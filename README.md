@@ -1,36 +1,52 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Poker Ledger
 
-## Getting Started
+A mobile-first poker session tracker built with Next.js 16 and React 19.
 
-First, run the development server:
+The in-progress game is stored in the browser so a refresh does not lose the
+current hand. Finished sessions use the `/api/sessions` Route Handler and can be
+shared across devices through Neon Postgres.
+
+## Local development
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Then open [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+The table and in-progress game work without a database. History syncing,
+finishing a session, importing, and deleting sessions require the environment
+variables below.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Environment variables
 
-## Learn More
+Copy `.env.example` to `.env.local`:
 
-To learn more about Next.js, take a look at the following resources:
+```text
+DATABASE_URL=<pooled Neon connection string>
+DELETION_PASSWORD=<long unique password>
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Never expose these values through `NEXT_PUBLIC_` variables. Restart the
+development server after changing them.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Database
 
-## Deploy on Vercel
+Run `schema.sql` against the target Postgres database. It creates the
+`poker_sessions` table and the history ordering index.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Checks
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```bash
+npm run lint
+npm test
+npm run build
+```
+
+## Project structure
+
+- `app/` — App Router page, metadata, PWA manifest, styles, and sessions API
+- `components/poker-ledger.tsx` — interactive ledger UI
+- `lib/poker/` — game rules, shared types, and API validation
+- `schema.sql` — Postgres schema for the later database connection
