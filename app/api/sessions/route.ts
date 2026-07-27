@@ -1,5 +1,5 @@
-import { neon } from "@neondatabase/serverless";
-
+import { getDatabase } from "@/lib/poker/database";
+import { playerNameKey } from "@/lib/poker/player-validation";
 import {
   MAX_SESSIONS_PER_REQUEST,
   passwordMatches,
@@ -24,13 +24,6 @@ function json(body: object, status = 200) {
     status,
     headers: { "Cache-Control": "no-store" },
   });
-}
-
-function getDatabase() {
-  if (!process.env.DATABASE_URL) {
-    throw new Error("DATABASE_URL is not configured");
-  }
-  return neon(process.env.DATABASE_URL);
 }
 
 export async function GET() {
@@ -85,8 +78,64 @@ export async function POST(request: Request) {
       );
     }
 
+    const missingPlayerNames = new Map<string, string>();
+    sessions.forEach((session) => {
+      session.results.forEach((result) => {
+        if (!result.playerId) {
+          missingPlayerNames.set(playerNameKey(result.name), result.name);
+        }
+      });
+    });
+
+    if (missingPlayerNames.size) {
+      await sql.transaction(
+        [...missingPlayerNames].map(
+          ([nameKey, name]) => sql`
+            INSERT INTO players (name, name_key)
+            VALUES (${name}, ${nameKey})
+            ON CONFLICT (name_key) DO NOTHING
+          `,
+        ),
+      );
+    }
+
+    const playerRows = (await sql`
+      SELECT id, name, name_key
+      FROM players
+    `) as Array<{ id: string; name: string; name_key: string }>;
+    const playersById = new Map(playerRows.map((player) => [player.id, player]));
+    const playersByName = new Map(
+      playerRows.map((player) => [player.name_key, player]),
+    );
+
+    const unknownPlayer = sessions
+      .flatMap((session) => session.results)
+      .find((result) =>
+        result.playerId
+          ? !playersById.has(result.playerId)
+          : !playersByName.has(playerNameKey(result.name)),
+      );
+    if (unknownPlayer) {
+      return json({ error: `Unknown player: ${unknownPlayer.name}` }, 400);
+    }
+
+    const resolvedSessions = sessions.map((session) => ({
+      ...session,
+      results: session.results.map((result) => {
+        const player = result.playerId
+          ? playersById.get(result.playerId)
+          : playersByName.get(playerNameKey(result.name));
+        return {
+          playerId: player!.id,
+          name: player!.name,
+          net: result.net,
+          end: result.end,
+        };
+      }),
+    }));
+
     const results = await sql.transaction(
-      sessions.map(
+      resolvedSessions.map(
         (session) => sql`
           INSERT INTO poker_sessions (
             id, played_at, ended_at, ante, starting_stack, hands, results

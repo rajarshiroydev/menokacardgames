@@ -1,8 +1,15 @@
 export type RaiseRule = "ante" | "double" | "free";
 
 export type Player = {
+  id?: string;
   name: string;
   stack: number;
+};
+
+export type PlayerProfile = {
+  id: string;
+  name: string;
+  createdAt: number;
 };
 
 export type PlayerAction = {
@@ -42,6 +49,7 @@ export type GameState = {
 };
 
 export type SessionResult = {
+  playerId?: string;
   name: string;
   net: number;
   end: number;
@@ -58,6 +66,7 @@ export type PokerSession = {
 };
 
 export type LeaderboardEntry = {
+  playerId?: string;
   name: string;
   net: number;
   sessions: number;

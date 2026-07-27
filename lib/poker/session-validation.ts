@@ -50,10 +50,17 @@ export function validateSession(input: unknown): PokerSession {
     }
     const result = value as Record<string, unknown>;
     const name = String(result.name || "").trim();
+    const playerId = result.playerId
+      ? String(result.playerId).trim()
+      : undefined;
     if (!name || name.length > 80) {
       throw new Error("Player names must be 1 to 80 characters");
     }
+    if (playerId && !/^[A-Za-z0-9._:-]{1,100}$/.test(playerId)) {
+      throw new Error("Invalid player id");
+    }
     return {
+      ...(playerId ? { playerId } : {}),
       name,
       net: asSafeInteger(result.net, "net result"),
       end: asSafeInteger(result.end, "ending stack", { min: 0 }),

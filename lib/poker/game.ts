@@ -125,8 +125,11 @@ export function buildLeaderboard(sessions: PokerSession[]) {
 
   sessions.forEach((session) => {
     session.results.forEach((result) => {
-      const key = playerKey(result.name);
+      const key = result.playerId
+        ? `id:${result.playerId}`
+        : `name:${playerKey(result.name)}`;
       const entry = entries.get(key) ?? {
+        playerId: result.playerId,
         name: result.name,
         net: 0,
         sessions: 0,

@@ -1,10 +1,12 @@
-# Poker Ledger
+# Menoka Card Games
 
-A mobile-first poker session tracker built with Next.js 16 and React 19.
+A mobile-first card-game tracker built with Next.js 16 and React 19. Poker is
+the first supported game.
 
 The in-progress game is stored in the browser so a refresh does not lose the
-current hand. Finished sessions use the `/api/sessions` Route Handler and can be
-shared across devices through Neon Postgres.
+current hand. The shared player directory uses `/api/players`, while finished
+poker sessions use `/api/sessions`. Both are shared across devices through Neon
+Postgres.
 
 ## Local development
 
@@ -15,9 +17,9 @@ npm run dev
 
 Then open [http://localhost:3000](http://localhost:3000).
 
-The table and in-progress game work without a database. History syncing,
-finishing a session, importing, and deleting sessions require the environment
-variables below.
+The table and in-progress game work without a database. The player directory,
+history syncing, finishing a session, importing, and deleting sessions require
+the environment variables below.
 
 ## Environment variables
 
@@ -34,7 +36,9 @@ development server after changing them.
 ## Database
 
 Run `schema.sql` against the target Postgres database. It creates the
-`poker_sessions` table and the history ordering index.
+game-agnostic `players` table, the `poker_sessions` table, and the history
+ordering index. Existing poker session results are linked to canonical player
+IDs without removing their readable names.
 
 ## Checks
 
@@ -46,7 +50,7 @@ npm run build
 
 ## Project structure
 
-- `app/` — App Router page, metadata, PWA manifest, styles, and sessions API
-- `components/poker-ledger.tsx` — interactive ledger UI
+- `app/` — App Router page, metadata, PWA manifest, styles, and APIs
+- `components/poker-ledger.tsx` — interactive home, player, and poker UI
 - `lib/poker/` — game rules, shared types, and API validation
 - `schema.sql` — Postgres schema for the later database connection

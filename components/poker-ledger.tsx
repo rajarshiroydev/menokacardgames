@@ -27,11 +27,12 @@ import {
 import type {
   GameState,
   PlayerAction,
+  PlayerProfile,
   PokerSession,
   RaiseRule,
 } from "@/lib/poker/types";
 
-type View = "table" | "history";
+type View = "home" | "setup" | "game" | "history" | "players";
 type ModalState =
   | {
       kind: "rules";
@@ -64,6 +65,23 @@ async function sessionsApi<T>(
   };
   if (!response.ok) {
     throw new Error(data.error || "Could not reach the ledger");
+  }
+  return data;
+}
+
+async function playersApi<T>(options: RequestInit = {}): Promise<T> {
+  const response = await fetch("/api/players", {
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
+  });
+  const data = (await response.json().catch(() => ({}))) as T & {
+    error?: string;
+  };
+  if (!response.ok) {
+    throw new Error(data.error || "Could not reach the player list");
   }
   return data;
 }
@@ -131,7 +149,10 @@ export function PokerLedger() {
   const [history, setHistory] = useState<PokerSession[]>([]);
   const [historyLoading, setHistoryLoading] = useState(true);
   const [historyError, setHistoryError] = useState("");
-  const [view, setView] = useState<View>("table");
+  const [players, setPlayers] = useState<PlayerProfile[]>([]);
+  const [playersLoading, setPlayersLoading] = useState(true);
+  const [playersError, setPlayersError] = useState("");
+  const [view, setView] = useState<View>("home");
   const [ready, setReady] = useState(false);
   const [toast, setToast] = useState("");
   const [modal, setModal] = useState<ModalState | null>(null);
@@ -168,17 +189,35 @@ export function PokerLedger() {
     }
   }, []);
 
+  const refreshPlayers = useCallback(async () => {
+    setPlayersLoading(true);
+    setPlayersError("");
+    try {
+      const data = await playersApi<{ players?: PlayerProfile[] }>();
+      setPlayers(Array.isArray(data.players) ? data.players : []);
+    } catch (error) {
+      setPlayersError(
+        error instanceof Error ? error.message : "Could not load players",
+      );
+    } finally {
+      setPlayersLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     const hydrationTimer = setTimeout(() => {
-      setGame(readStoredGame());
+      const storedGame = readStoredGame();
+      setGame(storedGame);
+      if (storedGame) setView("game");
       setReady(true);
       void refreshHistory();
+      void refreshPlayers();
     }, 0);
     return () => {
       clearTimeout(hydrationTimer);
       if (toastTimer.current) clearTimeout(toastTimer.current);
     };
-  }, [refreshHistory]);
+  }, [refreshHistory, refreshPlayers]);
 
   useEffect(() => {
     if (!ready) return;
@@ -200,7 +239,7 @@ export function PokerLedger() {
     (input: {
       stack: number;
       ante: number;
-      names: string[];
+      players: PlayerProfile[];
       raiseRule: RaiseRule;
     }) => {
       if (input.ante <= 0) {
@@ -212,17 +251,47 @@ export function PokerLedger() {
         startStack: input.stack,
         startedAt: Date.now(),
         raiseRule: input.raiseRule,
-        players: input.names.map((name) => ({
-          name,
+        players: input.players.map((player) => ({
+          id: player.id,
+          name: player.name,
           stack: input.stack,
         })),
         hand: null,
         handNo: 0,
         log: [],
-        _setupCount: input.names.length,
+        _setupCount: input.players.length,
       };
       dealNewHand(nextGame);
       setGame(nextGame);
+      setView("game");
+    },
+    [showToast],
+  );
+
+  const addPlayer = useCallback(
+    async (name: string) => {
+      try {
+        const data = await playersApi<{ player: PlayerProfile }>({
+          method: "POST",
+          body: JSON.stringify({ name }),
+        });
+        setPlayers((current) => {
+          const withoutPlayer = current.filter(
+            (player) => player.id !== data.player.id,
+          );
+          return [...withoutPlayer, data.player].sort((a, b) =>
+            a.name.localeCompare(b.name),
+          );
+        });
+        setPlayersError("");
+        showToast("Player Added");
+        return data.player;
+      } catch (error) {
+        showToast(
+          error instanceof Error ? error.message : "Player Was Not Added",
+        );
+        return null;
+      }
     },
     [showToast],
   );
@@ -501,7 +570,10 @@ export function PokerLedger() {
     ask(
       "Reset everything and start a new game? All current stacks are lost.",
       "Reset game",
-      () => setGame(null),
+      () => {
+        setGame(null);
+        setView("home");
+      },
     );
   }
 
@@ -518,6 +590,7 @@ export function PokerLedger() {
       startStack: game.startStack,
       hands: completedHands,
       results: game.players.map((player, index) => ({
+        ...(player.id ? { playerId: player.id } : {}),
         name: player.name,
         net: endStacks[index] - game.startStack,
         end: endStacks[index],
@@ -635,46 +708,45 @@ export function PokerLedger() {
   }
 
   return (
-    <main className="ledger-shell">
-      <header className="topbar">
-        <div className="brand">
-          <span className="spade" aria-hidden="true">
-            ♠
-          </span>
-          <span className="word">Menoka Card Games</span>
-        </div>
-        <button
-          className="rules-trigger"
-          type="button"
-          onClick={() => setModal({ kind: "rules" })}
-        >
-          Rules
-        </button>
-      </header>
-
-      <div className="app">
-        <nav className="tabs" aria-label="Menoka Card Games Sections">
+    <main className={`ledger-shell ${view === "home" ? "home-shell" : ""}`}>
+      {view !== "home" ? (
+        <header className="topbar">
           <button
-            className={view === "table" ? "on" : ""}
+            className="brand brand-button"
+            type="button"
+            aria-label="Return To Menoka Card Games Home"
             onClick={() => {
-              setView("table");
+              setView("home");
               window.scrollTo(0, 0);
             }}
           >
-            Table
+            <span className="spade" aria-hidden="true">
+              ♠
+            </span>
+            <span className="word">Menoka Card Games</span>
           </button>
           <button
-            className={view === "history" ? "on" : ""}
-            onClick={() => {
-              setView("history");
-              window.scrollTo(0, 0);
-            }}
+            className="rules-trigger"
+            type="button"
+            onClick={() => setModal({ kind: "rules" })}
           >
-            History
+            Rules
           </button>
-        </nav>
+        </header>
+      ) : null}
 
-        {view === "history" ? (
+      <div className={`app ${view === "home" ? "home-app" : ""}`}>
+        {view === "home" ? (
+          <HomeView
+            hasGame={Boolean(game)}
+            historyCount={history.length}
+            playerCount={players.length}
+            onGame={() => setView(game ? "game" : "setup")}
+            onHistory={() => setView("history")}
+            onPlayers={() => setView("players")}
+            onRules={() => setModal({ kind: "rules" })}
+          />
+        ) : view === "history" ? (
           <HistoryView
             history={history}
             loading={historyLoading}
@@ -683,6 +755,23 @@ export function PokerLedger() {
             onDelete={deleteSession}
             onExport={exportData}
             onImport={importData}
+          />
+        ) : view === "players" ? (
+          <PlayersView
+            players={players}
+            loading={playersLoading}
+            error={playersError}
+            onRetry={() => void refreshPlayers()}
+            onAdd={addPlayer}
+          />
+        ) : view === "setup" ? (
+          <SetupView
+            players={players}
+            loading={playersLoading}
+            error={playersError}
+            onRetry={() => void refreshPlayers()}
+            onManagePlayers={() => setView("players")}
+            onStart={startGame}
           />
         ) : game ? (
           <GameView
@@ -701,7 +790,15 @@ export function PokerLedger() {
             onDiscard={discardGame}
           />
         ) : (
-          <SetupView onStart={startGame} />
+          <HomeView
+            hasGame={false}
+            historyCount={history.length}
+            playerCount={players.length}
+            onGame={() => setView("setup")}
+            onHistory={() => setView("history")}
+            onPlayers={() => setView("players")}
+            onRules={() => setModal({ kind: "rules" })}
+          />
         )}
       </div>
 
@@ -719,13 +816,113 @@ export function PokerLedger() {
   );
 }
 
+function HomeView({
+  hasGame,
+  historyCount,
+  playerCount,
+  onGame,
+  onHistory,
+  onPlayers,
+  onRules,
+}: {
+  hasGame: boolean;
+  historyCount: number;
+  playerCount: number;
+  onGame: () => void;
+  onHistory: () => void;
+  onPlayers: () => void;
+  onRules: () => void;
+}) {
+  return (
+    <section className="home-view">
+      <div className="home-hero">
+        <div className="home-emblem" aria-hidden="true">
+          <span>♠</span>
+        </div>
+        <div className="home-kicker">House Poker, Kept Properly</div>
+        <h1>
+          Menoka
+          <span>Card Games</span>
+        </h1>
+        <p>
+          Choose A Table, Keep Every Stack Straight, And Let The House Ledger
+          Remember The Rest.
+        </p>
+      </div>
+
+      <div className="home-menu">
+        <button className="home-action featured" type="button" onClick={onGame}>
+          <span className="home-suit" aria-hidden="true">
+            ♦
+          </span>
+          <span className="home-action-copy">
+            <strong>{hasGame ? "Continue Current Game" : "Start A New Game"}</strong>
+            <small>
+              {hasGame
+                ? "Return To The Hand In Progress"
+                : "Choose The Players And Buy-In"}
+            </small>
+          </span>
+          <span className="home-arrow" aria-hidden="true">
+            →
+          </span>
+        </button>
+
+        <button className="home-action" type="button" onClick={onHistory}>
+          <span className="home-suit" aria-hidden="true">
+            ♣
+          </span>
+          <span className="home-action-copy">
+            <strong>All Time Standings</strong>
+            <small>
+              {historyCount} Saved Session{historyCount === 1 ? "" : "s"}
+            </small>
+          </span>
+          <span className="home-arrow" aria-hidden="true">
+            →
+          </span>
+        </button>
+
+        <button className="home-action" type="button" onClick={onPlayers}>
+          <span className="home-suit red-suit" aria-hidden="true">
+            ♥
+          </span>
+          <span className="home-action-copy">
+            <strong>Existing Players</strong>
+            <small>
+              {playerCount} Player{playerCount === 1 ? "" : "s"} Ready To Play
+            </small>
+          </span>
+          <span className="home-arrow" aria-hidden="true">
+            →
+          </span>
+        </button>
+      </div>
+
+      <button className="home-rules" type="button" onClick={onRules}>
+        Read The Poker Rules
+      </button>
+    </section>
+  );
+}
+
 function SetupView({
+  players,
+  loading,
+  error,
+  onRetry,
+  onManagePlayers,
   onStart,
 }: {
+  players: PlayerProfile[];
+  loading: boolean;
+  error: string;
+  onRetry: () => void;
+  onManagePlayers: () => void;
   onStart: (input: {
     stack: number;
     ante: number;
-    names: string[];
+    players: PlayerProfile[];
     raiseRule: RaiseRule;
   }) => void;
 }) {
@@ -733,7 +930,7 @@ function SetupView({
   const [ante, setAnte] = useState(100);
   const [raiseRule, setRaiseRule] = useState<RaiseRule>("ante");
   const [playerCount, setPlayerCount] = useState(3);
-  const [names, setNames] = useState(["", "", ""]);
+  const [selectedIds, setSelectedIds] = useState(["", "", ""]);
 
   const ruleExample = useMemo(() => {
     const buyIn = Math.max(1, ante || 100);
@@ -755,25 +952,39 @@ function SetupView({
   function updatePlayerCount(value: number) {
     const count = Math.max(2, Math.min(10, value || 2));
     setPlayerCount(count);
-    setNames((current) =>
+    setSelectedIds((current) =>
       Array.from({ length: count }, (_, index) => current[index] || ""),
     );
   }
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const selectedPlayers = selectedIds
+      .map((id) => players.find((player) => player.id === id))
+      .filter((player): player is PlayerProfile => Boolean(player));
+    if (
+      selectedPlayers.length !== playerCount ||
+      new Set(selectedPlayers.map((player) => player.id)).size !== playerCount
+    ) {
+      return;
+    }
     onStart({
       stack,
       ante,
       raiseRule,
-      names: names.map((name, index) => name.trim() || `Player ${index + 1}`),
+      players: selectedPlayers,
     });
   }
 
+  const selectionComplete =
+    selectedIds.length === playerCount &&
+    selectedIds.every(Boolean) &&
+    new Set(selectedIds).size === playerCount;
+
   return (
-    <form className="card" onSubmit={submit}>
+    <form className="card setup-card" onSubmit={submit}>
       <div className="hdr">
-        <b>New game</b>
+        <b>Start A New Game</b>
       </div>
       <div className="row setup-row">
         <div>
@@ -801,6 +1012,7 @@ function SetupView({
       </div>
       <label htmlFor="raise-rule">Minimum raise</label>
       <select
+        className="select-control"
         id="raise-rule"
         value={raiseRule}
         onChange={(event) => setRaiseRule(event.target.value as RaiseRule)}
@@ -816,38 +1028,174 @@ function SetupView({
         <br />
         <b>{ruleExample}</b>
       </p>
-      <label htmlFor="player-count">Number of players</label>
-      <input
+      <label htmlFor="player-count">Number Of Players</label>
+      <select
+        className="select-control"
         id="player-count"
-        type="number"
-        inputMode="numeric"
-        min="2"
-        max="10"
         value={playerCount}
         onChange={(event) => updatePlayerCount(Number(event.target.value))}
-      />
-      <div className="names">
-        <label>Player names</label>
-        {names.map((name, index) => (
-          <input
+      >
+        {Array.from({ length: 9 }, (_, index) => index + 2).map((count) => (
+          <option key={count} value={count}>
+            {count} Players
+          </option>
+        ))}
+      </select>
+
+      <div className="names player-selects">
+        <div className="player-select-heading">
+          <label>Select Players</label>
+          <button type="button" className="text-button" onClick={onManagePlayers}>
+            Manage Players
+          </button>
+        </div>
+        {error ? (
+          <div className="inline-state">
+            <span>{error}</span>
+            <button type="button" className="text-button" onClick={onRetry}>
+              Try Again
+            </button>
+          </div>
+        ) : null}
+        {selectedIds.map((selectedId, index) => (
+          <select
+            className="select-control"
             key={index}
-            aria-label={`Player ${index + 1} name`}
-            placeholder={`Player ${index + 1}`}
-            value={name}
+            aria-label={`Player ${index + 1}`}
+            disabled={loading || Boolean(error)}
+            value={selectedId}
             onChange={(event) =>
-              setNames((current) =>
+              setSelectedIds((current) =>
                 current.map((item, itemIndex) =>
                   itemIndex === index ? event.target.value : item,
                 ),
               )
             }
-          />
+          >
+            <option value="">
+              {loading ? "Loading Players…" : `Choose Player ${index + 1}`}
+            </option>
+            {players.map((player) => (
+              <option
+                key={player.id}
+                value={player.id}
+                disabled={
+                  player.id !== selectedId && selectedIds.includes(player.id)
+                }
+              >
+                {player.name}
+              </option>
+            ))}
+          </select>
         ))}
+        {!loading && !error && players.length < 2 ? (
+          <p className="muted player-help">
+            Add At Least Two Players Before Starting A Game.
+          </p>
+        ) : null}
       </div>
-      <button className="primary full start-game" type="submit">
-        Start game
+      <button
+        className="primary full start-game"
+        type="submit"
+        disabled={!selectionComplete || stack < 0 || ante < 1}
+      >
+        Start Game
       </button>
     </form>
+  );
+}
+
+function PlayersView({
+  players,
+  loading,
+  error,
+  onRetry,
+  onAdd,
+}: {
+  players: PlayerProfile[];
+  loading: boolean;
+  error: string;
+  onRetry: () => void;
+  onAdd: (name: string) => Promise<PlayerProfile | null>;
+}) {
+  const [name, setName] = useState("");
+  const [adding, setAdding] = useState(false);
+
+  async function add(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!name.trim() || adding) return;
+    setAdding(true);
+    const player = await onAdd(name);
+    if (player) setName("");
+    setAdding(false);
+  }
+
+  return (
+    <>
+      <section className="card player-directory-intro">
+        <div className="hdr">
+          <div>
+            <b>Existing Players</b>
+            <p className="muted card-note">
+              One Saved Name Keeps Every Future Session And Standing Together.
+            </p>
+          </div>
+          <span className="player-count-badge">{players.length}</span>
+        </div>
+
+        <form className="add-player-form" onSubmit={add}>
+          <label htmlFor="new-player-name">Add A New Player</label>
+          <div className="add-player-row">
+            <input
+              id="new-player-name"
+              maxLength={80}
+              placeholder="Enter Their Name"
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+            />
+            <button
+              className="primary"
+              type="submit"
+              disabled={!name.trim() || adding}
+            >
+              {adding ? "Adding…" : "Add Player"}
+            </button>
+          </div>
+        </form>
+      </section>
+
+      <section className="card">
+        <div className="hdr">
+          <b>Player List</b>
+          <span className="muted">Shared Across Every Device</span>
+        </div>
+        {error ? (
+          <div className="directory-state">
+            <p className="muted">{error}</p>
+            <button className="ghost full" type="button" onClick={onRetry}>
+              Try Again
+            </button>
+          </div>
+        ) : loading ? (
+          <p className="muted">Loading Players…</p>
+        ) : players.length ? (
+          <div className="player-directory-list">
+            {players.map((player, index) => (
+              <div className="directory-player" key={player.id}>
+                <span className="directory-index">
+                  {String(index + 1).padStart(2, "0")}
+                </span>
+                <span>{player.name}</span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="muted">
+            No Players Yet. Add The First Name Above, Then Return To New Game.
+          </p>
+        )}
+      </section>
+    </>
   );
 }
 

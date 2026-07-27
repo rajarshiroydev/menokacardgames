@@ -52,4 +52,16 @@ describe("session validation", () => {
     assert.equal(passwordMatches("correct horse!", "correct horse"), false);
     assert.equal(passwordMatches("", "correct horse"), false);
   });
+
+  test("keeps a valid stable player id", () => {
+    const session = validateSession({
+      ...validSession,
+      results: validSession.results.map((result, index) => ({
+        ...result,
+        playerId: `player-${index + 1}`,
+      })),
+    });
+
+    assert.equal(session.results[0].playerId, "player-1");
+  });
 });

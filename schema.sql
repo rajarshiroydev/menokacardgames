@@ -1,3 +1,10 @@
+CREATE TABLE IF NOT EXISTS players (
+  id text PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  name text NOT NULL CHECK (char_length(name) BETWEEN 1 AND 80),
+  name_key text NOT NULL UNIQUE,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
 CREATE TABLE IF NOT EXISTS poker_sessions (
   id text PRIMARY KEY,
   played_at timestamptz NOT NULL,
@@ -14,3 +21,37 @@ CREATE TABLE IF NOT EXISTS poker_sessions (
 
 CREATE INDEX IF NOT EXISTS poker_sessions_played_at_idx
   ON poker_sessions (played_at DESC);
+
+INSERT INTO players (name, name_key)
+SELECT DISTINCT ON (name_key) name, name_key
+FROM (
+  SELECT
+    btrim(result->>'name') AS name,
+    lower(regexp_replace(btrim(result->>'name'), '\s+', ' ', 'g')) AS name_key
+  FROM poker_sessions
+  CROSS JOIN LATERAL jsonb_array_elements(results) AS result
+  WHERE nullif(btrim(result->>'name'), '') IS NOT NULL
+) AS existing_players
+ORDER BY name_key, name
+ON CONFLICT (name_key) DO NOTHING;
+
+UPDATE poker_sessions AS session
+SET results = mapped.results
+FROM (
+  SELECT
+    poker_sessions.id,
+    jsonb_agg(
+      result || jsonb_build_object('playerId', players.id)
+      ORDER BY result_position
+    ) AS results
+  FROM poker_sessions
+  CROSS JOIN LATERAL jsonb_array_elements(results)
+    WITH ORDINALITY AS session_result(result, result_position)
+  JOIN players
+    ON players.name_key = lower(
+      regexp_replace(btrim(result->>'name'), '\s+', ' ', 'g')
+    )
+  GROUP BY poker_sessions.id
+) AS mapped
+WHERE session.id = mapped.id
+  AND session.results IS DISTINCT FROM mapped.results;
