@@ -50,6 +50,7 @@ type ModalState =
   | {
       kind: "password";
       message: string;
+      confirmLabel: string;
       onConfirm: (password: string) => void;
     };
 
@@ -413,6 +414,7 @@ export function PokerLedger() {
     setModal({
       kind: "password",
       message: `Delete ${player.name} from the active player list? Their identity and all past game results will stay connected.`,
+      confirmLabel: "Delete Player",
       onConfirm: (password) =>
         void archiveRemotePlayer(player, password),
     });
@@ -819,6 +821,7 @@ export function PokerLedger() {
       message: `Delete ${session.name || "this game"} from ${formatDate(
         session.date,
       )}? This changes the public leaderboard.`,
+      confirmLabel: "Delete Session",
       onConfirm: (password) => void deleteRemoteSession(id, password),
     });
   }
@@ -2210,8 +2213,8 @@ function Modal({
                   Undo Restores A Player&apos;s Latest Action On The Current
                   Street. Cancel Hand Refunds Every Chip From That Hand,
                   Including Buy-Ins. Undo Last Hand Restores Its Starting
-                  Stacks. Finish And Save Requires One Completed Hand; Any
-                  Unfinished Hand Is Refunded In The Saved Results.
+                  Stacks. Finish And Save Game Session Requires One Completed
+                  Hand; Any Unfinished Hand Is Refunded In The Saved Results.
                 </p>
               </div>
             </section>
@@ -2264,7 +2267,7 @@ function Modal({
           disabled={state.kind === "password" && !password}
           onClick={confirm}
         >
-          {state.kind === "password" ? "Delete session" : state.confirmLabel}
+          {state.confirmLabel}
         </button>
         <button className="ghost" onClick={onClose}>
           Never mind
