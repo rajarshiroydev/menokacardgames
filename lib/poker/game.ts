@@ -123,7 +123,7 @@ export function dealNewHand(game: GameState) {
 export function buildLeaderboard(sessions: PokerSession[]) {
   const entries = new Map<string, LeaderboardEntry>();
 
-  sessions.forEach((session) => {
+  sessions.filter((session) => !session.discardedAt).forEach((session) => {
     session.results.forEach((result) => {
       const key = result.playerId
         ? `id:${result.playerId}`

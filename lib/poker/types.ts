@@ -10,7 +10,8 @@ export type PlayerProfile = {
   id: string;
   name: string;
   createdAt: number;
-  deletedAt?: number;
+  discardedAt?: number;
+  hasHistory?: boolean;
 };
 
 export type WinnerAnnouncement = {
@@ -70,6 +71,7 @@ export type PokerSession = {
   id: string;
   name?: string;
   sessionNumber?: number;
+  discardedAt?: number;
   date: number;
   ended: number;
   ante: number;

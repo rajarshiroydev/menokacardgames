@@ -664,8 +664,9 @@ hr {
   white-space: nowrap;
 }
 
+.directory-discard,
 .directory-delete,
-.reconnect-player {
+.restore-player {
   min-height: 34px;
   padding: 7px 9px;
   background: transparent;
@@ -673,25 +674,37 @@ hr {
   letter-spacing: 0.2px;
 }
 
+.directory-discard {
+  border-color: color-mix(in srgb, var(--gold) 44%, var(--line));
+  color: var(--gold);
+}
+
 .directory-delete {
   border-color: var(--danger-line);
   color: var(--danger);
 }
 
-.reconnect-player {
+.restore-player {
   border-color: color-mix(in srgb, var(--green) 52%, var(--line));
   color: var(--green);
 }
 
-.directory-player.archived {
+.directory-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.directory-player.discarded {
   opacity: 0.78;
 }
 
-.archived-players > .hdr {
+.discarded-players > .hdr,
+.discarded-sessions > .hdr {
   align-items: flex-start;
 }
 
-.archived-count {
+.discarded-count {
   display: grid;
   place-items: center;
   min-width: 32px;
@@ -866,7 +879,7 @@ hr {
 
 .ctl {
   display: grid;
-  grid-template-columns: minmax(72px, 0.9fr) repeat(3, minmax(0, 1fr));
+  grid-template-columns: minmax(84px, 1.2fr) repeat(3, minmax(0, 1fr));
   align-items: stretch;
   gap: 6px;
 }
@@ -1195,14 +1208,39 @@ hr {
   min-width: 0;
 }
 
-.delete-session {
+.session-actions {
+  display: flex;
+  flex: none;
+  gap: 6px;
+}
+
+.discard-session,
+.delete-session,
+.restore-session {
   flex: none;
   min-height: 34px;
   padding: 7px 9px;
-  border-color: var(--danger-line);
   background: transparent;
-  color: var(--danger);
   font-size: 10px;
+}
+
+.discard-session {
+  border-color: color-mix(in srgb, var(--gold) 44%, var(--line));
+  color: var(--gold);
+}
+
+.delete-session {
+  border-color: var(--danger-line);
+  color: var(--danger);
+}
+
+.restore-session {
+  border-color: color-mix(in srgb, var(--green) 52%, var(--line));
+  color: var(--green);
+}
+
+.sess.discarded {
+  opacity: 0.78;
 }
 
 .session-meta {
@@ -1624,7 +1662,7 @@ hr {
   }
 
   .ctl {
-    grid-template-columns: minmax(62px, 0.8fr) repeat(3, minmax(0, 1fr));
+    grid-template-columns: minmax(76px, 1.15fr) repeat(3, minmax(0, 1fr));
     gap: 5px;
   }
 
@@ -1646,10 +1684,40 @@ hr {
     gap: 7px;
   }
 
+  .directory-discard,
   .directory-delete,
-  .reconnect-player {
+  .restore-player {
     padding-right: 7px;
     padding-left: 7px;
+  }
+
+  .directory-player.discarded {
+    grid-template-columns: 24px minmax(0, 1fr);
+    padding: 8px 0;
+  }
+
+  .directory-player.discarded .directory-actions {
+    grid-column: 2;
+    justify-content: flex-start;
+    width: 100%;
+  }
+
+  .directory-player.discarded .directory-actions button {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .session-hdr {
+    flex-wrap: wrap;
+  }
+
+  .session-actions {
+    width: 100%;
+  }
+
+  .session-actions button {
+    flex: 1;
+    min-width: 0;
   }
 
   .hand-rank {

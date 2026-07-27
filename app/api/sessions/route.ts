@@ -10,6 +10,7 @@ import type { PokerSession } from "@/lib/poker/types";
 export const dynamic = "force-dynamic";
 
 type SessionRow = {
+  discarded_at: Date | string | null;
   id: string;
   game_name: string | null;
   session_number: number | string;
@@ -33,6 +34,23 @@ function json(body: object, status = 200) {
   });
 }
 
+function mapSession(row: SessionRow): PokerSession {
+  return {
+    id: row.id,
+    name: row.game_name?.trim() || `Game ${Number(row.session_number)}`,
+    sessionNumber: Number(row.session_number),
+    ...(row.discarded_at
+      ? { discardedAt: new Date(row.discarded_at).getTime() }
+      : {}),
+    date: new Date(row.played_at).getTime(),
+    ended: new Date(row.ended_at).getTime(),
+    ante: Number(row.ante),
+    startStack: Number(row.starting_stack),
+    hands: Number(row.hands),
+    results: row.results,
+  };
+}
+
 export async function GET() {
   try {
     const sql = getDatabase();
@@ -46,7 +64,8 @@ export async function GET() {
         ante,
         starting_stack,
         hands,
-        results
+        results,
+        discarded_at
       FROM poker_sessions
       ORDER BY played_at DESC, created_at DESC
     `) as SessionRow[];
@@ -54,21 +73,15 @@ export async function GET() {
       SELECT last_value, is_called
       FROM poker_sessions_session_number_seq
     `) as SessionCounterRow[];
-    const sessions: PokerSession[] = rows.map((row) => ({
-      id: row.id,
-      name: row.game_name?.trim() || `Game ${Number(row.session_number)}`,
-      sessionNumber: Number(row.session_number),
-      date: new Date(row.played_at).getTime(),
-      ended: new Date(row.ended_at).getTime(),
-      ante: Number(row.ante),
-      startStack: Number(row.starting_stack),
-      hands: Number(row.hands),
-      results: row.results,
-    }));
+    const allSessions = rows.map(mapSession);
+    const sessions = allSessions.filter((session) => !session.discardedAt);
+    const discardedSessions = allSessions.filter(
+      (session) => session.discardedAt,
+    );
     const nextSessionNumber = counter
       ? Number(counter.last_value) + (counter.is_called ? 1 : 0)
       : 1;
-    return json({ sessions, nextSessionNumber });
+    return json({ discardedSessions, sessions, nextSessionNumber });
   } catch (error) {
     console.error("sessions GET error", error);
     return json({ error: "Could not reach the ledger database" }, 500);
@@ -195,6 +208,54 @@ export async function POST(request: Request) {
   }
 }
 
+export async function PATCH(request: Request) {
+  try {
+    const body = (await request.json()) as {
+      action?: unknown;
+      id?: unknown;
+    };
+    const id = String(body?.id || "");
+    if (!/^[A-Za-z0-9._:-]{1,100}$/.test(id)) {
+      return json({ error: "Invalid session id" }, 400);
+    }
+    if (body.action !== "discard" && body.action !== "restore") {
+      return json({ error: "Invalid session action" }, 400);
+    }
+
+    const sql = getDatabase();
+    const rows =
+      body.action === "discard"
+        ? await sql`
+            UPDATE poker_sessions
+            SET discarded_at = now()
+            WHERE id = ${id} AND discarded_at IS NULL
+            RETURNING id
+          `
+        : await sql`
+            UPDATE poker_sessions
+            SET discarded_at = NULL
+            WHERE id = ${id} AND discarded_at IS NOT NULL
+            RETURNING id
+          `;
+
+    if (!rows.length) {
+      return json(
+        {
+          error:
+            body.action === "discard"
+              ? "Active session not found"
+              : "Discarded session not found",
+        },
+        404,
+      );
+    }
+    return json({ id, state: body.action });
+  } catch (error) {
+    console.error("sessions PATCH error", error);
+    return json({ error: "Could not update the session" }, 500);
+  }
+}
+
 export async function DELETE(request: Request) {
   try {
     const deletionPassword =
@@ -220,10 +281,12 @@ export async function DELETE(request: Request) {
     const sql = getDatabase();
     const rows = await sql`
       DELETE FROM poker_sessions
-      WHERE id = ${id}
+      WHERE id = ${id} AND discarded_at IS NOT NULL
       RETURNING id
     `;
-    if (!rows.length) return json({ error: "Session not found" }, 404);
+    if (!rows.length) {
+      return json({ error: "Discarded session not found" }, 404);
+    }
     return json({ deleted: id });
   } catch (error) {
     console.error("sessions DELETE error", error);

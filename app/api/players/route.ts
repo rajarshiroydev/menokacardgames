@@ -13,6 +13,7 @@ type PlayerRow = {
   name: string;
   created_at: Date | string;
   deleted_at: Date | string | null;
+  has_history?: boolean;
 };
 
 function json(body: object, status = 200) {
@@ -27,8 +28,9 @@ function mapPlayer(row: PlayerRow): PlayerProfile {
     id: row.id,
     name: row.name,
     createdAt: new Date(row.created_at).getTime(),
+    hasHistory: Boolean(row.has_history),
     ...(row.deleted_at
-      ? { deletedAt: new Date(row.deleted_at).getTime() }
+      ? { discardedAt: new Date(row.deleted_at).getTime() }
       : {}),
   };
 }
@@ -37,15 +39,29 @@ export async function GET() {
   try {
     const sql = getDatabase();
     const rows = (await sql`
-      SELECT id, name, created_at, deleted_at
-      FROM players
-      ORDER BY deleted_at NULLS FIRST, lower(name), created_at
+      SELECT
+        player.id,
+        player.name,
+        player.created_at,
+        player.deleted_at,
+        EXISTS (
+          SELECT 1
+          FROM poker_sessions AS session
+          CROSS JOIN LATERAL jsonb_array_elements(session.results) AS result
+          WHERE result->>'playerId' = player.id
+        ) AS has_history
+      FROM players AS player
+      ORDER BY
+        player.deleted_at NULLS FIRST,
+        lower(player.name),
+        player.created_at
     `) as PlayerRow[];
 
     const profiles = rows.map(mapPlayer);
+    const discardedPlayers = profiles.filter((player) => player.discardedAt);
     return json({
-      players: profiles.filter((player) => !player.deletedAt),
-      archivedPlayers: profiles.filter((player) => player.deletedAt),
+      players: profiles.filter((player) => !player.discardedAt),
+      discardedPlayers,
     });
   } catch (error) {
     console.error("players GET error", error);
@@ -87,25 +103,50 @@ export async function POST(request: Request) {
 
 export async function PATCH(request: Request) {
   try {
-    const body = (await request.json()) as { id?: unknown };
+    const body = (await request.json()) as {
+      action?: unknown;
+      id?: unknown;
+    };
     const id = String(body?.id || "");
     if (!/^[A-Za-z0-9._:-]{1,100}$/.test(id)) {
       return json({ error: "Invalid player id" }, 400);
     }
+    const action = body.action ?? "restore";
+    if (action !== "discard" && action !== "restore") {
+      return json({ error: "Invalid player action" }, 400);
+    }
 
     const sql = getDatabase();
-    const rows = (await sql`
-      UPDATE players
-      SET deleted_at = NULL
-      WHERE id = ${id}
-      RETURNING id, name, created_at, deleted_at
-    `) as PlayerRow[];
+    const rows =
+      action === "discard"
+        ? ((await sql`
+            UPDATE players
+            SET deleted_at = now()
+            WHERE id = ${id} AND deleted_at IS NULL
+            RETURNING id, name, created_at, deleted_at
+          `) as PlayerRow[])
+        : ((await sql`
+            UPDATE players
+            SET deleted_at = NULL
+            WHERE id = ${id} AND deleted_at IS NOT NULL
+            RETURNING id, name, created_at, deleted_at
+          `) as PlayerRow[]);
 
-    if (!rows.length) return json({ error: "Player not found" }, 404);
+    if (!rows.length) {
+      return json(
+        {
+          error:
+            action === "discard"
+              ? "Active player not found"
+              : "Discarded player not found",
+        },
+        404,
+      );
+    }
     return json({ player: mapPlayer(rows[0]) });
   } catch (error) {
     console.error("players PATCH error", error);
-    return json({ error: "Could not reconnect the player" }, 500);
+    return json({ error: "Could not update the player" }, 500);
   }
 }
 
@@ -132,17 +173,60 @@ export async function DELETE(request: Request) {
     }
 
     const sql = getDatabase();
-    const rows = (await sql`
-      UPDATE players
-      SET deleted_at = now()
-      WHERE id = ${id} AND deleted_at IS NULL
-      RETURNING id
-    `) as Array<{ id: string }>;
+    const playerRows = (await sql`
+      SELECT
+        player.id,
+        player.deleted_at,
+        EXISTS (
+          SELECT 1
+          FROM poker_sessions AS session
+          CROSS JOIN LATERAL jsonb_array_elements(session.results) AS result
+          WHERE result->>'playerId' = player.id
+        ) AS has_history
+      FROM players AS player
+      WHERE player.id = ${id}
+    `) as Array<{
+      deleted_at: Date | string | null;
+      has_history: boolean;
+      id: string;
+    }>;
 
-    if (!rows.length) return json({ error: "Active player not found" }, 404);
-    return json({ archived: id });
+    const player = playerRows[0];
+    if (!player) return json({ error: "Player not found" }, 404);
+    if (!player.deleted_at) {
+      return json({ error: "Discard the player before deleting them" }, 409);
+    }
+    if (player.has_history) {
+      return json(
+        {
+          error:
+            "This player has saved session history and cannot be permanently deleted",
+        },
+        409,
+      );
+    }
+
+    const rows = await sql`
+      DELETE FROM players AS player
+      WHERE player.id = ${id}
+        AND player.deleted_at IS NOT NULL
+        AND NOT EXISTS (
+          SELECT 1
+          FROM poker_sessions AS session
+          CROSS JOIN LATERAL jsonb_array_elements(session.results) AS result
+          WHERE result->>'playerId' = player.id
+        )
+      RETURNING player.id
+    `;
+    if (!rows.length) {
+      return json(
+        { error: "The player changed before permanent deletion; try again" },
+        409,
+      );
+    }
+    return json({ deleted: id });
   } catch (error) {
     console.error("players DELETE error", error);
-    return json({ error: "Could not archive the player" }, 500);
+    return json({ error: "Could not permanently delete the player" }, 500);
   }
 }

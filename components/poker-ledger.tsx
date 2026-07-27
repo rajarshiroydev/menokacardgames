@@ -183,11 +183,16 @@ function awardPot(game: GameState, playerIndex: number, automatic = false) {
 export function PokerLedger() {
   const [game, setGame] = useState<GameState | null>(null);
   const [history, setHistory] = useState<PokerSession[]>([]);
+  const [discardedSessions, setDiscardedSessions] = useState<PokerSession[]>(
+    [],
+  );
   const [nextSessionNumber, setNextSessionNumber] = useState(1);
   const [historyLoading, setHistoryLoading] = useState(true);
   const [historyError, setHistoryError] = useState("");
   const [players, setPlayers] = useState<PlayerProfile[]>([]);
-  const [archivedPlayers, setArchivedPlayers] = useState<PlayerProfile[]>([]);
+  const [discardedPlayers, setDiscardedPlayers] = useState<PlayerProfile[]>(
+    [],
+  );
   const [playersLoading, setPlayersLoading] = useState(true);
   const [playersError, setPlayersError] = useState("");
   const [view, setView] = useState<View>("home");
@@ -230,10 +235,14 @@ export function PokerLedger() {
         window.localStorage.removeItem(HISTORY_STORAGE_KEY);
       }
       const data = await sessionsApi<{
+        discardedSessions?: PokerSession[];
         nextSessionNumber?: number;
         sessions?: PokerSession[];
       }>();
       setHistory(Array.isArray(data.sessions) ? data.sessions : []);
+      setDiscardedSessions(
+        Array.isArray(data.discardedSessions) ? data.discardedSessions : [],
+      );
       setNextSessionNumber(
         Number.isSafeInteger(data.nextSessionNumber) &&
           Number(data.nextSessionNumber) > 0
@@ -256,12 +265,12 @@ export function PokerLedger() {
     setPlayersError("");
     try {
       const data = await playersApi<{
-        archivedPlayers?: PlayerProfile[];
+        discardedPlayers?: PlayerProfile[];
         players?: PlayerProfile[];
       }>();
       setPlayers(Array.isArray(data.players) ? data.players : []);
-      setArchivedPlayers(
-        Array.isArray(data.archivedPlayers) ? data.archivedPlayers : [],
+      setDiscardedPlayers(
+        Array.isArray(data.discardedPlayers) ? data.discardedPlayers : [],
       );
     } catch (error) {
       setPlayersError(
@@ -399,7 +408,7 @@ export function PokerLedger() {
             a.name.localeCompare(b.name),
           );
         });
-        setArchivedPlayers((current) =>
+        setDiscardedPlayers((current) =>
           current.filter((player) => player.id !== data.player.id),
         );
         setPlayersError("");
@@ -415,17 +424,43 @@ export function PokerLedger() {
     [showToast],
   );
 
-  function archivePlayer(player: PlayerProfile) {
+  function discardPlayer(player: PlayerProfile) {
+    ask(
+      `Discard ${player.name}? They will be hidden from new games, while their identity and past results stay connected.`,
+      "Discard Player",
+      () => void updatePlayerState(player, "discard"),
+    );
+  }
+
+  async function updatePlayerState(
+    player: PlayerProfile,
+    action: "discard" | "restore",
+  ) {
+    try {
+      await playersApi<{ player: PlayerProfile }>("", {
+        method: "PATCH",
+        body: JSON.stringify({ action, id: player.id }),
+      });
+      await refreshPlayers();
+      showToast(action === "discard" ? "Player Discarded" : "Player Restored");
+    } catch (error) {
+      showToast(
+        error instanceof Error ? error.message : "Player Was Not Updated",
+      );
+    }
+  }
+
+  function deletePlayerPermanently(player: PlayerProfile) {
     setModal({
       kind: "password",
-      message: `Delete ${player.name} from the active player list? Their identity and all past game results will stay connected.`,
-      confirmLabel: "Delete Player",
+      message: `Permanently delete ${player.name}? This cannot be undone. Players with saved session history cannot be permanently deleted.`,
+      confirmLabel: "Delete Permanently",
       onConfirm: (password) =>
-        void archiveRemotePlayer(player, password),
+        void deleteRemotePlayerPermanently(player, password),
     });
   }
 
-  async function archiveRemotePlayer(
+  async function deleteRemotePlayerPermanently(
     player: PlayerProfile,
     password: string,
   ) {
@@ -434,40 +469,15 @@ export function PokerLedger() {
         method: "DELETE",
         headers: { "X-Delete-Password": password },
       });
-      setPlayers((current) =>
+      setDiscardedPlayers((current) =>
         current.filter((item) => item.id !== player.id),
       );
-      setArchivedPlayers((current) =>
-        [...current, { ...player, deletedAt: Date.now() }].sort((a, b) =>
-          a.name.localeCompare(b.name),
-        ),
-      );
-      showToast("Player Deleted From Active List");
+      showToast("Player Permanently Deleted");
     } catch (error) {
       showToast(
-        error instanceof Error ? error.message : "Player Was Not Deleted",
-      );
-    }
-  }
-
-  async function restorePlayer(player: PlayerProfile) {
-    try {
-      const data = await playersApi<{ player: PlayerProfile }>("", {
-        method: "PATCH",
-        body: JSON.stringify({ id: player.id }),
-      });
-      setArchivedPlayers((current) =>
-        current.filter((item) => item.id !== player.id),
-      );
-      setPlayers((current) =>
-        [...current, data.player].sort((a, b) =>
-          a.name.localeCompare(b.name),
-        ),
-      );
-      showToast("Player Reconnected");
-    } catch (error) {
-      showToast(
-        error instanceof Error ? error.message : "Player Was Not Reconnected",
+        error instanceof Error
+          ? error.message
+          : "Player Was Not Permanently Deleted",
       );
     }
   }
@@ -818,30 +828,68 @@ export function PokerLedger() {
     );
   }
 
-  function deleteSession(id: string) {
+  function discardSession(id: string) {
     const session = history.find((item) => item.id === id);
+    if (!session) return;
+    ask(
+      `Discard ${session.name || "this game"} from ${formatDate(
+        session.date,
+      )}? It will stop counting towards the leaderboard until restored.`,
+      "Discard Session",
+      () => void updateSessionState(id, "discard"),
+    );
+  }
+
+  async function updateSessionState(
+    id: string,
+    action: "discard" | "restore",
+  ) {
+    try {
+      await sessionsApi("", {
+        method: "PATCH",
+        body: JSON.stringify({ action, id }),
+      });
+      await refreshHistory();
+      showToast(action === "discard" ? "Session Discarded" : "Session Restored");
+    } catch (error) {
+      showToast(
+        error instanceof Error ? error.message : "Session Was Not Updated",
+      );
+    }
+  }
+
+  function deleteSessionPermanently(id: string) {
+    const session = discardedSessions.find((item) => item.id === id);
     if (!session) return;
     setModal({
       kind: "password",
-      message: `Delete ${session.name || "this game"} from ${formatDate(
+      message: `Permanently delete ${session.name || "this game"} from ${formatDate(
         session.date,
-      )}? This changes the public leaderboard.`,
-      confirmLabel: "Delete Session",
-      onConfirm: (password) => void deleteRemoteSession(id, password),
+      )}? This cannot be undone.`,
+      confirmLabel: "Delete Permanently",
+      onConfirm: (password) =>
+        void deleteRemoteSessionPermanently(id, password),
     });
   }
 
-  async function deleteRemoteSession(id: string, password: string) {
+  async function deleteRemoteSessionPermanently(
+    id: string,
+    password: string,
+  ) {
     try {
       await sessionsApi(`?id=${encodeURIComponent(id)}`, {
         method: "DELETE",
         headers: { "X-Delete-Password": password },
       });
-      setHistory((current) => current.filter((session) => session.id !== id));
-      showToast("Session deleted");
+      setDiscardedSessions((current) =>
+        current.filter((session) => session.id !== id),
+      );
+      showToast("Session Permanently Deleted");
     } catch (error) {
       showToast(
-        error instanceof Error ? error.message : "Session was not deleted",
+        error instanceof Error
+          ? error.message
+          : "Session Was Not Permanently Deleted",
       );
     }
   }
@@ -874,7 +922,9 @@ export function PokerLedger() {
         showToast("No sessions in that file");
         return;
       }
-      const existing = new Set(history.map((session) => session.id));
+      const existing = new Set(
+        [...history, ...discardedSessions].map((session) => session.id),
+      );
       const additions = incoming.filter(
         (session) =>
           session?.id && session.results && !existing.has(session.id),
@@ -978,24 +1028,28 @@ export function PokerLedger() {
           />
         ) : view === "history" ? (
           <HistoryView
+            discardedSessions={discardedSessions}
             history={history}
             loading={historyLoading}
             error={historyError}
             onRetry={() => void refreshHistory()}
-            onDelete={deleteSession}
+            onDiscard={discardSession}
+            onRestore={(id) => void updateSessionState(id, "restore")}
+            onDeletePermanently={deleteSessionPermanently}
             onExport={exportData}
             onImport={importData}
           />
         ) : view === "players" ? (
           <PlayersView
             players={players}
-            archivedPlayers={archivedPlayers}
+            discardedPlayers={discardedPlayers}
             loading={playersLoading}
             error={playersError}
             onRetry={() => void refreshPlayers()}
             onAdd={addPlayer}
-            onArchive={archivePlayer}
-            onRestore={(player) => void restorePlayer(player)}
+            onDiscard={discardPlayer}
+            onRestore={(player) => void updatePlayerState(player, "restore")}
+            onDeletePermanently={deletePlayerPermanently}
           />
         ) : view === "setup" ? (
           <SetupView
@@ -1364,22 +1418,24 @@ function SetupView({
 
 function PlayersView({
   players,
-  archivedPlayers,
+  discardedPlayers,
   loading,
   error,
   onRetry,
   onAdd,
-  onArchive,
+  onDiscard,
   onRestore,
+  onDeletePermanently,
 }: {
   players: PlayerProfile[];
-  archivedPlayers: PlayerProfile[];
+  discardedPlayers: PlayerProfile[];
   loading: boolean;
   error: string;
   onRetry: () => void;
   onAdd: (name: string) => Promise<PlayerProfile | null>;
-  onArchive: (player: PlayerProfile) => void;
+  onDiscard: (player: PlayerProfile) => void;
   onRestore: (player: PlayerProfile) => void;
+  onDeletePermanently: (player: PlayerProfile) => void;
 }) {
   const [name, setName] = useState("");
   const [adding, setAdding] = useState(false);
@@ -1452,11 +1508,11 @@ function PlayersView({
                 </span>
                 <span className="directory-name">{player.name}</span>
                 <button
-                  className="directory-delete"
+                  className="directory-discard"
                   type="button"
-                  onClick={() => onArchive(player)}
+                  onClick={() => onDiscard(player)}
                 >
-                  Delete Player
+                  Discard
                 </button>
               </div>
             ))}
@@ -1468,29 +1524,45 @@ function PlayersView({
         )}
       </section>
 
-      {archivedPlayers.length ? (
-        <section className="card archived-players">
+      {discardedPlayers.length ? (
+        <section className="card discarded-players">
           <div className="hdr">
             <div>
-              <b>Deleted Players</b>
+              <b>Discarded Players</b>
               <p className="muted card-note">
-                Past Results And Player IDs Are Preserved.
+                Restore A Player Anytime. Permanent Deletion Is Owner-Protected
+                And Unavailable When Saved History Exists.
               </p>
             </div>
-            <span className="archived-count">{archivedPlayers.length}</span>
+            <span className="discarded-count">{discardedPlayers.length}</span>
           </div>
           <div className="player-directory-list">
-            {archivedPlayers.map((player) => (
-              <div className="directory-player archived" key={player.id}>
+            {discardedPlayers.map((player) => (
+              <div className="directory-player discarded" key={player.id}>
                 <span className="directory-index">ID</span>
                 <span className="directory-name">{player.name}</span>
-                <button
-                  className="reconnect-player"
-                  type="button"
-                  onClick={() => onRestore(player)}
-                >
-                  Reconnect
-                </button>
+                <div className="directory-actions">
+                  <button
+                    className="restore-player"
+                    type="button"
+                    onClick={() => onRestore(player)}
+                  >
+                    Restore
+                  </button>
+                  <button
+                    className="directory-delete"
+                    type="button"
+                    disabled={player.hasHistory}
+                    title={
+                      player.hasHistory
+                        ? "Saved Session History Must Be Preserved"
+                        : "Delete This Player Permanently"
+                    }
+                    onClick={() => onDeletePermanently(player)}
+                  >
+                    Delete Permanently
+                  </button>
+                </div>
               </div>
             ))}
           </div>
@@ -1916,20 +1988,96 @@ function SplitView({
   );
 }
 
+function SessionCard({
+  session,
+  discarded = false,
+  onDiscard,
+  onRestore,
+  onDeletePermanently,
+}: {
+  session: PokerSession;
+  discarded?: boolean;
+  onDiscard?: (id: string) => void;
+  onRestore?: (id: string) => void;
+  onDeletePermanently?: (id: string) => void;
+}) {
+  const sortedResults = [...session.results].sort((a, b) => b.net - a.net);
+
+  return (
+    <article className={`sess ${discarded ? "discarded" : ""}`}>
+      <div className="hdr session-hdr">
+        <div>
+          <b>{session.name || `Game ${session.sessionNumber || ""}`}</b>
+          <div className="muted session-meta">
+            {formatDate(session.date)} · {session.hands} hands · buy-in{" "}
+            {formatRupees(session.ante)} · {session.results.length} players
+          </div>
+        </div>
+        <div className="session-actions">
+          {discarded ? (
+            <>
+              <button
+                className="restore-session"
+                type="button"
+                onClick={() => onRestore?.(session.id)}
+              >
+                Restore
+              </button>
+              <button
+                className="delete-session"
+                type="button"
+                onClick={() => onDeletePermanently?.(session.id)}
+              >
+                Delete Permanently
+              </button>
+            </>
+          ) : (
+            <button
+              className="discard-session"
+              type="button"
+              onClick={() => onDiscard?.(session.id)}
+            >
+              Discard Session
+            </button>
+          )}
+        </div>
+      </div>
+      {sortedResults.map((result, index) => (
+        <div className="sline" key={`${result.playerId || result.name}-${index}`}>
+          <span>
+            {index === 0 ? "🏆 " : ""}
+            {result.name}
+          </span>
+          <span className={result.net >= 0 ? "pos" : "neg"}>
+            {result.net >= 0 ? "+" : ""}
+            {formatRupees(result.net)}
+          </span>
+        </div>
+      ))}
+    </article>
+  );
+}
+
 function HistoryView({
   history,
+  discardedSessions,
   loading,
   error,
   onRetry,
-  onDelete,
+  onDiscard,
+  onRestore,
+  onDeletePermanently,
   onExport,
   onImport,
 }: {
   history: PokerSession[];
+  discardedSessions: PokerSession[];
   loading: boolean;
   error: string;
   onRetry: () => void;
-  onDelete: (id: string) => void;
+  onDiscard: (id: string) => void;
+  onRestore: (id: string) => void;
+  onDeletePermanently: (id: string) => void;
   onExport: () => void;
   onImport: (event: ChangeEvent<HTMLInputElement>) => void;
 }) {
@@ -1994,47 +2142,36 @@ function HistoryView({
           <div className="hdr">
             <b>Game Sessions</b>
           </div>
-          {history.map((session) => {
-            const sortedResults = [...session.results].sort(
-              (a, b) => b.net - a.net,
-            );
-            return (
-              <article className="sess" key={session.id}>
-                <div className="hdr session-hdr">
-                  <div>
-                    <b>
-                      {session.name ||
-                        `Game ${session.sessionNumber || history.length}`}
-                    </b>
-                    <div className="muted session-meta">
-                      {formatDate(session.date)} · {session.hands} hands ·
-                      buy-in {formatRupees(session.ante)} ·{" "}
-                      {session.results.length} players
-                    </div>
-                  </div>
-                  <button
-                    className="delete-session"
-                    aria-label={`Delete Session From ${formatDate(session.date)}`}
-                    onClick={() => onDelete(session.id)}
-                  >
-                    Delete Session
-                  </button>
-                </div>
-                {sortedResults.map((result, index) => (
-                  <div className="sline" key={`${result.name}-${index}`}>
-                    <span>
-                      {index === 0 ? "🏆 " : ""}
-                      {result.name}
-                    </span>
-                    <span className={result.net >= 0 ? "pos" : "neg"}>
-                      {result.net >= 0 ? "+" : ""}
-                      {formatRupees(result.net)}
-                    </span>
-                  </div>
-                ))}
-              </article>
-            );
-          })}
+          {history.map((session) => (
+            <SessionCard
+              key={session.id}
+              session={session}
+              onDiscard={onDiscard}
+            />
+          ))}
+        </section>
+      ) : null}
+
+      {!error && discardedSessions.length ? (
+        <section className="card discarded-sessions">
+          <div className="hdr">
+            <div>
+              <b>Discarded Sessions</b>
+              <p className="muted card-note">
+                These Sessions Do Not Count Towards The Leaderboard.
+              </p>
+            </div>
+            <span className="discarded-count">{discardedSessions.length}</span>
+          </div>
+          {discardedSessions.map((session) => (
+            <SessionCard
+              discarded
+              key={session.id}
+              session={session}
+              onRestore={onRestore}
+              onDeletePermanently={onDeletePermanently}
+            />
+          ))}
         </section>
       ) : null}
 

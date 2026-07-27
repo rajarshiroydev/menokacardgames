@@ -60,6 +60,13 @@ CREATE UNIQUE INDEX IF NOT EXISTS poker_sessions_session_number_idx
 CREATE INDEX IF NOT EXISTS poker_sessions_played_at_idx
   ON poker_sessions (played_at DESC);
 
+ALTER TABLE poker_sessions
+  ADD COLUMN IF NOT EXISTS discarded_at timestamptz;
+
+CREATE INDEX IF NOT EXISTS poker_sessions_active_played_at_idx
+  ON poker_sessions (played_at DESC, created_at DESC)
+  WHERE discarded_at IS NULL;
+
 INSERT INTO players (name, name_key)
 SELECT DISTINCT ON (name_key) name, name_key
 FROM (
