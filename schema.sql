@@ -2,8 +2,16 @@ CREATE TABLE IF NOT EXISTS players (
   id text PRIMARY KEY DEFAULT gen_random_uuid()::text,
   name text NOT NULL CHECK (char_length(name) BETWEEN 1 AND 80),
   name_key text NOT NULL UNIQUE,
-  created_at timestamptz NOT NULL DEFAULT now()
+  created_at timestamptz NOT NULL DEFAULT now(),
+  deleted_at timestamptz
 );
+
+ALTER TABLE players
+  ADD COLUMN IF NOT EXISTS deleted_at timestamptz;
+
+CREATE INDEX IF NOT EXISTS players_active_name_idx
+  ON players (lower(name))
+  WHERE deleted_at IS NULL;
 
 CREATE TABLE IF NOT EXISTS poker_sessions (
   id text PRIMARY KEY,

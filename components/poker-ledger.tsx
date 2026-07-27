@@ -30,12 +30,16 @@ import type {
   PlayerProfile,
   PokerSession,
   RaiseRule,
+  WinnerAnnouncement,
 } from "@/lib/poker/types";
 
 type View = "home" | "setup" | "game" | "history" | "players";
 type ModalState =
   | {
       kind: "rules";
+    }
+  | {
+      kind: "hands";
     }
   | {
       kind: "confirm";
@@ -48,6 +52,20 @@ type ModalState =
       message: string;
       onConfirm: (password: string) => void;
     };
+
+const HANDS_PINNED_KEY = "pokerLedger.handsPinned.v1";
+const POKER_HANDS = [
+  { name: "Royal Flush", cards: "A K Q J 10", note: "Same Suit" },
+  { name: "Straight Flush", cards: "9 8 7 6 5", note: "Same Suit" },
+  { name: "Four Of A Kind", cards: "A A A A K", note: "" },
+  { name: "Full House", cards: "K K K 7 7", note: "" },
+  { name: "Flush", cards: "A J 8 4 2", note: "Same Suit" },
+  { name: "Straight", cards: "9 8 7 6 5", note: "" },
+  { name: "Three Of A Kind", cards: "Q Q Q 8 3", note: "" },
+  { name: "Two Pair", cards: "J J 4 4 9", note: "" },
+  { name: "One Pair", cards: "10 10 A 7 3", note: "" },
+  { name: "High Card", cards: "A J 8 6 2", note: "" },
+] as const;
 
 async function sessionsApi<T>(
   path = "",
@@ -69,8 +87,11 @@ async function sessionsApi<T>(
   return data;
 }
 
-async function playersApi<T>(options: RequestInit = {}): Promise<T> {
-  const response = await fetch("/api/players", {
+async function playersApi<T>(
+  path = "",
+  options: RequestInit = {},
+): Promise<T> {
+  const response = await fetch(`/api/players${path}`, {
     ...options,
     headers: {
       "Content-Type": "application/json",
@@ -116,7 +137,7 @@ function recordAction(
 ) {
   const hand = game.hand;
   if (!hand) return;
-  const line = `H${hand.no} ${STAGES[hand.stage]}: ${text}`;
+  const line = `Hand ${hand.no} ${STAGES[hand.stage]}: ${text}`;
   hand.last[playerIndex] = { ...action, line };
   game.log.unshift(line);
   game.log = game.log.slice(0, 80);
@@ -127,6 +148,15 @@ function recordWin(game: GameState, line: string) {
   game.log = game.log.slice(0, 80);
 }
 
+function belongsToHand(line: string, handNo: number) {
+  return (
+    line.startsWith(`Hand ${handNo} `) ||
+    line.startsWith(`Hand ${handNo}:`) ||
+    line.startsWith(`H${handNo} `) ||
+    line.startsWith(`H${handNo}:`)
+  );
+}
+
 function awardPot(game: GameState, playerIndex: number, automatic = false) {
   const hand = game.hand;
   if (!hand) return 0;
@@ -134,13 +164,18 @@ function awardPot(game: GameState, playerIndex: number, automatic = false) {
   game.players[playerIndex].stack += pot;
   recordWin(
     game,
-    `H${hand.no}: ${game.players[playerIndex].name} wins ${formatRupees(pot)}${
-      automatic ? " (others folded)" : ""
-    }`,
+    `Hand ${hand.no}: ${game.players[playerIndex].name} wins ${formatRupees(
+      pot,
+    )}${automatic ? " (others folded)" : ""}`,
   );
   game.lastHand = { stacksBefore: [...hand.stacksBeforeHand] };
+  game.winnerAnnouncement = {
+    names: [game.players[playerIndex].name],
+    pot,
+    handNo: hand.no,
+    split: false,
+  };
   game.hand = null;
-  dealNewHand(game);
   return pot;
 }
 
@@ -151,11 +186,11 @@ export function PokerLedger() {
   const [historyLoading, setHistoryLoading] = useState(true);
   const [historyError, setHistoryError] = useState("");
   const [players, setPlayers] = useState<PlayerProfile[]>([]);
+  const [archivedPlayers, setArchivedPlayers] = useState<PlayerProfile[]>([]);
   const [playersLoading, setPlayersLoading] = useState(true);
   const [playersError, setPlayersError] = useState("");
   const [view, setView] = useState<View>("home");
-  const [playersReturnView, setPlayersReturnView] =
-    useState<Extract<View, "home" | "setup">>("home");
+  const [handsPinned, setHandsPinned] = useState(false);
   const [ready, setReady] = useState(false);
   const [toast, setToast] = useState("");
   const [modal, setModal] = useState<ModalState | null>(null);
@@ -166,6 +201,20 @@ export function PokerLedger() {
     if (toastTimer.current) clearTimeout(toastTimer.current);
     toastTimer.current = setTimeout(() => setToast(""), 1800);
   }, []);
+
+  const navigate = useCallback(
+    (nextView: View, options: { replace?: boolean } = {}) => {
+      setView(nextView);
+      const state = { ...window.history.state, menokaView: nextView };
+      if (options.replace) {
+        window.history.replaceState(state, "");
+      } else {
+        window.history.pushState(state, "");
+      }
+      window.scrollTo(0, 0);
+    },
+    [],
+  );
 
   const refreshHistory = useCallback(async () => {
     setHistoryLoading(true);
@@ -205,8 +254,14 @@ export function PokerLedger() {
     setPlayersLoading(true);
     setPlayersError("");
     try {
-      const data = await playersApi<{ players?: PlayerProfile[] }>();
+      const data = await playersApi<{
+        archivedPlayers?: PlayerProfile[];
+        players?: PlayerProfile[];
+      }>();
       setPlayers(Array.isArray(data.players) ? data.players : []);
+      setArchivedPlayers(
+        Array.isArray(data.archivedPlayers) ? data.archivedPlayers : [],
+      );
     } catch (error) {
       setPlayersError(
         error instanceof Error ? error.message : "Could not load players",
@@ -220,7 +275,20 @@ export function PokerLedger() {
     const hydrationTimer = setTimeout(() => {
       const storedGame = readStoredGame();
       setGame(storedGame);
-      if (storedGame) setView("game");
+      setHandsPinned(
+        window.localStorage.getItem(HANDS_PINNED_KEY) === "true",
+      );
+      window.history.replaceState(
+        { ...window.history.state, menokaView: "home" },
+        "",
+      );
+      if (storedGame) {
+        window.history.pushState(
+          { ...window.history.state, menokaView: "game" },
+          "",
+        );
+        setView("game");
+      }
       setReady(true);
       void refreshHistory();
       void refreshPlayers();
@@ -232,6 +300,27 @@ export function PokerLedger() {
   }, [refreshHistory, refreshPlayers]);
 
   useEffect(() => {
+    function handleBrowserBack(event: PopStateEvent) {
+      const nextView = event.state?.menokaView;
+      if (
+        nextView === "home" ||
+        nextView === "setup" ||
+        nextView === "game" ||
+        nextView === "history" ||
+        nextView === "players"
+      ) {
+        setView(nextView);
+      } else {
+        setView("home");
+      }
+      window.scrollTo(0, 0);
+    }
+
+    window.addEventListener("popstate", handleBrowserBack);
+    return () => window.removeEventListener("popstate", handleBrowserBack);
+  }, []);
+
+  useEffect(() => {
     if (!ready) return;
     if (game) {
       window.localStorage.setItem(GAME_STORAGE_KEY, JSON.stringify(game));
@@ -239,6 +328,11 @@ export function PokerLedger() {
       window.localStorage.removeItem(GAME_STORAGE_KEY);
     }
   }, [game, ready]);
+
+  useEffect(() => {
+    if (!ready) return;
+    window.localStorage.setItem(HANDS_PINNED_KEY, String(handsPinned));
+  }, [handsPinned, ready]);
 
   const ask = useCallback(
     (message: string, confirmLabel: string, onConfirm: () => void) => {
@@ -279,15 +373,15 @@ export function PokerLedger() {
       };
       dealNewHand(nextGame);
       setGame(nextGame);
-      setView("game");
+      navigate("game", { replace: true });
     },
-    [nextSessionNumber, showToast],
+    [navigate, nextSessionNumber, showToast],
   );
 
   const addPlayer = useCallback(
     async (name: string) => {
       try {
-        const data = await playersApi<{ player: PlayerProfile }>({
+        const data = await playersApi<{ player: PlayerProfile }>("", {
           method: "POST",
           body: JSON.stringify({ name }),
         });
@@ -299,6 +393,9 @@ export function PokerLedger() {
             a.name.localeCompare(b.name),
           );
         });
+        setArchivedPlayers((current) =>
+          current.filter((player) => player.id !== data.player.id),
+        );
         setPlayersError("");
         showToast("Player Added");
         return data.player;
@@ -312,7 +409,67 @@ export function PokerLedger() {
     [showToast],
   );
 
-  function act(playerIndex: number, type: PlayerAction["type"], amount?: number) {
+  function archivePlayer(player: PlayerProfile) {
+    setModal({
+      kind: "password",
+      message: `Delete ${player.name} from the active player list? Their identity and all past game results will stay connected.`,
+      onConfirm: (password) =>
+        void archiveRemotePlayer(player, password),
+    });
+  }
+
+  async function archiveRemotePlayer(
+    player: PlayerProfile,
+    password: string,
+  ) {
+    try {
+      await playersApi(`?id=${encodeURIComponent(player.id)}`, {
+        method: "DELETE",
+        headers: { "X-Delete-Password": password },
+      });
+      setPlayers((current) =>
+        current.filter((item) => item.id !== player.id),
+      );
+      setArchivedPlayers((current) =>
+        [...current, { ...player, deletedAt: Date.now() }].sort((a, b) =>
+          a.name.localeCompare(b.name),
+        ),
+      );
+      showToast("Player Deleted From Active List");
+    } catch (error) {
+      showToast(
+        error instanceof Error ? error.message : "Player Was Not Deleted",
+      );
+    }
+  }
+
+  async function restorePlayer(player: PlayerProfile) {
+    try {
+      const data = await playersApi<{ player: PlayerProfile }>("", {
+        method: "PATCH",
+        body: JSON.stringify({ id: player.id }),
+      });
+      setArchivedPlayers((current) =>
+        current.filter((item) => item.id !== player.id),
+      );
+      setPlayers((current) =>
+        [...current, data.player].sort((a, b) =>
+          a.name.localeCompare(b.name),
+        ),
+      );
+      showToast("Player Reconnected");
+    } catch (error) {
+      showToast(
+        error instanceof Error ? error.message : "Player Was Not Reconnected",
+      );
+    }
+  }
+
+  function act(
+    playerIndex: number,
+    type: PlayerAction["type"],
+    amount?: number,
+  ) {
     if (!game?.hand) return;
     const next = structuredClone(game);
     const hand = next.hand;
@@ -519,15 +676,28 @@ export function PokerLedger() {
     });
     recordWin(
       next,
-      `H${hand.no}: split ${formatRupees(hand.pot)} between ${winners
+      `Hand ${hand.no}: split ${formatRupees(hand.pot)} between ${winners
         .map((index) => next.players[index].name)
         .join(", ")}`,
     );
     next.lastHand = { stacksBefore: [...hand.stacksBeforeHand] };
+    next.winnerAnnouncement = {
+      names: winners.map((index) => next.players[index].name),
+      pot: hand.pot,
+      handNo: hand.no,
+      split: true,
+    };
     next.hand = null;
-    dealNewHand(next);
     setGame(next);
     showToast(`Pot split ${winners.length} ways`);
+  }
+
+  function startNextRound() {
+    if (!game?.winnerAnnouncement) return;
+    const next = structuredClone(game);
+    next.winnerAnnouncement = null;
+    dealNewHand(next);
+    setGame(next);
   }
 
   function cancelHand() {
@@ -542,11 +712,7 @@ export function PokerLedger() {
         next.players.forEach((player, index) => {
           player.stack = hand.stacksBeforeHand[index];
         });
-        next.log = next.log.filter(
-          (line) =>
-            !line.startsWith(`H${hand.no} `) &&
-            !line.startsWith(`H${hand.no}:`),
-        );
+        next.log = next.log.filter((line) => !belongsToHand(line, hand.no));
         next.handNo = hand.no - 1;
         next.hand = null;
         dealNewHand(next);
@@ -569,9 +735,7 @@ export function PokerLedger() {
       });
       const undoneNumber = next.hand ? next.hand.no - 1 : next.handNo;
       next.log = next.log.filter(
-        (line) =>
-          !line.startsWith(`H${undoneNumber} `) &&
-          !line.startsWith(`H${undoneNumber}:`),
+        (line) => !belongsToHand(line, undoneNumber),
       );
       next.handNo = undoneNumber - 1;
       next.lastHand = null;
@@ -588,7 +752,7 @@ export function PokerLedger() {
       "Reset game",
       () => {
         setGame(null);
-        setView("home");
+        navigate("home", { replace: true });
       },
     );
   }
@@ -621,7 +785,7 @@ export function PokerLedger() {
         body: JSON.stringify({ sessions: [session] }),
       });
       setGame(null);
-      setView("history");
+      navigate("history", { replace: true });
       await refreshHistory();
       showToast("Session saved");
     } catch (error) {
@@ -720,24 +884,27 @@ export function PokerLedger() {
         `Added ${additions.length} session${additions.length === 1 ? "" : "s"}`,
       );
     } catch (error) {
-      showToast(error instanceof SyntaxError ? "Not a valid file" : "Import failed");
+      showToast(
+        error instanceof SyntaxError ? "Not a valid file" : "Import failed",
+      );
     }
   }
 
-  function openPlayers(returnView: Extract<View, "home" | "setup">) {
-    setPlayersReturnView(returnView);
-    setView("players");
-    window.scrollTo(0, 0);
+  function openPlayers() {
+    navigate("players");
   }
 
   function goBack() {
-    setView(view === "players" ? playersReturnView : "home");
-    window.scrollTo(0, 0);
+    window.history.back();
+  }
+
+  function toggleHandsPinned() {
+    setHandsPinned((current) => !current);
   }
 
   const screenTitle =
     view === "game"
-      ? game?.sessionLabel || game?.gameName || "Current Game"
+      ? game?.sessionLabel || game?.gameName || "Game"
       : view === "setup"
         ? "New Game"
         : view === "history"
@@ -754,7 +921,6 @@ export function PokerLedger() {
             aria-label="Go Back"
             onClick={goBack}
           >
-            <span aria-hidden="true">←</span>
             <span>Back</span>
           </button>
           <span className="topbar-title">{screenTitle}</span>
@@ -774,9 +940,9 @@ export function PokerLedger() {
             hasGame={Boolean(game)}
             historyCount={history.length}
             playerCount={players.length}
-            onGame={() => setView(game ? "game" : "setup")}
-            onHistory={() => setView("history")}
-            onPlayers={() => openPlayers("home")}
+            onGame={() => navigate(game ? "game" : "setup")}
+            onHistory={() => navigate("history")}
+            onPlayers={openPlayers}
             onRules={() => setModal({ kind: "rules" })}
           />
         ) : view === "history" ? (
@@ -792,10 +958,13 @@ export function PokerLedger() {
         ) : view === "players" ? (
           <PlayersView
             players={players}
+            archivedPlayers={archivedPlayers}
             loading={playersLoading}
             error={playersError}
             onRetry={() => void refreshPlayers()}
             onAdd={addPlayer}
+            onArchive={archivePlayer}
+            onRestore={(player) => void restorePlayer(player)}
           />
         ) : view === "setup" ? (
           <SetupView
@@ -804,7 +973,7 @@ export function PokerLedger() {
             error={playersError}
             onRetry={() => void refreshPlayers()}
             suggestedName={`Game ${nextSessionNumber}`}
-            onManagePlayers={() => openPlayers("setup")}
+            onManagePlayers={openPlayers}
             onStart={startGame}
           />
         ) : game ? (
@@ -822,15 +991,18 @@ export function PokerLedger() {
             onEndSession={endSession}
             onUndoHand={undoHand}
             onDiscard={discardGame}
+            handsPinned={handsPinned}
+            onOpenHands={() => setModal({ kind: "hands" })}
+            onToggleHandsPin={toggleHandsPinned}
           />
         ) : (
           <HomeView
             hasGame={false}
             historyCount={history.length}
             playerCount={players.length}
-            onGame={() => setView("setup")}
-            onHistory={() => setView("history")}
-            onPlayers={() => openPlayers("home")}
+            onGame={() => navigate("setup")}
+            onHistory={() => navigate("history")}
+            onPlayers={openPlayers}
             onRules={() => setModal({ kind: "rules" })}
           />
         )}
@@ -842,8 +1014,16 @@ export function PokerLedger() {
       {modal ? (
         <Modal
           state={modal}
+          handsPinned={handsPinned}
+          onToggleHandsPin={toggleHandsPinned}
           onClose={() => setModal(null)}
           onConfirm={() => setModal(null)}
+        />
+      ) : null}
+      {game?.winnerAnnouncement ? (
+        <WinnerCard
+          announcement={game.winnerAnnouncement}
+          onNext={startNextRound}
         />
       ) : null}
     </main>
@@ -890,15 +1070,14 @@ function HomeView({
             ♦
           </span>
           <span className="home-action-copy">
-            <strong>{hasGame ? "Continue Current Game" : "Start A New Game"}</strong>
+            <strong>
+              {hasGame ? "Continue Game Session" : "Start A New Game"}
+            </strong>
             <small>
               {hasGame
                 ? "Return To The Hand In Progress"
                 : "Choose The Players And Buy-In"}
             </small>
-          </span>
-          <span className="home-arrow" aria-hidden="true">
-            →
           </span>
         </button>
 
@@ -909,11 +1088,9 @@ function HomeView({
           <span className="home-action-copy">
             <strong>All Time Standings</strong>
             <small>
-              {historyCount} Saved Session{historyCount === 1 ? "" : "s"}
+              {historyCount} Saved Game Session
+              {historyCount === 1 ? "" : "s"}
             </small>
-          </span>
-          <span className="home-arrow" aria-hidden="true">
-            →
           </span>
         </button>
 
@@ -926,9 +1103,6 @@ function HomeView({
             <small>
               {playerCount} Player{playerCount === 1 ? "" : "s"} Ready To Play
             </small>
-          </span>
-          <span className="home-arrow" aria-hidden="true">
-            →
           </span>
         </button>
       </div>
@@ -973,18 +1147,16 @@ function SetupView({
   const ruleExample = useMemo(() => {
     const buyIn = Math.max(1, ante || 100);
     if (raiseRule === "double") {
-      return `Open ${formatRupees(buyIn)} → raise ${formatRupees(
+      return `Open ${formatRupees(buyIn)}; raise ${formatRupees(
         2 * buyIn,
-      )} → ${formatRupees(4 * buyIn)} → ${formatRupees(8 * buyIn)}`;
+      )}; then ${formatRupees(4 * buyIn)}; then ${formatRupees(8 * buyIn)}`;
     }
     if (raiseRule === "free") {
-      return `Open ${formatRupees(
-        buyIn,
-      )} → any raise above the current bet`;
+      return `Open ${formatRupees(buyIn)}; then any raise above the current bet`;
     }
-    return `Open ${formatRupees(buyIn)} → raise ${formatRupees(
+    return `Open ${formatRupees(buyIn)}; raise ${formatRupees(
       2 * buyIn,
-    )} → ${formatRupees(3 * buyIn)} → ${formatRupees(4 * buyIn)}`;
+    )}; then ${formatRupees(3 * buyIn)}; then ${formatRupees(4 * buyIn)}`;
   }, [ante, raiseRule]);
 
   function updatePlayerCount(value: number) {
@@ -1095,7 +1267,11 @@ function SetupView({
       <div className="names player-selects">
         <div className="player-select-heading">
           <label>Select Players</label>
-          <button type="button" className="text-button" onClick={onManagePlayers}>
+          <button
+            type="button"
+            className="text-button"
+            onClick={onManagePlayers}
+          >
             Manage Players
           </button>
         </div>
@@ -1157,16 +1333,22 @@ function SetupView({
 
 function PlayersView({
   players,
+  archivedPlayers,
   loading,
   error,
   onRetry,
   onAdd,
+  onArchive,
+  onRestore,
 }: {
   players: PlayerProfile[];
+  archivedPlayers: PlayerProfile[];
   loading: boolean;
   error: string;
   onRetry: () => void;
   onAdd: (name: string) => Promise<PlayerProfile | null>;
+  onArchive: (player: PlayerProfile) => void;
+  onRestore: (player: PlayerProfile) => void;
 }) {
   const [name, setName] = useState("");
   const [adding, setAdding] = useState(false);
@@ -1183,14 +1365,17 @@ function PlayersView({
   return (
     <>
       <section className="card player-directory-intro">
-        <div className="hdr">
+        <div className="player-directory-header">
           <div>
             <b>Existing Players</b>
             <p className="muted card-note">
               One Saved Name Keeps Every Future Session And Standing Together.
             </p>
           </div>
-          <span className="player-count-badge">{players.length}</span>
+          <div className="player-tally" aria-label={`${players.length} Active Players`}>
+            <strong>{players.length}</strong>
+            <span>Active Players</span>
+          </div>
         </div>
 
         <form className="add-player-form" onSubmit={add}>
@@ -1217,7 +1402,6 @@ function PlayersView({
       <section className="card">
         <div className="hdr">
           <b>Player List</b>
-          <span className="muted">Shared Across Every Device</span>
         </div>
         {error ? (
           <div className="directory-state">
@@ -1235,7 +1419,14 @@ function PlayersView({
                 <span className="directory-index">
                   {String(index + 1).padStart(2, "0")}
                 </span>
-                <span>{player.name}</span>
+                <span className="directory-name">{player.name}</span>
+                <button
+                  className="directory-delete"
+                  type="button"
+                  onClick={() => onArchive(player)}
+                >
+                  Delete Player
+                </button>
               </div>
             ))}
           </div>
@@ -1245,6 +1436,35 @@ function PlayersView({
           </p>
         )}
       </section>
+
+      {archivedPlayers.length ? (
+        <section className="card archived-players">
+          <div className="hdr">
+            <div>
+              <b>Deleted Players</b>
+              <p className="muted card-note">
+                Past Results And Player IDs Are Preserved.
+              </p>
+            </div>
+            <span className="archived-count">{archivedPlayers.length}</span>
+          </div>
+          <div className="player-directory-list">
+            {archivedPlayers.map((player) => (
+              <div className="directory-player archived" key={player.id}>
+                <span className="directory-index">ID</span>
+                <span className="directory-name">{player.name}</span>
+                <button
+                  className="reconnect-player"
+                  type="button"
+                  onClick={() => onRestore(player)}
+                >
+                  Reconnect
+                </button>
+              </div>
+            ))}
+          </div>
+        </section>
+      ) : null}
     </>
   );
 }
@@ -1267,20 +1487,32 @@ type GameViewProps = {
   onEndSession: () => void;
   onUndoHand: () => void;
   onDiscard: () => void;
+  handsPinned: boolean;
+  onOpenHands: () => void;
+  onToggleHandsPin: () => void;
 };
 
 function GameView(props: GameViewProps) {
   const { game } = props;
   const hand = game.hand;
-  const net = (index: number) =>
-    game.players[index].stack - game.startStack;
+  const net = (index: number) => game.players[index].stack - game.startStack;
 
   return (
     <>
-      <section className="game-identity" aria-label="Current Game">
-        <span>Current Game</span>
-        <strong>{game.sessionLabel || game.gameName || "Current Game"}</strong>
-      </section>
+      {props.handsPinned ? (
+        <PokerHandsChart
+          pinned
+          onTogglePin={props.onToggleHandsPin}
+        />
+      ) : (
+        <button
+          className="hands-launch"
+          type="button"
+          onClick={props.onOpenHands}
+        >
+          Poker Hands
+        </button>
+      )}
       {!hand ? (
         <section className="card">
           <b>Game over</b>
@@ -1303,8 +1535,7 @@ function GameView(props: GameViewProps) {
             <div className="stage">Pot</div>
             <div className="pot">{formatRupees(hand.pot)}</div>
             <div className="muted pot-meta">
-              hand {hand.no} · buy-in {formatRupees(game.ante)} · to call{" "}
-              {formatRupees(hand.roundHigh)} ·{" "}
+              hand {hand.no} · buy-in {formatRupees(game.ante)} ·{" "}
               {RAISE_RULES[getRaiseRule(game)].name.toLowerCase()}
             </div>
           </div>
@@ -1341,7 +1572,7 @@ function GameView(props: GameViewProps) {
                   disabled={pendingIndexes(game).length > 0}
                   onClick={props.onNextStage}
                 >
-                  Deal {STAGES[hand.stage + 1]} →
+                  Deal {STAGES[hand.stage + 1]}
                 </button>
               ) : (
                 <>
@@ -1365,7 +1596,7 @@ function GameView(props: GameViewProps) {
                       disabled={pendingIndexes(game).length > 0}
                       onClick={props.onBeginSplit}
                     >
-                      Split between two or more →
+                      Split Between Two Or More
                     </button>
                   ) : null}
                 </>
@@ -1407,7 +1638,7 @@ function GameView(props: GameViewProps) {
 
       <section className="card">
         <button className="blue full finish" onClick={props.onEndSession}>
-          Finish &amp; save session
+          Finish And Save Game Session
         </button>
         <div className="grid2">
           <button onClick={props.onUndoHand}>Undo last hand</button>
@@ -1427,6 +1658,82 @@ function GameView(props: GameViewProps) {
         ) : null}
       </section>
     </>
+  );
+}
+
+function PokerHandsChart({
+  pinned,
+  onTogglePin,
+}: {
+  pinned: boolean;
+  onTogglePin: () => void;
+}) {
+  return (
+    <section className={`poker-hands-chart ${pinned ? "pinned" : ""}`}>
+      <div className="poker-hands-heading">
+        <div>
+          <span className="hands-kicker">Strongest To Weakest</span>
+          <h2>Poker Hand Rankings</h2>
+        </div>
+        <button type="button" onClick={onTogglePin}>
+          {pinned ? "Unpin" : "Pin Chart"}
+        </button>
+      </div>
+      <div className="hand-rank-grid">
+        {POKER_HANDS.map((hand, index) => (
+          <div className="hand-rank" key={hand.name}>
+            <span className="hand-rank-number">{index + 1}</span>
+            <div>
+              <strong>{hand.name}</strong>
+              <span>
+                {hand.cards}
+                {hand.note ? ` · ${hand.note}` : ""}
+              </span>
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function WinnerCard({
+  announcement,
+  onNext,
+}: {
+  announcement: WinnerAnnouncement;
+  onNext: () => void;
+}) {
+  const winnerText = announcement.split
+    ? `${announcement.names.join(" And ")} Win`
+    : `${announcement.names[0]} Wins`;
+
+  return (
+    <div className="winner-overlay" role="presentation">
+      <section
+        className="winner-card"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="winner-title"
+      >
+        <div className="confetti" aria-hidden="true">
+          {Array.from({ length: 18 }, (_, index) => (
+            <span key={index} />
+          ))}
+        </div>
+        <span className="winner-suit" aria-hidden="true">
+          ♠
+        </span>
+        <span className="winner-kicker">
+          Hand {announcement.handNo} Complete
+        </span>
+        <h2 id="winner-title">{winnerText}</h2>
+        <p>{formatRupees(announcement.pot)} Pot Awarded</p>
+        <button className="primary full" type="button" onClick={onNext}>
+          Start The Next Round
+        </button>
+      </section>
+    </div>
   );
 }
 
@@ -1459,7 +1766,9 @@ function PlayerRow({
           <small>{formatRupees(player.stack)}</small>
         </div>
         <span className="tag">
-          {folded ? "folded" : `in ${formatRupees(hand.committed[playerIndex])}`}
+          {folded
+            ? "folded"
+            : `in ${formatRupees(hand.committed[playerIndex])}`}
         </span>
         {canUndo ? (
           <button className="undo" onClick={() => onUndo(playerIndex)}>
@@ -1512,10 +1821,7 @@ function PlayerRow({
           >
             {owed > 0 ? "Call" : "Check"}
           </button>
-          <button
-            className="danger"
-            onClick={() => onAct(playerIndex, "fold")}
-          >
+          <button className="danger" onClick={() => onAct(playerIndex, "fold")}>
             Fold
           </button>
         </div>
@@ -1539,9 +1845,7 @@ function SplitView({
   if (!hand?.splitSel) return null;
   const selected = [...hand.splitSel].sort((a, b) => a - b);
   const each = selected.length ? Math.floor(hand.pot / selected.length) : 0;
-  const remainder = selected.length
-    ? hand.pot - each * selected.length
-    : 0;
+  const remainder = selected.length ? hand.pot - each * selected.length : 0;
 
   return (
     <>
@@ -1575,7 +1879,7 @@ function SplitView({
           : "Select at least 2 players"}
       </button>
       <button className="ghost full split-back" onClick={onBack}>
-        ← Back
+        Back
       </button>
     </>
   );
@@ -1648,8 +1952,8 @@ function HistoryView({
           ))
         ) : (
           <p className="muted">
-            No saved sessions yet. Finish a game with “Finish &amp; save
-            session” and it will show up here.
+            No Saved Sessions Yet. Finish A Game With “Finish And Save Game
+            Session” And It Will Show Up Here.
           </p>
         )}
       </section>
@@ -1657,7 +1961,7 @@ function HistoryView({
       {!error && history.length ? (
         <section className="card">
           <div className="hdr">
-            <b>Sessions</b>
+            <b>Game Sessions</b>
           </div>
           {history.map((session) => {
             const sortedResults = [...session.results].sort(
@@ -1672,19 +1976,17 @@ function HistoryView({
                         `Game ${session.sessionNumber || history.length}`}
                     </b>
                     <div className="muted session-meta">
-                      {formatDate(session.date)} · {session.hands} hands · buy-in{" "}
-                      {formatRupees(session.ante)} · {session.results.length}{" "}
-                      players
+                      {formatDate(session.date)} · {session.hands} hands ·
+                      buy-in {formatRupees(session.ante)} ·{" "}
+                      {session.results.length} players
                     </div>
                   </div>
                   <button
-                    className="undo"
-                    aria-label={`Delete session from ${formatDate(
-                      session.date,
-                    )}`}
+                    className="delete-session"
+                    aria-label={`Delete Session From ${formatDate(session.date)}`}
                     onClick={() => onDelete(session.id)}
                   >
-                    ✕
+                    Delete Session
                   </button>
                 </div>
                 {sortedResults.map((result, index) => (
@@ -1707,8 +2009,8 @@ function HistoryView({
 
       <section className="card">
         <div className="grid2">
-          <button onClick={onExport}>↓ Export backup</button>
-          <button onClick={() => importInput.current?.click()}>↑ Import</button>
+          <button onClick={onExport}>Export Backup</button>
+          <button onClick={() => importInput.current?.click()}>Import</button>
         </div>
         <input
           ref={importInput}
@@ -1729,17 +2031,21 @@ function HistoryView({
 
 function Modal({
   state,
+  handsPinned,
+  onToggleHandsPin,
   onClose,
   onConfirm,
 }: {
   state: ModalState;
+  handsPinned: boolean;
+  onToggleHandsPin: () => void;
   onClose: () => void;
   onConfirm: () => void;
 }) {
   const [password, setPassword] = useState("");
 
   function confirm() {
-    if (state.kind === "rules") {
+    if (state.kind === "rules" || state.kind === "hands") {
       onClose();
       return;
     }
@@ -1750,6 +2056,33 @@ function Modal({
       state.onConfirm();
     }
     onConfirm();
+  }
+
+  if (state.kind === "hands") {
+    return (
+      <div
+        className="modal show"
+        role="presentation"
+        onMouseDown={(event) => {
+          if (event.target === event.currentTarget) onClose();
+        }}
+      >
+        <div
+          className="sheet hands-sheet"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Poker Hand Rankings"
+        >
+          <PokerHandsChart
+            pinned={handsPinned}
+            onTogglePin={onToggleHandsPin}
+          />
+          <button className="ghost full" type="button" onClick={onClose}>
+            Close Chart
+          </button>
+        </div>
+      </div>
+    );
   }
 
   if (state.kind === "rules") {
@@ -1783,7 +2116,8 @@ function Modal({
                 <h3>Set Up The Table</h3>
                 <p>
                   Choose A Starting Stack, Buy-In, Minimum Raise Rule, And Two
-                  To Ten Players. There Are No Small Or Big Blinds.
+                  To Ten Players. One Game Session Can Contain Multiple Hands.
+                  There Are No Small Or Big Blinds.
                 </p>
               </div>
             </section>
@@ -1793,10 +2127,10 @@ function Modal({
               <div>
                 <h3>Start Every Hand</h3>
                 <p>
-                  Every Player Who Can Afford The Buy-In Posts It
-                  Automatically. Deal Two Hole Cards And Reveal The Flop
-                  Physically. There Is No Pre-Flop Betting Round, And The App
-                  Does Not Record Cards Or Burns.
+                  Every Player Who Can Afford The Buy-In Posts It Automatically.
+                  Deal Two Hole Cards And Reveal The Flop Physically. There Is
+                  No Pre-Flop Betting Round, And The App Does Not Record Cards
+                  Or Burns.
                 </p>
               </div>
             </section>
@@ -1807,10 +2141,11 @@ function Modal({
                 <h3>Take One Action Per Street</h3>
                 <p>
                   Play Flop, Turn, Then River, Burning One Physical Card Before
-                  Each Community-Card Reveal. Each Active Player Acts Exactly
-                  Once On Each Street. A Later Bet Or Raise Does Not Reopen
-                  Action For Anyone Who Already Acted. The Street Ends After
-                  Every Active Player Has Acted.
+                  Each Community-Card Reveal. Together, Flop, Turn, And River
+                  Make One Hand. Each Active Player Acts Exactly Once On Each
+                  Street. A Later Bet Or Raise Does Not Reopen Action For Anyone
+                  Who Already Acted. The Street Ends After Every Active Player
+                  Has Acted.
                 </p>
               </div>
             </section>
@@ -1860,8 +2195,9 @@ function Modal({
                 <p>
                   After The River, Choose One Winner Or Split The Pot Between
                   Two Or More Active Players. A Split Is Equal, With Any
-                  Leftover ₹1 Chips Awarded In Player Order. The Next Hand
-                  Starts Automatically And Posts A New Buy-In.
+                  Leftover ₹1 Chips Awarded In Player Order. Confirm The Winner,
+                  Then Start The Next Round To Begin A New Hand And Post A New
+                  Buy-In.
                 </p>
               </div>
             </section>

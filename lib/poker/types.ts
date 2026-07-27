@@ -10,6 +10,14 @@ export type PlayerProfile = {
   id: string;
   name: string;
   createdAt: number;
+  deletedAt?: number;
+};
+
+export type WinnerAnnouncement = {
+  names: string[];
+  pot: number;
+  handNo: number;
+  split: boolean;
 };
 
 export type PlayerAction = {
@@ -44,6 +52,7 @@ export type GameState = {
   hand: Hand | null;
   handNo: number;
   log: string[];
+  winnerAnnouncement?: WinnerAnnouncement | null;
   lastHand?: {
     stacksBefore: number[];
   } | null;

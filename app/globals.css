@@ -226,7 +226,6 @@ hr {
   display: inline-flex;
   align-items: center;
   justify-self: start;
-  gap: 6px;
   min-height: 42px;
   padding: 8px 10px;
   border-color: var(--line);
@@ -234,12 +233,6 @@ hr {
   color: var(--muted);
   font-size: 12px;
   font-weight: 700;
-}
-
-.back-button span:first-child {
-  color: var(--gold);
-  font-size: 18px;
-  line-height: 1;
 }
 
 .topbar-title {
@@ -395,7 +388,7 @@ hr {
 
 .home-action {
   display: grid;
-  grid-template-columns: 42px minmax(0, 1fr) 22px;
+  grid-template-columns: 42px minmax(0, 1fr);
   align-items: center;
   gap: 12px;
   min-height: 76px;
@@ -462,17 +455,6 @@ hr {
 
 .featured .home-action-copy small {
   color: rgb(33 23 5 / 70%);
-}
-
-.home-arrow {
-  color: var(--dim);
-  font-family: var(--mono);
-  font-size: 18px;
-  text-align: right;
-}
-
-.featured .home-arrow {
-  color: var(--on-gold);
 }
 
 .home-rules {
@@ -606,18 +588,45 @@ hr {
   margin-top: 12px;
 }
 
-.player-count-badge {
+.player-directory-header {
   display: grid;
-  flex: none;
-  place-items: center;
-  width: 38px;
-  height: 38px;
-  border: 1px solid var(--line2);
-  border-radius: 50%;
-  background: var(--sunk);
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 18px;
+}
+
+.player-directory-header > div:first-child > b {
+  font-family: var(--serif);
+  font-size: 24px;
+  font-weight: 400;
+}
+
+.player-tally {
+  display: grid;
+  min-width: 94px;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--gold) 44%, var(--line));
+  border-radius: 12px;
+  background:
+    radial-gradient(circle at 80% 10%, rgb(217 169 76 / 14%), transparent 48%),
+    var(--sunk);
+  text-align: right;
+}
+
+.player-tally strong {
   color: var(--gold);
   font-family: var(--mono);
-  font-size: 13px;
+  font-size: 28px;
+  font-weight: 500;
+  line-height: 1;
+}
+
+.player-tally span {
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 750;
+  letter-spacing: 0.65px;
 }
 
 .add-player-form {
@@ -640,13 +649,58 @@ hr {
 
 .directory-player {
   display: grid;
-  grid-template-columns: 34px 1fr;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
   align-items: center;
   gap: 10px;
   min-height: 52px;
   border-bottom: 1px solid var(--hair);
   font-size: 15px;
   font-weight: 650;
+}
+
+.directory-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.directory-delete,
+.reconnect-player {
+  min-height: 34px;
+  padding: 7px 9px;
+  background: transparent;
+  font-size: 10px;
+  letter-spacing: 0.2px;
+}
+
+.directory-delete {
+  border-color: var(--danger-line);
+  color: var(--danger);
+}
+
+.reconnect-player {
+  border-color: color-mix(in srgb, var(--green) 52%, var(--line));
+  color: var(--green);
+}
+
+.directory-player.archived {
+  opacity: 0.78;
+}
+
+.archived-players > .hdr {
+  align-items: flex-start;
+}
+
+.archived-count {
+  display: grid;
+  place-items: center;
+  min-width: 32px;
+  height: 32px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  color: var(--dim2);
+  font-family: var(--mono);
+  font-size: 12px;
 }
 
 .directory-player:last-child {
@@ -965,29 +1019,108 @@ hr {
   margin-bottom: 8px;
 }
 
-.game-identity {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 16px;
-  margin: 0 2px 10px;
-  color: var(--dim2);
+.hands-launch {
+  width: 100%;
+  margin-bottom: 10px;
+  padding: 10px 14px;
+  border-color: color-mix(in srgb, var(--gold) 40%, var(--line));
+  background: color-mix(in srgb, var(--gold) 6%, transparent);
+  color: var(--gold);
+  font-size: 12px;
+  letter-spacing: 0.4px;
 }
 
-.game-identity span {
-  font-size: 11px;
-  font-weight: 700;
+.poker-hands-chart {
+  margin-bottom: 14px;
+  padding: 16px;
+  border: 1px solid color-mix(in srgb, var(--gold) 34%, var(--line));
+  border-radius: 16px;
+  background:
+    radial-gradient(circle at 88% 0%, rgb(217 169 76 / 10%), transparent 34%),
+    var(--card);
+  box-shadow: 0 10px 30px rgb(0 0 0 / 35%);
+}
+
+.poker-hands-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 13px;
+}
+
+.hands-kicker {
+  color: var(--gold);
+  font-size: 9px;
+  font-weight: 750;
   letter-spacing: 0.8px;
 }
 
-.game-identity strong {
-  overflow: hidden;
-  color: var(--gold);
+.poker-hands-heading h2 {
+  margin: 3px 0 0;
   font-family: var(--serif);
-  font-size: 20px;
+  font-size: 23px;
   font-weight: 400;
-  line-height: 1.1;
+  line-height: 1;
+}
+
+.poker-hands-heading button {
+  min-height: 34px;
+  padding: 7px 10px;
+  border-color: var(--line);
+  background: transparent;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.hand-rank-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.hand-rank {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  align-items: center;
+  gap: 7px;
+  min-height: 50px;
+  padding: 7px 8px;
+  border: 1px solid var(--hair);
+  border-radius: 9px;
+  background: var(--sunk);
+}
+
+.hand-rank-number {
+  display: grid;
+  place-items: center;
+  width: 21px;
+  height: 21px;
+  border-radius: 50%;
+  background: var(--card2);
+  color: var(--gold);
+  font-family: var(--mono);
+  font-size: 9px;
+}
+
+.hand-rank strong,
+.hand-rank div > span {
+  display: block;
+}
+
+.hand-rank strong {
+  overflow: hidden;
+  font-size: 11px;
   text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hand-rank div > span {
+  margin-top: 2px;
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 8px;
+  letter-spacing: -0.1px;
   white-space: nowrap;
 }
 
@@ -1051,7 +1184,23 @@ hr {
 }
 
 .session-hdr {
+  align-items: flex-start;
+  gap: 12px;
   margin-bottom: 6px;
+}
+
+.session-hdr > div {
+  min-width: 0;
+}
+
+.delete-session {
+  flex: none;
+  min-height: 34px;
+  padding: 7px 9px;
+  border-color: var(--danger-line);
+  background: transparent;
+  color: var(--danger);
+  font-size: 10px;
 }
 
 .session-meta {
@@ -1098,6 +1247,114 @@ hr {
   opacity: 1;
 }
 
+.winner-overlay {
+  position: fixed;
+  z-index: 70;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgb(5 9 7 / 86%);
+}
+
+.winner-card {
+  position: relative;
+  width: min(100%, 390px);
+  overflow: hidden;
+  padding: 30px 22px 22px;
+  border: 1px solid var(--gold);
+  border-radius: 20px;
+  background:
+    radial-gradient(circle at 50% 0%, rgb(217 169 76 / 24%), transparent 44%),
+    var(--card);
+  box-shadow: 0 28px 70px rgb(0 0 0 / 65%);
+  text-align: center;
+}
+
+.winner-suit {
+  display: block;
+  color: var(--gold);
+  font-family: var(--serif);
+  font-size: 50px;
+  line-height: 1;
+}
+
+.winner-kicker {
+  display: block;
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: 1px;
+}
+
+.winner-card h2 {
+  margin: 9px 0 4px;
+  font-family: var(--serif);
+  font-size: clamp(34px, 11vw, 46px);
+  font-weight: 400;
+  line-height: 0.98;
+}
+
+.winner-card p {
+  margin: 0 0 22px;
+  color: var(--green);
+  font-family: var(--mono);
+  font-size: 15px;
+}
+
+.confetti span {
+  position: absolute;
+  top: -18px;
+  left: 50%;
+  width: 7px;
+  height: 13px;
+  border-radius: 2px;
+  background: var(--gold);
+  animation: confetti-fall 1.5s ease-out both;
+}
+
+.confetti span:nth-child(3n) {
+  background: var(--green);
+}
+
+.confetti span:nth-child(3n + 2) {
+  background: #d66c58;
+}
+
+.confetti span:nth-child(1) { left: 6%; animation-delay: 0.02s; }
+.confetti span:nth-child(2) { left: 11%; animation-delay: 0.18s; }
+.confetti span:nth-child(3) { left: 16%; animation-delay: 0.08s; }
+.confetti span:nth-child(4) { left: 21%; animation-delay: 0.24s; }
+.confetti span:nth-child(5) { left: 26%; animation-delay: 0.12s; }
+.confetti span:nth-child(6) { left: 31%; animation-delay: 0.3s; }
+.confetti span:nth-child(7) { left: 36%; animation-delay: 0.04s; }
+.confetti span:nth-child(8) { left: 41%; animation-delay: 0.2s; }
+.confetti span:nth-child(9) { left: 46%; animation-delay: 0.1s; }
+.confetti span:nth-child(10) { left: 51%; animation-delay: 0.28s; }
+.confetti span:nth-child(11) { left: 56%; animation-delay: 0.15s; }
+.confetti span:nth-child(12) { left: 61%; animation-delay: 0.34s; }
+.confetti span:nth-child(13) { left: 66%; animation-delay: 0.06s; }
+.confetti span:nth-child(14) { left: 71%; animation-delay: 0.22s; }
+.confetti span:nth-child(15) { left: 76%; animation-delay: 0.13s; }
+.confetti span:nth-child(16) { left: 81%; animation-delay: 0.31s; }
+.confetti span:nth-child(17) { left: 86%; animation-delay: 0.09s; }
+.confetti span:nth-child(18) { left: 91%; animation-delay: 0.26s; }
+
+@keyframes confetti-fall {
+  0% {
+    opacity: 0;
+    transform: translateY(0) rotate(0deg);
+  }
+  18% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0.8;
+    transform: translateY(270px) rotate(480deg);
+  }
+}
+
 .modal {
   position: fixed;
   z-index: 50;
@@ -1131,6 +1388,20 @@ hr {
   padding: 0;
   border-color: color-mix(in srgb, var(--gold) 28%, var(--line2));
   overscroll-behavior: contain;
+}
+
+.hands-sheet {
+  max-width: 540px;
+  max-height: min(90dvh, 760px);
+  overflow-y: auto;
+  padding: 0;
+}
+
+.hands-sheet .poker-hands-chart {
+  margin: 0;
+  border: 0;
+  border-radius: 16px 16px 0 0;
+  box-shadow: none;
 }
 
 .rules-heading {
@@ -1254,6 +1525,17 @@ hr {
   margin-bottom: 0;
 }
 
+.sheet .poker-hands-heading button {
+  width: auto;
+  margin: 0;
+  padding: 7px 10px;
+}
+
+.sheet.hands-sheet > button {
+  width: calc(100% - 32px);
+  margin: 0 16px 16px;
+}
+
 @media (max-width: 400px) {
   .home-view {
     padding-right: 2px;
@@ -1275,7 +1557,7 @@ hr {
   }
 
   .home-action {
-    grid-template-columns: 38px minmax(0, 1fr) 18px;
+    grid-template-columns: 38px minmax(0, 1fr);
     min-height: 72px;
     padding: 12px 13px;
   }
@@ -1318,16 +1600,55 @@ hr {
   }
 
   .ctl {
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
   }
 
-  .amtwrap,
+  .amtwrap {
+    flex: 0 0 82px;
+    padding-right: 7px;
+    padding-left: 7px;
+  }
+
   .acts {
-    flex: 1 1 100%;
+    flex: 1 1 auto;
+    min-width: 0;
   }
 
   .acts button {
     flex: 1;
+    min-width: 0;
+    padding-right: 5px;
+    padding-left: 5px;
+  }
+
+  .directory-player {
+    grid-template-columns: 24px minmax(0, 1fr) auto;
+    gap: 7px;
+  }
+
+  .directory-delete,
+  .reconnect-player {
+    padding-right: 7px;
+    padding-left: 7px;
+  }
+
+  .hand-rank {
+    grid-template-columns: 19px minmax(0, 1fr);
+    padding-right: 6px;
+    padding-left: 6px;
+  }
+
+  .hand-rank-number {
+    width: 18px;
+    height: 18px;
+  }
+
+  .hand-rank strong {
+    font-size: 10px;
+  }
+
+  .hand-rank div > span {
+    font-size: 7px;
   }
 
   .toast {
