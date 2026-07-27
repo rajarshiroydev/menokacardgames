@@ -2064,7 +2064,7 @@ function Modal({
   if (state.kind === "hands") {
     return (
       <div
-        className="modal show"
+        className="modal hands-modal show"
         role="presentation"
         onMouseDown={(event) => {
           if (event.target === event.currentTarget) onClose();

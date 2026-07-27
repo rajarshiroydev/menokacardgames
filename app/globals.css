@@ -1075,32 +1075,32 @@ hr {
 
 .hand-rank-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 6px;
+  grid-template-columns: 1fr;
+  gap: 7px;
 }
 
 .hand-rank {
   display: grid;
-  grid-template-columns: 22px minmax(0, 1fr);
+  grid-template-columns: 28px minmax(0, 1fr);
   align-items: center;
-  gap: 7px;
-  min-height: 50px;
-  padding: 7px 8px;
+  gap: 10px;
+  min-height: 56px;
+  padding: 8px 10px;
   border: 1px solid var(--hair);
-  border-radius: 9px;
+  border-radius: 10px;
   background: var(--sunk);
 }
 
 .hand-rank-number {
   display: grid;
   place-items: center;
-  width: 21px;
-  height: 21px;
+  width: 26px;
+  height: 26px;
   border-radius: 50%;
   background: var(--card2);
   color: var(--gold);
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: 10px;
 }
 
 .hand-rank strong,
@@ -1110,16 +1110,16 @@ hr {
 
 .hand-rank strong {
   overflow: hidden;
-  font-size: 11px;
+  font-size: 13px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .hand-rank div > span {
-  margin-top: 2px;
+  margin-top: 3px;
   color: var(--muted);
   font-family: var(--mono);
-  font-size: 8px;
+  font-size: 10px;
   letter-spacing: -0.1px;
   white-space: nowrap;
 }
@@ -1391,14 +1391,21 @@ hr {
 }
 
 .hands-sheet {
-  max-width: 540px;
-  max-height: min(90dvh, 760px);
-  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  max-width: 620px;
+  height: min(94dvh, 900px);
+  max-height: none;
+  overflow: hidden;
   padding: 0;
 }
 
 .hands-sheet .poker-hands-chart {
+  flex: 1;
+  min-height: 0;
   margin: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   border: 0;
   border-radius: 16px 16px 0 0;
   box-shadow: none;
@@ -1532,11 +1539,26 @@ hr {
 }
 
 .sheet.hands-sheet > button {
-  width: calc(100% - 32px);
-  margin: 0 16px 16px;
+  flex: none;
+  width: calc(100% - 36px);
+  margin: 12px 18px calc(18px + env(safe-area-inset-bottom));
 }
 
 @media (max-width: 400px) {
+  .hands-modal {
+    padding: 6px;
+  }
+
+  .hands-sheet {
+    height: 96dvh;
+    border-radius: 18px;
+  }
+
+  .hands-sheet .poker-hands-chart {
+    padding: 18px 14px 12px;
+    border-radius: 18px 18px 0 0;
+  }
+
   .home-view {
     padding-right: 2px;
     padding-left: 2px;
@@ -1633,22 +1655,24 @@ hr {
   }
 
   .hand-rank {
-    grid-template-columns: 19px minmax(0, 1fr);
-    padding-right: 6px;
-    padding-left: 6px;
+    grid-template-columns: 26px minmax(0, 1fr);
+    gap: 9px;
+    min-height: 55px;
+    padding-right: 9px;
+    padding-left: 9px;
   }
 
   .hand-rank-number {
-    width: 18px;
-    height: 18px;
+    width: 25px;
+    height: 25px;
   }
 
   .hand-rank strong {
-    font-size: 10px;
+    font-size: 12px;
   }
 
   .hand-rank div > span {
-    font-size: 7px;
+    font-size: 9px;
   }
 
   .toast {
