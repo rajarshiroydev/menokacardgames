@@ -4,6 +4,7 @@ import type { PokerSession, SessionResult } from "./types";
 
 export const MAX_SESSIONS_PER_REQUEST = 250;
 const MAX_RESULTS_PER_SESSION = 10;
+const MAX_GAME_NAME_LENGTH = 80;
 
 function asSafeInteger(
   value: unknown,
@@ -35,6 +36,12 @@ export function validateSession(input: unknown): PokerSession {
     min: 0,
   });
   const hands = asSafeInteger(candidate.hands, "hands", { min: 1 });
+  const name = String(candidate.name || "").trim();
+  if (name.length > MAX_GAME_NAME_LENGTH) {
+    throw new Error(
+      `Game names must be ${MAX_GAME_NAME_LENGTH} characters or fewer`,
+    );
+  }
 
   if (
     !Array.isArray(candidate.results) ||
@@ -67,7 +74,16 @@ export function validateSession(input: unknown): PokerSession {
     };
   });
 
-  return { id, date, ended, ante, startStack, hands, results };
+  return {
+    id,
+    ...(name ? { name } : {}),
+    date,
+    ended,
+    ante,
+    startStack,
+    hands,
+    results,
+  };
 }
 
 export function passwordMatches(candidate?: string | null, expected?: string) {

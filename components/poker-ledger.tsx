@@ -147,12 +147,15 @@ function awardPot(game: GameState, playerIndex: number, automatic = false) {
 export function PokerLedger() {
   const [game, setGame] = useState<GameState | null>(null);
   const [history, setHistory] = useState<PokerSession[]>([]);
+  const [nextSessionNumber, setNextSessionNumber] = useState(1);
   const [historyLoading, setHistoryLoading] = useState(true);
   const [historyError, setHistoryError] = useState("");
   const [players, setPlayers] = useState<PlayerProfile[]>([]);
   const [playersLoading, setPlayersLoading] = useState(true);
   const [playersError, setPlayersError] = useState("");
   const [view, setView] = useState<View>("home");
+  const [playersReturnView, setPlayersReturnView] =
+    useState<Extract<View, "home" | "setup">>("home");
   const [ready, setReady] = useState(false);
   const [toast, setToast] = useState("");
   const [modal, setModal] = useState<ModalState | null>(null);
@@ -176,8 +179,17 @@ export function PokerLedger() {
         });
         window.localStorage.removeItem(HISTORY_STORAGE_KEY);
       }
-      const data = await sessionsApi<{ sessions?: PokerSession[] }>();
+      const data = await sessionsApi<{
+        nextSessionNumber?: number;
+        sessions?: PokerSession[];
+      }>();
       setHistory(Array.isArray(data.sessions) ? data.sessions : []);
+      setNextSessionNumber(
+        Number.isSafeInteger(data.nextSessionNumber) &&
+          Number(data.nextSessionNumber) > 0
+          ? Number(data.nextSessionNumber)
+          : 1,
+      );
     } catch (error) {
       setHistoryError(
         error instanceof Error
@@ -237,6 +249,7 @@ export function PokerLedger() {
 
   const startGame = useCallback(
     (input: {
+      name: string;
       stack: number;
       ante: number;
       players: PlayerProfile[];
@@ -246,7 +259,10 @@ export function PokerLedger() {
         showToast("Buy-in must be greater than 0");
         return;
       }
+      const gameName = input.name.trim();
       const nextGame: GameState = {
+        ...(gameName ? { gameName } : {}),
+        sessionLabel: gameName || `Game ${nextSessionNumber}`,
         ante: input.ante,
         startStack: input.stack,
         startedAt: Date.now(),
@@ -265,7 +281,7 @@ export function PokerLedger() {
       setGame(nextGame);
       setView("game");
     },
-    [showToast],
+    [nextSessionNumber, showToast],
   );
 
   const addPlayer = useCallback(
@@ -584,6 +600,7 @@ export function PokerLedger() {
       : game.players.map((player) => player.stack);
     const session: PokerSession = {
       id: `s${game.startedAt}`,
+      ...(game.gameName ? { name: game.gameName } : {}),
       date: game.startedAt,
       ended: Date.now(),
       ante: game.ante,
@@ -635,7 +652,7 @@ export function PokerLedger() {
     if (!session) return;
     setModal({
       kind: "password",
-      message: `Delete the session from ${formatDate(
+      message: `Delete ${session.name || "this game"} from ${formatDate(
         session.date,
       )}? This changes the public leaderboard.`,
       onConfirm: (password) => void deleteRemoteSession(id, password),
@@ -707,24 +724,40 @@ export function PokerLedger() {
     }
   }
 
+  function openPlayers(returnView: Extract<View, "home" | "setup">) {
+    setPlayersReturnView(returnView);
+    setView("players");
+    window.scrollTo(0, 0);
+  }
+
+  function goBack() {
+    setView(view === "players" ? playersReturnView : "home");
+    window.scrollTo(0, 0);
+  }
+
+  const screenTitle =
+    view === "game"
+      ? game?.sessionLabel || game?.gameName || "Current Game"
+      : view === "setup"
+        ? "New Game"
+        : view === "history"
+          ? "Standings"
+          : "Players";
+
   return (
     <main className={`ledger-shell ${view === "home" ? "home-shell" : ""}`}>
       {view !== "home" ? (
         <header className="topbar">
           <button
-            className="brand brand-button"
+            className="back-button"
             type="button"
-            aria-label="Return To Menoka Card Games Home"
-            onClick={() => {
-              setView("home");
-              window.scrollTo(0, 0);
-            }}
+            aria-label="Go Back"
+            onClick={goBack}
           >
-            <span className="spade" aria-hidden="true">
-              ♠
-            </span>
-            <span className="word">Menoka Card Games</span>
+            <span aria-hidden="true">←</span>
+            <span>Back</span>
           </button>
+          <span className="topbar-title">{screenTitle}</span>
           <button
             className="rules-trigger"
             type="button"
@@ -743,7 +776,7 @@ export function PokerLedger() {
             playerCount={players.length}
             onGame={() => setView(game ? "game" : "setup")}
             onHistory={() => setView("history")}
-            onPlayers={() => setView("players")}
+            onPlayers={() => openPlayers("home")}
             onRules={() => setModal({ kind: "rules" })}
           />
         ) : view === "history" ? (
@@ -770,7 +803,8 @@ export function PokerLedger() {
             loading={playersLoading}
             error={playersError}
             onRetry={() => void refreshPlayers()}
-            onManagePlayers={() => setView("players")}
+            suggestedName={`Game ${nextSessionNumber}`}
+            onManagePlayers={() => openPlayers("setup")}
             onStart={startGame}
           />
         ) : game ? (
@@ -796,7 +830,7 @@ export function PokerLedger() {
             playerCount={players.length}
             onGame={() => setView("setup")}
             onHistory={() => setView("history")}
-            onPlayers={() => setView("players")}
+            onPlayers={() => openPlayers("home")}
             onRules={() => setModal({ kind: "rules" })}
           />
         )}
@@ -911,6 +945,7 @@ function SetupView({
   loading,
   error,
   onRetry,
+  suggestedName,
   onManagePlayers,
   onStart,
 }: {
@@ -918,14 +953,17 @@ function SetupView({
   loading: boolean;
   error: string;
   onRetry: () => void;
+  suggestedName: string;
   onManagePlayers: () => void;
   onStart: (input: {
+    name: string;
     stack: number;
     ante: number;
     players: PlayerProfile[];
     raiseRule: RaiseRule;
   }) => void;
 }) {
+  const [name, setName] = useState("");
   const [stack, setStack] = useState(10_000);
   const [ante, setAnte] = useState(100);
   const [raiseRule, setRaiseRule] = useState<RaiseRule>("ante");
@@ -969,6 +1007,7 @@ function SetupView({
       return;
     }
     onStart({
+      name,
       stack,
       ante,
       raiseRule,
@@ -986,6 +1025,17 @@ function SetupView({
       <div className="hdr">
         <b>Start A New Game</b>
       </div>
+      <label htmlFor="game-name">
+        Game Name <span className="label-optional">(Optional)</span>
+      </label>
+      <input
+        className="game-name-input"
+        id="game-name"
+        maxLength={80}
+        placeholder={suggestedName}
+        value={name}
+        onChange={(event) => setName(event.target.value)}
+      />
       <div className="row setup-row">
         <div>
           <label htmlFor="stack">Starting stack</label>
@@ -1227,6 +1277,10 @@ function GameView(props: GameViewProps) {
 
   return (
     <>
+      <section className="game-identity" aria-label="Current Game">
+        <span>Current Game</span>
+        <strong>{game.sessionLabel || game.gameName || "Current Game"}</strong>
+      </section>
       {!hand ? (
         <section className="card">
           <b>Game over</b>
@@ -1613,9 +1667,12 @@ function HistoryView({
               <article className="sess" key={session.id}>
                 <div className="hdr session-hdr">
                   <div>
-                    <b>{formatDate(session.date)}</b>
+                    <b>
+                      {session.name ||
+                        `Game ${session.sessionNumber || history.length}`}
+                    </b>
                     <div className="muted session-meta">
-                      {session.hands} hands · buy-in{" "}
+                      {formatDate(session.date)} · {session.hands} hands · buy-in{" "}
                       {formatRupees(session.ante)} · {session.results.length}{" "}
                       players
                     </div>
@@ -1824,9 +1881,11 @@ function Modal({
             </section>
           </div>
 
-          <button className="primary rules-close" onClick={onClose}>
-            Close Rules
-          </button>
+          <div className="rules-footer">
+            <button className="primary rules-close" onClick={onClose}>
+              Close Rules
+            </button>
+          </div>
         </div>
       </div>
     );

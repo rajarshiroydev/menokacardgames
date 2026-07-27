@@ -213,12 +213,44 @@ hr {
 }
 
 .topbar {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(74px, 1fr) minmax(0, 2fr) minmax(74px, 1fr);
   align-items: center;
-  justify-content: space-between;
+  gap: 8px;
   margin-bottom: 16px;
   padding: 16px 18px 12px;
   border-bottom: 1px solid var(--hair);
+}
+
+.back-button {
+  display: inline-flex;
+  align-items: center;
+  justify-self: start;
+  gap: 6px;
+  min-height: 42px;
+  padding: 8px 10px;
+  border-color: var(--line);
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.back-button span:first-child {
+  color: var(--gold);
+  font-size: 18px;
+  line-height: 1;
+}
+
+.topbar-title {
+  overflow: hidden;
+  color: var(--fg);
+  font-family: var(--serif);
+  font-size: 18px;
+  line-height: 1.1;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .brand {
@@ -257,6 +289,7 @@ hr {
 
 .rules-trigger {
   flex: none;
+  justify-self: end;
   min-height: 42px;
   padding: 9px 13px;
   border-color: color-mix(in srgb, var(--gold) 55%, var(--line));
@@ -497,6 +530,16 @@ hr {
 
 .setup-row {
   margin-bottom: 10px;
+}
+
+.game-name-input {
+  margin-bottom: 14px;
+}
+
+.label-optional {
+  color: var(--dim);
+  font-size: 10px;
+  font-weight: 600;
 }
 
 .setup-card > .hdr b,
@@ -922,6 +965,32 @@ hr {
   margin-bottom: 8px;
 }
 
+.game-identity {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 0 2px 10px;
+  color: var(--dim2);
+}
+
+.game-identity span {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+}
+
+.game-identity strong {
+  overflow: hidden;
+  color: var(--gold);
+  font-family: var(--serif);
+  font-size: 20px;
+  font-weight: 400;
+  line-height: 1.1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .log {
   max-height: 180px;
   overflow: auto;
@@ -1152,12 +1221,17 @@ hr {
   margin-top: 8px;
 }
 
-.sheet .rules-close {
+.rules-footer {
   position: sticky;
   bottom: 0;
-  width: calc(100% - 44px);
-  margin: 8px 22px 22px;
-  box-shadow: 0 -12px 24px var(--card);
+  padding: 10px 22px 22px;
+  background: linear-gradient(transparent, var(--card) 18px);
+}
+
+.sheet .rules-close {
+  width: 100%;
+  margin: 0;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 28%);
 }
 
 .sheet .msg {
@@ -1216,7 +1290,16 @@ hr {
     padding-left: 14px;
   }
 
-  .brand .word {
+  .topbar {
+    grid-template-columns: 74px minmax(0, 1fr) 74px;
+  }
+
+  .back-button {
+    padding-right: 8px;
+    padding-left: 8px;
+  }
+
+  .topbar-title {
     font-size: 17px;
   }
 
@@ -1259,10 +1342,9 @@ hr {
     padding-left: 18px;
   }
 
-  .sheet .rules-close {
-    width: calc(100% - 36px);
-    margin-right: 18px;
-    margin-left: 18px;
+  .rules-footer {
+    padding-right: 18px;
+    padding-left: 18px;
   }
 }
 

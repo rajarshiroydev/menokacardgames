@@ -24,6 +24,21 @@ describe("session validation", () => {
     assert.deepEqual(validateSession(validSession), validSession);
   });
 
+  test("keeps an optional trimmed game name", () => {
+    assert.deepEqual(
+      validateSession({ ...validSession, name: "  Sunday Night  " }),
+      { ...validSession, name: "Sunday Night" },
+    );
+    assert.deepEqual(
+      validateSession({ ...validSession, name: "   " }),
+      validSession,
+    );
+    assert.throws(
+      () => validateSession({ ...validSession, name: "x".repeat(81) }),
+      /80 characters or fewer/,
+    );
+  });
+
   test("rejects unsafe or incomplete session data", () => {
     assert.throws(
       () => validateSession({ ...validSession, hands: 0 }),

@@ -34,6 +34,8 @@ export type Hand = {
 };
 
 export type GameState = {
+  gameName?: string;
+  sessionLabel?: string;
   ante: number;
   startStack: number;
   startedAt: number;
@@ -57,6 +59,8 @@ export type SessionResult = {
 
 export type PokerSession = {
   id: string;
+  name?: string;
+  sessionNumber?: number;
   date: number;
   ended: number;
   ante: number;
