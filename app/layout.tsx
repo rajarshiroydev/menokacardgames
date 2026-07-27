@@ -1,27 +1,38 @@
 import type { Metadata, Viewport } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import {
+  DM_Serif_Display,
+  IBM_Plex_Mono,
+  Manrope,
+} from "next/font/google";
 
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const manrope = Manrope({
+  variable: "--font-manrope",
   subsets: ["latin"],
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+const displaySerif = DM_Serif_Display({
+  variable: "--font-display-serif",
   subsets: ["latin"],
+  weight: "400",
+});
+
+const plexMono = IBM_Plex_Mono({
+  variable: "--font-plex-mono",
+  subsets: ["latin"],
+  weight: ["400", "500", "600"],
 });
 
 export const metadata: Metadata = {
-  title: "Poker Ledger",
+  title: "Menoka Card Games",
   description:
     "A mobile-friendly poker session tracker with shared history and leaderboards.",
-  applicationName: "Poker Ledger",
+  applicationName: "Menoka Card Games",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "Poker Ledger",
+    title: "Menoka Card Games",
   },
 };
 
@@ -40,7 +51,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+      className={`${manrope.variable} ${displaySerif.variable} ${plexMono.variable} antialiased`}
     >
       <body>{children}</body>
     </html>

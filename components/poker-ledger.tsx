@@ -34,6 +34,9 @@ import type {
 type View = "table" | "history";
 type ModalState =
   | {
+      kind: "rules";
+    }
+  | {
       kind: "confirm";
       message: string;
       confirmLabel: string;
@@ -631,15 +634,6 @@ export function PokerLedger() {
     }
   }
 
-  const topRight =
-    view === "history"
-      ? historyLoading
-        ? "Syncing"
-        : `${history.length} saved`
-      : game?.players
-        ? `Hand ${Math.max(1, game.handNo)}`
-        : "Setup";
-
   return (
     <main className="ledger-shell">
       <header className="topbar">
@@ -647,13 +641,19 @@ export function PokerLedger() {
           <span className="spade" aria-hidden="true">
             ♠
           </span>
-          <span className="word">Ledger</span>
+          <span className="word">Menoka Card Games</span>
         </div>
-        <div className="topright">{topRight}</div>
+        <button
+          className="rules-trigger"
+          type="button"
+          onClick={() => setModal({ kind: "rules" })}
+        >
+          Rules
+        </button>
       </header>
 
       <div className="app">
-        <nav className="tabs" aria-label="Poker ledger sections">
+        <nav className="tabs" aria-label="Menoka Card Games Sections">
           <button
             className={view === "table" ? "on" : ""}
             onClick={() => {
@@ -1334,6 +1334,10 @@ function Modal({
   const [password, setPassword] = useState("");
 
   function confirm() {
+    if (state.kind === "rules") {
+      onClose();
+      return;
+    }
     if (state.kind === "password") {
       if (!password) return;
       state.onConfirm(password);
@@ -1341,6 +1345,143 @@ function Modal({
       state.onConfirm();
     }
     onConfirm();
+  }
+
+  if (state.kind === "rules") {
+    return (
+      <div
+        className="modal show"
+        role="presentation"
+        onMouseDown={(event) => {
+          if (event.target === event.currentTarget) onClose();
+        }}
+      >
+        <div
+          className="sheet rules-sheet"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="poker-rules-title"
+        >
+          <div className="rules-heading">
+            <span className="rules-kicker">Menoka House Rules</span>
+            <h2 id="poker-rules-title">Poker Rules</h2>
+            <p>
+              This Is A Chip Ledger For Your Modified Poker Game. It Does Not
+              Track Cards Or Real Money.
+            </p>
+          </div>
+
+          <div className="rules-list">
+            <section>
+              <span className="rule-number">01</span>
+              <div>
+                <h3>Set Up The Table</h3>
+                <p>
+                  Choose A Starting Stack, Buy-In, Minimum Raise Rule, And Two
+                  To Ten Players. There Are No Small Or Big Blinds.
+                </p>
+              </div>
+            </section>
+
+            <section>
+              <span className="rule-number">02</span>
+              <div>
+                <h3>Start Every Hand</h3>
+                <p>
+                  Every Player Who Can Afford The Buy-In Posts It
+                  Automatically. Deal Two Hole Cards And Reveal The Flop
+                  Physically. There Is No Pre-Flop Betting Round, And The App
+                  Does Not Record Cards Or Burns.
+                </p>
+              </div>
+            </section>
+
+            <section>
+              <span className="rule-number">03</span>
+              <div>
+                <h3>Take One Action Per Street</h3>
+                <p>
+                  Play Flop, Turn, Then River, Burning One Physical Card Before
+                  Each Community-Card Reveal. Each Active Player Acts Exactly
+                  Once On Each Street. A Later Bet Or Raise Does Not Reopen
+                  Action For Anyone Who Already Acted. The Street Ends After
+                  Every Active Player Has Acted.
+                </p>
+              </div>
+            </section>
+
+            <section>
+              <span className="rule-number">04</span>
+              <div>
+                <h3>Choose An Action</h3>
+                <p>
+                  Check Only When Nothing Is Owed. Bet To Open The Action, Call
+                  The Current Bet, Raise It, Or Fold. A Short-Stacked Player Can
+                  Call Or Bet All-In With Their Remaining Chips. If Only One
+                  Player Remains, They Win Automatically.
+                </p>
+              </div>
+            </section>
+
+            <section>
+              <span className="rule-number">05</span>
+              <div>
+                <h3>Follow The Selected Raise Rule</h3>
+                <ul>
+                  <li>
+                    <strong>Buy-In Increment:</strong> Raise By At Least One
+                    Buy-In.
+                  </li>
+                  <li>
+                    <strong>Match Last Raise:</strong> Raise By At Least The
+                    Previous Raise Size, Or One Buy-In If That Is Larger.
+                  </li>
+                  <li>
+                    <strong>Any Amount:</strong> Raise The Current Bet By At
+                    Least ₹1.
+                  </li>
+                </ul>
+                <p>
+                  An Opening Bet Is At Least One Buy-In Unless The Player Is
+                  Going All-In For Less.
+                </p>
+              </div>
+            </section>
+
+            <section>
+              <span className="rule-number">06</span>
+              <div>
+                <h3>Award The Pot</h3>
+                <p>
+                  After The River, Choose One Winner Or Split The Pot Between
+                  Two Or More Active Players. A Split Is Equal, With Any
+                  Leftover ₹1 Chips Awarded In Player Order. The Next Hand
+                  Starts Automatically And Posts A New Buy-In.
+                </p>
+              </div>
+            </section>
+
+            <section>
+              <span className="rule-number">07</span>
+              <div>
+                <h3>Correct Mistakes And Save</h3>
+                <p>
+                  Undo Restores A Player&apos;s Latest Action On The Current
+                  Street. Cancel Hand Refunds Every Chip From That Hand,
+                  Including Buy-Ins. Undo Last Hand Restores Its Starting
+                  Stacks. Finish And Save Requires One Completed Hand; Any
+                  Unfinished Hand Is Refunded In The Saved Results.
+                </p>
+              </div>
+            </section>
+          </div>
+
+          <button className="primary rules-close" onClick={onClose}>
+            Close Rules
+          </button>
+        </div>
+      </div>
+    );
   }
 
   return (
