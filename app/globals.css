@@ -865,16 +865,17 @@ hr {
 }
 
 .ctl {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(72px, 0.9fr) repeat(3, minmax(0, 1fr));
   align-items: stretch;
   gap: 6px;
 }
 
 .amtwrap {
   display: flex;
-  flex: 1;
   align-items: center;
   gap: 6px;
+  width: 100%;
   min-width: 0;
   padding: 0 11px;
   border: 1px solid var(--line);
@@ -905,13 +906,14 @@ hr {
 }
 
 .acts {
-  display: flex;
-  flex: none;
-  gap: 6px;
+  display: contents;
 }
 
 .acts button {
-  padding: 11px 12px;
+  width: 100%;
+  min-width: 0;
+  min-height: 48px;
+  padding: 11px 6px;
   font-size: 13px;
   white-space: nowrap;
 }
@@ -923,7 +925,7 @@ hr {
 }
 
 .acts button.danger {
-  padding: 11px 13px;
+  padding: 11px 6px;
 }
 
 .tag {
@@ -1622,25 +1624,21 @@ hr {
   }
 
   .ctl {
-    flex-wrap: nowrap;
+    grid-template-columns: minmax(62px, 0.8fr) repeat(3, minmax(0, 1fr));
+    gap: 5px;
   }
 
   .amtwrap {
-    flex: 0 0 82px;
-    padding-right: 7px;
-    padding-left: 7px;
-  }
-
-  .acts {
-    flex: 1 1 auto;
-    min-width: 0;
+    gap: 4px;
+    padding-right: 6px;
+    padding-left: 6px;
   }
 
   .acts button {
-    flex: 1;
-    min-width: 0;
-    padding-right: 5px;
-    padding-left: 5px;
+    min-height: 46px;
+    padding-right: 4px;
+    padding-left: 4px;
+    font-size: 12px;
   }
 
   .directory-player {
