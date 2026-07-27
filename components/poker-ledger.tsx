@@ -303,6 +303,11 @@ export function PokerLedger() {
   useEffect(() => {
     function handleBrowserBack(event: PopStateEvent) {
       const nextView = event.state?.menokaView;
+      if (event.state?.menokaModal === "hands") {
+        setModal({ kind: "hands" });
+      } else {
+        setModal(null);
+      }
       if (
         nextView === "home" ||
         nextView === "setup" ||
@@ -901,6 +906,29 @@ export function PokerLedger() {
     window.history.back();
   }
 
+  function openHands() {
+    window.history.pushState(
+      {
+        ...window.history.state,
+        menokaView: view,
+        menokaModal: "hands",
+      },
+      "",
+    );
+    setModal({ kind: "hands" });
+  }
+
+  function closeModal() {
+    if (
+      modal?.kind === "hands" &&
+      window.history.state?.menokaModal === "hands"
+    ) {
+      window.history.back();
+      return;
+    }
+    setModal(null);
+  }
+
   function toggleHandsPinned() {
     setHandsPinned((current) => !current);
   }
@@ -995,7 +1023,7 @@ export function PokerLedger() {
             onUndoHand={undoHand}
             onDiscard={discardGame}
             handsPinned={handsPinned}
-            onOpenHands={() => setModal({ kind: "hands" })}
+            onOpenHands={openHands}
             onToggleHandsPin={toggleHandsPinned}
           />
         ) : (
@@ -1019,7 +1047,7 @@ export function PokerLedger() {
           state={modal}
           handsPinned={handsPinned}
           onToggleHandsPin={toggleHandsPinned}
-          onClose={() => setModal(null)}
+          onClose={closeModal}
           onConfirm={() => setModal(null)}
         />
       ) : null}
