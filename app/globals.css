@@ -17,6 +17,8 @@
   --danger: #c9553d;
   --danger-line: #3a2823;
   --green: #7fbf9c;
+  --action-green: #34875b;
+  --action-blue: #356fa8;
   --idle: #1f2c25;
   --idle-text: #829189;
   --serif: var(--font-display-serif), Georgia, "Times New Roman", serif;
@@ -469,6 +471,17 @@ hr {
   font-size: 12px;
 }
 
+.home-hands {
+  width: 100%;
+  max-width: 500px;
+  margin: 10px auto 0;
+  text-align: left;
+}
+
+.home-hands-action {
+  width: 100%;
+}
+
 .card {
   margin-bottom: 14px;
   padding: 16px;
@@ -798,6 +811,24 @@ hr {
   text-align: center;
 }
 
+.table-positions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 5px;
+  margin-top: 10px;
+}
+
+.table-positions span {
+  padding: 4px 7px;
+  border: 1px solid color-mix(in srgb, var(--gold) 34%, var(--line));
+  border-radius: 999px;
+  background: rgb(217 169 76 / 8%);
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+}
+
 .stage {
   color: var(--muted);
   font-size: 11px;
@@ -877,6 +908,38 @@ hr {
   gap: 11px;
 }
 
+.prow.waiting {
+  border-style: dashed;
+  opacity: 0.7;
+}
+
+.prow.current-turn {
+  border-color: var(--gold);
+  background: linear-gradient(100deg, rgb(217 169 76 / 16%), var(--card2));
+  box-shadow: 0 0 0 1px rgb(217 169 76 / 14%), 0 12px 28px rgb(0 0 0 / 25%);
+}
+
+.stack-value {
+  color: var(--gold) !important;
+  font-size: 16px !important;
+  font-weight: 700;
+}
+
+.turn-chip {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 3px 6px;
+  border-radius: 999px;
+  background: var(--gold);
+  color: var(--on-gold);
+  font-family: var(--sans);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  vertical-align: middle;
+}
+
 .ctl {
   display: grid;
   grid-template-columns: minmax(84px, 1.2fr) repeat(3, minmax(0, 1fr));
@@ -931,14 +994,23 @@ hr {
   white-space: nowrap;
 }
 
-.acts button.blue {
-  border-color: var(--line2);
-  background: var(--card2);
+.acts button.action-call {
+  border-color: var(--action-blue);
+  background: var(--action-blue);
+  color: var(--fg);
+}
+
+.acts button.action-raise {
+  border-color: var(--action-green);
+  background: var(--action-green);
   color: var(--fg);
 }
 
 .acts button.danger {
   padding: 11px 6px;
+  border-color: var(--danger);
+  background: var(--danger);
+  color: var(--fg);
 }
 
 .tag {

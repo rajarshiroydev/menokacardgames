@@ -17,11 +17,10 @@ import {
   formatDate,
   formatRupees,
   GAME_STORAGE_KEY,
-  getRaiseRule,
   HISTORY_STORAGE_KEY,
   minimumRaise,
+  nextPlayerToAct,
   pendingIndexes,
-  RAISE_RULES,
   STAGES,
 } from "@/lib/poker/game";
 import type {
@@ -29,7 +28,6 @@ import type {
   PlayerAction,
   PlayerProfile,
   PokerSession,
-  RaiseRule,
   WinnerAnnouncement,
 } from "@/lib/poker/types";
 
@@ -113,7 +111,19 @@ function readStoredGame() {
     const data = JSON.parse(
       window.localStorage.getItem(GAME_STORAGE_KEY) || "null",
     ) as GameState | null;
-    return data?.players ? data : null;
+    if (!data?.players) return null;
+    // Older saved games did not have positional betting. Start their next hand
+    // with the new model instead of leaving an unusable in-progress hand.
+    if (!Number.isInteger(data.dealerIndex)) {
+      data.players.forEach((player, index) => {
+        player.stack = data.hand?.stacksBeforeHand[index] ?? player.stack;
+      });
+      data.dealerIndex = -1;
+      data.hand = null;
+      data.winnerAnnouncement = null;
+      dealNewHand(data);
+    }
+    return data;
   } catch {
     return null;
   }
@@ -362,10 +372,9 @@ export function PokerLedger() {
       stack: number;
       ante: number;
       players: PlayerProfile[];
-      raiseRule: RaiseRule;
     }) => {
       if (input.ante <= 0) {
-        showToast("Buy-in must be greater than 0");
+        showToast("Big blind must be greater than 0");
         return;
       }
       const gameName = input.name.trim();
@@ -375,7 +384,6 @@ export function PokerLedger() {
         ante: input.ante,
         startStack: input.stack,
         startedAt: Date.now(),
-        raiseRule: input.raiseRule,
         players: input.players.map((player) => ({
           id: player.id,
           name: player.name,
@@ -383,6 +391,7 @@ export function PokerLedger() {
         })),
         hand: null,
         handNo: 0,
+        dealerIndex: -1,
         log: [],
         _setupCount: input.players.length,
       };
@@ -490,7 +499,12 @@ export function PokerLedger() {
     if (!game?.hand) return;
     const next = structuredClone(game);
     const hand = next.hand;
-    if (!hand || !hand.in[playerIndex] || hand.acted[playerIndex]) return;
+    if (
+      !hand ||
+      !hand.in[playerIndex] ||
+      hand.currentPlayer !== playerIndex
+    )
+      return;
     const player = next.players[playerIndex];
 
     if (type === "fold") {
@@ -558,20 +572,20 @@ export function PokerLedger() {
       const opening = !hand.committed.some(
         (committed, index) => index !== playerIndex && committed > 0,
       );
-      const previousRaise = hand.lastRaise;
-      const previousHigh = hand.roundHigh;
       player.stack -= chips;
       hand.committed[playerIndex] += chips;
       hand.pot += chips;
       hand.acted[playerIndex] = true;
       if (wasRaise) {
-        hand.lastRaise = Math.max(total - previousHigh, next.ante);
         hand.roundHigh = total;
+        hand.acted = hand.acted.map((_, index) =>
+          index === playerIndex || !hand.in[index] || next.players[index].stack === 0,
+        );
       }
       recordAction(
         next,
         playerIndex,
-        { type, chips, prevRaise: previousRaise },
+        { type, chips },
         `${player.name} ${
           wasRaise
             ? opening
@@ -590,6 +604,7 @@ export function PokerLedger() {
       showToast(`${next.players[winner].name} +${formatRupees(pot)}`);
       return;
     }
+    hand.currentPlayer = nextPlayerToAct(next, playerIndex);
     setGame(next);
   }
 
@@ -607,7 +622,7 @@ export function PokerLedger() {
     hand.acted[playerIndex] = false;
     hand.last[playerIndex] = null;
     hand.roundHigh = Math.max(0, ...hand.committed);
-    if (action.prevRaise !== undefined) hand.lastRaise = action.prevRaise;
+    hand.currentPlayer = playerIndex;
     const logIndex = next.log.indexOf(action.line);
     if (logIndex >= 0) next.log.splice(logIndex, 1);
     setGame(next);
@@ -620,7 +635,7 @@ export function PokerLedger() {
       showToast("Everyone must act first");
       return;
     }
-    if (game.hand.stage >= 2) {
+    if (game.hand.stage >= STAGES.length - 1) {
       showToast("Pick the winner");
       return;
     }
@@ -632,7 +647,7 @@ export function PokerLedger() {
     hand.roundHigh = 0;
     hand.acted = next.players.map(() => false);
     hand.last = next.players.map(() => null);
-    hand.lastRaise = next.ante;
+    hand.currentPlayer = nextPlayerToAct(next, hand.dealerIndex);
     setGame(next);
   }
 
@@ -720,7 +735,7 @@ export function PokerLedger() {
   function cancelHand() {
     if (!game?.hand) return;
     ask(
-      `Cancel hand ${game.hand.no}? Everyone gets their money back, including the buy-in.`,
+      `Cancel hand ${game.hand.no}? Everyone gets their money back, including the blinds.`,
       "Cancel hand",
       () => {
         const next = structuredClone(game);
@@ -1024,6 +1039,7 @@ export function PokerLedger() {
             onGame={() => navigate(game ? "game" : "setup")}
             onHistory={() => navigate("history")}
             onPlayers={openPlayers}
+            onOpenHands={openHands}
             onRules={() => setModal({ kind: "rules" })}
           />
         ) : view === "history" ? (
@@ -1088,6 +1104,7 @@ export function PokerLedger() {
             onGame={() => navigate("setup")}
             onHistory={() => navigate("history")}
             onPlayers={openPlayers}
+            onOpenHands={openHands}
             onRules={() => setModal({ kind: "rules" })}
           />
         )}
@@ -1122,6 +1139,7 @@ function HomeView({
   onGame,
   onHistory,
   onPlayers,
+  onOpenHands,
   onRules,
 }: {
   hasGame: boolean;
@@ -1130,6 +1148,7 @@ function HomeView({
   onGame: () => void;
   onHistory: () => void;
   onPlayers: () => void;
+  onOpenHands: () => void;
   onRules: () => void;
 }) {
   return (
@@ -1161,7 +1180,7 @@ function HomeView({
             <small>
               {hasGame
                 ? "Return To The Hand In Progress"
-                : "Choose The Players And Buy-In"}
+                : "Choose The Players And Blinds"}
             </small>
           </span>
         </button>
@@ -1188,6 +1207,20 @@ function HomeView({
             <small>
               {playerCount} Player{playerCount === 1 ? "" : "s"} Ready To Play
             </small>
+          </span>
+        </button>
+      </div>
+
+      <div className="home-hands">
+        <button
+          className="home-action home-hands-action"
+          type="button"
+          onClick={onOpenHands}
+        >
+          <span className="home-suit" aria-hidden="true">♠</span>
+          <span className="home-action-copy">
+            <strong>Poker Hand Rankings</strong>
+            <small>View all ten hands, strongest to weakest</small>
           </span>
         </button>
       </div>
@@ -1219,30 +1252,13 @@ function SetupView({
     stack: number;
     ante: number;
     players: PlayerProfile[];
-    raiseRule: RaiseRule;
   }) => void;
 }) {
   const [name, setName] = useState("");
   const [stack, setStack] = useState(10_000);
   const [ante, setAnte] = useState(100);
-  const [raiseRule, setRaiseRule] = useState<RaiseRule>("ante");
   const [playerCount, setPlayerCount] = useState(3);
   const [selectedIds, setSelectedIds] = useState(["", "", ""]);
-
-  const ruleExample = useMemo(() => {
-    const buyIn = Math.max(1, ante || 100);
-    if (raiseRule === "double") {
-      return `Open ${formatRupees(buyIn)}; raise ${formatRupees(
-        2 * buyIn,
-      )}; then ${formatRupees(4 * buyIn)}; then ${formatRupees(8 * buyIn)}`;
-    }
-    if (raiseRule === "free") {
-      return `Open ${formatRupees(buyIn)}; then any raise above the current bet`;
-    }
-    return `Open ${formatRupees(buyIn)}; raise ${formatRupees(
-      2 * buyIn,
-    )}; then ${formatRupees(3 * buyIn)}; then ${formatRupees(4 * buyIn)}`;
-  }, [ante, raiseRule]);
 
   function updatePlayerCount(value: number) {
     const count = Math.max(2, Math.min(10, value || 2));
@@ -1267,7 +1283,6 @@ function SetupView({
       name,
       stack,
       ante,
-      raiseRule,
       players: selectedPlayers,
     });
   }
@@ -1306,7 +1321,7 @@ function SetupView({
           />
         </div>
         <div>
-          <label htmlFor="ante">Buy-in</label>
+          <label htmlFor="ante">Big blind</label>
           <input
             id="ante"
             type="number"
@@ -1317,23 +1332,10 @@ function SetupView({
           />
         </div>
       </div>
-      <label htmlFor="raise-rule">Minimum raise</label>
-      <select
-        className="select-control"
-        id="raise-rule"
-        value={raiseRule}
-        onChange={(event) => setRaiseRule(event.target.value as RaiseRule)}
-      >
-        {Object.entries(RAISE_RULES).map(([key, rule]) => (
-          <option key={key} value={key}>
-            {rule.name}
-          </option>
-        ))}
-      </select>
       <p className="muted rule-note">
-        {RAISE_RULES[raiseRule].note}
-        <br />
-        <b>{ruleExample}</b>
+        Small blind {formatRupees(Math.floor(Math.max(1, ante) / 2))} · first
+        pre-flop raise to {formatRupees(Math.max(1, ante) * 2)} · later raises
+        can be any higher amount.
       </p>
       <label htmlFor="player-count">Number Of Players</label>
       <select
@@ -1620,7 +1622,7 @@ function GameView(props: GameViewProps) {
         <section className="card">
           <b>Game over</b>
           <p className="muted card-note">
-            Fewer than 2 players can post the buy-in of{" "}
+            Fewer than 2 players have chips remaining to post the big blind of{" "}
             {formatRupees(game.ante)}.
           </p>
         </section>
@@ -1638,8 +1640,15 @@ function GameView(props: GameViewProps) {
             <div className="stage">Pot</div>
             <div className="pot">{formatRupees(hand.pot)}</div>
             <div className="muted pot-meta">
-              hand {hand.no} · buy-in {formatRupees(game.ante)} ·{" "}
-              {RAISE_RULES[getRaiseRule(game)].name.toLowerCase()}
+              hand {hand.no} · blinds {formatRupees(Math.floor(game.ante / 2))}/
+              {formatRupees(game.ante)}
+            </div>
+            <div className="table-positions" aria-label="Table positions">
+              <span>Dealer · {game.players[hand.dealerIndex].name}</span>
+              <span>
+                Small Blind · {game.players[hand.smallBlindIndex].name}
+              </span>
+              <span>Big Blind · {game.players[hand.bigBlindIndex].name}</span>
             </div>
           </div>
 
@@ -1669,7 +1678,7 @@ function GameView(props: GameViewProps) {
                 ))}
               </div>
               <hr />
-              {hand.stage < 2 ? (
+              {hand.stage < STAGES.length - 1 ? (
                 <button
                   className="blue full"
                   disabled={pendingIndexes(game).length > 0}
@@ -1768,8 +1777,8 @@ function PokerHandsChart({
   pinned,
   onTogglePin,
 }: {
-  pinned: boolean;
-  onTogglePin: () => void;
+  pinned?: boolean;
+  onTogglePin?: () => void;
 }) {
   return (
     <section className={`poker-hands-chart ${pinned ? "pinned" : ""}`}>
@@ -1857,20 +1866,23 @@ function PlayerRow({
   const player = game.players[playerIndex];
   const folded = !hand.in[playerIndex];
   const done = hand.acted[playerIndex];
+  const isTurn = hand.currentPlayer === playerIndex;
   const owed = hand.roundHigh - hand.committed[playerIndex];
   const minimum = minimumRaise(game, playerIndex);
   const canUndo = hand.last[playerIndex] && !hand.splitSel;
 
-  if (folded || done) {
+  if (folded || done || !isTurn) {
     return (
-      <div className={`prow ${folded ? "folded" : "done"}`}>
+      <div className={`prow ${folded ? "folded" : done ? "done" : "waiting"}`}>
         <div className="nm">
           <b>{player.name}</b>
-          <small>{formatRupees(player.stack)}</small>
+          <small className="stack-value">{formatRupees(player.stack)}</small>
         </div>
         <span className="tag">
           {folded
             ? "folded"
+            : !isTurn
+              ? "waiting"
             : `in ${formatRupees(hand.committed[playerIndex])}`}
         </span>
         {canUndo ? (
@@ -1883,11 +1895,11 @@ function PlayerRow({
   }
 
   return (
-    <div className="prow act">
+    <div className="prow act current-turn">
       <div className="nm">
-        <b>{player.name}</b>
-        <small>
-          {formatRupees(player.stack)}
+        <b>{player.name} <span className="turn-chip">Your turn</span></b>
+        <small className="stack-value">
+          Stack {formatRupees(player.stack)}
           {owed > 0 ? ` · to call ${formatRupees(owed)}` : ""} · min{" "}
           {owed > 0 ? "raise" : "bet"} {formatRupees(minimum)}
         </small>
@@ -1900,29 +1912,26 @@ function PlayerRow({
             type="number"
             inputMode="numeric"
             min={minimum}
-            placeholder={String(minimum)}
+            aria-label={owed > 0 ? "Raise amount" : "Bet amount"}
             value={amount}
             onChange={(event) => setAmount(event.target.value)}
           />
         </div>
         <div className="acts">
           <button
-            className="primary"
-            onClick={() =>
-              onAct(
-                playerIndex,
-                "bet",
-                amount.trim() === "" ? minimum : Math.floor(Number(amount)),
-              )
-            }
-          >
-            {owed > 0 ? "Raise" : "Bet"}
-          </button>
-          <button
-            className={owed > 0 ? "blue" : ""}
+            className="action-call"
             onClick={() => onAct(playerIndex, owed > 0 ? "call" : "check")}
           >
             {owed > 0 ? "Call" : "Check"}
+          </button>
+          <button
+            className="action-raise"
+            disabled={amount.trim() === ""}
+            onClick={() =>
+              onAct(playerIndex, "bet", Math.floor(Number(amount)))
+            }
+          >
+            {owed > 0 ? "Raise" : "Bet"}
           </button>
           <button className="danger" onClick={() => onAct(playerIndex, "fold")}>
             Fold
@@ -2009,7 +2018,7 @@ function SessionCard({
         <div>
           <b>{session.name || `Game ${session.sessionNumber || ""}`}</b>
           <div className="muted session-meta">
-            {formatDate(session.date)} · {session.hands} hands · buy-in{" "}
+            {formatDate(session.date)} · {session.hands} hands · big blind{" "}
             {formatRupees(session.ante)} · {session.results.length} players
           </div>
         </div>
@@ -2283,9 +2292,9 @@ function Modal({
               <div>
                 <h3>Set Up The Table</h3>
                 <p>
-                  Choose A Starting Stack, Buy-In, Minimum Raise Rule, And Two
-                  To Ten Players. One Game Session Can Contain Multiple Hands.
-                  There Are No Small Or Big Blinds.
+                  Choose A Starting Stack, Big Blind, And Two To Ten Players.
+                  One Game Session Can Contain Multiple Hands. The Small Blind
+                  Is Half The Big Blind, Rounded Down.
                 </p>
               </div>
             </section>
@@ -2295,10 +2304,9 @@ function Modal({
               <div>
                 <h3>Start Every Hand</h3>
                 <p>
-                  Every Player Who Can Afford The Buy-In Posts It Automatically.
-                  Deal Two Hole Cards And Reveal The Flop Physically. There Is
-                  No Pre-Flop Betting Round, And The App Does Not Record Cards
-                  Or Burns.
+                  The dealer button, small blind, and big blind rotate one seat
+                  each hand. Deal two hole cards, post blinds, and complete a
+                  pre-flop betting round before revealing the flop physically.
                 </p>
               </div>
             </section>
@@ -2306,14 +2314,13 @@ function Modal({
             <section>
               <span className="rule-number">03</span>
               <div>
-                <h3>Take One Action Per Street</h3>
+                <h3>Take Turns Until Bets Match</h3>
                 <p>
-                  Play Flop, Turn, Then River, Burning One Physical Card Before
-                  Each Community-Card Reveal. Together, Flop, Turn, And River
-                  Make One Hand. Each Active Player Acts Exactly Once On Each
-                  Street. A Later Bet Or Raise Does Not Reopen Action For Anyone
-                  Who Already Acted. The Street Ends After Every Active Player
-                  Has Acted.
+                  Play pre-flop, flop, turn, then river, burning one physical
+                  card before each community-card reveal. Only the highlighted
+                  player can act. A raise reopens the action; the street ends
+                  only when every active player has called, checked, folded, or
+                  is all-in.
                 </p>
               </div>
             </section>
@@ -2334,24 +2341,13 @@ function Modal({
             <section>
               <span className="rule-number">05</span>
               <div>
-                <h3>Follow The Selected Raise Rule</h3>
-                <ul>
-                  <li>
-                    <strong>Buy-In Increment:</strong> Raise By At Least One
-                    Buy-In.
-                  </li>
-                  <li>
-                    <strong>Match Last Raise:</strong> Raise By At Least The
-                    Previous Raise Size, Or One Buy-In If That Is Larger.
-                  </li>
-                  <li>
-                    <strong>Any Amount:</strong> Raise The Current Bet By At
-                    Least ₹1.
-                  </li>
-                </ul>
+                <h3>Raise From Under The Gun</h3>
                 <p>
-                  An Opening Bet Is At Least One Buy-In Unless The Player Is
-                  Going All-In For Less.
+                  The First Player After The Big Blind Is Under The Gun. Their
+                  Minimum Pre-Flop Raise Makes The Total Bet Twice The Big
+                  Blind. After That First Action, Any Raise Only Needs To Be
+                  Higher Than The Current Bet. A Player May Always Go All-In
+                  For Less.
                 </p>
               </div>
             </section>
@@ -2364,8 +2360,8 @@ function Modal({
                   After The River, Choose One Winner Or Split The Pot Between
                   Two Or More Active Players. A Split Is Equal, With Any
                   Leftover ₹1 Chips Awarded In Player Order. Confirm The Winner,
-                  Then Start The Next Round To Begin A New Hand And Post A New
-                  Buy-In.
+                  Then Start The Next Round To Rotate Positions And Begin A New
+                  Hand.
                 </p>
               </div>
             </section>
@@ -2377,7 +2373,7 @@ function Modal({
                 <p>
                   Undo Restores A Player&apos;s Latest Action On The Current
                   Street. Cancel Hand Refunds Every Chip From That Hand,
-                  Including Buy-Ins. Undo Last Hand Restores Its Starting
+                  Including Blinds. Undo Last Hand Restores Its Starting
                   Stacks. Finish And Save Game Session Requires One Completed
                   Hand; Any Unfinished Hand Is Refunded In The Saved Results.
                 </p>

@@ -1,5 +1,3 @@
-export type RaiseRule = "ante" | "double" | "free";
-
 export type Player = {
   id?: string;
   name: string;
@@ -25,7 +23,6 @@ export type PlayerAction = {
   type: "fold" | "check" | "call" | "bet";
   chips: number;
   line: string;
-  prevRaise?: number;
 };
 
 export type Hand = {
@@ -37,8 +34,11 @@ export type Hand = {
   acted: boolean[];
   last: Array<PlayerAction | null>;
   roundHigh: number;
-  lastRaise: number;
   stacksBeforeHand: number[];
+  dealerIndex: number;
+  smallBlindIndex: number;
+  bigBlindIndex: number;
+  currentPlayer: number | null;
   splitSel?: number[] | null;
 };
 
@@ -48,10 +48,10 @@ export type GameState = {
   ante: number;
   startStack: number;
   startedAt: number;
-  raiseRule: RaiseRule;
   players: Player[];
   hand: Hand | null;
   handNo: number;
+  dealerIndex: number;
   log: string[];
   winnerAnnouncement?: WinnerAnnouncement | null;
   lastHand?: {

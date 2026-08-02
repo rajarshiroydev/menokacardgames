@@ -2,30 +2,11 @@ import type {
   GameState,
   LeaderboardEntry,
   PokerSession,
-  RaiseRule,
 } from "./types";
 
 export const GAME_STORAGE_KEY = "pokerLedger.v1";
 export const HISTORY_STORAGE_KEY = "pokerLedger.history.v1";
-export const STAGES = ["FLOP", "TURN", "RIVER"] as const;
-
-export const RAISE_RULES: Record<
-  RaiseRule,
-  { name: string; note: string }
-> = {
-  ante: {
-    name: "Buy-in increment",
-    note: "A raise must go at least one buy-in above the current bet.",
-  },
-  double: {
-    name: "Match last raise",
-    note: "A raise must increase by at least the size of the last raise.",
-  },
-  free: {
-    name: "Any amount",
-    note: "A raise only has to beat the current bet.",
-  },
-};
+export const STAGES = ["PREFLOP", "FLOP", "TURN", "RIVER"] as const;
 
 export function formatRupees(value: number) {
   return `₹${Number(value).toLocaleString("en-IN")}`;
@@ -52,29 +33,48 @@ export function activeIndexes(game: GameState) {
 
 export function pendingIndexes(game: GameState) {
   if (!game.hand) return [];
-  return activeIndexes(game).filter((index) => !game.hand?.acted[index]);
+  const hand = game.hand;
+  return activeIndexes(game).filter(
+    (index) =>
+      game.players[index].stack > 0 &&
+      (!hand.acted[index] || hand.committed[index] < hand.roundHigh),
+  );
 }
 
-export function getRaiseRule(game: GameState): RaiseRule {
-  return game.raiseRule in RAISE_RULES ? game.raiseRule : "ante";
+export function nextEligibleIndex(inHand: boolean[], from: number) {
+  for (let offset = 1; offset <= inHand.length; offset += 1) {
+    const index = (from + offset) % inHand.length;
+    if (inHand[index]) return index;
+  }
+  return -1;
+}
+
+export function nextPlayerToAct(game: GameState, from: number) {
+  const hand = game.hand;
+  if (!hand) return null;
+  for (let offset = 1; offset <= game.players.length; offset += 1) {
+    const index = (from + offset) % game.players.length;
+    if (
+      hand.in[index] &&
+      game.players[index].stack > 0 &&
+      (!hand.acted[index] || hand.committed[index] < hand.roundHigh)
+    ) {
+      return index;
+    }
+  }
+  return null;
 }
 
 export function minimumRaise(game: GameState, playerIndex: number) {
   const hand = game.hand;
   if (!hand) return 0;
 
-  let target: number;
-  const rule = getRaiseRule(game);
-  if (hand.roundHigh === 0) {
-    target = game.ante;
-  } else if (rule === "double") {
-    target =
-      hand.roundHigh + Math.max(hand.lastRaise || game.ante, game.ante);
-  } else if (rule === "free") {
-    target = hand.roundHigh + 1;
-  } else {
-    target = hand.roundHigh + game.ante;
-  }
+  const utgIndex = nextEligibleIndex(hand.in, hand.bigBlindIndex);
+  const isUtgOpeningAction =
+    hand.stage === 0 &&
+    playerIndex === utgIndex &&
+    !hand.acted.some(Boolean);
+  const target = isUtgOpeningAction ? game.ante * 2 : hand.roundHigh + 1;
 
   return Math.max(
     1,
@@ -86,38 +86,52 @@ export function minimumRaise(game: GameState, playerIndex: number) {
 }
 
 export function dealNewHand(game: GameState) {
-  const alive = game.players.filter(
-    (player) => player.stack >= game.ante,
-  ).length;
+  const alive = game.players.filter((player) => player.stack > 0).length;
   if (alive < 2) {
     game.hand = null;
     return;
   }
 
   game.handNo += 1;
-  const inHand = game.players.map((player) => player.stack >= game.ante);
+  const inHand = game.players.map((player) => player.stack > 0);
+  const previousDealer = Number.isInteger(game.dealerIndex)
+    ? game.dealerIndex
+    : -1;
+  const dealerIndex = nextEligibleIndex(inHand, previousDealer);
+  const smallBlindIndex =
+    alive === 2
+      ? dealerIndex
+      : nextEligibleIndex(inHand, dealerIndex);
+  const bigBlindIndex = nextEligibleIndex(inHand, smallBlindIndex);
+  const stacksBeforeHand = game.players.map((player) => player.stack);
+  const committed = game.players.map(() => 0);
   let pot = 0;
-  game.players.forEach((player, index) => {
-    if (inHand[index]) {
-      player.stack -= game.ante;
-      pot += game.ante;
-    }
-  });
+  [[smallBlindIndex, Math.floor(game.ante / 2)], [bigBlindIndex, game.ante]].forEach(
+    ([index, blind]) => {
+      const chips = Math.min(blind, game.players[index].stack);
+      game.players[index].stack -= chips;
+      committed[index] += chips;
+      pot += chips;
+    },
+  );
+  game.dealerIndex = dealerIndex;
 
   game.hand = {
     no: game.handNo,
     pot,
     stage: 0,
     in: inHand,
-    committed: game.players.map(() => 0),
+    committed,
     acted: game.players.map(() => false),
     last: game.players.map(() => null),
-    roundHigh: 0,
-    lastRaise: game.ante,
-    stacksBeforeHand: game.players.map(
-      (player, index) => player.stack + (inHand[index] ? game.ante : 0),
-    ),
+    roundHigh: committed[bigBlindIndex],
+    stacksBeforeHand,
+    dealerIndex,
+    smallBlindIndex,
+    bigBlindIndex,
+    currentPlayer: null,
   };
+  game.hand.currentPlayer = nextPlayerToAct(game, bigBlindIndex);
 }
 
 export function buildLeaderboard(sessions: PokerSession[]) {
