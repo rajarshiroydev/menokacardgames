@@ -375,7 +375,7 @@ describe("positional betting", () => {
     assert.equal(nextPlayerToAct(game, 2), null);
   });
 
-  test("requires UTG to raise to twice the big blind, then allows any higher amount", () => {
+  test("requires a big blind opening bet after the flop", () => {
     const game = gameState();
     dealNewHand(game);
     const hand = game.hand!;
@@ -392,6 +392,12 @@ describe("positional betting", () => {
     hand.committed = [0, 0, 0];
     hand.roundHigh = 0;
     hand.acted = [false, false, false];
-    assert.equal(minimumRaise(game, 1), 1);
+    assert.equal(minimumRaise(game, 1), 100);
+
+    game.ante = 250;
+    assert.equal(minimumRaise(game, 1), 250);
+
+    game.players[1].stack = 80;
+    assert.equal(minimumRaise(game, 1), 80);
   });
 });

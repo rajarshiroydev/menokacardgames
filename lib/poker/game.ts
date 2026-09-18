@@ -83,7 +83,11 @@ export function minimumRaise(game: GameState, playerIndex: number) {
     hand.stage === 0 &&
     playerIndex === utgIndex &&
     !hand.acted.some(Boolean);
-  const target = isUtgOpeningAction ? game.ante * 2 : hand.roundHigh + 1;
+  const target = isUtgOpeningAction
+    ? game.ante * 2
+    : hand.roundHigh === 0
+      ? game.ante
+      : hand.roundHigh + 1;
 
   return Math.max(
     1,
