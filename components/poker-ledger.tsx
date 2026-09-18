@@ -2329,6 +2329,7 @@ function PlayerRow({
   const owed = hand.roundHigh - hand.committed[playerIndex];
   const minimum = minimumRaise(game, playerIndex);
   const canUndo = hand.last[playerIndex] && !hand.splitSel;
+  const hasAmount = amount.trim() !== "";
 
   if (folded || done || !isTurn) {
     return (
@@ -2381,20 +2382,25 @@ function PlayerRow({
         <div className="acts">
           <button
             className="action-call"
+            disabled={hasAmount}
             onClick={() => onAct(playerIndex, owed > 0 ? "call" : "check")}
           >
             {owed > 0 ? "Call" : "Check"}
           </button>
           <button
             className="action-raise"
-            disabled={amount.trim() === ""}
+            disabled={!hasAmount}
             onClick={() =>
               onAct(playerIndex, "bet", Math.floor(Number(amount)))
             }
           >
             {owed > 0 ? "Raise" : "Bet"}
           </button>
-          <button className="danger" onClick={() => onAct(playerIndex, "fold")}>
+          <button
+            className="danger"
+            disabled={hasAmount}
+            onClick={() => onAct(playerIndex, "fold")}
+          >
             Fold
           </button>
           <button
