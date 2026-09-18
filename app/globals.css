@@ -599,6 +599,70 @@ hr {
   margin-bottom: 7px;
 }
 
+.seat-order-help {
+  margin: 0 0 9px;
+}
+
+.seat-order-list {
+  display: grid;
+  gap: 7px;
+}
+
+.seat-row {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) 40px;
+  align-items: center;
+  gap: 8px;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--card2);
+  transition: border-color 150ms ease, background 150ms ease, opacity 150ms ease;
+}
+
+.seat-row.is-dragging {
+  opacity: 0.45;
+}
+
+.seat-row.is-drop-target {
+  border-color: var(--gold);
+  background: color-mix(in srgb, var(--gold) 12%, var(--card2));
+}
+
+.seat-number {
+  color: var(--gold);
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.names .seat-row select {
+  min-width: 0;
+  min-height: 44px;
+  margin: 0;
+  font-size: 14px;
+}
+
+.seat-drag-handle {
+  display: grid;
+  width: 40px;
+  min-height: 44px;
+  place-items: center;
+  padding: 0;
+  border-color: var(--line);
+  color: var(--gold);
+  font-size: 23px;
+  line-height: 1;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.seat-drag-handle:active {
+  cursor: grabbing;
+}
+
 .text-button {
   width: max-content;
   min-height: 0;

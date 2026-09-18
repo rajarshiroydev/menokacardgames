@@ -3,6 +3,7 @@
 import {
   ChangeEvent,
   FormEvent,
+  PointerEvent as ReactPointerEvent,
   useCallback,
   useEffect,
   useMemo,
@@ -1395,6 +1396,26 @@ function SetupView({
   );
   const [playerCount, setPlayerCount] = useState(3);
   const [selectedIds, setSelectedIds] = useState(["", "", ""]);
+  const seatListRef = useRef<HTMLDivElement>(null);
+  const seatDragRef = useRef<{
+    pointerId: number;
+    from: number;
+    over: number | null;
+    startX: number;
+    startY: number;
+    x: number;
+    y: number;
+    moved: boolean;
+  } | null>(null);
+  const seatScrollFrameRef = useRef<number | null>(null);
+  const [draggingSeat, setDraggingSeat] = useState<number | null>(null);
+  const [dropSeat, setDropSeat] = useState<number | null>(null);
+
+  useEffect(() => () => {
+    if (seatScrollFrameRef.current !== null) {
+      cancelAnimationFrame(seatScrollFrameRef.current);
+    }
+  }, []);
 
   const schedule: BlindSchedule | null = risingBlinds
     ? {
@@ -1420,6 +1441,158 @@ function SetupView({
     setSelectedIds((current) =>
       Array.from({ length: count }, (_, index) => current[index] || ""),
     );
+  }
+
+  function moveSeat(from: number, to: number) {
+    if (from === to) return;
+    setSelectedIds((current) => {
+      if (
+        from < 0 ||
+        to < 0 ||
+        from >= current.length ||
+        to >= current.length
+      ) {
+        return current;
+      }
+      const next = [...current];
+      const [playerId] = next.splice(from, 1);
+      next.splice(to, 0, playerId);
+      return next;
+    });
+  }
+
+  function updateSeatDropTarget(
+    drag: NonNullable<typeof seatDragRef.current>,
+  ) {
+    const list = seatListRef.current;
+    const bounds = list?.getBoundingClientRect();
+    let over: number | null = null;
+    if (
+      list &&
+      bounds &&
+      drag.x >= bounds.left - 32 &&
+      drag.x <= bounds.right + 32 &&
+      drag.y >= bounds.top - 16 &&
+      drag.y <= bounds.bottom + 16
+    ) {
+      let nearestDistance = Infinity;
+      for (const row of list.querySelectorAll<HTMLElement>(
+        "[data-seat-index]",
+      )) {
+        const rect = row.getBoundingClientRect();
+        const distance = Math.abs(drag.y - (rect.top + rect.bottom) / 2);
+        if (distance < nearestDistance) {
+          nearestDistance = distance;
+          over = Number(row.dataset.seatIndex);
+        }
+      }
+    }
+    if (drag.over !== over) {
+      drag.over = over;
+      setDropSeat(over);
+    }
+  }
+
+  function scrollWhileDragging() {
+    seatScrollFrameRef.current = null;
+    const drag = seatDragRef.current;
+    if (!drag?.moved) return;
+    const edge = 72;
+    const distanceFromBottom = window.innerHeight - drag.y;
+    const step =
+      drag.y < edge
+        ? -Math.max(4, Math.ceil((edge - drag.y) / 5))
+        : distanceFromBottom < edge
+          ? Math.max(4, Math.ceil((edge - distanceFromBottom) / 5))
+          : 0;
+    if (step === 0) return;
+    const bounds = seatListRef.current?.getBoundingClientRect();
+    if (
+      !bounds ||
+      (step < 0 && bounds.top >= drag.y) ||
+      (step > 0 && bounds.bottom <= drag.y)
+    ) {
+      return;
+    }
+    const previousScroll = window.scrollY;
+    window.scrollBy(0, step);
+    if (window.scrollY === previousScroll) return;
+    updateSeatDropTarget(drag);
+    seatScrollFrameRef.current = requestAnimationFrame(scrollWhileDragging);
+  }
+
+  function stopSeatScroll() {
+    if (seatScrollFrameRef.current !== null) {
+      cancelAnimationFrame(seatScrollFrameRef.current);
+      seatScrollFrameRef.current = null;
+    }
+  }
+
+  function startSeatDrag(
+    event: ReactPointerEvent<HTMLButtonElement>,
+    index: number,
+  ) {
+    if (
+      !selectedIds[index] ||
+      loading ||
+      error ||
+      !event.isPrimary ||
+      event.button !== 0
+    ) {
+      return;
+    }
+    seatDragRef.current = {
+      pointerId: event.pointerId,
+      from: index,
+      over: index,
+      startX: event.clientX,
+      startY: event.clientY,
+      x: event.clientX,
+      y: event.clientY,
+      moved: false,
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+    setDraggingSeat(index);
+    setDropSeat(index);
+  }
+
+  function moveSeatDrag(event: ReactPointerEvent<HTMLButtonElement>) {
+    const drag = seatDragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    drag.x = event.clientX;
+    drag.y = event.clientY;
+    if (
+      !drag.moved &&
+      Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY) < 5
+    ) {
+      return;
+    }
+    drag.moved = true;
+    updateSeatDropTarget(drag);
+    if (seatScrollFrameRef.current === null) {
+      seatScrollFrameRef.current = requestAnimationFrame(scrollWhileDragging);
+    }
+  }
+
+  function endSeatDrag(event: ReactPointerEvent<HTMLButtonElement>) {
+    const drag = seatDragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    stopSeatScroll();
+    if (drag.moved && drag.over !== null) moveSeat(drag.from, drag.over);
+    seatDragRef.current = null;
+    setDraggingSeat(null);
+    setDropSeat(null);
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+  }
+
+  function cancelSeatDrag(event: ReactPointerEvent<HTMLButtonElement>) {
+    if (seatDragRef.current?.pointerId !== event.pointerId) return;
+    stopSeatScroll();
+    seatDragRef.current = null;
+    setDraggingSeat(null);
+    setDropSeat(null);
   }
 
   function submit(event: FormEvent<HTMLFormElement>) {
@@ -1616,7 +1789,7 @@ function SetupView({
 
       <div className="names player-selects">
         <div className="player-select-heading">
-          <label>Select Players</label>
+          <label>Select Players &amp; Seating Order</label>
           <button
             type="button"
             className="text-button"
@@ -1633,37 +1806,80 @@ function SetupView({
             </button>
           </div>
         ) : null}
-        {selectedIds.map((selectedId, index) => (
-          <select
-            className="select-control"
-            key={index}
-            aria-label={`Player ${index + 1}`}
-            disabled={loading || Boolean(error)}
-            value={selectedId}
-            onChange={(event) =>
-              setSelectedIds((current) =>
-                current.map((item, itemIndex) =>
-                  itemIndex === index ? event.target.value : item,
-                ),
-              )
-            }
-          >
-            <option value="">
-              {loading ? "Loading Players…" : `Choose Player ${index + 1}`}
-            </option>
-            {players.map((player) => (
-              <option
-                key={player.id}
-                value={player.id}
-                disabled={
-                  player.id !== selectedId && selectedIds.includes(player.id)
+        <p className="muted seat-order-help">
+          Drag a player by the grip to change seats. Seat 1 deals first; the
+          dealer moves to the next active player each hand.
+        </p>
+        <div className="seat-order-list" ref={seatListRef}>
+          {selectedIds.map((selectedId, index) => (
+            <div
+              className={`seat-row${draggingSeat === index ? " is-dragging" : ""}${
+                draggingSeat !== null && dropSeat === index && draggingSeat !== index
+                  ? " is-drop-target"
+                  : ""
+              }`}
+              data-seat-index={index}
+              key={selectedId || `empty-seat-${index}`}
+            >
+              <span className="seat-number" aria-hidden="true">
+                {index + 1}
+              </span>
+              <select
+                className="select-control"
+                aria-label={`Seat ${index + 1} player`}
+                disabled={loading || Boolean(error)}
+                value={selectedId}
+                onChange={(event) =>
+                  setSelectedIds((current) =>
+                    current.map((item, itemIndex) =>
+                      itemIndex === index ? event.target.value : item,
+                    ),
+                  )
                 }
               >
-                {player.name}
-              </option>
-            ))}
-          </select>
-        ))}
+                <option value="">
+                  {loading ? "Loading Players…" : `Choose Player ${index + 1}`}
+                </option>
+                {players.map((player) => (
+                  <option
+                    key={player.id}
+                    value={player.id}
+                    disabled={
+                      player.id !== selectedId && selectedIds.includes(player.id)
+                    }
+                  >
+                    {player.name}
+                  </option>
+                ))}
+              </select>
+              <button
+                className="seat-drag-handle"
+                type="button"
+                disabled={!selectedId || loading || Boolean(error)}
+                aria-label={`Move seat ${index + 1} player. Drag or use arrow keys.`}
+                onPointerDown={(event) => startSeatDrag(event, index)}
+                onPointerMove={moveSeatDrag}
+                onPointerUp={endSeatDrag}
+                onPointerCancel={cancelSeatDrag}
+                onLostPointerCapture={cancelSeatDrag}
+                onKeyDown={(event) => {
+                  if (event.key === "ArrowUp" && index > 0) {
+                    event.preventDefault();
+                    moveSeat(index, index - 1);
+                  } else if (
+                    event.key === "ArrowDown" &&
+                    index < playerCount - 1
+                  ) {
+                    event.preventDefault();
+                    moveSeat(index, index + 1);
+                  }
+                }}
+              >
+                <span aria-hidden="true">⠿</span>
+              </button>
+            </div>
+          ))}
+        </div>
         {!loading && !error && players.length < 2 ? (
           <p className="muted player-help">
             Add At Least Two Players Before Starting A Game.
@@ -2797,11 +3013,12 @@ function Modal({
                 <h3>Set Up The Table</h3>
                 <p>
                   Choose A Starting Stack, Big Blind, And Two To Ten Players.
-                  One Game Session Can Contain Multiple Hands. The Small Blind
-                  Is Half The Big Blind, Rounded Down. Blinds Can Also Be Set
-                  To Rise Every Few Hands Or Minutes, Either Multiplying The
-                  Big Blind Or Adding A Fixed Amount Each Level. A New Level
-                  Takes Effect When The Next Hand Is Dealt, Never Mid-Hand.
+                  Drag Players Into Seating Order Before Starting. One Game
+                  Session Can Contain Multiple Hands. The Small Blind Is Half
+                  The Big Blind, Rounded Down. Blinds Can Also Be Set To Rise
+                  Every Few Hands Or Minutes, Either Multiplying The Big Blind
+                  Or Adding A Fixed Amount Each Level. A New Level Takes
+                  Effect When The Next Hand Is Dealt, Never Mid-Hand.
                 </p>
               </div>
             </section>
@@ -2811,9 +3028,10 @@ function Modal({
               <div>
                 <h3>Start Every Hand</h3>
                 <p>
-                  The dealer button, small blind, and big blind rotate one seat
-                  each hand. Deal two hole cards, post blinds, and complete a
-                  pre-flop betting round before revealing the flop physically.
+                  The Dealer Button, Small Blind, And Big Blind Rotate Through
+                  The Chosen Seating Order Each Hand, Skipping Players Without
+                  Chips. Deal Two Hole Cards, Post Blinds, And Complete A
+                  Pre-Flop Betting Round Before Revealing The Flop Physically.
                 </p>
               </div>
             </section>

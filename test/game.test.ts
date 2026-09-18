@@ -344,6 +344,17 @@ describe("rising blinds", () => {
 });
 
 describe("positional betting", () => {
+  test("rotates the dealer through the chosen seating order", () => {
+    const game = gameState();
+    game.players = [game.players[2], game.players[0], game.players[1]];
+
+    for (const name of ["C", "A", "B", "C"]) {
+      game.hand = null;
+      dealNewHand(game);
+      assert.equal(game.players[dealtHand(game).dealerIndex].name, name);
+    }
+  });
+
   test("posts rotating blinds and starts action left of the big blind", () => {
     const game = gameState();
     dealNewHand(game);
