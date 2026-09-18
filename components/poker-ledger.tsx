@@ -631,7 +631,10 @@ export function PokerLedger() {
         `${player.name} calls ${formatRupees(needed)}`,
       );
     } else {
-      const chips = amount ?? minimumRaise(next, playerIndex);
+      const chips =
+        type === "all-in"
+          ? player.stack
+          : (amount ?? minimumRaise(next, playerIndex));
       if (!Number.isSafeInteger(chips) || chips <= 0) {
         showToast("Enter an amount");
         return;
@@ -661,17 +664,21 @@ export function PokerLedger() {
           index === playerIndex || !hand.in[index] || next.players[index].stack === 0,
         );
       }
+      const description =
+        type === "all-in"
+          ? `goes all-in for ${formatRupees(chips)}${
+              wasRaise ? ` (to ${formatRupees(total)})` : ""
+            }`
+          : wasRaise
+            ? opening
+              ? `bets ${formatRupees(chips)}`
+              : `raises to ${formatRupees(total)}`
+            : `calls ${formatRupees(chips)}`;
       recordAction(
         next,
         playerIndex,
         { type, chips },
-        `${player.name} ${
-          wasRaise
-            ? opening
-              ? `bets ${formatRupees(chips)}`
-              : `raises to ${formatRupees(total)}`
-            : `calls ${formatRupees(chips)}`
-        }`,
+        `${player.name} ${description}`,
       );
     }
 
@@ -2333,9 +2340,11 @@ function PlayerRow({
         <span className="tag">
           {folded
             ? "folded"
-            : !isTurn
-              ? "waiting"
-            : `in ${formatRupees(hand.committed[playerIndex])}`}
+            : player.stack === 0
+              ? "all-in"
+              : !isTurn
+                ? "waiting"
+                : `in ${formatRupees(hand.committed[playerIndex])}`}
         </span>
         {canUndo ? (
           <button className="undo" onClick={() => onUndo(playerIndex)}>
@@ -2387,6 +2396,12 @@ function PlayerRow({
           </button>
           <button className="danger" onClick={() => onAct(playerIndex, "fold")}>
             Fold
+          </button>
+          <button
+            className="action-all-in"
+            onClick={() => onAct(playerIndex, "all-in")}
+          >
+            All In · {formatRupees(player.stack)}
           </button>
         </div>
       </div>
@@ -2817,9 +2832,9 @@ function Modal({
                 <h3>Choose An Action</h3>
                 <p>
                   Check Only When Nothing Is Owed. Bet To Open The Action, Call
-                  The Current Bet, Raise It, Or Fold. A Short-Stacked Player Can
-                  Call Or Bet All-In With Their Remaining Chips. If Only One
-                  Player Remains, They Win Automatically.
+                  The Current Bet, Raise It, Or Fold. All In Commits The
+                  Player&apos;s Entire Remaining Stack, Even If It Cannot Cover
+                  A Call. If Only One Player Remains, They Win Automatically.
                 </p>
               </div>
             </section>

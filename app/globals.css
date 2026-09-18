@@ -1047,6 +1047,13 @@ hr {
   color: var(--fg);
 }
 
+.acts button.action-all-in {
+  grid-column: 1 / -1;
+  border-color: var(--gold);
+  background: color-mix(in srgb, var(--gold) 15%, var(--sunk));
+  color: var(--gold);
+}
+
 .acts button.danger {
   padding: 11px 6px;
   border-color: var(--danger);

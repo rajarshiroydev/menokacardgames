@@ -20,7 +20,7 @@ export type WinnerAnnouncement = {
 };
 
 export type PlayerAction = {
-  type: "fold" | "check" | "call" | "bet";
+  type: "fold" | "check" | "call" | "bet" | "all-in";
   chips: number;
   line: string;
 };
