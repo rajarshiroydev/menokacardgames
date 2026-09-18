@@ -80,6 +80,31 @@ describe("session validation", () => {
     assert.equal(session.results[0].playerId, "player-1");
   });
 
+  test("keeps halved buy-ins and checks net against total invested", () => {
+    const results = [
+      { name: "Raj", net: -2500, end: 15000, buyIns: [10000, 5000, 2500] },
+      { name: "Sam", net: 2500, end: 12500 },
+    ];
+    assert.deepEqual(
+      validateSession({ ...validSession, results }).results,
+      results,
+    );
+    assert.throws(
+      () => validateSession({
+        ...validSession,
+        results: [{ ...results[0], buyIns: [10000, 6000] }, results[1]],
+      }),
+      /Invalid buy-in sequence/,
+    );
+    assert.throws(
+      () => validateSession({
+        ...validSession,
+        results: [{ ...results[0], net: 0 }, results[1]],
+      }),
+      /Buy-ins do not match the net result/,
+    );
+  });
+
   test("keeps the blind plan and levels used in a finished session", () => {
     const blindHistory = {
       plans: [

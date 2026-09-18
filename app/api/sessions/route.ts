@@ -171,6 +171,7 @@ export async function POST(request: Request) {
           name: player!.name,
           net: result.net,
           end: result.end,
+          ...(result.buyIns ? { buyIns: result.buyIns } : {}),
         };
       }),
     }));

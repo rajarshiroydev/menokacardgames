@@ -178,11 +178,42 @@ export function validateSession(input: unknown): PokerSession {
     if (playerId && !/^[A-Za-z0-9._:-]{1,100}$/.test(playerId)) {
       throw new Error("Invalid player id");
     }
+    const net = asSafeInteger(result.net, "net result");
+    const end = asSafeInteger(result.end, "ending stack", { min: 0 });
+    let buyIns: number[] | undefined;
+    if (result.buyIns !== undefined) {
+      if (
+        !Array.isArray(result.buyIns) ||
+        result.buyIns.length < 1 ||
+        result.buyIns.length > 64
+      ) {
+        throw new Error("Invalid buy-in history");
+      }
+      const parsedBuyIns = result.buyIns.map((amount, index) =>
+        asSafeInteger(amount, "buy-in amount", { min: index === 0 ? 0 : 1 }),
+      );
+      const validHalves = parsedBuyIns.every(
+        (amount, index) =>
+          index === 0 || amount === Math.floor(parsedBuyIns[index - 1] / 2),
+      );
+      if (parsedBuyIns[0] !== startStack || !validHalves) {
+        throw new Error("Invalid buy-in sequence");
+      }
+      const invested = parsedBuyIns.reduce(
+        (total, amount) => total + amount,
+        0,
+      );
+      if (!Number.isSafeInteger(invested) || net !== end - invested) {
+        throw new Error("Buy-ins do not match the net result");
+      }
+      buyIns = parsedBuyIns;
+    }
     return {
       ...(playerId ? { playerId } : {}),
       name,
-      net: asSafeInteger(result.net, "net result"),
-      end: asSafeInteger(result.end, "ending stack", { min: 0 }),
+      net,
+      end,
+      ...(buyIns ? { buyIns } : {}),
     };
   });
 

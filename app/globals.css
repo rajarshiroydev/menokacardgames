@@ -1470,6 +1470,13 @@ hr {
   font-size: 13px;
 }
 
+.session-result-player small {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
 .backup-note {
   margin: 8px 0 0;
   font-size: 13px;
@@ -1511,7 +1518,9 @@ hr {
 .winner-card {
   position: relative;
   width: min(100%, 390px);
-  overflow: hidden;
+  max-height: calc(100dvh - 40px);
+  overflow-x: hidden;
+  overflow-y: auto;
   padding: 30px 22px 22px;
   border: 1px solid var(--gold);
   border-radius: 20px;
@@ -1552,6 +1561,51 @@ hr {
   color: var(--green);
   font-family: var(--mono);
   font-size: 15px;
+}
+
+.buy-in-options {
+  margin-bottom: 14px;
+}
+
+.winner-card .buy-in-options {
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--sunk);
+  text-align: left;
+}
+
+.buy-in-options > b {
+  font-size: 16px;
+}
+
+.buy-in-options p,
+.winner-card .buy-in-options p {
+  margin: 4px 0 10px;
+  color: var(--muted);
+  font-family: var(--sans);
+  font-size: 12px;
+}
+
+.buy-in-button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  margin-top: 6px;
+  padding: 10px 12px;
+  border-color: var(--gold);
+  background: color-mix(in srgb, var(--gold) 12%, var(--card2));
+  color: var(--fg);
+  font-size: 12px;
+  text-align: left;
+}
+
+.buy-in-button strong {
+  flex: none;
+  color: var(--gold);
+  font-size: 12px;
 }
 
 .confetti span {

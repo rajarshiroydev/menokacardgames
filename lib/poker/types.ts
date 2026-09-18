@@ -2,6 +2,8 @@ export type Player = {
   id?: string;
   name: string;
   stack: number;
+  /** Initial stack followed by each rebuy amount. */
+  buyIns?: number[];
 };
 
 export type PlayerProfile = {
@@ -92,6 +94,7 @@ export type GameState = {
   winnerAnnouncement?: WinnerAnnouncement | null;
   lastHand?: {
     stacksBefore: number[];
+    buyInsBefore?: number[][];
   } | null;
   _setupCount: number;
 };
@@ -101,6 +104,7 @@ export type SessionResult = {
   name: string;
   net: number;
   end: number;
+  buyIns?: number[];
 };
 
 export type PokerSession = {

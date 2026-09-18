@@ -5,12 +5,15 @@ import {
   bigBlindAtLevel,
   blindStatus,
   buildLeaderboard,
+  buyInPlayer,
   dealNewHand,
   editBlindSchedule,
   minimumRaise,
+  nextBuyIn,
   nextPlayerToAct,
   pendingBlindPlan,
   pendingIndexes,
+  totalBuyIns,
 } from "../lib/poker/game.ts";
 import type {
   BlindSchedule,
@@ -410,5 +413,37 @@ describe("positional betting", () => {
 
     game.players[1].stack = 80;
     assert.equal(minimumRaise(game, 1), 80);
+  });
+});
+
+describe("buy-ins", () => {
+  test("halves each busted player's previous buy-in", () => {
+    const game = gameState();
+    game.startStack = 10_000;
+    game.players[0].stack = 0;
+
+    assert.equal(nextBuyIn(game, 0), 5_000);
+    assert.equal(buyInPlayer(game, 0), 5_000);
+    assert.equal(game.players[0].stack, 5_000);
+    assert.deepEqual(game.players[0].buyIns, [10_000, 5_000]);
+
+    game.players[0].stack = 0;
+    assert.equal(nextBuyIn(game, 0), 2_500);
+    assert.equal(buyInPlayer(game, 0), 2_500);
+    assert.equal(totalBuyIns(game, 0), 17_500);
+    assert.equal(game.players[0].stack, 2_500);
+    assert.equal(nextBuyIn(game, 0), null);
+  });
+
+  test("offers no buy-in during a hand or after the amount reaches zero", () => {
+    const game = gameState();
+    game.players[0].stack = 0;
+    game.players[0].buyIns = [1];
+    assert.equal(nextBuyIn(game, 0), null);
+
+    game.players[0].buyIns = [100_000];
+    dealNewHand(game);
+    assert.equal(nextBuyIn(game, 0), null);
+    assert.equal(buyInPlayer(game, 0), null);
   });
 });

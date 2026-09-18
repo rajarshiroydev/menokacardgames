@@ -16,6 +16,7 @@ import {
   bigBlindAtLevel,
   blindStatus,
   buildLeaderboard,
+  buyInPlayer,
   dealNewHand,
   DEFAULT_BLIND_SCHEDULE,
   editBlindSchedule,
@@ -24,12 +25,15 @@ import {
   GAME_STORAGE_KEY,
   HISTORY_STORAGE_KEY,
   minimumRaise,
+  nextBuyIn,
   nextPlayerToAct,
   pendingIndexes,
   pendingBlindPlan,
+  playerBuyIns,
   smallBlindFor,
   STAGES,
   startingBigBlind,
+  totalBuyIns,
 } from "@/lib/poker/game";
 import type {
   BlindSchedule,
@@ -141,6 +145,14 @@ function readStoredGame() {
         ? [{ handNo: data.handNo, dealtAt: Date.now(), bigBlind: data.ante }]
         : []),
     ];
+    data.players.forEach((player) => {
+      player.buyIns ??= [data.startStack];
+    });
+    if (data.lastHand) {
+      data.lastHand.buyInsBefore ??= data.players.map((player) => [
+        ...(player.buyIns ?? [data.startStack]),
+      ]);
+    }
     // Older saved games did not have positional betting. Start their next hand
     // with the new model instead of leaving an unusable in-progress hand.
     if (!Number.isInteger(data.dealerIndex)) {
@@ -234,7 +246,12 @@ function awardPot(game: GameState, playerIndex: number, automatic = false) {
       pot,
     )}${automatic ? " (others folded)" : ""}`,
   );
-  game.lastHand = { stacksBefore: [...hand.stacksBeforeHand] };
+  game.lastHand = {
+    stacksBefore: [...hand.stacksBeforeHand],
+    buyInsBefore: game.players.map((_, index) => [
+      ...playerBuyIns(game, index),
+    ]),
+  };
   game.winnerAnnouncement = {
     names: [game.players[playerIndex].name],
     pot,
@@ -468,6 +485,7 @@ export function PokerLedger() {
           id: player.id,
           name: player.name,
           stack: input.stack,
+          buyIns: [input.stack],
         })),
         hand: null,
         handNo: 0,
@@ -799,7 +817,12 @@ export function PokerLedger() {
         .map((index) => next.players[index].name)
         .join(", ")}`,
     );
-    next.lastHand = { stacksBefore: [...hand.stacksBeforeHand] };
+    next.lastHand = {
+      stacksBefore: [...hand.stacksBeforeHand],
+      buyInsBefore: next.players.map((_, index) => [
+        ...playerBuyIns(next, index),
+      ]),
+    };
     next.winnerAnnouncement = {
       names: winners.map((index) => next.players[index].name),
       pot: hand.pot,
@@ -812,7 +835,7 @@ export function PokerLedger() {
   }
 
   function startNextHand() {
-    if (!game?.winnerAnnouncement) return;
+    if (!game || game.hand) return;
     const next = structuredClone(game);
     const anteBefore = next.ante;
     next.winnerAnnouncement = null;
@@ -825,6 +848,20 @@ export function PokerLedger() {
         )}/${formatRupees(next.ante)}`,
       );
     }
+  }
+
+  function buyIn(playerIndex: number) {
+    if (!game || game.hand) return;
+    const next = structuredClone(game);
+    const amount = buyInPlayer(next, playerIndex);
+    if (amount === null) return;
+    const player = next.players[playerIndex];
+    recordWin(
+      next,
+      `Hand ${next.handNo}: ${player.name} buys in for ${formatRupees(amount)}`,
+    );
+    setGame(next);
+    showToast(`${player.name} buys in for ${formatRupees(amount)}`);
   }
 
   function saveBlindSchedule(schedule: BlindSchedule | null) {
@@ -868,10 +905,14 @@ export function PokerLedger() {
       if (!next.lastHand) return;
       next.players.forEach((player, index) => {
         player.stack = next.lastHand?.stacksBefore[index] ?? player.stack;
+        player.buyIns = next.lastHand?.buyInsBefore?.[index] ?? player.buyIns;
       });
       const undoneNumber = next.hand ? next.hand.no - 1 : next.handNo;
+      const currentHandNumber = next.hand?.no;
       next.log = next.log.filter(
-        (line) => !belongsToHand(line, undoneNumber),
+        (line) =>
+          !belongsToHand(line, undoneNumber) &&
+          (!currentHandNumber || !belongsToHand(line, currentHandNumber)),
       );
       next.handNo = undoneNumber - 1;
       next.lastHand = null;
@@ -921,8 +962,11 @@ export function PokerLedger() {
       results: game.players.map((player, index) => ({
         ...(player.id ? { playerId: player.id } : {}),
         name: player.name,
-        net: endStacks[index] - game.startStack,
+        net: endStacks[index] - totalBuyIns(game, index),
         end: endStacks[index],
+        ...(player.buyIns && player.buyIns.length > 1
+          ? { buyIns: player.buyIns }
+          : {}),
       })),
     };
 
@@ -1205,6 +1249,8 @@ export function PokerLedger() {
             onToggleSplit={toggleSplit}
             onSplitPot={splitPot}
             onCancelHand={cancelHand}
+            onBuyIn={buyIn}
+            onNextHand={startNextHand}
             onEndSession={endSession}
             onUndoHand={undoHand}
             onDiscard={discardGame}
@@ -1242,6 +1288,8 @@ export function PokerLedger() {
       {game?.winnerAnnouncement ? (
         <WinnerCard
           announcement={game.winnerAnnouncement}
+          game={game}
+          onBuyIn={buyIn}
           onNext={startNextHand}
           onEditBlinds={() => setEditingBlinds(true)}
         />
@@ -1638,7 +1686,7 @@ function SetupView({
       />
       <div className="row setup-row">
         <div>
-          <label htmlFor="stack">Starting stack</label>
+          <label htmlFor="stack">Starting Stack / First Buy-In</label>
           <input
             id="stack"
             type="number"
@@ -2070,6 +2118,8 @@ type GameViewProps = {
   onToggleSplit: (playerIndex: number) => void;
   onSplitPot: () => void;
   onCancelHand: () => void;
+  onBuyIn: (playerIndex: number) => void;
+  onNextHand: () => void;
   onEndSession: () => void;
   onUndoHand: () => void;
   onDiscard: () => void;
@@ -2082,7 +2132,9 @@ type GameViewProps = {
 function GameView(props: GameViewProps) {
   const { game } = props;
   const hand = game.hand;
-  const net = (index: number) => game.players[index].stack - game.startStack;
+  const net = (index: number) =>
+    game.players[index].stack - totalBuyIns(game, index);
+  const enoughPlayers = game.players.filter((player) => player.stack > 0).length >= 2;
   const now = useBlindClock(Boolean(hand) && game.blinds?.unit === "minutes");
   const blinds = blindStatus(game, now);
   const pendingPlan = pendingBlindPlan(game);
@@ -2117,11 +2169,17 @@ function GameView(props: GameViewProps) {
       )}
       {!hand ? (
         <section className="card">
-          <b>Game over</b>
+          <b>{enoughPlayers ? "Ready for the next hand" : "Game over"}</b>
           <p className="muted card-note">
-            Fewer than 2 players have chips remaining to post the big blind of{" "}
-            {formatRupees(game.ante)}.
+            {enoughPlayers
+              ? "The table has enough players with chips to deal again."
+              : "Fewer than two players have chips remaining. A busted player can buy in to continue."}
           </p>
+          {enoughPlayers && !game.winnerAnnouncement ? (
+            <button className="primary full" onClick={props.onNextHand}>
+              Deal The Next Hand
+            </button>
+          ) : null}
         </section>
       ) : (
         <section className="card">
@@ -2243,6 +2301,10 @@ function GameView(props: GameViewProps) {
         </section>
       )}
 
+      {!hand && !game.winnerAnnouncement ? (
+        <BuyInOptions game={game} onBuyIn={props.onBuyIn} />
+      ) : null}
+
       <section className="card">
         <div className="hdr">
           <b>Standings</b>
@@ -2255,6 +2317,9 @@ function GameView(props: GameViewProps) {
             <div className="prow standing" key={index}>
               <div className="nm">
                 <b>{player.name}</b>
+                <small className="stack-value">
+                  Invested {formatRupees(totalBuyIns(game, index))}
+                </small>
               </div>
               <div className="align-right">
                 <b>{formatRupees(player.stack)}</b>
@@ -2479,12 +2544,50 @@ function BlindEditor({
   );
 }
 
+function BuyInOptions({
+  game,
+  onBuyIn,
+  embedded = false,
+}: {
+  game: GameState;
+  onBuyIn: (playerIndex: number) => void;
+  embedded?: boolean;
+}) {
+  const offers = game.players.flatMap((player, index) => {
+    const amount = nextBuyIn(game, index);
+    return amount === null ? [] : [{ player, index, amount }];
+  });
+  if (!offers.length) return null;
+
+  return (
+    <section className={embedded ? "buy-in-options" : "card buy-in-options"}>
+      <b>Buy In</b>
+      <p className="muted">A busted player can return for half their last buy-in.</p>
+      {offers.map(({ player, index, amount }) => (
+        <button
+          className="buy-in-button"
+          key={player.id || index}
+          type="button"
+          onClick={() => onBuyIn(index)}
+        >
+          <span>{player.name}</span>
+          <strong>Buy In · {formatRupees(amount)}</strong>
+        </button>
+      ))}
+    </section>
+  );
+}
+
 function WinnerCard({
   announcement,
+  game,
+  onBuyIn,
   onNext,
   onEditBlinds,
 }: {
   announcement: WinnerAnnouncement;
+  game: GameState;
+  onBuyIn: (playerIndex: number) => void;
   onNext: () => void;
   onEditBlinds: () => void;
 }) {
@@ -2513,6 +2616,7 @@ function WinnerCard({
         </span>
         <h2 id="winner-title">{winnerText}</h2>
         <p>{formatRupees(announcement.pot)} Pot Awarded</p>
+        <BuyInOptions game={game} onBuyIn={onBuyIn} embedded />
         <button className="primary full" type="button" onClick={onNext}>
           Deal The Next Hand
         </button>
@@ -2773,9 +2877,14 @@ function SessionCard({
       ) : null}
       {sortedResults.map((result, index) => (
         <div className="sline" key={`${result.playerId || result.name}-${index}`}>
-          <span>
+          <span className="session-result-player">
             {index === 0 ? "🏆 " : ""}
             {result.name}
+            {result.buyIns && result.buyIns.length > 1 ? (
+              <small>
+                Buy-ins {formatRupees(result.buyIns.reduce((sum, amount) => sum + amount, 0))}
+              </small>
+            ) : null}
           </span>
           <span className={result.net >= 0 ? "pos" : "neg"}>
             {result.net >= 0 ? "+" : ""}
@@ -3059,6 +3168,9 @@ function Modal({
                   The Current Bet, Raise It, Or Fold. All In Commits The
                   Player&apos;s Entire Remaining Stack, Even If It Cannot Cover
                   A Call. If Only One Player Remains, They Win Automatically.
+                  Between Hands, A Busted Player Can Buy In For Half Their
+                  Previous Buy-In, Rounded Down To A Whole Chip. Buy-Ins Stop
+                  Once Half Would Be Zero.
                 </p>
               </div>
             </section>

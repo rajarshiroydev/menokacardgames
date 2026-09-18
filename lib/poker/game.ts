@@ -40,6 +40,39 @@ export function activeIndexes(game: GameState) {
     .filter((index) => game.hand?.in[index]);
 }
 
+export function playerBuyIns(game: GameState, playerIndex: number) {
+  const buyIns = game.players[playerIndex].buyIns;
+  return buyIns?.length ? buyIns : [game.startStack];
+}
+
+export function totalBuyIns(game: GameState, playerIndex: number) {
+  return playerBuyIns(game, playerIndex).reduce(
+    (total, amount) => total + amount,
+    0,
+  );
+}
+
+export function nextBuyIn(game: GameState, playerIndex: number) {
+  const player = game.players[playerIndex];
+  if (!player || game.hand || player.stack !== 0) return null;
+  const previous = playerBuyIns(game, playerIndex).at(-1) ?? 0;
+  const amount = Math.floor(previous / 2);
+  return (
+    amount > 0 && Number.isSafeInteger(totalBuyIns(game, playerIndex) + amount)
+  )
+    ? amount
+    : null;
+}
+
+export function buyInPlayer(game: GameState, playerIndex: number) {
+  const amount = nextBuyIn(game, playerIndex);
+  if (amount === null) return null;
+  const player = game.players[playerIndex];
+  player.buyIns = [...playerBuyIns(game, playerIndex), amount];
+  player.stack = amount;
+  return amount;
+}
+
 export function pendingIndexes(game: GameState) {
   if (!game.hand) return [];
   const hand = game.hand;
