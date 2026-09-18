@@ -35,6 +35,33 @@ function json(body: object, status = 200) {
   });
 }
 
+function missingBlindHistoryColumn(error: unknown) {
+  if (!error || typeof error !== "object") return false;
+  const databaseError = error as { code?: unknown; message?: unknown };
+  return (
+    databaseError.code === "42703" &&
+    typeof databaseError.message === "string" &&
+    databaseError.message.includes("blind_history")
+  );
+}
+
+async function withBlindHistoryColumn<T>(
+  sql: ReturnType<typeof getDatabase>,
+  query: () => Promise<T>,
+): Promise<T> {
+  try {
+    return await query();
+  } catch (error) {
+    if (!missingBlindHistoryColumn(error)) throw error;
+    // Existing production databases may predate the blind-history column.
+    await sql`
+      ALTER TABLE poker_sessions
+      ADD COLUMN IF NOT EXISTS blind_history jsonb
+    `;
+    return query();
+  }
+}
+
 function mapSession(row: SessionRow): PokerSession {
   return {
     id: row.id,
@@ -56,22 +83,25 @@ function mapSession(row: SessionRow): PokerSession {
 export async function GET() {
   try {
     const sql = getDatabase();
-    const rows = (await sql`
-      SELECT
-        id,
-        game_name,
-        session_number,
-        played_at,
-        ended_at,
-        ante,
-        starting_stack,
-        hands,
-        blind_history,
-        results,
-        discarded_at
-      FROM poker_sessions
-      ORDER BY played_at DESC, created_at DESC
-    `) as SessionRow[];
+    const rows = (await withBlindHistoryColumn(
+      sql,
+      () => sql`
+        SELECT
+          id,
+          game_name,
+          session_number,
+          played_at,
+          ended_at,
+          ante,
+          starting_stack,
+          hands,
+          blind_history,
+          results,
+          discarded_at
+        FROM poker_sessions
+        ORDER BY played_at DESC, created_at DESC
+      `,
+    )) as SessionRow[];
     const [counter] = (await sql`
       SELECT last_value, is_called
       FROM poker_sessions_session_number_seq
@@ -176,33 +206,35 @@ export async function POST(request: Request) {
       }),
     }));
 
-    const results = await sql.transaction(
-      resolvedSessions.map(
-        (session) => sql`
-          INSERT INTO poker_sessions (
-            id,
-            game_name,
-            played_at,
-            ended_at,
-            ante,
-            starting_stack,
-            hands,
-            blind_history,
-            results
-          ) VALUES (
-            ${session.id},
-            ${session.name || null},
-            ${new Date(session.date).toISOString()},
-            ${new Date(session.ended).toISOString()},
-            ${session.ante},
-            ${session.startStack},
-            ${session.hands},
-            ${session.blindHistory ? JSON.stringify(session.blindHistory) : null}::jsonb,
-            ${JSON.stringify(session.results)}::jsonb
-          )
-          ON CONFLICT (id) DO NOTHING
-          RETURNING id
-        `,
+    const results = await withBlindHistoryColumn(sql, () =>
+      sql.transaction(
+        resolvedSessions.map(
+          (session) => sql`
+            INSERT INTO poker_sessions (
+              id,
+              game_name,
+              played_at,
+              ended_at,
+              ante,
+              starting_stack,
+              hands,
+              blind_history,
+              results
+            ) VALUES (
+              ${session.id},
+              ${session.name || null},
+              ${new Date(session.date).toISOString()},
+              ${new Date(session.ended).toISOString()},
+              ${session.ante},
+              ${session.startStack},
+              ${session.hands},
+              ${session.blindHistory ? JSON.stringify(session.blindHistory) : null}::jsonb,
+              ${JSON.stringify(session.results)}::jsonb
+            )
+            ON CONFLICT (id) DO NOTHING
+            RETURNING id
+          `,
+        ),
       ),
     );
     return json({
