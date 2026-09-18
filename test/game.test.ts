@@ -6,13 +6,16 @@ import {
   blindStatus,
   buildLeaderboard,
   dealNewHand,
+  editBlindSchedule,
   minimumRaise,
   nextPlayerToAct,
+  pendingBlindPlan,
   pendingIndexes,
 } from "../lib/poker/game.ts";
 import type {
   BlindSchedule,
   GameState,
+  Hand,
   PokerSession,
 } from "../lib/poker/types.ts";
 
@@ -38,6 +41,11 @@ function playHands(game: GameState, count: number, now = Date.now()) {
     game.hand = null;
     dealNewHand(game, now);
   }
+}
+
+function dealtHand(game: GameState): Hand {
+  assert.ok(game.hand);
+  return game.hand;
 }
 
 describe("leaderboard player identity", () => {
@@ -116,6 +124,102 @@ describe("leaderboard player identity", () => {
 });
 
 describe("rising blinds", () => {
+  test("edits the plan after the current hand and restarts the hand interval", () => {
+    const game = gameState();
+    playHands(game, 3);
+    const schedule: BlindSchedule = {
+      unit: "hands",
+      every: 5,
+      raiseType: "add",
+      raiseBy: 250,
+    };
+
+    editBlindSchedule(game, schedule, 5_000);
+    assert.equal(game.ante, 100);
+    assert.equal(game.blinds, null);
+    assert.equal(pendingBlindPlan(game)?.effectiveHand, 4);
+
+    playHands(game, 5);
+    assert.equal(game.handNo, 8);
+    assert.equal(game.ante, 100);
+    assert.equal(game.blindPlans?.length, 2);
+    assert.equal(game.blindLevels?.length, 1);
+
+    playHands(game, 1);
+    assert.equal(game.handNo, 9);
+    assert.equal(game.ante, 350);
+    assert.deepEqual(game.blindLevels?.map((entry) => entry.handNo), [1, 9]);
+  });
+
+  test("replaces a pending edit and can turn increases off", () => {
+    const game = gameState({
+      unit: "hands",
+      every: 2,
+      raiseType: "add",
+      raiseBy: 100,
+    });
+    playHands(game, 3);
+    assert.equal(game.ante, 200);
+
+    editBlindSchedule(game, {
+      unit: "hands",
+      every: 5,
+      raiseType: "add",
+      raiseBy: 250,
+    });
+    editBlindSchedule(game, null);
+    assert.equal(game.blindPlans?.length, 2);
+    assert.equal(game.ante, 200);
+
+    playHands(game, 8);
+    assert.equal(game.ante, 200);
+    assert.equal(game.blinds, null);
+  });
+
+  test("counts timed edits from when they are saved", () => {
+    const game = gameState();
+    game.startedAt = 1_000_000;
+    dealNewHand(game, game.startedAt);
+    const editedAt = game.startedAt + 10 * 60_000;
+    editBlindSchedule(game, {
+      unit: "minutes",
+      every: 5,
+      raiseType: "multiply",
+      raiseBy: 2,
+    }, editedAt);
+
+    game.hand = null;
+    dealNewHand(game, editedAt + 4 * 60_000);
+    assert.equal(game.ante, 100);
+    game.hand = null;
+    dealNewHand(game, editedAt + 6 * 60_000);
+    assert.equal(game.ante, 200);
+  });
+
+  test("keeps the earlier plan when a hand is replayed after an edit", () => {
+    const game = gameState();
+    playHands(game, 2);
+    editBlindSchedule(game, {
+      unit: "hands",
+      every: 1,
+      raiseType: "add",
+      raiseBy: 50,
+    });
+    playHands(game, 2);
+    assert.equal(game.ante, 150);
+
+    game.handNo = 1;
+    game.hand = null;
+    dealNewHand(game);
+    assert.equal(game.handNo, 2);
+    assert.equal(game.ante, 100);
+    assert.equal(game.blinds, null);
+    assert.deepEqual(game.blindLevels?.map((entry) => entry.handNo), [1]);
+
+    playHands(game, 2);
+    assert.equal(game.ante, 150);
+  });
+
   test("keeps the blinds fixed when no schedule is set", () => {
     const game = gameState();
     playHands(game, 12);
@@ -252,10 +356,11 @@ describe("positional betting", () => {
 
     game.hand = null;
     dealNewHand(game);
-    assert.equal(game.hand?.dealerIndex, 1);
-    assert.equal(game.hand?.smallBlindIndex, 2);
-    assert.equal(game.hand?.bigBlindIndex, 0);
-    assert.equal(game.hand?.currentPlayer, 1);
+    const nextHand = dealtHand(game);
+    assert.equal(nextHand.dealerIndex, 1);
+    assert.equal(nextHand.smallBlindIndex, 2);
+    assert.equal(nextHand.bigBlindIndex, 0);
+    assert.equal(nextHand.currentPlayer, 1);
   });
 
   test("keeps a street open until each funded player matches the bet", () => {

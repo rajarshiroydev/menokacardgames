@@ -51,6 +51,26 @@ export type BlindSchedule = {
   raiseBy: number;
 };
 
+export type BlindPlan = {
+  /** First hand dealt under this plan. */
+  effectiveHand: number;
+  /** When the plan was chosen; timed levels count from here. */
+  effectiveAt: number;
+  baseBigBlind: number;
+  schedule: BlindSchedule | null;
+};
+
+export type BlindLevelRecord = {
+  handNo: number;
+  dealtAt: number;
+  bigBlind: number;
+};
+
+export type BlindHistory = {
+  plans: BlindPlan[];
+  levels: BlindLevelRecord[];
+};
+
 export type GameState = {
   gameName?: string;
   sessionLabel?: string;
@@ -60,6 +80,8 @@ export type GameState = {
   baseAnte?: number;
   blinds?: BlindSchedule | null;
   blindLevel?: number;
+  blindPlans?: BlindPlan[];
+  blindLevels?: BlindLevelRecord[];
   startStack: number;
   startedAt: number;
   players: Player[];
@@ -89,6 +111,7 @@ export type PokerSession = {
   date: number;
   ended: number;
   ante: number;
+  blindHistory?: BlindHistory;
   startStack: number;
   hands: number;
   results: SessionResult[];

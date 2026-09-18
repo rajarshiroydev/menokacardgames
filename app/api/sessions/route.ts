@@ -19,6 +19,7 @@ type SessionRow = {
   ante: number | string;
   starting_stack: number | string;
   hands: number | string;
+  blind_history: PokerSession["blindHistory"] | null;
   results: PokerSession["results"];
 };
 
@@ -45,6 +46,7 @@ function mapSession(row: SessionRow): PokerSession {
     date: new Date(row.played_at).getTime(),
     ended: new Date(row.ended_at).getTime(),
     ante: Number(row.ante),
+    ...(row.blind_history ? { blindHistory: row.blind_history } : {}),
     startStack: Number(row.starting_stack),
     hands: Number(row.hands),
     results: row.results,
@@ -64,6 +66,7 @@ export async function GET() {
         ante,
         starting_stack,
         hands,
+        blind_history,
         results,
         discarded_at
       FROM poker_sessions
@@ -183,6 +186,7 @@ export async function POST(request: Request) {
             ante,
             starting_stack,
             hands,
+            blind_history,
             results
           ) VALUES (
             ${session.id},
@@ -192,6 +196,7 @@ export async function POST(request: Request) {
             ${session.ante},
             ${session.startStack},
             ${session.hands},
+            ${session.blindHistory ? JSON.stringify(session.blindHistory) : null}::jsonb,
             ${JSON.stringify(session.results)}::jsonb
           )
           ON CONFLICT (id) DO NOTHING

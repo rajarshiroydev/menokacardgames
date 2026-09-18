@@ -45,6 +45,8 @@ game-agnostic `players` table, the `poker_sessions` table, and the history
 ordering index. Existing poker session results are linked to canonical player
 IDs without removing their readable names. Discarded sessions remain stored but
 are excluded from the leaderboard until restored.
+Run it again on existing databases before using saved blind histories; the
+`blind_history` column is added without changing existing sessions.
 
 ## Checks
 

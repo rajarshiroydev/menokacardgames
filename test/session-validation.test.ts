@@ -79,4 +79,40 @@ describe("session validation", () => {
 
     assert.equal(session.results[0].playerId, "player-1");
   });
+
+  test("keeps the blind plan and levels used in a finished session", () => {
+    const blindHistory = {
+      plans: [
+        {
+          effectiveHand: 1,
+          effectiveAt: validSession.date,
+          baseBigBlind: 100,
+          schedule: { unit: "hands", every: 2, raiseType: "add", raiseBy: 50 },
+        },
+        {
+          effectiveHand: 4,
+          effectiveAt: validSession.date + 1000,
+          baseBigBlind: 150,
+          schedule: null,
+        },
+      ],
+      levels: [
+        { handNo: 1, dealtAt: validSession.date, bigBlind: 100 },
+        { handNo: 3, dealtAt: validSession.date + 500, bigBlind: 150 },
+      ],
+    };
+    assert.deepEqual(
+      validateSession({ ...validSession, blindHistory }).blindHistory,
+      blindHistory,
+    );
+    assert.throws(
+      () => validateSession({
+        ...validSession,
+        blindHistory: { ...blindHistory, levels: [
+          { handNo: 1, dealtAt: validSession.date, bigBlind: 999 },
+        ] },
+      }),
+      /Invalid blind history order/,
+    );
+  });
 });

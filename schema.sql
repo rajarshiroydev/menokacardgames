@@ -24,6 +24,7 @@ CREATE TABLE IF NOT EXISTS poker_sessions (
   ante bigint NOT NULL CHECK (ante > 0),
   starting_stack bigint NOT NULL CHECK (starting_stack >= 0),
   hands integer NOT NULL CHECK (hands > 0),
+  blind_history jsonb,
   results jsonb NOT NULL CHECK (
     jsonb_typeof(results) = 'array'
     AND jsonb_array_length(results) BETWEEN 2 AND 10
@@ -37,6 +38,9 @@ ALTER TABLE poker_sessions
 
 ALTER TABLE poker_sessions
   ADD COLUMN IF NOT EXISTS game_name text;
+
+ALTER TABLE poker_sessions
+  ADD COLUMN IF NOT EXISTS blind_history jsonb;
 
 DO $$
 BEGIN

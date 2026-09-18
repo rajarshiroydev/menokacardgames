@@ -17,6 +17,7 @@ import {
   buildLeaderboard,
   dealNewHand,
   DEFAULT_BLIND_SCHEDULE,
+  editBlindSchedule,
   formatDate,
   formatRupees,
   GAME_STORAGE_KEY,
@@ -24,6 +25,7 @@ import {
   minimumRaise,
   nextPlayerToAct,
   pendingIndexes,
+  pendingBlindPlan,
   smallBlindFor,
   STAGES,
   startingBigBlind,
@@ -122,6 +124,22 @@ function readStoredGame() {
     data.baseAnte ??= data.ante;
     data.blinds ??= null;
     data.blindLevel ??= 0;
+    data.blindPlans ??= [{
+      effectiveHand: 1,
+      effectiveAt: data.startedAt,
+      baseBigBlind: data.baseAnte,
+      schedule: data.blinds,
+    }];
+    data.blindLevels ??= [
+      {
+        handNo: 1,
+        dealtAt: data.startedAt,
+        bigBlind: data.baseAnte,
+      },
+      ...(data.handNo > 1 && data.ante !== data.baseAnte
+        ? [{ handNo: data.handNo, dealtAt: Date.now(), bigBlind: data.ante }]
+        : []),
+    ];
     // Older saved games did not have positional betting. Start their next hand
     // with the new model instead of leaving an unusable in-progress hand.
     if (!Number.isInteger(data.dealerIndex)) {
@@ -153,6 +171,16 @@ function readStoredHistory() {
 function formatCountdown(ms: number) {
   const total = Math.ceil(ms / 1000);
   return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")}`;
+}
+
+function describeBlindSchedule(schedule: BlindSchedule | null) {
+  if (!schedule) return "Fixed blinds";
+  const interval = `${schedule.every} ${schedule.unit === "hands"
+    ? schedule.every === 1 ? "hand" : "hands"
+    : schedule.every === 1 ? "minute" : "minutes"}`;
+  return schedule.raiseType === "add"
+    ? `Add ${formatRupees(schedule.raiseBy)} to the big blind every ${interval}`
+    : `Multiply the big blind by ${schedule.raiseBy} every ${interval}`;
 }
 
 /** Ticks once a second, but only while a timed blind schedule is running. */
@@ -236,6 +264,7 @@ export function PokerLedger() {
   const [ready, setReady] = useState(false);
   const [toast, setToast] = useState("");
   const [modal, setModal] = useState<ModalState | null>(null);
+  const [editingBlinds, setEditingBlinds] = useState(false);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const showToast = useCallback((message: string) => {
@@ -417,6 +446,7 @@ export function PokerLedger() {
         return;
       }
       const gameName = input.name.trim();
+      const startedAt = Date.now();
       const nextGame: GameState = {
         ...(gameName ? { gameName } : {}),
         sessionLabel: gameName || `Game ${nextSessionNumber}`,
@@ -424,8 +454,15 @@ export function PokerLedger() {
         baseAnte: input.ante,
         blinds: input.blinds,
         blindLevel: 0,
+        blindPlans: [{
+          effectiveHand: 1,
+          effectiveAt: startedAt,
+          baseBigBlind: input.ante,
+          schedule: input.blinds,
+        }],
+        blindLevels: [],
         startStack: input.stack,
-        startedAt: Date.now(),
+        startedAt,
         players: input.players.map((player) => ({
           id: player.id,
           name: player.name,
@@ -782,6 +819,15 @@ export function PokerLedger() {
     }
   }
 
+  function saveBlindSchedule(schedule: BlindSchedule | null) {
+    if (!game || (!game.hand && !game.winnerAnnouncement)) return;
+    const next = structuredClone(game);
+    editBlindSchedule(next, schedule);
+    setGame(next);
+    setEditingBlinds(false);
+    showToast("Blind plan updated for the next hand");
+  }
+
   function cancelHand() {
     if (!game?.hand) return;
     ask(
@@ -850,6 +896,18 @@ export function PokerLedger() {
       date: game.startedAt,
       ended: Date.now(),
       ante: startingBigBlind(game),
+      ...(game.blindPlans && game.blindLevels
+        ? {
+            blindHistory: {
+              plans: game.blindPlans.filter(
+                (plan) => plan.effectiveHand <= completedHands,
+              ),
+              levels: game.blindLevels.filter(
+                (level) => level.handNo <= completedHands,
+              ),
+            },
+          }
+        : {}),
       startStack: game.startStack,
       hands: completedHands,
       results: game.players.map((player, index) => ({
@@ -1142,6 +1200,7 @@ export function PokerLedger() {
             onEndSession={endSession}
             onUndoHand={undoHand}
             onDiscard={discardGame}
+            onEditBlinds={() => setEditingBlinds(true)}
             handsPinned={handsPinned}
             onOpenHands={openHands}
             onToggleHandsPin={toggleHandsPinned}
@@ -1176,6 +1235,14 @@ export function PokerLedger() {
         <WinnerCard
           announcement={game.winnerAnnouncement}
           onNext={startNextHand}
+          onEditBlinds={() => setEditingBlinds(true)}
+        />
+      ) : null}
+      {editingBlinds && game ? (
+        <BlindEditor
+          game={game}
+          onClose={() => setEditingBlinds(false)}
+          onSave={saveBlindSchedule}
         />
       ) : null}
     </main>
@@ -1783,6 +1850,7 @@ type GameViewProps = {
   onEndSession: () => void;
   onUndoHand: () => void;
   onDiscard: () => void;
+  onEditBlinds: () => void;
   handsPinned: boolean;
   onOpenHands: () => void;
   onToggleHandsPin: () => void;
@@ -1794,6 +1862,7 @@ function GameView(props: GameViewProps) {
   const net = (index: number) => game.players[index].stack - game.startStack;
   const now = useBlindClock(Boolean(hand) && game.blinds?.unit === "minutes");
   const blinds = blindStatus(game, now);
+  const pendingPlan = pendingBlindPlan(game);
   const nextBlinds = `${formatRupees(blinds.nextSmallBlind)}/${formatRupees(
     blinds.nextBigBlind,
   )}`;
@@ -1849,12 +1918,18 @@ function GameView(props: GameViewProps) {
               {formatRupees(blinds.bigBlind)}
               {blinds.schedule ? ` · level ${blinds.level + 1}` : ""}
             </div>
-            {blinds.schedule ? (
+            {blinds.schedule && !pendingPlan ? (
               <div
                 className={`blind-timer ${blinds.dueNow ? "due" : ""}`}
                 aria-live="polite"
               >
                 {blindNote}
+              </div>
+            ) : null}
+            {pendingPlan ? (
+              <div className="blind-timer due">
+                From hand {pendingPlan.effectiveHand}:{" "}
+                {describeBlindSchedule(pendingPlan.schedule)}
               </div>
             ) : null}
             <div className="table-positions" aria-label="Table positions">
@@ -1865,6 +1940,13 @@ function GameView(props: GameViewProps) {
               <span>Big Blind · {game.players[hand.bigBlindIndex].name}</span>
             </div>
           </div>
+          <button
+            className="ghost full edit-blinds-button"
+            type="button"
+            onClick={props.onEditBlinds}
+          >
+            Edit Blind Plan
+          </button>
 
           {hand.splitSel ? (
             <SplitView
@@ -2023,12 +2105,165 @@ function PokerHandsChart({
   );
 }
 
+function BlindEditor({
+  game,
+  onClose,
+  onSave,
+}: {
+  game: GameState;
+  onClose: () => void;
+  onSave: (schedule: BlindSchedule | null) => void;
+}) {
+  const pending = pendingBlindPlan(game);
+  const initial = pending ? pending.schedule : (game.blinds ?? null);
+  const defaults = initial ?? DEFAULT_BLIND_SCHEDULE;
+  const [enabled, setEnabled] = useState(Boolean(initial));
+  const [unit, setUnit] = useState<BlindSchedule["unit"]>(defaults.unit);
+  const [every, setEvery] = useState(defaults.every);
+  const [raiseType, setRaiseType] = useState<BlindSchedule["raiseType"]>(
+    defaults.raiseType,
+  );
+  const [raiseBy, setRaiseBy] = useState(defaults.raiseBy);
+  const valid =
+    !enabled ||
+    (Number.isSafeInteger(every) &&
+      every >= 1 &&
+      Number.isFinite(raiseBy) &&
+      raiseBy > (raiseType === "multiply" ? 1 : 0) &&
+      (raiseType === "multiply" || Number.isSafeInteger(raiseBy)));
+  const schedule: BlindSchedule | null = enabled
+    ? { unit, every, raiseType, raiseBy }
+    : null;
+
+  function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (valid) onSave(schedule);
+  }
+
+  return (
+    <div
+      className="modal blind-editor-modal show"
+      role="presentation"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <form
+        className="sheet blind-editor-sheet"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="blind-editor-title"
+        onSubmit={submit}
+      >
+        <h2 id="blind-editor-title">Edit Blind Plan</h2>
+        <p className="muted rule-note">
+          Current blinds: {formatRupees(smallBlindFor(game.ante))}/
+          {formatRupees(game.ante)}. This hand keeps its posted blinds. The new
+          plan starts with the next dealt hand.
+        </p>
+        <div className="blind-toggle">
+          <label htmlFor="edit-rising-blinds">Blinds Go Up</label>
+          <input
+            id="edit-rising-blinds"
+            type="checkbox"
+            checked={enabled}
+            onChange={(event) => setEnabled(event.target.checked)}
+          />
+        </div>
+        {enabled ? (
+          <>
+            <div className="row setup-row">
+              <div>
+                <label htmlFor="edit-blind-every">Raise Every</label>
+                <input
+                  id="edit-blind-every"
+                  type="number"
+                  min="1"
+                  step="1"
+                  value={every}
+                  onChange={(event) => setEvery(Number(event.target.value))}
+                />
+              </div>
+              <div>
+                <label htmlFor="edit-blind-unit">Counted In</label>
+                <select
+                  className="select-control"
+                  id="edit-blind-unit"
+                  value={unit}
+                  onChange={(event) =>
+                    setUnit(event.target.value as BlindSchedule["unit"])
+                  }
+                >
+                  <option value="hands">Hands</option>
+                  <option value="minutes">Minutes</option>
+                </select>
+              </div>
+            </div>
+            <div className="row setup-row">
+              <div>
+                <label htmlFor="edit-blind-raise-type">Increase By</label>
+                <select
+                  className="select-control"
+                  id="edit-blind-raise-type"
+                  value={raiseType}
+                  onChange={(event) => {
+                    const nextType = event.target
+                      .value as BlindSchedule["raiseType"];
+                    setRaiseType(nextType);
+                    setRaiseBy(nextType === "multiply" ? 2 : game.ante);
+                  }}
+                >
+                  <option value="multiply">Multiply Big Blind</option>
+                  <option value="add">Add To Big Blind</option>
+                </select>
+              </div>
+              <div>
+                <label htmlFor="edit-blind-raise-by">
+                  {raiseType === "multiply" ? "Multiplier" : "Amount"}
+                </label>
+                <input
+                  id="edit-blind-raise-by"
+                  type="number"
+                  min={raiseType === "multiply" ? "1.1" : "1"}
+                  step={raiseType === "multiply" ? "0.1" : "1"}
+                  value={raiseBy}
+                  onChange={(event) => setRaiseBy(Number(event.target.value))}
+                />
+              </div>
+            </div>
+            <p className="muted rule-note">
+              {valid
+                ? `Next levels: ${Array.from({ length: 4 }, (_, level) =>
+                    formatRupees(bigBlindAtLevel(game.ante, schedule, level)),
+                  ).join(" → ")}. ${unit === "minutes" ? "The timer starts when you save." : "The hand count starts with the next hand."}`
+                : "Enter a whole hand or minute interval and an increase that raises the big blind."}
+            </p>
+          </>
+        ) : (
+          <p className="muted rule-note">
+            Blinds will stay at {formatRupees(smallBlindFor(game.ante))}/
+            {formatRupees(game.ante)} from the next hand onward.
+          </p>
+        )}
+        <button className="primary full" type="submit" disabled={!valid}>
+          Save Blind Plan
+        </button>
+        <button className="ghost full" type="button" onClick={onClose}>
+          Cancel
+        </button>
+      </form>
+    </div>
+  );
+}
+
 function WinnerCard({
   announcement,
   onNext,
+  onEditBlinds,
 }: {
   announcement: WinnerAnnouncement;
   onNext: () => void;
+  onEditBlinds: () => void;
 }) {
   const winnerText = announcement.split
     ? `${announcement.names.join(" And ")} Win`
@@ -2057,6 +2292,9 @@ function WinnerCard({
         <p>{formatRupees(announcement.pot)} Pot Awarded</p>
         <button className="primary full" type="button" onClick={onNext}>
           Deal The Next Hand
+        </button>
+        <button className="ghost full" type="button" onClick={onEditBlinds}>
+          Edit Blind Plan
         </button>
       </section>
     </div>
@@ -2265,6 +2503,37 @@ function SessionCard({
           )}
         </div>
       </div>
+      {session.blindHistory ? (
+        <details className="session-blind-history">
+          <summary>
+            Blind history · {session.blindHistory.levels.length} amount
+            {session.blindHistory.levels.length === 1 ? "" : "s"} used · finished at{" "}
+            {formatRupees(
+              smallBlindFor(session.blindHistory.levels.at(-1)!.bigBlind),
+            )}
+            /{formatRupees(session.blindHistory.levels.at(-1)!.bigBlind)}
+          </summary>
+          <div className="session-blind-history-content">
+            <b>Plans</b>
+            {session.blindHistory.plans.map((plan) => (
+              <div key={plan.effectiveHand}>
+                From hand {plan.effectiveHand}: {formatRupees(
+                  smallBlindFor(plan.baseBigBlind),
+                )}/{formatRupees(plan.baseBigBlind)} ·{" "}
+                {describeBlindSchedule(plan.schedule)}
+              </div>
+            ))}
+            <b>Blinds used</b>
+            {session.blindHistory.levels.map((level) => (
+              <div key={level.handNo}>
+                Hand {level.handNo}: {formatRupees(
+                  smallBlindFor(level.bigBlind),
+                )}/{formatRupees(level.bigBlind)}
+              </div>
+            ))}
+          </div>
+        </details>
+      ) : null}
       {sortedResults.map((result, index) => (
         <div className="sline" key={`${result.playerId || result.name}-${index}`}>
           <span>

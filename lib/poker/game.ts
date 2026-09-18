@@ -1,4 +1,5 @@
 import type {
+  BlindPlan,
   BlindSchedule,
   GameState,
   LeaderboardEntry,
@@ -101,6 +102,50 @@ export function startingBigBlind(game: GameState) {
   return game.baseAnte ?? game.ante;
 }
 
+function initialBlindPlan(game: GameState): BlindPlan {
+  return {
+    effectiveHand: 1,
+    effectiveAt: game.startedAt,
+    baseBigBlind: startingBigBlind(game),
+    schedule: game.blinds ?? null,
+  };
+}
+
+function planForHand(game: GameState, handNo: number): BlindPlan {
+  const plans = game.blindPlans;
+  if (plans?.length) {
+    for (let index = plans.length - 1; index >= 0; index -= 1) {
+      if (plans[index].effectiveHand <= handNo) return plans[index];
+    }
+    return plans[0];
+  }
+  return initialBlindPlan(game);
+}
+
+export function pendingBlindPlan(game: GameState) {
+  return game.blindPlans?.find((plan) => plan.effectiveHand > game.handNo);
+}
+
+/** A changed plan starts on the next dealt hand, without changing this hand. */
+export function editBlindSchedule(
+  game: GameState,
+  schedule: BlindSchedule | null,
+  now = Date.now(),
+) {
+  const effectiveHand = game.handNo + 1;
+  game.blindPlans = [
+    ...(game.blindPlans ?? [initialBlindPlan(game)]).filter(
+      (plan) => plan.effectiveHand < effectiveHand,
+    ),
+    {
+      effectiveHand,
+      effectiveAt: now,
+      baseBigBlind: game.ante,
+      schedule,
+    },
+  ];
+}
+
 export function bigBlindAtLevel(
   base: number,
   schedule: BlindSchedule | null | undefined,
@@ -124,19 +169,21 @@ export function blindLevelFor(
   handNo: number,
   now = Date.now(),
 ) {
-  const schedule = game.blinds;
+  const plan = planForHand(game, handNo);
+  const schedule = plan.schedule;
   if (!schedule || schedule.every <= 0) return 0;
   const elapsed =
     schedule.unit === "hands"
-      ? handNo - 1
-      : (now - game.startedAt) / MINUTE;
+      ? handNo - plan.effectiveHand
+      : (now - plan.effectiveAt) / MINUTE;
   return Math.max(0, Math.floor(elapsed / schedule.every));
 }
 
 /** What the blinds are now, and what the next level brings. */
 export function blindStatus(game: GameState, now = Date.now()) {
-  const schedule = game.blinds;
-  const base = startingBigBlind(game);
+  const plan = planForHand(game, game.handNo);
+  const schedule = plan.schedule;
+  const base = plan.baseBigBlind;
   const level = game.blindLevel ?? 0;
   const bigBlind = game.ante;
   const status = {
@@ -158,11 +205,14 @@ export function blindStatus(game: GameState, now = Date.now()) {
   status.nextBigBlind = bigBlindAtLevel(base, schedule, level + 1);
   status.nextSmallBlind = smallBlindFor(status.nextBigBlind);
   if (schedule.unit === "hands") {
-    status.handsLeft = Math.max(0, (level + 1) * schedule.every - game.handNo);
+    status.handsLeft = Math.max(
+      0,
+      plan.effectiveHand + (level + 1) * schedule.every - 1 - game.handNo,
+    );
     status.dueNow = status.handsLeft === 0;
   } else {
     const levelEndsAt =
-      game.startedAt + (level + 1) * schedule.every * MINUTE;
+      plan.effectiveAt + (level + 1) * schedule.every * MINUTE;
     status.msLeft = Math.max(0, levelEndsAt - now);
     status.dueNow = status.msLeft === 0;
   }
@@ -171,15 +221,24 @@ export function blindStatus(game: GameState, now = Date.now()) {
 
 /** Moves `game.ante` to the level the given hand belongs to. */
 function applyBlindLevel(game: GameState, handNo: number, now: number) {
-  if (!game.blinds) return;
+  const plan = planForHand(game, handNo);
   const level = blindLevelFor(game, handNo, now);
-  const bigBlind = bigBlindAtLevel(startingBigBlind(game), game.blinds, level);
-  const raised = bigBlind !== game.ante;
+  const bigBlind = bigBlindAtLevel(plan.baseBigBlind, plan.schedule, level);
+  const previousBigBlind = game.ante;
+  const changed = bigBlind !== previousBigBlind;
+  game.blinds = plan.schedule;
   game.blindLevel = level;
   game.ante = bigBlind;
-  if (raised) {
+  const previousLevels = (game.blindLevels ?? []).filter(
+    (entry) => entry.handNo < handNo,
+  );
+  game.blindLevels =
+    previousLevels.at(-1)?.bigBlind === bigBlind
+      ? previousLevels
+      : [...previousLevels, { handNo, dealtAt: now, bigBlind }];
+  if (changed) {
     game.log.unshift(
-      `Hand ${handNo}: blinds up to ${formatRupees(
+      `Hand ${handNo}: blinds ${bigBlind > previousBigBlind ? "up" : "set"} to ${formatRupees(
         smallBlindFor(bigBlind),
       )}/${formatRupees(bigBlind)} (level ${level + 1})`,
     );

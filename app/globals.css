@@ -889,6 +889,10 @@ hr {
   color: var(--gold);
 }
 
+.edit-blinds-button {
+  margin: 12px 0 18px;
+}
+
 .plist {
   display: flex;
   flex-direction: column;
@@ -1356,6 +1360,33 @@ hr {
   font-size: 13px;
 }
 
+.session-blind-history {
+  margin: 8px 0;
+  padding: 9px 11px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--sunk);
+  color: var(--dim2);
+  font-size: 12px;
+}
+
+.session-blind-history summary {
+  cursor: pointer;
+  color: var(--gold);
+}
+
+.session-blind-history-content {
+  display: grid;
+  gap: 6px;
+  max-height: 220px;
+  overflow-y: auto;
+  margin-top: 10px;
+}
+
+.session-blind-history-content b:not(:first-child) {
+  margin-top: 7px;
+}
+
 .sline {
   display: flex;
   justify-content: space-between;
@@ -1517,6 +1548,22 @@ hr {
 
 .modal.show {
   display: flex;
+}
+
+.blind-editor-modal {
+  z-index: 80;
+}
+
+.blind-editor-sheet {
+  max-height: min(90dvh, 760px);
+  overflow-y: auto;
+}
+
+.blind-editor-sheet h2 {
+  margin: 0 0 10px;
+  font-family: var(--serif);
+  font-size: 30px;
+  font-weight: 400;
 }
 
 .sheet {
