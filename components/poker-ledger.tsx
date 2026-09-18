@@ -6,6 +6,7 @@ import {
   PointerEvent as ReactPointerEvent,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -1449,21 +1450,55 @@ function SetupView({
     pointerId: number;
     from: number;
     over: number | null;
+    row: HTMLElement;
+    rowCenters: number[];
+    rowStep: number;
+    startScrollY: number;
     startX: number;
     startY: number;
     x: number;
     y: number;
     moved: boolean;
   } | null>(null);
+  const seatDropAnimationRef = useRef<{
+    row: HTMLElement;
+    fromRect: DOMRect;
+  } | null>(null);
   const seatScrollFrameRef = useRef<number | null>(null);
   const [draggingSeat, setDraggingSeat] = useState<number | null>(null);
   const [dropSeat, setDropSeat] = useState<number | null>(null);
+  const [seatDragStep, setSeatDragStep] = useState(0);
 
   useEffect(() => () => {
     if (seatScrollFrameRef.current !== null) {
       cancelAnimationFrame(seatScrollFrameRef.current);
     }
   }, []);
+
+  useLayoutEffect(() => {
+    const landing = seatDropAnimationRef.current;
+    if (!landing) return;
+    seatDropAnimationRef.current = null;
+    landing.row.style.transition = "none";
+    landing.row.style.removeProperty("transform");
+    const toRect = landing.row.getBoundingClientRect();
+    landing.row.style.removeProperty("transition");
+    if (
+      typeof landing.row.animate !== "function" ||
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    ) {
+      return;
+    }
+    landing.row.animate(
+      [
+        {
+          transform: `translate3d(${landing.fromRect.left - toRect.left}px, ${landing.fromRect.top - toRect.top}px, 0) scale(1.03)`,
+        },
+        { transform: "translate3d(0, 0, 0) scale(1)" },
+      ],
+      { duration: 190, easing: "cubic-bezier(.2, .8, .2, 1)" },
+    );
+  }, [selectedIds]);
 
   const schedule: BlindSchedule | null = risingBlinds
     ? {
@@ -1509,9 +1544,7 @@ function SetupView({
     });
   }
 
-  function updateSeatDropTarget(
-    drag: NonNullable<typeof seatDragRef.current>,
-  ) {
+  function updateSeatDropTarget(drag: NonNullable<typeof seatDragRef.current>) {
     const list = seatListRef.current;
     const bounds = list?.getBoundingClientRect();
     let over: number | null = null;
@@ -1524,21 +1557,25 @@ function SetupView({
       drag.y <= bounds.bottom + 16
     ) {
       let nearestDistance = Infinity;
-      for (const row of list.querySelectorAll<HTMLElement>(
-        "[data-seat-index]",
-      )) {
-        const rect = row.getBoundingClientRect();
-        const distance = Math.abs(drag.y - (rect.top + rect.bottom) / 2);
+      const scrollDelta = window.scrollY - drag.startScrollY;
+      drag.rowCenters.forEach((center, index) => {
+        const distance = Math.abs(drag.y - (center - scrollDelta));
         if (distance < nearestDistance) {
           nearestDistance = distance;
-          over = Number(row.dataset.seatIndex);
+          over = index;
         }
-      }
+      });
     }
     if (drag.over !== over) {
       drag.over = over;
       setDropSeat(over);
     }
+  }
+
+  function positionDraggedSeat(drag: NonNullable<typeof seatDragRef.current>) {
+    const x = drag.x - drag.startX;
+    const y = drag.y - drag.startY + window.scrollY - drag.startScrollY;
+    drag.row.style.transform = `translate3d(${x}px, ${y}px, 0) scale(1.03)`;
   }
 
   function scrollWhileDragging() {
@@ -1565,6 +1602,7 @@ function SetupView({
     const previousScroll = window.scrollY;
     window.scrollBy(0, step);
     if (window.scrollY === previousScroll) return;
+    positionDraggedSeat(drag);
     updateSeatDropTarget(drag);
     seatScrollFrameRef.current = requestAnimationFrame(scrollWhileDragging);
   }
@@ -1589,10 +1627,22 @@ function SetupView({
     ) {
       return;
     }
+    const list = seatListRef.current;
+    const row = event.currentTarget.closest<HTMLElement>(".seat-row");
+    if (!list || !row) return;
+    const rows = [...list.querySelectorAll<HTMLElement>("[data-seat-index]")];
+    const rowGap = Number.parseFloat(window.getComputedStyle(list).rowGap) || 0;
     seatDragRef.current = {
       pointerId: event.pointerId,
       from: index,
       over: index,
+      row,
+      rowCenters: rows.map((item) => {
+        const rect = item.getBoundingClientRect();
+        return (rect.top + rect.bottom) / 2;
+      }),
+      rowStep: row.getBoundingClientRect().height + rowGap,
+      startScrollY: window.scrollY,
       startX: event.clientX,
       startY: event.clientY,
       x: event.clientX,
@@ -1600,8 +1650,6 @@ function SetupView({
       moved: false,
     };
     event.currentTarget.setPointerCapture(event.pointerId);
-    setDraggingSeat(index);
-    setDropSeat(index);
   }
 
   function moveSeatDrag(event: ReactPointerEvent<HTMLButtonElement>) {
@@ -1615,7 +1663,13 @@ function SetupView({
     ) {
       return;
     }
+    if (!drag.moved) {
+      setDraggingSeat(drag.from);
+      setDropSeat(drag.from);
+      setSeatDragStep(drag.rowStep);
+    }
     drag.moved = true;
+    positionDraggedSeat(drag);
     updateSeatDropTarget(drag);
     if (seatScrollFrameRef.current === null) {
       seatScrollFrameRef.current = requestAnimationFrame(scrollWhileDragging);
@@ -1626,10 +1680,19 @@ function SetupView({
     const drag = seatDragRef.current;
     if (!drag || drag.pointerId !== event.pointerId) return;
     stopSeatScroll();
-    if (drag.moved && drag.over !== null) moveSeat(drag.from, drag.over);
+    if (drag.moved && drag.over !== null && drag.over !== drag.from) {
+      seatDropAnimationRef.current = {
+        row: drag.row,
+        fromRect: drag.row.getBoundingClientRect(),
+      };
+      moveSeat(drag.from, drag.over);
+    } else {
+      drag.row.style.removeProperty("transform");
+    }
     seatDragRef.current = null;
     setDraggingSeat(null);
     setDropSeat(null);
+    setSeatDragStep(0);
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
@@ -1638,9 +1701,11 @@ function SetupView({
   function cancelSeatDrag(event: ReactPointerEvent<HTMLButtonElement>) {
     if (seatDragRef.current?.pointerId !== event.pointerId) return;
     stopSeatScroll();
+    seatDragRef.current.row.style.removeProperty("transform");
     seatDragRef.current = null;
     setDraggingSeat(null);
     setDropSeat(null);
+    setSeatDragStep(0);
   }
 
   function submit(event: FormEvent<HTMLFormElement>) {
@@ -1859,74 +1924,99 @@ function SetupView({
           dealer moves to the next active player each hand.
         </p>
         <div className="seat-order-list" ref={seatListRef}>
-          {selectedIds.map((selectedId, index) => (
-            <div
-              className={`seat-row${draggingSeat === index ? " is-dragging" : ""}${
-                draggingSeat !== null && dropSeat === index && draggingSeat !== index
-                  ? " is-drop-target"
-                  : ""
-              }`}
-              data-seat-index={index}
-              key={selectedId || `empty-seat-${index}`}
-            >
-              <span className="seat-number" aria-hidden="true">
-                {index + 1}
-              </span>
-              <select
-                className="select-control"
-                aria-label={`Seat ${index + 1} player`}
-                disabled={loading || Boolean(error)}
-                value={selectedId}
-                onChange={(event) =>
-                  setSelectedIds((current) =>
-                    current.map((item, itemIndex) =>
-                      itemIndex === index ? event.target.value : item,
-                    ),
-                  )
+          {selectedIds.map((selectedId, index) => {
+            let shift = 0;
+            if (draggingSeat !== null && dropSeat !== null) {
+              if (
+                draggingSeat < dropSeat &&
+                index > draggingSeat &&
+                index <= dropSeat
+              ) {
+                shift = -seatDragStep;
+              } else if (
+                draggingSeat > dropSeat &&
+                index >= dropSeat &&
+                index < draggingSeat
+              ) {
+                shift = seatDragStep;
+              }
+            }
+            return (
+              <div
+                className={`seat-row${draggingSeat === index ? " is-dragging" : ""}${
+                  draggingSeat !== null &&
+                  dropSeat === index &&
+                  draggingSeat !== index
+                    ? " is-drop-target"
+                    : ""
+                }`}
+                data-seat-index={index}
+                key={selectedId || `empty-seat-${index}`}
+                style={
+                  shift
+                    ? { transform: `translate3d(0, ${shift}px, 0)` }
+                    : undefined
                 }
               >
-                <option value="">
-                  {loading ? "Loading Players…" : `Choose Player ${index + 1}`}
-                </option>
-                {players.map((player) => (
-                  <option
-                    key={player.id}
-                    value={player.id}
-                    disabled={
-                      player.id !== selectedId && selectedIds.includes(player.id)
-                    }
-                  >
-                    {player.name}
-                  </option>
-                ))}
-              </select>
-              <button
-                className="seat-drag-handle"
-                type="button"
-                disabled={!selectedId || loading || Boolean(error)}
-                aria-label={`Move seat ${index + 1} player. Drag or use arrow keys.`}
-                onPointerDown={(event) => startSeatDrag(event, index)}
-                onPointerMove={moveSeatDrag}
-                onPointerUp={endSeatDrag}
-                onPointerCancel={cancelSeatDrag}
-                onLostPointerCapture={cancelSeatDrag}
-                onKeyDown={(event) => {
-                  if (event.key === "ArrowUp" && index > 0) {
-                    event.preventDefault();
-                    moveSeat(index, index - 1);
-                  } else if (
-                    event.key === "ArrowDown" &&
-                    index < playerCount - 1
-                  ) {
-                    event.preventDefault();
-                    moveSeat(index, index + 1);
+                <span className="seat-number" aria-hidden="true">
+                  {index + 1}
+                </span>
+                <select
+                  className="select-control"
+                  aria-label={`Seat ${index + 1} player`}
+                  disabled={loading || Boolean(error)}
+                  value={selectedId}
+                  onChange={(event) =>
+                    setSelectedIds((current) =>
+                      current.map((item, itemIndex) =>
+                        itemIndex === index ? event.target.value : item,
+                      ),
+                    )
                   }
-                }}
-              >
-                <span aria-hidden="true">⠿</span>
-              </button>
-            </div>
-          ))}
+                >
+                  <option value="">
+                    {loading ? "Loading Players…" : `Choose Player ${index + 1}`}
+                  </option>
+                  {players.map((player) => (
+                    <option
+                      key={player.id}
+                      value={player.id}
+                      disabled={
+                        player.id !== selectedId && selectedIds.includes(player.id)
+                      }
+                    >
+                      {player.name}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  className="seat-drag-handle"
+                  type="button"
+                  disabled={!selectedId || loading || Boolean(error)}
+                  aria-label={`Move seat ${index + 1} player. Drag or use arrow keys.`}
+                  onPointerDown={(event) => startSeatDrag(event, index)}
+                  onPointerMove={moveSeatDrag}
+                  onPointerUp={endSeatDrag}
+                  onPointerCancel={cancelSeatDrag}
+                  onLostPointerCapture={cancelSeatDrag}
+                  onKeyDown={(event) => {
+                    if (event.key === "ArrowUp" && index > 0) {
+                      event.preventDefault();
+                      moveSeat(index, index - 1);
+                    } else if (
+                      event.key === "ArrowDown" &&
+                      index < playerCount - 1
+                    ) {
+                      event.preventDefault();
+                      moveSeat(index, index + 1);
+                    }
+                  }}
+                >
+                  <span aria-hidden="true">⠿</span>
+                </button>
+              </div>
+            );
+          })}
         </div>
         {!loading && !error && players.length < 2 ? (
           <p className="muted player-help">

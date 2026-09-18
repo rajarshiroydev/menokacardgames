@@ -609,6 +609,7 @@ hr {
 }
 
 .seat-row {
+  position: relative;
   display: grid;
   grid-template-columns: 28px minmax(0, 1fr) 40px;
   align-items: center;
@@ -617,11 +618,19 @@ hr {
   border: 1px solid var(--line);
   border-radius: 12px;
   background: var(--card2);
-  transition: border-color 150ms ease, background 150ms ease, opacity 150ms ease;
+  transition:
+    transform 180ms cubic-bezier(.2, .8, .2, 1),
+    border-color 150ms ease,
+    background 150ms ease,
+    box-shadow 150ms ease;
 }
 
 .seat-row.is-dragging {
-  opacity: 0.45;
+  z-index: 2;
+  border-color: var(--gold);
+  box-shadow: 0 16px 32px rgb(0 0 0 / 35%);
+  cursor: grabbing;
+  transition: none;
 }
 
 .seat-row.is-drop-target {
