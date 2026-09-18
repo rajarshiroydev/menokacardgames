@@ -1,4 +1,5 @@
 import type {
+  BlindSchedule,
   GameState,
   LeaderboardEntry,
   PokerSession,
@@ -7,6 +8,13 @@ import type {
 export const GAME_STORAGE_KEY = "pokerLedger.v1";
 export const HISTORY_STORAGE_KEY = "pokerLedger.history.v1";
 export const STAGES = ["PREFLOP", "FLOP", "TURN", "RIVER"] as const;
+export const MINUTE = 60_000;
+export const DEFAULT_BLIND_SCHEDULE: BlindSchedule = {
+  unit: "hands",
+  every: 10,
+  raiseType: "multiply",
+  raiseBy: 2,
+};
 
 export function formatRupees(value: number) {
   return `₹${Number(value).toLocaleString("en-IN")}`;
@@ -85,7 +93,101 @@ export function minimumRaise(game: GameState, playerIndex: number) {
   );
 }
 
-export function dealNewHand(game: GameState) {
+export function smallBlindFor(bigBlind: number) {
+  return Math.floor(bigBlind / 2);
+}
+
+export function startingBigBlind(game: GameState) {
+  return game.baseAnte ?? game.ante;
+}
+
+export function bigBlindAtLevel(
+  base: number,
+  schedule: BlindSchedule | null | undefined,
+  level: number,
+) {
+  if (!schedule || level <= 0) return Math.max(1, Math.round(base));
+  const raised =
+    schedule.raiseType === "multiply"
+      ? base * schedule.raiseBy ** level
+      : base + schedule.raiseBy * level;
+  return Math.max(1, Math.round(raised));
+}
+
+/**
+ * Level the given hand is dealt at. Hand-based levels count completed hands,
+ * so `every: 10` keeps hands 1-10 at level 0. Time-based levels count real
+ * minutes since the game started, and only apply when the next hand is dealt.
+ */
+export function blindLevelFor(
+  game: GameState,
+  handNo: number,
+  now = Date.now(),
+) {
+  const schedule = game.blinds;
+  if (!schedule || schedule.every <= 0) return 0;
+  const elapsed =
+    schedule.unit === "hands"
+      ? handNo - 1
+      : (now - game.startedAt) / MINUTE;
+  return Math.max(0, Math.floor(elapsed / schedule.every));
+}
+
+/** What the blinds are now, and what the next level brings. */
+export function blindStatus(game: GameState, now = Date.now()) {
+  const schedule = game.blinds;
+  const base = startingBigBlind(game);
+  const level = game.blindLevel ?? 0;
+  const bigBlind = game.ante;
+  const status = {
+    schedule,
+    level,
+    bigBlind,
+    smallBlind: smallBlindFor(bigBlind),
+    nextBigBlind: 0,
+    nextSmallBlind: 0,
+    /** Hands still to be played at this level, for hand-based schedules. */
+    handsLeft: 0,
+    /** Milliseconds until the next level, for time-based schedules. */
+    msLeft: 0,
+    /** The next hand dealt will be at a higher level. */
+    dueNow: false,
+  };
+  if (!schedule || schedule.every <= 0) return status;
+
+  status.nextBigBlind = bigBlindAtLevel(base, schedule, level + 1);
+  status.nextSmallBlind = smallBlindFor(status.nextBigBlind);
+  if (schedule.unit === "hands") {
+    status.handsLeft = Math.max(0, (level + 1) * schedule.every - game.handNo);
+    status.dueNow = status.handsLeft === 0;
+  } else {
+    const levelEndsAt =
+      game.startedAt + (level + 1) * schedule.every * MINUTE;
+    status.msLeft = Math.max(0, levelEndsAt - now);
+    status.dueNow = status.msLeft === 0;
+  }
+  return status;
+}
+
+/** Moves `game.ante` to the level the given hand belongs to. */
+function applyBlindLevel(game: GameState, handNo: number, now: number) {
+  if (!game.blinds) return;
+  const level = blindLevelFor(game, handNo, now);
+  const bigBlind = bigBlindAtLevel(startingBigBlind(game), game.blinds, level);
+  const raised = bigBlind !== game.ante;
+  game.blindLevel = level;
+  game.ante = bigBlind;
+  if (raised) {
+    game.log.unshift(
+      `Hand ${handNo}: blinds up to ${formatRupees(
+        smallBlindFor(bigBlind),
+      )}/${formatRupees(bigBlind)} (level ${level + 1})`,
+    );
+    game.log = game.log.slice(0, 80);
+  }
+}
+
+export function dealNewHand(game: GameState, now = Date.now()) {
   const alive = game.players.filter((player) => player.stack > 0).length;
   if (alive < 2) {
     game.hand = null;
@@ -93,6 +195,7 @@ export function dealNewHand(game: GameState) {
   }
 
   game.handNo += 1;
+  applyBlindLevel(game, game.handNo, now);
   const inHand = game.players.map((player) => player.stack > 0);
   const previousDealer = Number.isInteger(game.dealerIndex)
     ? game.dealerIndex
@@ -106,7 +209,7 @@ export function dealNewHand(game: GameState) {
   const stacksBeforeHand = game.players.map((player) => player.stack);
   const committed = game.players.map(() => 0);
   let pot = 0;
-  [[smallBlindIndex, Math.floor(game.ante / 2)], [bigBlindIndex, game.ante]].forEach(
+  [[smallBlindIndex, smallBlindFor(game.ante)], [bigBlindIndex, game.ante]].forEach(
     ([index, blind]) => {
       const chips = Math.min(blind, game.players[index].stack);
       game.players[index].stack -= chips;

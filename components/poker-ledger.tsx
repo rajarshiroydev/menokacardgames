@@ -12,8 +12,11 @@ import {
 
 import {
   activeIndexes,
+  bigBlindAtLevel,
+  blindStatus,
   buildLeaderboard,
   dealNewHand,
+  DEFAULT_BLIND_SCHEDULE,
   formatDate,
   formatRupees,
   GAME_STORAGE_KEY,
@@ -21,9 +24,12 @@ import {
   minimumRaise,
   nextPlayerToAct,
   pendingIndexes,
+  smallBlindFor,
   STAGES,
+  startingBigBlind,
 } from "@/lib/poker/game";
 import type {
+  BlindSchedule,
   GameState,
   PlayerAction,
   PlayerProfile,
@@ -112,6 +118,10 @@ function readStoredGame() {
       window.localStorage.getItem(GAME_STORAGE_KEY) || "null",
     ) as GameState | null;
     if (!data?.players) return null;
+    // Games saved before escalating blinds kept one fixed big blind.
+    data.baseAnte ??= data.ante;
+    data.blinds ??= null;
+    data.blindLevel ??= 0;
     // Older saved games did not have positional betting. Start their next hand
     // with the new model instead of leaving an unusable in-progress hand.
     if (!Number.isInteger(data.dealerIndex)) {
@@ -138,6 +148,22 @@ function readStoredHistory() {
   } catch {
     return [];
   }
+}
+
+function formatCountdown(ms: number) {
+  const total = Math.ceil(ms / 1000);
+  return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")}`;
+}
+
+/** Ticks once a second, but only while a timed blind schedule is running. */
+function useBlindClock(active: boolean) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!active) return;
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [active]);
+  return now;
 }
 
 function recordAction(
@@ -371,10 +397,23 @@ export function PokerLedger() {
       name: string;
       stack: number;
       ante: number;
+      blinds: BlindSchedule | null;
       players: PlayerProfile[];
     }) => {
       if (input.ante <= 0) {
         showToast("Big blind must be greater than 0");
+        return;
+      }
+      if (input.blinds && input.blinds.every < 1) {
+        showToast("Blinds must go up after at least 1 hand or minute");
+        return;
+      }
+      if (
+        input.blinds &&
+        input.blinds.raiseBy <=
+          (input.blinds.raiseType === "multiply" ? 1 : 0)
+      ) {
+        showToast("Blind increase must make the blinds bigger");
         return;
       }
       const gameName = input.name.trim();
@@ -382,6 +421,9 @@ export function PokerLedger() {
         ...(gameName ? { gameName } : {}),
         sessionLabel: gameName || `Game ${nextSessionNumber}`,
         ante: input.ante,
+        baseAnte: input.ante,
+        blinds: input.blinds,
+        blindLevel: 0,
         startStack: input.stack,
         startedAt: Date.now(),
         players: input.players.map((player) => ({
@@ -724,12 +766,20 @@ export function PokerLedger() {
     showToast(`Pot split ${winners.length} ways`);
   }
 
-  function startNextRound() {
+  function startNextHand() {
     if (!game?.winnerAnnouncement) return;
     const next = structuredClone(game);
+    const anteBefore = next.ante;
     next.winnerAnnouncement = null;
     dealNewHand(next);
     setGame(next);
+    if (next.ante !== anteBefore) {
+      showToast(
+        `Blinds up to ${formatRupees(
+          smallBlindFor(next.ante),
+        )}/${formatRupees(next.ante)}`,
+      );
+    }
   }
 
   function cancelHand() {
@@ -799,7 +849,7 @@ export function PokerLedger() {
       ...(game.gameName ? { name: game.gameName } : {}),
       date: game.startedAt,
       ended: Date.now(),
-      ante: game.ante,
+      ante: startingBigBlind(game),
       startStack: game.startStack,
       hands: completedHands,
       results: game.players.map((player, index) => ({
@@ -1125,7 +1175,7 @@ export function PokerLedger() {
       {game?.winnerAnnouncement ? (
         <WinnerCard
           announcement={game.winnerAnnouncement}
-          onNext={startNextRound}
+          onNext={startNextHand}
         />
       ) : null}
     </main>
@@ -1251,14 +1301,44 @@ function SetupView({
     name: string;
     stack: number;
     ante: number;
+    blinds: BlindSchedule | null;
     players: PlayerProfile[];
   }) => void;
 }) {
   const [name, setName] = useState("");
   const [stack, setStack] = useState(10_000);
   const [ante, setAnte] = useState(100);
+  const [risingBlinds, setRisingBlinds] = useState(false);
+  const [blindUnit, setBlindUnit] = useState<BlindSchedule["unit"]>(
+    DEFAULT_BLIND_SCHEDULE.unit,
+  );
+  const [blindEvery, setBlindEvery] = useState(DEFAULT_BLIND_SCHEDULE.every);
+  const [blindRaiseType, setBlindRaiseType] = useState<
+    BlindSchedule["raiseType"]
+  >(DEFAULT_BLIND_SCHEDULE.raiseType);
+  const [blindRaiseBy, setBlindRaiseBy] = useState(
+    DEFAULT_BLIND_SCHEDULE.raiseBy,
+  );
   const [playerCount, setPlayerCount] = useState(3);
   const [selectedIds, setSelectedIds] = useState(["", "", ""]);
+
+  const schedule: BlindSchedule | null = risingBlinds
+    ? {
+        unit: blindUnit,
+        every: blindEvery,
+        raiseType: blindRaiseType,
+        raiseBy: blindRaiseBy,
+      }
+    : null;
+  const scheduleValid =
+    !schedule ||
+    (schedule.every >= 1 &&
+      schedule.raiseBy > (schedule.raiseType === "multiply" ? 1 : 0));
+  const ladder = schedule && scheduleValid
+    ? Array.from({ length: 4 }, (_, level) =>
+        bigBlindAtLevel(Math.max(1, ante), schedule, level),
+      )
+    : [];
 
   function updatePlayerCount(value: number) {
     const count = Math.max(2, Math.min(10, value || 2));
@@ -1283,6 +1363,7 @@ function SetupView({
       name,
       stack,
       ante,
+      blinds: schedule,
       players: selectedPlayers,
     });
   }
@@ -1333,10 +1414,118 @@ function SetupView({
         </div>
       </div>
       <p className="muted rule-note">
-        Small blind {formatRupees(Math.floor(Math.max(1, ante) / 2))} · first
+        Small blind {formatRupees(smallBlindFor(Math.max(1, ante)))} · first
         pre-flop raise to {formatRupees(Math.max(1, ante) * 2)} · later raises
         can be any higher amount.
       </p>
+
+      <div className="blind-toggle">
+        <label htmlFor="rising-blinds">Blinds Go Up During The Game</label>
+        <input
+          id="rising-blinds"
+          type="checkbox"
+          checked={risingBlinds}
+          onChange={(event) => setRisingBlinds(event.target.checked)}
+        />
+      </div>
+      {risingBlinds ? (
+        <>
+          <div className="row setup-row">
+            <div>
+              <label htmlFor="blind-every">Raise Blinds Every</label>
+              <input
+                id="blind-every"
+                type="number"
+                inputMode="numeric"
+                min="1"
+                value={blindEvery}
+                onChange={(event) =>
+                  setBlindEvery(Number(event.target.value))
+                }
+              />
+            </div>
+            <div>
+              <label htmlFor="blind-unit">Counted In</label>
+              <select
+                className="select-control"
+                id="blind-unit"
+                value={blindUnit}
+                onChange={(event) =>
+                  setBlindUnit(event.target.value as BlindSchedule["unit"])
+                }
+              >
+                <option value="hands">Hands</option>
+                <option value="minutes">Minutes</option>
+              </select>
+            </div>
+          </div>
+          <div className="row setup-row">
+            <div>
+              <label htmlFor="blind-raise-type">Increase By</label>
+              <select
+                className="select-control"
+                id="blind-raise-type"
+                value={blindRaiseType}
+                onChange={(event) => {
+                  const nextType = event.target
+                    .value as BlindSchedule["raiseType"];
+                  setBlindRaiseType(nextType);
+                  setBlindRaiseBy(
+                    nextType === "multiply" ? 2 : Math.max(1, ante),
+                  );
+                }}
+              >
+                <option value="multiply">Multiplying The Big Blind</option>
+                <option value="add">Adding A Fixed Amount</option>
+              </select>
+            </div>
+            <div>
+              <label htmlFor="blind-raise-by">
+                {blindRaiseType === "multiply" ? "Multiplier" : "Amount"}
+              </label>
+              <input
+                id="blind-raise-by"
+                type="number"
+                inputMode="decimal"
+                min={blindRaiseType === "multiply" ? "1.1" : "1"}
+                step={blindRaiseType === "multiply" ? "0.1" : "1"}
+                value={blindRaiseBy}
+                onChange={(event) =>
+                  setBlindRaiseBy(Number(event.target.value))
+                }
+              />
+            </div>
+          </div>
+          <p className="muted rule-note">
+            {scheduleValid ? (
+              <>
+                Every {blindEvery}{" "}
+                {blindUnit === "hands"
+                  ? blindEvery === 1
+                    ? "hand"
+                    : "hands"
+                  : blindEvery === 1
+                    ? "minute"
+                    : "minutes"}
+                , the big blind steps up:{" "}
+                {ladder
+                  .map((bigBlind) => formatRupees(bigBlind))
+                  .join(" → ")}{" "}
+                → …
+                {blindUnit === "minutes"
+                  ? " Timed levels apply when the next hand is dealt."
+                  : ""}
+              </>
+            ) : (
+              <>
+                Set an interval of at least 1 and an increase that makes the
+                blinds bigger.
+              </>
+            )}
+          </p>
+        </>
+      ) : null}
+
       <label htmlFor="player-count">Number Of Players</label>
       <select
         className="select-control"
@@ -1410,7 +1599,9 @@ function SetupView({
       <button
         className="primary full start-game"
         type="submit"
-        disabled={!selectionComplete || stack < 0 || ante < 1}
+        disabled={
+          !selectionComplete || stack < 0 || ante < 1 || !scheduleValid
+        }
       >
         Start Game
       </button>
@@ -1601,6 +1792,20 @@ function GameView(props: GameViewProps) {
   const { game } = props;
   const hand = game.hand;
   const net = (index: number) => game.players[index].stack - game.startStack;
+  const now = useBlindClock(Boolean(hand) && game.blinds?.unit === "minutes");
+  const blinds = blindStatus(game, now);
+  const nextBlinds = `${formatRupees(blinds.nextSmallBlind)}/${formatRupees(
+    blinds.nextBigBlind,
+  )}`;
+  const blindNote = !blinds.schedule
+    ? ""
+    : blinds.dueNow
+      ? `Blinds go up to ${nextBlinds} on the next hand`
+      : blinds.schedule.unit === "hands"
+        ? `${nextBlinds} in ${blinds.handsLeft} hand${
+            blinds.handsLeft === 1 ? "" : "s"
+          }`
+        : `${nextBlinds} in ${formatCountdown(blinds.msLeft)}`;
 
   return (
     <>
@@ -1640,9 +1845,18 @@ function GameView(props: GameViewProps) {
             <div className="stage">Pot</div>
             <div className="pot">{formatRupees(hand.pot)}</div>
             <div className="muted pot-meta">
-              hand {hand.no} · blinds {formatRupees(Math.floor(game.ante / 2))}/
-              {formatRupees(game.ante)}
+              hand {hand.no} · blinds {formatRupees(blinds.smallBlind)}/
+              {formatRupees(blinds.bigBlind)}
+              {blinds.schedule ? ` · level ${blinds.level + 1}` : ""}
             </div>
+            {blinds.schedule ? (
+              <div
+                className={`blind-timer ${blinds.dueNow ? "due" : ""}`}
+                aria-live="polite"
+              >
+                {blindNote}
+              </div>
+            ) : null}
             <div className="table-positions" aria-label="Table positions">
               <span>Dealer · {game.players[hand.dealerIndex].name}</span>
               <span>
@@ -1842,7 +2056,7 @@ function WinnerCard({
         <h2 id="winner-title">{winnerText}</h2>
         <p>{formatRupees(announcement.pot)} Pot Awarded</p>
         <button className="primary full" type="button" onClick={onNext}>
-          Start The Next Round
+          Deal The Next Hand
         </button>
       </section>
     </div>
@@ -2294,7 +2508,10 @@ function Modal({
                 <p>
                   Choose A Starting Stack, Big Blind, And Two To Ten Players.
                   One Game Session Can Contain Multiple Hands. The Small Blind
-                  Is Half The Big Blind, Rounded Down.
+                  Is Half The Big Blind, Rounded Down. Blinds Can Also Be Set
+                  To Rise Every Few Hands Or Minutes, Either Multiplying The
+                  Big Blind Or Adding A Fixed Amount Each Level. A New Level
+                  Takes Effect When The Next Hand Is Dealt, Never Mid-Hand.
                 </p>
               </div>
             </section>
@@ -2360,8 +2577,8 @@ function Modal({
                   After The River, Choose One Winner Or Split The Pot Between
                   Two Or More Active Players. A Split Is Equal, With Any
                   Leftover ₹1 Chips Awarded In Player Order. Confirm The Winner,
-                  Then Start The Next Round To Rotate Positions And Begin A New
-                  Hand.
+                  Then Deal The Next Hand To Rotate The Button And Post Fresh
+                  Blinds.
                 </p>
               </div>
             </section>

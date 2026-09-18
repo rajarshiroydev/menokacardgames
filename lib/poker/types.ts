@@ -42,10 +42,24 @@ export type Hand = {
   splitSel?: number[] | null;
 };
 
+export type BlindSchedule = {
+  /** Levels advance every `every` hands, or every `every` minutes. */
+  unit: "hands" | "minutes";
+  every: number;
+  /** Multiply the starting big blind, or add a flat amount each level. */
+  raiseType: "multiply" | "add";
+  raiseBy: number;
+};
+
 export type GameState = {
   gameName?: string;
   sessionLabel?: string;
+  /** Big blind for the current level. */
   ante: number;
+  /** Big blind the game started at. Older saved games fall back to `ante`. */
+  baseAnte?: number;
+  blinds?: BlindSchedule | null;
+  blindLevel?: number;
   startStack: number;
   startedAt: number;
   players: Player[];
