@@ -1664,7 +1664,7 @@ hr {
     opacity: 1;
   }
   100% {
-    opacity: 0.8;
+    opacity: 0;
     transform: translateY(270px) rotate(480deg);
   }
 }
