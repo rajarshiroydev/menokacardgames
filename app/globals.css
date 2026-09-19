@@ -2169,6 +2169,150 @@ hr {
   }
 }
 
+@media (min-width: 768px) {
+  .ledger-shell:not(.view-home) {
+    max-width: 960px;
+  }
+
+  .ledger-shell:not(.view-home) .topbar {
+    margin-bottom: 20px;
+    padding: 22px 28px 16px;
+  }
+
+  .ledger-shell:not(.view-home) .topbar-title {
+    font-size: 22px;
+  }
+
+  .ledger-shell:not(.view-home) .app {
+    padding-right: 28px;
+    padding-left: 28px;
+  }
+
+  .view-setup .app,
+  .view-players .app,
+  .view-game .app {
+    max-width: 780px;
+    margin: 0 auto;
+  }
+
+  .history-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1.45fr) minmax(280px, 0.65fr);
+    gap: 18px;
+    align-items: start;
+  }
+
+  .leaderboard-card {
+    grid-column: 1 / -1;
+    margin-bottom: 0;
+    padding: 22px;
+  }
+
+  .leaderboard-list {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .leaderboard-list .leaderboard-row {
+    margin-bottom: 0;
+  }
+
+  .sessions-card {
+    grid-column: 1;
+    margin-bottom: 0;
+    padding: 20px;
+  }
+
+  .history-side-column {
+    display: grid;
+    grid-column: 2;
+    gap: 18px;
+    align-content: start;
+  }
+
+  .history-side-column .card {
+    margin-bottom: 0;
+  }
+}
+
+@media (min-width: 1050px) {
+  .home-shell {
+    max-width: 1120px;
+  }
+
+  .view-home .home-view {
+    grid-template-columns: minmax(320px, 0.85fr) minmax(460px, 1.15fr);
+    column-gap: 70px;
+    padding-right: 48px;
+    padding-left: 48px;
+  }
+
+  .view-home .home-hero {
+    grid-row: 1 / span 3;
+    align-self: center;
+  }
+
+  .view-home .home-menu {
+    grid-column: 2;
+    grid-row: 1;
+    align-self: end;
+    margin-top: 0;
+  }
+
+  .view-home .home-hands {
+    grid-column: 2;
+    grid-row: 2;
+  }
+
+  .view-home .home-rules {
+    grid-column: 2;
+    grid-row: 3;
+  }
+
+  .ledger-shell:not(.view-home) {
+    max-width: 1280px;
+  }
+
+  .view-game .app {
+    display: grid;
+    grid-template-columns: minmax(0, 1.5fr) minmax(340px, 0.7fr);
+    gap: 18px;
+    align-items: start;
+    max-width: none;
+  }
+
+  .view-game .app > .card:first-child {
+    grid-column: 1;
+    grid-row: 1 / span 2;
+  }
+
+  .view-game .app > .card:nth-child(2) {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .view-game .app > .card:nth-child(3) {
+    grid-column: 2;
+    grid-row: 2;
+  }
+
+  .leaderboard-content {
+    display: grid;
+    grid-template-columns: minmax(0, 1.7fr) minmax(310px, 0.7fr);
+    gap: 20px;
+    align-items: start;
+  }
+
+  .leaderboard-content .leaderboard-chart {
+    margin: 0;
+  }
+
+  .leaderboard-content .leaderboard-list {
+    grid-template-columns: 1fr;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

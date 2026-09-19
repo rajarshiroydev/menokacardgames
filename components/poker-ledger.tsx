@@ -1204,7 +1204,9 @@ export function PokerLedger() {
           : "Players";
 
   return (
-    <main className={`ledger-shell ${view === "home" ? "home-shell" : ""}`}>
+    <main
+      className={`ledger-shell view-${view} ${view === "home" ? "home-shell" : ""}`}
+    >
       {view !== "home" ? (
         <header className="topbar">
           <button
@@ -3035,8 +3037,8 @@ function HistoryView({
   const importInput = useRef<HTMLInputElement>(null);
 
   return (
-    <>
-      <section className="card">
+    <div className="history-layout">
+      <section className="card leaderboard-card">
         <div className="hdr">
           <b>All-time leaderboard</b>
           <span className="muted">
@@ -3055,40 +3057,42 @@ function HistoryView({
         ) : loading ? (
           <p className="muted">Loading the shared ledger…</p>
         ) : leaderboard.length ? (
-          <>
+          <div className="leaderboard-content">
             <LeaderboardChart
               entries={leaderboard}
               sessions={history}
             />
-            {leaderboard.map((entry, rank) => (
-              <div
-                className="prow leaderboard-row"
-                key={entry.playerId ?? entry.name}
-              >
-                <span className={`rank ${rank === 0 ? "gold" : ""}`}>
-                  {rank + 1}
-                </span>
-                <div className="nm">
-                  <b>{entry.name}</b>
-                  <small>
-                    {entry.sessions} session
-                    {entry.sessions === 1 ? "" : "s"} · {entry.hands} hands ·
-                    won {entry.wins}
-                  </small>
-                </div>
-                <div className="align-right">
-                  <b className={entry.net >= 0 ? "pos" : "neg"}>
-                    {entry.net >= 0 ? "+" : ""}
-                    {formatRupees(entry.net)}
-                  </b>
-                  <div className="muted best">
-                    best {entry.best >= 0 ? "+" : ""}
-                    {formatRupees(entry.best)}
+            <div className="leaderboard-list">
+              {leaderboard.map((entry, rank) => (
+                <div
+                  className="prow leaderboard-row"
+                  key={entry.playerId ?? entry.name}
+                >
+                  <span className={`rank ${rank === 0 ? "gold" : ""}`}>
+                    {rank + 1}
+                  </span>
+                  <div className="nm">
+                    <b>{entry.name}</b>
+                    <small>
+                      {entry.sessions} session
+                      {entry.sessions === 1 ? "" : "s"} · {entry.hands} hands ·
+                      won {entry.wins}
+                    </small>
+                  </div>
+                  <div className="align-right">
+                    <b className={entry.net >= 0 ? "pos" : "neg"}>
+                      {entry.net >= 0 ? "+" : ""}
+                      {formatRupees(entry.net)}
+                    </b>
+                    <div className="muted best">
+                      best {entry.best >= 0 ? "+" : ""}
+                      {formatRupees(entry.best)}
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
-          </>
+              ))}
+            </div>
+          </div>
         ) : (
           <p className="muted">
             No Saved Sessions Yet. Finish A Game With “Finish And Save Game
@@ -3098,7 +3102,7 @@ function HistoryView({
       </section>
 
       {!error && history.length ? (
-        <section className="card">
+        <section className="card sessions-card">
           <div className="hdr">
             <b>Game Sessions</b>
           </div>
@@ -3112,48 +3116,50 @@ function HistoryView({
         </section>
       ) : null}
 
-      {!error && discardedSessions.length ? (
-        <section className="card discarded-sessions">
-          <div className="hdr">
-            <div>
-              <b>Discarded Sessions</b>
-              <p className="muted card-note">
-                These Sessions Do Not Count Towards The Leaderboard.
-              </p>
+      <aside className="history-side-column">
+        {!error && discardedSessions.length ? (
+          <section className="card discarded-sessions">
+            <div className="hdr">
+              <div>
+                <b>Discarded Sessions</b>
+                <p className="muted card-note">
+                  These Sessions Do Not Count Towards The Leaderboard.
+                </p>
+              </div>
+              <span className="discarded-count">{discardedSessions.length}</span>
             </div>
-            <span className="discarded-count">{discardedSessions.length}</span>
-          </div>
-          {discardedSessions.map((session) => (
-            <SessionCard
-              discarded
-              key={session.id}
-              session={session}
-              onRestore={onRestore}
-              onDeletePermanently={onDeletePermanently}
-            />
-          ))}
-        </section>
-      ) : null}
+            {discardedSessions.map((session) => (
+              <SessionCard
+                discarded
+                key={session.id}
+                session={session}
+                onRestore={onRestore}
+                onDeletePermanently={onDeletePermanently}
+              />
+            ))}
+          </section>
+        ) : null}
 
-      <section className="card">
-        <div className="grid2">
-          <button onClick={onExport}>Export Backup</button>
-          <button onClick={() => importInput.current?.click()}>Import</button>
-        </div>
-        <input
-          ref={importInput}
-          type="file"
-          accept="application/json,.json"
-          hidden
-          onChange={onImport}
-        />
-        <p className="muted backup-note">
-          History is shared from Neon across every device. Export gives you an
-          extra offline backup; importing never overwrites and only adds
-          sessions that are not already in the ledger.
-        </p>
-      </section>
-    </>
+        <section className="card backup-card">
+          <div className="grid2">
+            <button onClick={onExport}>Export Backup</button>
+            <button onClick={() => importInput.current?.click()}>Import</button>
+          </div>
+          <input
+            ref={importInput}
+            type="file"
+            accept="application/json,.json"
+            hidden
+            onChange={onImport}
+          />
+          <p className="muted backup-note">
+            History is shared from Neon across every device. Export gives you an
+            extra offline backup; importing never overwrites and only adds
+            sessions that are not already in the ledger.
+          </p>
+        </section>
+      </aside>
+    </div>
   );
 }
 
