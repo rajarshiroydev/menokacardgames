@@ -853,16 +853,27 @@ export function PokerLedger() {
 
   function buyIn(playerIndex: number) {
     if (!game || game.hand) return;
-    const next = structuredClone(game);
-    const amount = buyInPlayer(next, playerIndex);
+    const amount = nextBuyIn(game, playerIndex);
     if (amount === null) return;
-    const player = next.players[playerIndex];
-    recordWin(
-      next,
-      `Hand ${next.handNo}: ${player.name} buys in for ${formatRupees(amount)}`,
+    const player = game.players[playerIndex];
+    ask(
+      `Buy in ${player.name} for ${formatRupees(amount)}?`,
+      `Buy In · ${formatRupees(amount)}`,
+      () => {
+        const next = structuredClone(game);
+        const confirmedAmount = buyInPlayer(next, playerIndex);
+        if (confirmedAmount === null) return;
+        const confirmedPlayer = next.players[playerIndex];
+        recordWin(
+          next,
+          `Hand ${next.handNo}: ${confirmedPlayer.name} buys in for ${formatRupees(confirmedAmount)}`,
+        );
+        setGame(next);
+        showToast(
+          `${confirmedPlayer.name} buys in for ${formatRupees(confirmedAmount)}`,
+        );
+      },
     );
-    setGame(next);
-    showToast(`${player.name} buys in for ${formatRupees(amount)}`);
   }
 
   function saveBlindSchedule(schedule: BlindSchedule | null) {
