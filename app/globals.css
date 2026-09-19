@@ -1231,17 +1231,6 @@ hr {
   margin-bottom: 8px;
 }
 
-.hands-launch {
-  width: 100%;
-  margin-bottom: 10px;
-  padding: 10px 14px;
-  border-color: color-mix(in srgb, var(--gold) 40%, var(--line));
-  background: color-mix(in srgb, var(--gold) 6%, transparent);
-  color: var(--gold);
-  font-size: 12px;
-  letter-spacing: 0.4px;
-}
-
 .poker-hands-chart {
   margin-bottom: 14px;
   padding: 16px;

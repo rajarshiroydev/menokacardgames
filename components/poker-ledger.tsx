@@ -1267,9 +1267,6 @@ export function PokerLedger() {
             onUndoHand={undoHand}
             onDiscard={discardGame}
             onEditBlinds={() => setEditingBlinds(true)}
-            handsPinned={handsPinned}
-            onOpenHands={openHands}
-            onToggleHandsPin={toggleHandsPinned}
           />
         ) : (
           <HomeView
@@ -2222,9 +2219,6 @@ type GameViewProps = {
   onUndoHand: () => void;
   onDiscard: () => void;
   onEditBlinds: () => void;
-  handsPinned: boolean;
-  onOpenHands: () => void;
-  onToggleHandsPin: () => void;
 };
 
 function GameView(props: GameViewProps) {
@@ -2251,20 +2245,6 @@ function GameView(props: GameViewProps) {
 
   return (
     <>
-      {props.handsPinned ? (
-        <PokerHandsChart
-          pinned
-          onTogglePin={props.onToggleHandsPin}
-        />
-      ) : (
-        <button
-          className="hands-launch"
-          type="button"
-          onClick={props.onOpenHands}
-        >
-          Poker Hands
-        </button>
-      )}
       {!hand ? (
         <section className="card next-hand-card">
           <b>{enoughPlayers ? "Ready for the next hand" : "Game over"}</b>
