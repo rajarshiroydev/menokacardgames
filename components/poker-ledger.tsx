@@ -2263,7 +2263,7 @@ function GameView(props: GameViewProps) {
           {!game.winnerAnnouncement ? (
             <div className="between-hands-actions">
               <button
-                className="ghost full edit-blinds-button"
+                className="ghost full"
                 type="button"
                 onClick={props.onEditBlinds}
               >
@@ -2326,14 +2326,6 @@ function GameView(props: GameViewProps) {
               <span>Big Blind · {game.players[hand.bigBlindIndex].name}</span>
             </div>
           </div>
-          <button
-            className="ghost full edit-blinds-button"
-            type="button"
-            onClick={props.onEditBlinds}
-          >
-            Edit Blind Plan
-          </button>
-
           {hand.splitSel ? (
             <SplitView
               game={game}

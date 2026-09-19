@@ -854,10 +854,6 @@ hr {
   gap: 10px;
 }
 
-.between-hands-actions .edit-blinds-button {
-  margin: 0;
-}
-
 .between-hands-actions .buy-in-options {
   margin: 0;
   padding: 14px;
@@ -982,10 +978,6 @@ hr {
 
 .blind-timer.due {
   color: var(--gold);
-}
-
-.edit-blinds-button {
-  margin: 12px 0 18px;
 }
 
 .plist {
