@@ -3224,7 +3224,7 @@ function LeaderboardChart({
   );
   const keyFor = (playerId: string | undefined, name: string) =>
     playerId ? `id:${playerId}` : `name:${playerKey(name)}`;
-  const colors = ["#e2ad4f", "#72b9e6", "#83c9a6", "#d8735b", "#b99be8", "#e190bd"];
+  const colors = ["#3d9cff", "#41e2a3", "#f7fbff", "#67c7ff", "#19b879", "#a7e8d2"];
   const sortedKeys = entries
     .map((entry) => keyFor(entry.playerId, entry.name))
     .sort();
