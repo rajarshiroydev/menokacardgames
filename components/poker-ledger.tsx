@@ -3213,6 +3213,10 @@ function LeaderboardChart({
     (index / Math.max(1, chronologicalSessions.length)) * plotWidth;
   const yFor = (value: number) =>
     plot.top + ((axisMagnitude - value) / (axisMagnitude * 2)) * plotHeight;
+  const xLabelEvery = Math.max(
+    1,
+    Math.ceil(chronologicalSessions.length / 13),
+  );
   const tickLabel = (value: number) => {
     if (value === 0) return "₹0";
     const sign = value > 0 ? "+" : "−";
@@ -3278,14 +3282,18 @@ function LeaderboardChart({
               y1={chartHeight - plot.bottom}
               y2={chartHeight - plot.bottom + 5}
             />
-            <text
-              className="leaderboard-axis-value"
-              x={xFor(index)}
-              y={chartHeight - plot.bottom + 19}
-              textAnchor="middle"
-            >
-              {index === 0 ? "Start" : index}
-            </text>
+            {index === 0 ||
+            index === chronologicalSessions.length ||
+            index % xLabelEvery === 0 ? (
+              <text
+                className="leaderboard-axis-value"
+                x={index === 0 ? xFor(index) - 6 : xFor(index)}
+                y={chartHeight - plot.bottom + 19}
+                textAnchor={index === 0 ? "end" : "middle"}
+              >
+                {index === 0 ? "Start" : index}
+              </text>
+            ) : null}
           </g>
         ))}
 
@@ -3310,22 +3318,26 @@ function LeaderboardChart({
                 points={points}
                 stroke={player.color}
               />
-              {player.values.map((value, index) => (
-                <circle
-                  className="leaderboard-player-point"
-                  cx={xFor(index)}
-                  cy={yFor(value)}
-                  fill={player.color}
-                  key={index}
-                  r={index === player.values.length - 1 ? 4.5 : 3}
-                >
-                  <title>
-                    {player.entry.name}, {index === 0 ? "start" : `session ${index}`}:{" "}
-                    {value >= 0 ? "+" : ""}
-                    {formatRupees(value)}
-                  </title>
-                </circle>
-              ))}
+              {player.values.map((value, index) => {
+                if (index === 0 || value === player.values[index - 1]) {
+                  return null;
+                }
+                return (
+                  <circle
+                    className="leaderboard-player-point"
+                    cx={xFor(index)}
+                    cy={yFor(value)}
+                    fill={player.color}
+                    key={index}
+                    r={index === player.values.length - 1 ? 4.5 : 3}
+                  >
+                    <title>
+                      {player.entry.name}, session {index}: {value >= 0 ? "+" : ""}
+                      {formatRupees(value)}
+                    </title>
+                  </circle>
+                );
+              })}
             </g>
           );
         })}
