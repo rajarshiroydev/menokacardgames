@@ -1233,6 +1233,65 @@ hr {
   margin-bottom: 6px;
 }
 
+.history-layout {
+  display: flex;
+  flex-direction: column;
+}
+
+.history-expander {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--hair);
+}
+
+.history-expander summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--sunk);
+  color: var(--gold);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+  list-style: none;
+}
+
+.history-expander summary::-webkit-details-marker {
+  display: none;
+}
+
+.history-expander summary::after {
+  content: "⌄";
+  font-size: 17px;
+  line-height: 1;
+  transition: transform 160ms ease;
+}
+
+.history-expander[open] summary::after {
+  transform: rotate(180deg);
+}
+
+.history-expander summary:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
+
+.history-expander-content {
+  margin-top: 10px;
+}
+
+.player-standings-card > .leaderboard-list,
+.history-expander-content.leaderboard-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
 .leaderboard-chart {
   margin: 18px 0 20px;
   padding: 16px;
@@ -2196,42 +2255,23 @@ hr {
   }
 
   .history-layout {
-    display: grid;
-    grid-template-columns: minmax(0, 1.45fr) minmax(280px, 0.65fr);
+    display: flex;
+    flex-direction: column;
     gap: 18px;
-    align-items: start;
   }
 
-  .leaderboard-card {
-    grid-column: 1 / -1;
+  .history-layout > .card {
     margin-bottom: 0;
     padding: 22px;
   }
 
   .leaderboard-list {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
   }
 
   .leaderboard-list .leaderboard-row {
-    margin-bottom: 0;
-  }
-
-  .sessions-card {
-    grid-column: 1;
-    margin-bottom: 0;
-    padding: 20px;
-  }
-
-  .history-side-column {
-    display: grid;
-    grid-column: 2;
-    gap: 18px;
-    align-content: start;
-  }
-
-  .history-side-column .card {
     margin-bottom: 0;
   }
 }
@@ -2297,20 +2337,6 @@ hr {
     grid-row: 2;
   }
 
-  .leaderboard-content {
-    display: grid;
-    grid-template-columns: minmax(0, 1.7fr) minmax(310px, 0.7fr);
-    gap: 20px;
-    align-items: start;
-  }
-
-  .leaderboard-content .leaderboard-chart {
-    margin: 0;
-  }
-
-  .leaderboard-content .leaderboard-list {
-    grid-template-columns: 1fr;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {

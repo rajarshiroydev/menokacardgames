@@ -3034,11 +3034,45 @@ function HistoryView({
   onImport: (event: ChangeEvent<HTMLInputElement>) => void;
 }) {
   const leaderboard = useMemo(() => buildLeaderboard(history), [history]);
+  const latestSessions = useMemo(
+    () => [...history].sort((a, b) => b.date - a.date),
+    [history],
+  );
   const importInput = useRef<HTMLInputElement>(null);
+
+  function leaderboardRow(entry: LeaderboardEntry, rank: number) {
+    return (
+      <div
+        className="prow leaderboard-row"
+        key={entry.playerId ?? entry.name}
+      >
+        <span className={`rank ${rank === 0 ? "gold" : ""}`}>
+          {rank + 1}
+        </span>
+        <div className="nm">
+          <b>{entry.name}</b>
+          <small>
+            {entry.sessions} session{entry.sessions === 1 ? "" : "s"} ·{" "}
+            {entry.hands} hands · won {entry.wins}
+          </small>
+        </div>
+        <div className="align-right">
+          <b className={entry.net >= 0 ? "pos" : "neg"}>
+            {entry.net >= 0 ? "+" : ""}
+            {formatRupees(entry.net)}
+          </b>
+          <div className="muted best">
+            best {entry.best >= 0 ? "+" : ""}
+            {formatRupees(entry.best)}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="history-layout">
-      <section className="card leaderboard-card">
+      <section className="card history-graph-card">
         <div className="hdr">
           <b>All-time leaderboard</b>
           <span className="muted">
@@ -3057,42 +3091,7 @@ function HistoryView({
         ) : loading ? (
           <p className="muted">Loading the shared ledger…</p>
         ) : leaderboard.length ? (
-          <div className="leaderboard-content">
-            <LeaderboardChart
-              entries={leaderboard}
-              sessions={history}
-            />
-            <div className="leaderboard-list">
-              {leaderboard.map((entry, rank) => (
-                <div
-                  className="prow leaderboard-row"
-                  key={entry.playerId ?? entry.name}
-                >
-                  <span className={`rank ${rank === 0 ? "gold" : ""}`}>
-                    {rank + 1}
-                  </span>
-                  <div className="nm">
-                    <b>{entry.name}</b>
-                    <small>
-                      {entry.sessions} session
-                      {entry.sessions === 1 ? "" : "s"} · {entry.hands} hands ·
-                      won {entry.wins}
-                    </small>
-                  </div>
-                  <div className="align-right">
-                    <b className={entry.net >= 0 ? "pos" : "neg"}>
-                      {entry.net >= 0 ? "+" : ""}
-                      {formatRupees(entry.net)}
-                    </b>
-                    <div className="muted best">
-                      best {entry.best >= 0 ? "+" : ""}
-                      {formatRupees(entry.best)}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
+          <LeaderboardChart entries={leaderboard} sessions={history} />
         ) : (
           <p className="muted">
             No Saved Sessions Yet. Finish A Game With “Finish And Save Game
@@ -3101,64 +3100,109 @@ function HistoryView({
         )}
       </section>
 
+      {!error && !loading && leaderboard.length ? (
+        <section className="card player-standings-card">
+          <div className="hdr">
+            <b>Player Standings</b>
+            <span className="muted">
+              {leaderboard.length} player{leaderboard.length === 1 ? "" : "s"}
+            </span>
+          </div>
+          <div className="leaderboard-list">
+            {leaderboard.slice(0, 5).map(leaderboardRow)}
+          </div>
+          {leaderboard.length > 5 ? (
+            <details className="history-expander">
+              <summary>
+                Show {leaderboard.length - 5} more player
+                {leaderboard.length - 5 === 1 ? "" : "s"}
+              </summary>
+              <div className="history-expander-content leaderboard-list">
+                {leaderboard
+                  .slice(5)
+                  .map((entry, index) => leaderboardRow(entry, index + 5))}
+              </div>
+            </details>
+          ) : null}
+        </section>
+      ) : null}
+
       {!error && history.length ? (
         <section className="card sessions-card">
           <div className="hdr">
             <b>Game Sessions</b>
+            <span className="muted">
+              {history.length} game{history.length === 1 ? "" : "s"}
+            </span>
           </div>
-          {history.map((session) => (
+          {latestSessions.slice(0, 5).map((session) => (
             <SessionCard
               key={session.id}
               session={session}
               onDiscard={onDiscard}
             />
           ))}
+          {latestSessions.length > 5 ? (
+            <details className="history-expander">
+              <summary>
+                Show {latestSessions.length - 5} older game
+                {latestSessions.length - 5 === 1 ? "" : "s"}
+              </summary>
+              <div className="history-expander-content">
+                {latestSessions.slice(5).map((session) => (
+                  <SessionCard
+                    key={session.id}
+                    session={session}
+                    onDiscard={onDiscard}
+                  />
+                ))}
+              </div>
+            </details>
+          ) : null}
         </section>
       ) : null}
 
-      <aside className="history-side-column">
-        {!error && discardedSessions.length ? (
-          <section className="card discarded-sessions">
-            <div className="hdr">
-              <div>
-                <b>Discarded Sessions</b>
-                <p className="muted card-note">
-                  These Sessions Do Not Count Towards The Leaderboard.
-                </p>
-              </div>
-              <span className="discarded-count">{discardedSessions.length}</span>
-            </div>
-            {discardedSessions.map((session) => (
-              <SessionCard
-                discarded
-                key={session.id}
-                session={session}
-                onRestore={onRestore}
-                onDeletePermanently={onDeletePermanently}
-              />
-            ))}
-          </section>
-        ) : null}
+      <section className="card backup-card">
+        <div className="grid2">
+          <button onClick={onExport}>Export Backup</button>
+          <button onClick={() => importInput.current?.click()}>Import</button>
+        </div>
+        <input
+          ref={importInput}
+          type="file"
+          accept="application/json,.json"
+          hidden
+          onChange={onImport}
+        />
+        <p className="muted backup-note">
+          History is shared from Neon across every device. Export gives you an
+          extra offline backup; importing never overwrites and only adds
+          sessions that are not already in the ledger.
+        </p>
+      </section>
 
-        <section className="card backup-card">
-          <div className="grid2">
-            <button onClick={onExport}>Export Backup</button>
-            <button onClick={() => importInput.current?.click()}>Import</button>
+      {!error && discardedSessions.length ? (
+        <section className="card discarded-sessions">
+          <div className="hdr">
+            <div>
+              <b>Discarded Sessions</b>
+              <p className="muted card-note">
+                These Sessions Do Not Count Towards The Leaderboard.
+              </p>
+            </div>
+            <span className="discarded-count">{discardedSessions.length}</span>
           </div>
-          <input
-            ref={importInput}
-            type="file"
-            accept="application/json,.json"
-            hidden
-            onChange={onImport}
-          />
-          <p className="muted backup-note">
-            History is shared from Neon across every device. Export gives you an
-            extra offline backup; importing never overwrites and only adds
-            sessions that are not already in the ledger.
-          </p>
+          {discardedSessions.map((session) => (
+            <SessionCard
+              discarded
+              key={session.id}
+              session={session}
+              onRestore={onRestore}
+              onDeletePermanently={onDeletePermanently}
+            />
+          ))}
         </section>
-      </aside>
+      ) : null}
     </div>
   );
 }
