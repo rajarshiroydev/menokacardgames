@@ -42,6 +42,12 @@ export type Hand = {
   bigBlindIndex: number;
   currentPlayer: number | null;
   splitSel?: number[] | null;
+  /** State restored when a newly dealt hand returns to the between-hands page. */
+  dealerIndexBefore?: number;
+  anteBefore?: number;
+  blindLevelBefore?: number;
+  blindsBefore?: BlindSchedule | null;
+  blindLevelsBefore?: BlindLevelRecord[];
 };
 
 export type BlindSchedule = {

@@ -863,6 +863,10 @@ hr {
   text-align: left;
 }
 
+.hand-back-button {
+  margin-bottom: 16px;
+}
+
 .tabs {
   display: flex;
   gap: 24px;

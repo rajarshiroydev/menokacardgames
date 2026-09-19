@@ -31,6 +31,7 @@ import {
   pendingIndexes,
   pendingBlindPlan,
   playerBuyIns,
+  returnToBetweenHands,
   smallBlindFor,
   STAGES,
   startingBigBlind,
@@ -914,6 +915,20 @@ export function PokerLedger() {
     );
   }
 
+  function backToBetweenHands() {
+    if (!game?.hand) return;
+    ask(
+      `Return to between hands from hand ${game.hand.no}? All actions from this hand will be cleared and every chip, including the blinds, will be returned.`,
+      "Back To Between Hands",
+      () => {
+        const next = structuredClone(game);
+        if (!returnToBetweenHands(next)) return;
+        setGame(next);
+        showToast("Returned to between hands");
+      },
+    );
+  }
+
   function undoHand() {
     if (!game?.lastHand) {
       showToast("Nothing to undo");
@@ -1268,6 +1283,7 @@ export function PokerLedger() {
             onToggleSplit={toggleSplit}
             onSplitPot={splitPot}
             onCancelHand={cancelHand}
+            onBackToBetweenHands={backToBetweenHands}
             onBuyIn={buyIn}
             onNextHand={startNextHand}
             onEndSession={endSession}
@@ -2220,6 +2236,7 @@ type GameViewProps = {
   onToggleSplit: (playerIndex: number) => void;
   onSplitPot: () => void;
   onCancelHand: () => void;
+  onBackToBetweenHands: () => void;
   onBuyIn: (playerIndex: number) => void;
   onNextHand: () => void;
   onEndSession: () => void;
@@ -2288,6 +2305,13 @@ function GameView(props: GameViewProps) {
         </section>
       ) : (
         <section className="card">
+          <button
+            className="ghost full hand-back-button"
+            type="button"
+            onClick={props.onBackToBetweenHands}
+          >
+            Back To Between Hands
+          </button>
           <div className="segs">
             {STAGES.map((stage, index) => (
               <div className={index <= hand.stage ? "on" : ""} key={stage}>

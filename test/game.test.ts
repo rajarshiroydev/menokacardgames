@@ -13,6 +13,7 @@ import {
   nextPlayerToAct,
   pendingBlindPlan,
   pendingIndexes,
+  returnToBetweenHands,
   totalBuyIns,
 } from "../lib/poker/game.ts";
 import type {
@@ -347,6 +348,34 @@ describe("rising blinds", () => {
 });
 
 describe("positional betting", () => {
+  test("returns a dealt hand to the same between-hands state", () => {
+    const game = gameState({
+      unit: "hands",
+      every: 1,
+      raiseType: "add",
+      raiseBy: 100,
+    });
+    dealNewHand(game);
+    const firstHand = dealtHand(game);
+    const dealer = firstHand.dealerIndex;
+    const stacks = [...firstHand.stacksBeforeHand];
+    game.players[dealer].stack -= 500;
+    game.log.unshift(`Hand ${firstHand.no} PREFLOP: A Bets ₹500`);
+
+    assert.equal(returnToBetweenHands(game), true);
+    assert.equal(game.hand, null);
+    assert.equal(game.handNo, 0);
+    assert.deepEqual(game.players.map((player) => player.stack), stacks);
+    assert.equal(game.log.some((line) => line.startsWith("Hand 1")), false);
+    assert.equal(game.ante, 100);
+    assert.equal(game.blindLevel, 0);
+    assert.deepEqual(game.blindLevels, []);
+
+    dealNewHand(game);
+    assert.equal(dealtHand(game).dealerIndex, dealer);
+    assert.equal(game.ante, 100);
+  });
+
   test("rotates the dealer through the chosen seating order", () => {
     const game = gameState();
     game.players = [game.players[2], game.players[0], game.players[1]];

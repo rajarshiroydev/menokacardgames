@@ -290,6 +290,11 @@ export function dealNewHand(game: GameState, now = Date.now()) {
     return;
   }
 
+  const dealerIndexBefore = game.dealerIndex;
+  const anteBefore = game.ante;
+  const blindLevelBefore = game.blindLevel ?? 0;
+  const blindsBefore = game.blinds ?? null;
+  const blindLevelsBefore = structuredClone(game.blindLevels ?? []);
   game.handNo += 1;
   applyBlindLevel(game, game.handNo, now);
   const inHand = game.players.map((player) => player.stack > 0);
@@ -329,8 +334,55 @@ export function dealNewHand(game: GameState, now = Date.now()) {
     smallBlindIndex,
     bigBlindIndex,
     currentPlayer: null,
+    dealerIndexBefore,
+    anteBefore,
+    blindLevelBefore,
+    blindsBefore,
+    blindLevelsBefore,
   };
   game.hand.currentPlayer = nextPlayerToAct(game, bigBlindIndex);
+}
+
+function previousEligibleIndex(inHand: boolean[], from: number) {
+  for (let offset = 1; offset <= inHand.length; offset += 1) {
+    const index = (from - offset + inHand.length) % inHand.length;
+    if (inHand[index]) return index;
+  }
+  return -1;
+}
+
+/** Refunds the current hand and restores the state from immediately before it was dealt. */
+export function returnToBetweenHands(game: GameState) {
+  const hand = game.hand;
+  if (!hand) return false;
+
+  game.players.forEach((player, index) => {
+    player.stack = hand.stacksBeforeHand[index];
+  });
+  game.log = game.log.filter(
+    (line) => !new RegExp(`^Hand ${hand.no}(?::|\\s)`).test(line),
+  );
+  game.handNo = hand.no - 1;
+  game.dealerIndex =
+    hand.dealerIndexBefore ?? previousEligibleIndex(hand.in, hand.dealerIndex);
+
+  const restoredLevels = hand.blindLevelsBefore
+    ? structuredClone(hand.blindLevelsBefore)
+    : (game.blindLevels ?? []).filter((level) => level.handNo < hand.no);
+  const restoredAnte =
+    hand.anteBefore ?? restoredLevels.at(-1)?.bigBlind ?? startingBigBlind(game);
+  const currentAnte = game.ante;
+  game.ante = restoredAnte;
+  game.blindLevel =
+    hand.blindLevelBefore ??
+    (currentAnte === restoredAnte
+      ? (game.blindLevel ?? 0)
+      : Math.max(0, (game.blindLevel ?? 0) - 1));
+  game.blinds = hand.blindsBefore ?? planForHand(game, Math.max(1, hand.no - 1)).schedule;
+  game.blindLevels = restoredLevels;
+  game.winnerAnnouncement = null;
+  game.hand = null;
+  return true;
 }
 
 export function buildLeaderboard(sessions: PokerSession[]) {
