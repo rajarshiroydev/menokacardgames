@@ -849,6 +849,24 @@ hr {
   margin-bottom: 16px;
 }
 
+.between-hands-actions {
+  display: grid;
+  gap: 10px;
+}
+
+.between-hands-actions .edit-blinds-button {
+  margin: 0;
+}
+
+.between-hands-actions .buy-in-options {
+  margin: 0;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--sunk);
+  text-align: left;
+}
+
 .tabs {
   display: flex;
   gap: 24px;

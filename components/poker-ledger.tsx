@@ -851,6 +851,13 @@ export function PokerLedger() {
     }
   }
 
+  function dismissWinner() {
+    if (!game?.winnerAnnouncement) return;
+    const next = structuredClone(game);
+    next.winnerAnnouncement = null;
+    setGame(next);
+  }
+
   function buyIn(playerIndex: number) {
     if (!game || game.hand) return;
     const amount = nextBuyIn(game, playerIndex);
@@ -877,7 +884,7 @@ export function PokerLedger() {
   }
 
   function saveBlindSchedule(schedule: BlindSchedule | null) {
-    if (!game || (!game.hand && !game.winnerAnnouncement)) return;
+    if (!game) return;
     const next = structuredClone(game);
     editBlindSchedule(next, schedule);
     setGame(next);
@@ -1297,7 +1304,7 @@ export function PokerLedger() {
       {game?.winnerAnnouncement ? (
         <WinnerCard
           announcement={game.winnerAnnouncement}
-          onNext={startNextHand}
+          onNext={dismissWinner}
         />
       ) : null}
       {editingBlinds && game ? (
@@ -2253,10 +2260,30 @@ function GameView(props: GameViewProps) {
               ? "The table has enough players with chips to deal again."
               : "Fewer than two players have chips remaining. A busted player can buy in to continue."}
           </p>
-          {enoughPlayers && !game.winnerAnnouncement ? (
-            <button className="primary full" onClick={props.onNextHand}>
-              Deal The Next Hand
-            </button>
+          {!game.winnerAnnouncement ? (
+            <div className="between-hands-actions">
+              <button
+                className="ghost full edit-blinds-button"
+                type="button"
+                onClick={props.onEditBlinds}
+              >
+                Edit Blind Plan
+              </button>
+              <BuyInOptions
+                embedded
+                game={game}
+                onBuyIn={props.onBuyIn}
+              />
+              {enoughPlayers ? (
+                <button
+                  className="primary full"
+                  type="button"
+                  onClick={props.onNextHand}
+                >
+                  Deal The Next Hand
+                </button>
+              ) : null}
+            </div>
           ) : null}
         </section>
       ) : (
@@ -2378,10 +2405,6 @@ function GameView(props: GameViewProps) {
           </button>
         </section>
       )}
-
-      {!hand && !game.winnerAnnouncement ? (
-        <BuyInOptions game={game} onBuyIn={props.onBuyIn} />
-      ) : null}
 
       <section className="card">
         <div className="hdr">
@@ -2524,8 +2547,9 @@ function BlindEditor({
         <h2 id="blind-editor-title">Edit Blind Plan</h2>
         <p className="muted rule-note">
           Current blinds: {formatRupees(smallBlindFor(game.ante))}/
-          {formatRupees(game.ante)}. This hand keeps its posted blinds. The new
-          plan starts with the next dealt hand.
+          {formatRupees(game.ante)}. {game.hand
+            ? "This hand keeps its posted blinds. The new plan starts with the next dealt hand."
+            : "The new plan starts with the next dealt hand."}
         </p>
         <div className="blind-toggle">
           <label htmlFor="edit-rising-blinds">Blinds Go Up</label>
@@ -2625,9 +2649,11 @@ function BlindEditor({
 function BuyInOptions({
   game,
   onBuyIn,
+  embedded = false,
 }: {
   game: GameState;
   onBuyIn: (playerIndex: number) => void;
+  embedded?: boolean;
 }) {
   const offers = game.players.flatMap((player, index) => {
     const amount = nextBuyIn(game, index);
@@ -2636,7 +2662,9 @@ function BuyInOptions({
   if (!offers.length) return null;
 
   return (
-    <section className="card buy-in-options">
+    <section
+      className={embedded ? "buy-in-options embedded" : "card buy-in-options"}
+    >
       <b>Buy In</b>
       <p className="muted">A busted player can return for half their last buy-in.</p>
       {offers.map(({ player, index, amount }) => (
@@ -2687,7 +2715,7 @@ function WinnerCard({
         <h2 id="winner-title">{winnerText}</h2>
         <p>{formatRupees(announcement.pot)} Pot Awarded</p>
         <button className="primary full" type="button" onClick={onNext}>
-          Deal The Next Hand
+          Next
         </button>
       </section>
     </div>
