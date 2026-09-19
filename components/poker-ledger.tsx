@@ -1289,10 +1289,7 @@ export function PokerLedger() {
       {game?.winnerAnnouncement ? (
         <WinnerCard
           announcement={game.winnerAnnouncement}
-          game={game}
-          onBuyIn={buyIn}
           onNext={startNextHand}
-          onEditBlinds={() => setEditingBlinds(true)}
         />
       ) : null}
       {editingBlinds && game ? (
@@ -2637,11 +2634,9 @@ function BlindEditor({
 function BuyInOptions({
   game,
   onBuyIn,
-  embedded = false,
 }: {
   game: GameState;
   onBuyIn: (playerIndex: number) => void;
-  embedded?: boolean;
 }) {
   const offers = game.players.flatMap((player, index) => {
     const amount = nextBuyIn(game, index);
@@ -2650,7 +2645,7 @@ function BuyInOptions({
   if (!offers.length) return null;
 
   return (
-    <section className={embedded ? "buy-in-options" : "card buy-in-options"}>
+    <section className="card buy-in-options">
       <b>Buy In</b>
       <p className="muted">A busted player can return for half their last buy-in.</p>
       {offers.map(({ player, index, amount }) => (
@@ -2670,16 +2665,10 @@ function BuyInOptions({
 
 function WinnerCard({
   announcement,
-  game,
-  onBuyIn,
   onNext,
-  onEditBlinds,
 }: {
   announcement: WinnerAnnouncement;
-  game: GameState;
-  onBuyIn: (playerIndex: number) => void;
   onNext: () => void;
-  onEditBlinds: () => void;
 }) {
   const winnerText = announcement.split
     ? `${announcement.names.join(" And ")} Win`
@@ -2706,12 +2695,8 @@ function WinnerCard({
         </span>
         <h2 id="winner-title">{winnerText}</h2>
         <p>{formatRupees(announcement.pot)} Pot Awarded</p>
-        <BuyInOptions game={game} onBuyIn={onBuyIn} embedded />
         <button className="primary full" type="button" onClick={onNext}>
           Deal The Next Hand
-        </button>
-        <button className="ghost full" type="button" onClick={onEditBlinds}>
-          Edit Blind Plan
         </button>
       </section>
     </div>

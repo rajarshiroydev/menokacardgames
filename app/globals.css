@@ -1580,20 +1580,11 @@ hr {
   margin-bottom: 14px;
 }
 
-.winner-card .buy-in-options {
-  padding: 12px;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  background: var(--sunk);
-  text-align: left;
-}
-
 .buy-in-options > b {
   font-size: 16px;
 }
 
-.buy-in-options p,
-.winner-card .buy-in-options p {
+.buy-in-options p {
   margin: 4px 0 10px;
   color: var(--muted);
   font-family: var(--sans);
