@@ -1233,6 +1233,122 @@ hr {
   margin-bottom: 6px;
 }
 
+.leaderboard-chart {
+  margin: 18px 0 20px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background:
+    radial-gradient(circle at 92% 0%, rgb(217 169 76 / 9%), transparent 38%),
+    var(--sunk);
+}
+
+.leaderboard-chart figcaption {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 15px;
+}
+
+.leaderboard-chart figcaption b {
+  color: var(--fg);
+  font-family: var(--serif);
+  font-size: 19px;
+  font-weight: 400;
+}
+
+.leaderboard-chart figcaption span {
+  color: var(--dim);
+  font-size: 10px;
+}
+
+.leaderboard-line-plot {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+.leaderboard-grid-line,
+.leaderboard-axis-line,
+.leaderboard-session-tick {
+  stroke: var(--hair);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.leaderboard-zero-axis {
+  stroke: var(--line2);
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+}
+
+.leaderboard-axis-value,
+.leaderboard-axis-title {
+  fill: var(--dim);
+  font-family: var(--mono);
+  font-size: 11px;
+}
+
+.leaderboard-axis-title {
+  fill: var(--muted);
+  font-family: var(--sans);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.leaderboard-player-line {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2.5;
+  vector-effect: non-scaling-stroke;
+}
+
+.leaderboard-player-point {
+  stroke: var(--sunk);
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+}
+
+.leaderboard-line-legend {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px 16px;
+  margin-top: 6px;
+  padding-top: 13px;
+  border-top: 1px solid var(--hair);
+}
+
+.leaderboard-legend-player {
+  display: grid;
+  grid-template-columns: 8px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+
+.leaderboard-legend-player > span {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.leaderboard-legend-player b {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 11px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.leaderboard-legend-player small {
+  font-family: var(--mono);
+  font-size: 9px;
+}
+
 .align-right {
   text-align: right;
 }

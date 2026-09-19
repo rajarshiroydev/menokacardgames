@@ -30,6 +30,7 @@ import {
   nextPlayerToAct,
   pendingIndexes,
   pendingBlindPlan,
+  playerKey,
   playerBuyIns,
   returnToBetweenHands,
   smallBlindFor,
@@ -40,6 +41,7 @@ import {
 import type {
   BlindSchedule,
   GameState,
+  LeaderboardEntry,
   PlayerAction,
   PlayerProfile,
   PokerSession,
@@ -3053,30 +3055,40 @@ function HistoryView({
         ) : loading ? (
           <p className="muted">Loading the shared ledger…</p>
         ) : leaderboard.length ? (
-          leaderboard.map((entry, rank) => (
-            <div className="prow leaderboard-row" key={entry.name}>
-              <span className={`rank ${rank === 0 ? "gold" : ""}`}>
-                {rank + 1}
-              </span>
-              <div className="nm">
-                <b>{entry.name}</b>
-                <small>
-                  {entry.sessions} session{entry.sessions === 1 ? "" : "s"} ·{" "}
-                  {entry.hands} hands · won {entry.wins}
-                </small>
-              </div>
-              <div className="align-right">
-                <b className={entry.net >= 0 ? "pos" : "neg"}>
-                  {entry.net >= 0 ? "+" : ""}
-                  {formatRupees(entry.net)}
-                </b>
-                <div className="muted best">
-                  best {entry.best >= 0 ? "+" : ""}
-                  {formatRupees(entry.best)}
+          <>
+            <LeaderboardChart
+              entries={leaderboard}
+              sessions={history}
+            />
+            {leaderboard.map((entry, rank) => (
+              <div
+                className="prow leaderboard-row"
+                key={entry.playerId ?? entry.name}
+              >
+                <span className={`rank ${rank === 0 ? "gold" : ""}`}>
+                  {rank + 1}
+                </span>
+                <div className="nm">
+                  <b>{entry.name}</b>
+                  <small>
+                    {entry.sessions} session
+                    {entry.sessions === 1 ? "" : "s"} · {entry.hands} hands ·
+                    won {entry.wins}
+                  </small>
+                </div>
+                <div className="align-right">
+                  <b className={entry.net >= 0 ? "pos" : "neg"}>
+                    {entry.net >= 0 ? "+" : ""}
+                    {formatRupees(entry.net)}
+                  </b>
+                  <div className="muted best">
+                    best {entry.best >= 0 ? "+" : ""}
+                    {formatRupees(entry.best)}
+                  </div>
                 </div>
               </div>
-            </div>
-          ))
+            ))}
+          </>
         ) : (
           <p className="muted">
             No Saved Sessions Yet. Finish A Game With “Finish And Save Game
@@ -3142,6 +3154,195 @@ function HistoryView({
         </p>
       </section>
     </>
+  );
+}
+
+function LeaderboardChart({
+  entries,
+  sessions,
+}: {
+  entries: LeaderboardEntry[];
+  sessions: PokerSession[];
+}) {
+  const chartWidth = 480;
+  const chartHeight = 280;
+  const plot = { top: 18, right: 14, bottom: 48, left: 58 };
+  const plotWidth = chartWidth - plot.left - plot.right;
+  const plotHeight = chartHeight - plot.top - plot.bottom;
+  const chronologicalSessions = [...sessions].sort(
+    (a, b) => a.date - b.date,
+  );
+  const keyFor = (playerId: string | undefined, name: string) =>
+    playerId ? `id:${playerId}` : `name:${playerKey(name)}`;
+  const colors = ["#e2ad4f", "#72b9e6", "#83c9a6", "#d8735b", "#b99be8", "#e190bd"];
+  const sortedKeys = entries
+    .map((entry) => keyFor(entry.playerId, entry.name))
+    .sort();
+  const colorByKey = new Map(
+    sortedKeys.map((key, index) => [key, colors[index % colors.length]]),
+  );
+  const totals = new Map(sortedKeys.map((key) => [key, 0]));
+  const series = entries.map((entry) => {
+    const key = keyFor(entry.playerId, entry.name);
+    return {
+      color: colorByKey.get(key) ?? colors[0],
+      entry,
+      key,
+      values: [0],
+    };
+  });
+
+  chronologicalSessions.forEach((session) => {
+    session.results.forEach((result) => {
+      const key = keyFor(result.playerId, result.name);
+      totals.set(key, (totals.get(key) ?? 0) + result.net);
+    });
+    series.forEach((player) => {
+      player.values.push(totals.get(player.key) ?? 0);
+    });
+  });
+
+  const maxMagnitude = Math.max(
+    1,
+    ...series.flatMap((player) => player.values.map(Math.abs)),
+  );
+  const axisMagnitude = Math.max(5_000, Math.ceil(maxMagnitude / 5_000) * 5_000);
+  const yTicks = [axisMagnitude, axisMagnitude / 2, 0, -axisMagnitude / 2, -axisMagnitude];
+  const xFor = (index: number) =>
+    plot.left +
+    (index / Math.max(1, chronologicalSessions.length)) * plotWidth;
+  const yFor = (value: number) =>
+    plot.top + ((axisMagnitude - value) / (axisMagnitude * 2)) * plotHeight;
+  const tickLabel = (value: number) => {
+    if (value === 0) return "₹0";
+    const sign = value > 0 ? "+" : "−";
+    const magnitude = Math.abs(value);
+    return `${sign}₹${magnitude >= 1_000 ? `${magnitude / 1_000}k` : magnitude}`;
+  };
+
+  return (
+    <figure
+      className="leaderboard-chart"
+      aria-label="Overall standings by net profit and loss"
+    >
+      <figcaption>
+        <b>Profit and loss over time</b>
+        <span>Cumulative net after each session</span>
+      </figcaption>
+      <svg
+        className="leaderboard-line-plot"
+        viewBox={`0 0 ${chartWidth} ${chartHeight}`}
+        role="img"
+        aria-labelledby="standings-chart-title standings-chart-description"
+      >
+        <title id="standings-chart-title">Cumulative poker profit and loss</title>
+        <desc id="standings-chart-description">
+          Each colored line shows one player&apos;s cumulative net result after
+          every session.
+        </desc>
+
+        {yTicks.map((tick) => (
+          <g key={tick}>
+            <line
+              className={tick === 0 ? "leaderboard-zero-axis" : "leaderboard-grid-line"}
+              x1={plot.left}
+              x2={chartWidth - plot.right}
+              y1={yFor(tick)}
+              y2={yFor(tick)}
+            />
+            <text
+              className="leaderboard-axis-value"
+              x={plot.left - 10}
+              y={yFor(tick) + 4}
+              textAnchor="end"
+            >
+              {tickLabel(tick)}
+            </text>
+          </g>
+        ))}
+
+        <line
+          className="leaderboard-axis-line"
+          x1={plot.left}
+          x2={plot.left}
+          y1={plot.top}
+          y2={chartHeight - plot.bottom}
+        />
+
+        {Array.from({ length: chronologicalSessions.length + 1 }, (_, index) => (
+          <g key={index}>
+            <line
+              className="leaderboard-session-tick"
+              x1={xFor(index)}
+              x2={xFor(index)}
+              y1={chartHeight - plot.bottom}
+              y2={chartHeight - plot.bottom + 5}
+            />
+            <text
+              className="leaderboard-axis-value"
+              x={xFor(index)}
+              y={chartHeight - plot.bottom + 19}
+              textAnchor="middle"
+            >
+              {index === 0 ? "Start" : index}
+            </text>
+          </g>
+        ))}
+
+        <text
+          className="leaderboard-axis-title"
+          x={plot.left + plotWidth / 2}
+          y={chartHeight - 7}
+          textAnchor="middle"
+        >
+          Sessions played
+        </text>
+
+        {series.map((player) => {
+          const points = player.values
+            .map((value, index) => `${xFor(index)},${yFor(value)}`)
+            .join(" ");
+
+          return (
+            <g key={player.key}>
+              <polyline
+                className="leaderboard-player-line"
+                points={points}
+                stroke={player.color}
+              />
+              {player.values.map((value, index) => (
+                <circle
+                  className="leaderboard-player-point"
+                  cx={xFor(index)}
+                  cy={yFor(value)}
+                  fill={player.color}
+                  key={index}
+                  r={index === player.values.length - 1 ? 4.5 : 3}
+                >
+                  <title>
+                    {player.entry.name}, {index === 0 ? "start" : `session ${index}`}:{" "}
+                    {value >= 0 ? "+" : ""}
+                    {formatRupees(value)}
+                  </title>
+                </circle>
+              ))}
+            </g>
+          );
+        })}
+      </svg>
+      <div className="leaderboard-line-legend">
+        {series.map((player) => (
+          <div className="leaderboard-legend-player" key={player.key}>
+            <span style={{ backgroundColor: player.color }} />
+            <b>{player.entry.name}</b>
+            <small className={player.entry.net >= 0 ? "pos" : "neg"}>
+              {player.entry.net >= 0 ? "+" : ""}
+              {formatRupees(player.entry.net)}
+            </small>
+          </div>
+        ))}
+      </div>
+    </figure>
   );
 }
 
