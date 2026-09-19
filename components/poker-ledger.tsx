@@ -2258,7 +2258,7 @@ function GameView(props: GameViewProps) {
         </button>
       )}
       {!hand ? (
-        <section className="card">
+        <section className="card next-hand-card">
           <b>{enoughPlayers ? "Ready for the next hand" : "Game over"}</b>
           <p className="muted card-note">
             {enoughPlayers

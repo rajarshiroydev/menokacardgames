@@ -845,6 +845,10 @@ hr {
   margin: 6px 0 0;
 }
 
+.next-hand-card .card-note {
+  margin-bottom: 16px;
+}
+
 .tabs {
   display: flex;
   gap: 24px;
