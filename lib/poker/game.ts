@@ -73,10 +73,25 @@ export function buyInPlayer(game: GameState, playerIndex: number) {
   return amount;
 }
 
+function bettingIsClosed(game: GameState) {
+  const hand = game.hand;
+  if (!hand) return true;
+  const active = activeIndexes(game);
+  const funded = active.filter((index) => game.players[index].stack > 0);
+  return (
+    active.length > 1 &&
+    (funded.length === 0 ||
+      (funded.length === 1 &&
+        hand.committed[funded[0]] >= hand.roundHigh))
+  );
+}
+
 export function pendingIndexes(game: GameState) {
   if (!game.hand) return [];
   const hand = game.hand;
-  return activeIndexes(game).filter(
+  const active = activeIndexes(game);
+  if (bettingIsClosed(game)) return [];
+  return active.filter(
     (index) =>
       game.players[index].stack > 0 &&
       (!hand.acted[index] || hand.committed[index] < hand.roundHigh),
@@ -94,6 +109,7 @@ export function nextEligibleIndex(inHand: boolean[], from: number) {
 export function nextPlayerToAct(game: GameState, from: number) {
   const hand = game.hand;
   if (!hand) return null;
+  if (bettingIsClosed(game)) return null;
   for (let offset = 1; offset <= game.players.length; offset += 1) {
     const index = (from + offset) % game.players.length;
     if (

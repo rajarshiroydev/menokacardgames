@@ -418,6 +418,44 @@ describe("positional betting", () => {
     assert.equal(nextPlayerToAct(game, 2), null);
   });
 
+  test("runs out the board when only one funded player remains", () => {
+    const game = gameState();
+    dealNewHand(game);
+    const hand = dealtHand(game);
+    hand.in = [false, true, true];
+    game.players[2].stack = 0;
+    hand.roundHigh = 1_000;
+    hand.committed = [0, 500, 1_000];
+    hand.acted = [true, false, true];
+
+    assert.deepEqual(pendingIndexes(game), [1]);
+    assert.equal(nextPlayerToAct(game, 2), 1);
+
+    hand.committed[1] = 1_000;
+    assert.deepEqual(pendingIndexes(game), []);
+    assert.equal(nextPlayerToAct(game, 2), null);
+
+    hand.stage = 1;
+    hand.committed = [0, 0, 0];
+    hand.roundHigh = 0;
+    hand.acted = [false, false, false];
+    assert.deepEqual(pendingIndexes(game), []);
+    assert.equal(nextPlayerToAct(game, hand.dealerIndex), null);
+  });
+
+  test("keeps betting open while two funded players can respond", () => {
+    const game = gameState();
+    dealNewHand(game);
+    const hand = dealtHand(game);
+    game.players[2].stack = 0;
+    hand.roundHigh = 100;
+    hand.committed = [100, 100, 100];
+    hand.acted = [false, false, true];
+
+    assert.deepEqual(pendingIndexes(game), [0, 1]);
+    assert.equal(nextPlayerToAct(game, 2), 0);
+  });
+
   test("requires a big blind opening bet after the flop", () => {
     const game = gameState();
     dealNewHand(game);
