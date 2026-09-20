@@ -94,3 +94,31 @@ Reconciliation:
 | Legacy sessions retained | 28 |
 
 An idempotent rerun of the player and session copy created no duplicate profiles or sessions. Browser verification showed 9 private players, 24 private sessions and the expected standings/session history.
+
+## 0004 database-enforced isolation
+
+- Date: 2026-09-21
+- Project: `wispy-morning-76468301`
+- Isolated branch: `multi-user-auth` (`br-little-rain-ay5fufwv`)
+- Production changed: no
+- Migration: `migrations/0004_database_enforced_isolation.sql`
+
+The application now connects as the SQL-created `menoka_app` role. The role has login permission but no superuser, role-management, database-creation or `BYPASSRLS` capability and does not inherit `neon_superuser`. The runtime can use only the account, player and session operations required by the current APIs. Migration credentials remain separate.
+
+Every application query runs in a transaction that sets the server-verified Neon Auth UUID with transaction-local scope. Row-level policies map that UUID to the internal account and deny rows owned by any other account. Existing explicit owner predicates remain in the queries as an additional application check.
+
+Isolation rehearsal results:
+
+| Check | Result |
+| --- | --- |
+| No authenticated transaction context | Zero account and player rows visible |
+| Account A reads Account B/player B | Zero rows |
+| Account B reads Account A/player A | Zero rows |
+| Account A updates Account B player by guessed ID | Zero rows |
+| Account A inserts a player owned by Account B | Rejected by row policy |
+| Runtime reads migration ledger | Permission denied |
+| Context after pooled HTTP connection reuse | Cleared; zero rows without a new context |
+| Browser with restricted credential | 9 players and 24 sessions loaded successfully |
+| Isolation fixtures remaining after test | 0 |
+
+The rehearsal also found that roles created through Neon's role API inherit `neon_superuser` and therefore bypass row security. That role type is explicitly rejected for runtime use. The application role must be created through SQL with the attributes recorded in the migration README, then given an independently initialized credential.

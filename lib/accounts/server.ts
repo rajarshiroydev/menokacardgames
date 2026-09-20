@@ -1,6 +1,6 @@
 import "server-only";
 
-import { getDatabase } from "@/lib/poker/database";
+import { runAsAuthenticatedUser } from "@/lib/poker/database";
 
 import {
   type AccountLifecycleState,
@@ -31,18 +31,20 @@ export async function provisionHostAccount(authUserId: unknown) {
     throw new Error("The authenticated user has an invalid identifier");
   }
 
-  const sql = getDatabase();
-  const rows = (await sql`
-    INSERT INTO accounts (auth_user_id)
-    VALUES (${authUserId}::uuid)
-    ON CONFLICT (auth_user_id) DO UPDATE
-      SET auth_user_id = EXCLUDED.auth_user_id
-    RETURNING
-      id,
-      auth_user_id,
-      lifecycle_state,
-      deletion_requested_at
-  `) as AccountRow[];
+  const [result] = await runAsAuthenticatedUser(authUserId, (sql) => [
+    sql`
+      INSERT INTO accounts (auth_user_id)
+      VALUES (${authUserId}::uuid)
+      ON CONFLICT (auth_user_id) DO UPDATE
+        SET auth_user_id = EXCLUDED.auth_user_id
+      RETURNING
+        id,
+        auth_user_id,
+        lifecycle_state,
+        deletion_requested_at
+    `,
+  ]);
+  const rows = result as AccountRow[];
 
   if (!rows[0]) throw new Error("Could not provision the host account");
   return mapAccount(rows[0]);

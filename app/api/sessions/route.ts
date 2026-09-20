@@ -1,5 +1,5 @@
 import { requireHostAccount } from "@/lib/auth/server";
-import { getDatabase } from "@/lib/poker/database";
+import { runAsAuthenticatedUser } from "@/lib/poker/database";
 import { playerNameKey } from "@/lib/poker/player-validation";
 import {
   MAX_SESSIONS_PER_REQUEST,
@@ -53,10 +53,13 @@ export async function GET() {
   const authResult = await requireHostAccount();
   if ("response" in authResult) return authResult.response;
   const ownerId = authResult.account.id;
+  const authUserId = authResult.session.user.id;
 
   try {
-    const sql = getDatabase();
-    const rows = (await sql`
+    const [sessionsResult, counterResult] = await runAsAuthenticatedUser(
+      authUserId,
+      (sql) => [
+        sql`
         SELECT
           id,
           game_name,
@@ -72,12 +75,18 @@ export async function GET() {
         FROM poker_sessions
         WHERE owner_id = ${ownerId}::uuid
         ORDER BY played_at DESC, created_at DESC
-      `) as SessionRow[];
-    const [counter] = (await sql`
-      SELECT next_session_number
-      FROM accounts
-      WHERE id = ${ownerId}::uuid
-    `) as Array<{ next_session_number: number | string }>;
+        `,
+        sql`
+          SELECT next_session_number
+          FROM accounts
+          WHERE id = ${ownerId}::uuid
+        `,
+      ],
+    );
+    const rows = sessionsResult as SessionRow[];
+    const [counter] = counterResult as Array<{
+      next_session_number: number | string;
+    }>;
     const allSessions = rows.map(mapSession);
     const sessions = allSessions.filter((session) => !session.discardedAt);
     const discardedSessions = allSessions.filter(
@@ -97,9 +106,9 @@ export async function POST(request: Request) {
   const authResult = await requireHostAccount();
   if ("response" in authResult) return authResult.response;
   const ownerId = authResult.account.id;
+  const authUserId = authResult.session.user.id;
 
   try {
-    const sql = getDatabase();
     const body = (await request.json()) as {
       sessions?: unknown[];
     };
@@ -135,7 +144,7 @@ export async function POST(request: Request) {
     });
 
     if (missingPlayerNames.size) {
-      await sql.transaction(
+      await runAsAuthenticatedUser(authUserId, (sql) =>
         [...missingPlayerNames].map(
           ([nameKey, name]) => sql`
             INSERT INTO players (owner_id, name, name_key)
@@ -147,11 +156,18 @@ export async function POST(request: Request) {
       );
     }
 
-    const playerRows = (await sql`
-      SELECT id, name, name_key
-      FROM players
-      WHERE owner_id = ${ownerId}::uuid
-    `) as Array<{ id: string; name: string; name_key: string }>;
+    const [playersResult] = await runAsAuthenticatedUser(authUserId, (sql) => [
+      sql`
+        SELECT id, name, name_key
+        FROM players
+        WHERE owner_id = ${ownerId}::uuid
+      `,
+    ]);
+    const playerRows = playersResult as Array<{
+      id: string;
+      name: string;
+      name_key: string;
+    }>;
     const playersById = new Map(playerRows.map((player) => [player.id, player]));
     const playersByName = new Map(
       playerRows.map((player) => [player.name_key, player]),
@@ -184,9 +200,9 @@ export async function POST(request: Request) {
       }),
     }));
 
-    const results = await sql.transaction(
-        resolvedSessions.map(
-          (session) => sql`
+    const results = await runAsAuthenticatedUser(authUserId, (sql) =>
+      resolvedSessions.map(
+        (session) => sql`
             WITH owner_lock AS MATERIALIZED (
               SELECT pg_advisory_xact_lock(
                 hashtextextended(${ownerId}, 0)
@@ -236,7 +252,7 @@ export async function POST(request: Request) {
             ON CONFLICT (owner_id, id) WHERE owner_id IS NOT NULL DO NOTHING
             RETURNING id
           `,
-        ),
+      ),
     );
     return json({
       saved: results.reduce((count, rows) => count + rows.length, 0),
@@ -251,6 +267,7 @@ export async function PATCH(request: Request) {
   const authResult = await requireHostAccount();
   if ("response" in authResult) return authResult.response;
   const ownerId = authResult.account.id;
+  const authUserId = authResult.session.user.id;
 
   try {
     const body = (await request.json()) as {
@@ -265,10 +282,9 @@ export async function PATCH(request: Request) {
       return json({ error: "Invalid session action" }, 400);
     }
 
-    const sql = getDatabase();
-    const rows =
+    const [result] = await runAsAuthenticatedUser(authUserId, (sql) => [
       body.action === "discard"
-        ? await sql`
+        ? sql`
             UPDATE poker_sessions
             SET discarded_at = now()
             WHERE id = ${id}
@@ -276,14 +292,16 @@ export async function PATCH(request: Request) {
               AND discarded_at IS NULL
             RETURNING id
           `
-        : await sql`
+        : sql`
             UPDATE poker_sessions
             SET discarded_at = NULL
             WHERE id = ${id}
               AND owner_id = ${ownerId}::uuid
               AND discarded_at IS NOT NULL
             RETURNING id
-          `;
+          `,
+    ]);
+    const rows = result;
 
     if (!rows.length) {
       return json(
@@ -307,6 +325,7 @@ export async function DELETE(request: Request) {
   const authResult = await requireHostAccount();
   if ("response" in authResult) return authResult.response;
   const ownerId = authResult.account.id;
+  const authUserId = authResult.session.user.id;
 
   try {
     const deletionPassword =
@@ -329,14 +348,16 @@ export async function DELETE(request: Request) {
       return json({ error: "Invalid session id" }, 400);
     }
 
-    const sql = getDatabase();
-    const rows = await sql`
-      DELETE FROM poker_sessions
-      WHERE id = ${id}
-        AND owner_id = ${ownerId}::uuid
-        AND discarded_at IS NOT NULL
-      RETURNING id
-    `;
+    const [result] = await runAsAuthenticatedUser(authUserId, (sql) => [
+      sql`
+        DELETE FROM poker_sessions
+        WHERE id = ${id}
+          AND owner_id = ${ownerId}::uuid
+          AND discarded_at IS NOT NULL
+        RETURNING id
+      `,
+    ]);
+    const rows = result;
     if (!rows.length) {
       return json({ error: "Discarded session not found" }, 404);
     }

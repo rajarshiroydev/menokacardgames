@@ -1,5 +1,5 @@
 import { requireHostAccount } from "@/lib/auth/server";
-import { getDatabase } from "@/lib/poker/database";
+import { runAsAuthenticatedUser } from "@/lib/poker/database";
 import {
   cleanPlayerName,
   playerNameKey,
@@ -40,29 +40,32 @@ export async function GET() {
   const authResult = await requireHostAccount();
   if ("response" in authResult) return authResult.response;
   const ownerId = authResult.account.id;
+  const authUserId = authResult.session.user.id;
 
   try {
-    const sql = getDatabase();
-    const rows = (await sql`
-      SELECT
-        player.id,
-        player.name,
-        player.created_at,
-        player.deleted_at,
-        EXISTS (
-          SELECT 1
-          FROM poker_sessions AS session
-          CROSS JOIN LATERAL jsonb_array_elements(session.results) AS result
-          WHERE session.owner_id = ${ownerId}::uuid
-            AND result->>'playerId' = player.id
-        ) AS has_history
-      FROM players AS player
-      WHERE player.owner_id = ${ownerId}::uuid
-      ORDER BY
-        player.deleted_at NULLS FIRST,
-        lower(player.name),
-        player.created_at
-    `) as PlayerRow[];
+    const [result] = await runAsAuthenticatedUser(authUserId, (sql) => [
+      sql`
+        SELECT
+          player.id,
+          player.name,
+          player.created_at,
+          player.deleted_at,
+          EXISTS (
+            SELECT 1
+            FROM poker_sessions AS session
+            CROSS JOIN LATERAL jsonb_array_elements(session.results) AS result
+            WHERE session.owner_id = ${ownerId}::uuid
+              AND result->>'playerId' = player.id
+          ) AS has_history
+        FROM players AS player
+        WHERE player.owner_id = ${ownerId}::uuid
+        ORDER BY
+          player.deleted_at NULLS FIRST,
+          lower(player.name),
+          player.created_at
+      `,
+    ]);
+    const rows = result as PlayerRow[];
 
     const profiles = rows.map(mapPlayer);
     const discardedPlayers = profiles.filter((player) => player.discardedAt);
@@ -80,6 +83,7 @@ export async function POST(request: Request) {
   const authResult = await requireHostAccount();
   if ("response" in authResult) return authResult.response;
   const ownerId = authResult.account.id;
+  const authUserId = authResult.session.user.id;
 
   try {
     const body = (await request.json()) as { name?: unknown };
@@ -96,14 +100,16 @@ export async function POST(request: Request) {
       );
     }
 
-    const sql = getDatabase();
-    const rows = (await sql`
-      INSERT INTO players (owner_id, name, name_key)
-      VALUES (${ownerId}::uuid, ${name}, ${playerNameKey(name)})
-      ON CONFLICT (owner_id, name_key) WHERE owner_id IS NOT NULL DO UPDATE
-      SET name = EXCLUDED.name, deleted_at = NULL
-      RETURNING id, name, created_at, deleted_at
-    `) as PlayerRow[];
+    const [result] = await runAsAuthenticatedUser(authUserId, (sql) => [
+      sql`
+        INSERT INTO players (owner_id, name, name_key)
+        VALUES (${ownerId}::uuid, ${name}, ${playerNameKey(name)})
+        ON CONFLICT (owner_id, name_key) WHERE owner_id IS NOT NULL DO UPDATE
+        SET name = EXCLUDED.name, deleted_at = NULL
+        RETURNING id, name, created_at, deleted_at
+      `,
+    ]);
+    const rows = result as PlayerRow[];
 
     return json({ player: mapPlayer(rows[0]) }, 201);
   } catch (error) {
@@ -116,6 +122,7 @@ export async function PATCH(request: Request) {
   const authResult = await requireHostAccount();
   if ("response" in authResult) return authResult.response;
   const ownerId = authResult.account.id;
+  const authUserId = authResult.session.user.id;
 
   try {
     const body = (await request.json()) as {
@@ -131,25 +138,26 @@ export async function PATCH(request: Request) {
       return json({ error: "Invalid player action" }, 400);
     }
 
-    const sql = getDatabase();
-    const rows =
+    const [result] = await runAsAuthenticatedUser(authUserId, (sql) => [
       action === "discard"
-        ? ((await sql`
+        ? sql`
             UPDATE players
             SET deleted_at = now()
             WHERE id = ${id}
               AND owner_id = ${ownerId}::uuid
               AND deleted_at IS NULL
             RETURNING id, name, created_at, deleted_at
-          `) as PlayerRow[])
-        : ((await sql`
+          `
+        : sql`
             UPDATE players
             SET deleted_at = NULL
             WHERE id = ${id}
               AND owner_id = ${ownerId}::uuid
               AND deleted_at IS NOT NULL
             RETURNING id, name, created_at, deleted_at
-          `) as PlayerRow[]);
+          `,
+    ]);
+    const rows = result as PlayerRow[];
 
     if (!rows.length) {
       return json(
@@ -173,6 +181,7 @@ export async function DELETE(request: Request) {
   const authResult = await requireHostAccount();
   if ("response" in authResult) return authResult.response;
   const ownerId = authResult.account.id;
+  const authUserId = authResult.session.user.id;
 
   try {
     const deletionPassword =
@@ -195,22 +204,24 @@ export async function DELETE(request: Request) {
       return json({ error: "Invalid player id" }, 400);
     }
 
-    const sql = getDatabase();
-    const playerRows = (await sql`
-      SELECT
-        player.id,
-        player.deleted_at,
-        EXISTS (
-          SELECT 1
-          FROM poker_sessions AS session
-          CROSS JOIN LATERAL jsonb_array_elements(session.results) AS result
-          WHERE session.owner_id = ${ownerId}::uuid
-            AND result->>'playerId' = player.id
-        ) AS has_history
-      FROM players AS player
-      WHERE player.id = ${id}
-        AND player.owner_id = ${ownerId}::uuid
-    `) as Array<{
+    const [lookupResult] = await runAsAuthenticatedUser(authUserId, (sql) => [
+      sql`
+        SELECT
+          player.id,
+          player.deleted_at,
+          EXISTS (
+            SELECT 1
+            FROM poker_sessions AS session
+            CROSS JOIN LATERAL jsonb_array_elements(session.results) AS result
+            WHERE session.owner_id = ${ownerId}::uuid
+              AND result->>'playerId' = player.id
+          ) AS has_history
+        FROM players AS player
+        WHERE player.id = ${id}
+          AND player.owner_id = ${ownerId}::uuid
+      `,
+    ]);
+    const playerRows = lookupResult as Array<{
       deleted_at: Date | string | null;
       has_history: boolean;
       id: string;
@@ -231,20 +242,23 @@ export async function DELETE(request: Request) {
       );
     }
 
-    const rows = await sql`
-      DELETE FROM players AS player
-      WHERE player.id = ${id}
-        AND player.owner_id = ${ownerId}::uuid
-        AND player.deleted_at IS NOT NULL
-        AND NOT EXISTS (
-          SELECT 1
-          FROM poker_sessions AS session
-          CROSS JOIN LATERAL jsonb_array_elements(session.results) AS result
-          WHERE session.owner_id = ${ownerId}::uuid
-            AND result->>'playerId' = player.id
-        )
-      RETURNING player.id
-    `;
+    const [deleteResult] = await runAsAuthenticatedUser(authUserId, (sql) => [
+      sql`
+        DELETE FROM players AS player
+        WHERE player.id = ${id}
+          AND player.owner_id = ${ownerId}::uuid
+          AND player.deleted_at IS NOT NULL
+          AND NOT EXISTS (
+            SELECT 1
+            FROM poker_sessions AS session
+            CROSS JOIN LATERAL jsonb_array_elements(session.results) AS result
+            WHERE session.owner_id = ${ownerId}::uuid
+              AND result->>'playerId' = player.id
+          )
+        RETURNING player.id
+      `,
+    ]);
+    const rows = deleteResult;
     if (!rows.length) {
       return json(
         { error: "The player changed before permanent deletion; try again" },
