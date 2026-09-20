@@ -124,3 +124,30 @@ Isolation rehearsal results:
 The rehearsal also found that roles created through Neon's role API inherit `neon_superuser` and therefore bypass row security. That role type is explicitly rejected for runtime use. The application role must be created through SQL with the attributes recorded in the migration README, then given an independently initialized credential.
 
 The unused API-created rehearsal role was deleted after explicit user approval. Only the restricted `menoka_app` runtime role remains in application configuration.
+
+## 0005 normalized accounting
+
+- Date: 2026-09-21
+- Project: `wispy-morning-76468301`
+- Isolated branch: `multi-user-auth` (`br-little-rain-ay5fufwv`)
+- Production changed: no
+- Migration: `migrations/0005_normalized_accounting.sql`
+
+The migration created owner-bound session results and ordered buy-in events. It rejected incomplete player references and required each owned legacy result and whole session to reconcile before backfill. The original JSON remains on the session as an immutable compatibility snapshot; application reads now use the relational records.
+
+Reconciliation:
+
+| Check | Result |
+| --- | ---: |
+| Owned sessions | 24 |
+| Normalized results | 72 |
+| Buy-in events | 72 |
+| Unbalanced sessions | 0 |
+| Buy-in/event investment mismatches | 0 |
+| Relational/snapshot result mismatches | 0 |
+| Accounting row policies | 2 |
+| Migration version recorded | yes |
+
+A restricted `menoka_app` smoke test created a temporary account and saved a balanced two-player session through the same atomic query used by the API. The first request saved one session, two results and two events; repeating the same client session ID saved zero rows and left the next local number at 2. Cleanup removed the temporary account and every dependent row.
+
+The initial cleanup attempt exposed that an immediate `RESTRICT` player-history foreign key could be checked before the parallel session cascade during whole-account deletion. The final migration uses a deferred `NO ACTION` check instead. It still rejects direct deletion of a player with history at transaction commit, while allowing all account-owned rows to cascade together. Runtime grants on both accounting tables are limited to `SELECT` and `INSERT`.

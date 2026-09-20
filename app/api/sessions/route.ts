@@ -1,4 +1,5 @@
 import { requireHostAccount } from "@/lib/auth/server";
+import { deriveSessionAccounting } from "@/lib/poker/accounting";
 import { runAsAuthenticatedUser } from "@/lib/poker/database";
 import { playerNameKey } from "@/lib/poker/player-validation";
 import {
@@ -70,11 +71,41 @@ export async function GET() {
           starting_stack,
           hands,
           blind_history,
-          results,
+          normalized.results,
           discarded_at
-        FROM poker_sessions
-        WHERE owner_id = ${ownerId}::uuid
-        ORDER BY played_at DESC, created_at DESC
+        FROM poker_sessions AS session
+        JOIN LATERAL (
+          SELECT jsonb_agg(
+            jsonb_build_object(
+              'playerId', result.player_id,
+              'name', result.player_name,
+              'net', result.net,
+              'end', result.ending_stack
+            ) || CASE
+              WHEN buy_ins.buy_ins IS NULL
+                OR (
+                  jsonb_array_length(buy_ins.buy_ins) = 1
+                  AND (buy_ins.buy_ins->>0)::bigint = session.starting_stack
+                ) THEN '{}'::jsonb
+              ELSE jsonb_build_object('buyIns', buy_ins.buy_ins)
+            END
+            ORDER BY result.position
+          ) AS results
+          FROM session_results AS result
+          LEFT JOIN LATERAL (
+            SELECT jsonb_agg(event.amount ORDER BY event.sequence) AS buy_ins
+            FROM buy_in_events AS event
+            WHERE event.owner_id = result.owner_id
+              AND event.session_record_id = result.session_record_id
+              AND event.player_id = result.player_id
+          ) AS buy_ins ON true
+          WHERE result.owner_id = session.owner_id
+            AND result.session_record_id = session.record_id
+            AND result.accounting_status IN ('verified', 'legacy_verified')
+          HAVING count(*) > 0
+        ) AS normalized ON true
+        WHERE session.owner_id = ${ownerId}::uuid
+        ORDER BY session.played_at DESC, session.created_at DESC
         `,
         sql`
           SELECT next_session_number
@@ -201,8 +232,9 @@ export async function POST(request: Request) {
     }));
 
     const results = await runAsAuthenticatedUser(authUserId, (sql) =>
-      resolvedSessions.map(
-        (session) => sql`
+      resolvedSessions.map((session) => {
+        const accounting = deriveSessionAccounting(session);
+        return sql`
             WITH owner_lock AS MATERIALIZED (
               SELECT pg_advisory_xact_lock(
                 hashtextextended(${ownerId}, 0)
@@ -223,8 +255,9 @@ export async function POST(request: Request) {
                 AND lifecycle_state = 'active'
                 AND NOT EXISTS (SELECT 1 FROM existing)
               RETURNING next_session_number - 1 AS session_number
-            )
-            INSERT INTO poker_sessions (
+            ),
+            inserted_session AS (
+              INSERT INTO poker_sessions (
               owner_id,
               owner_session_number,
               id,
@@ -236,23 +269,81 @@ export async function POST(request: Request) {
               hands,
               blind_history,
               results
-            ) SELECT
-              ${ownerId}::uuid,
-              allocated.session_number,
-              ${session.id},
-              ${session.name || null},
-              ${new Date(session.date).toISOString()},
-              ${new Date(session.ended).toISOString()},
-              ${session.ante},
-              ${session.startStack},
-              ${session.hands},
-              ${session.blindHistory ? JSON.stringify(session.blindHistory) : null}::jsonb,
-              ${JSON.stringify(session.results)}::jsonb
-            FROM allocated
-            ON CONFLICT (owner_id, id) WHERE owner_id IS NOT NULL DO NOTHING
-            RETURNING id
-          `,
-      ),
+              ) SELECT
+                ${ownerId}::uuid,
+                allocated.session_number,
+                ${session.id},
+                ${session.name || null},
+                ${new Date(session.date).toISOString()},
+                ${new Date(session.ended).toISOString()},
+                ${session.ante},
+                ${session.startStack},
+                ${session.hands},
+                ${session.blindHistory ? JSON.stringify(session.blindHistory) : null}::jsonb,
+                ${JSON.stringify(session.results)}::jsonb
+              FROM allocated
+              ON CONFLICT (owner_id, id) WHERE owner_id IS NOT NULL DO NOTHING
+              RETURNING record_id, id
+            ),
+            source_results AS MATERIALIZED (
+              SELECT result.value, result.position
+              FROM jsonb_array_elements(
+                ${JSON.stringify(accounting.results)}::jsonb
+              ) WITH ORDINALITY AS result(value, position)
+            ),
+            inserted_results AS (
+              INSERT INTO session_results (
+                owner_id,
+                session_record_id,
+                player_id,
+                position,
+                player_name,
+                invested,
+                ending_stack,
+                accounting_status
+              )
+              SELECT
+                ${ownerId}::uuid,
+                inserted_session.record_id,
+                source.value->>'playerId',
+                source.position,
+                source.value->>'name',
+                (source.value->>'invested')::bigint,
+                (source.value->>'end')::bigint,
+                'verified'
+              FROM inserted_session
+              CROSS JOIN source_results AS source
+              RETURNING owner_id, session_record_id, player_id
+            ),
+            inserted_buy_ins AS (
+              INSERT INTO buy_in_events (
+                owner_id,
+                session_record_id,
+                player_id,
+                sequence,
+                kind,
+                amount
+              )
+              SELECT
+                inserted.owner_id,
+                inserted.session_record_id,
+                inserted.player_id,
+                buy_in.position,
+                CASE WHEN buy_in.position = 1 THEN 'initial' ELSE 'rebuy' END,
+                buy_in.value::bigint
+              FROM inserted_results AS inserted
+              JOIN source_results AS source
+                ON source.value->>'playerId' = inserted.player_id
+              CROSS JOIN LATERAL jsonb_array_elements_text(
+                source.value->'buyIns'
+              ) WITH ORDINALITY AS buy_in(value, position)
+              RETURNING 1
+            )
+            SELECT inserted_session.id
+            FROM inserted_session
+            CROSS JOIN (SELECT count(*) FROM inserted_buy_ins) AS completed
+          `;
+      }),
     );
     return json({
       saved: results.reduce((count, rows) => count + rows.length, 0),

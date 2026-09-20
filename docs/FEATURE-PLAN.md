@@ -1,6 +1,6 @@
 # Feature plan: accounts and normalized standings
 
-Updated: 2026-09-20. Status: implementation in progress on `feature/multi-user-transition`; production unchanged.
+Updated: 2026-09-21. Status: implementation in progress on `feature/multi-user-transition`; production unchanged.
 
 This is the canonical living feature-planning document. Add future feature plans here, record decisions and acceptance criteria, and update status as work progresses. Detailed designs may be linked from here; avoid competing roadmaps.
 
@@ -15,7 +15,7 @@ This is the canonical living feature-planning document. Add future feature plans
 - Use Neon Managed Better Auth with email magic links only for the initial login flow. Password and social login are out of the initial scope.
 - Account deletion immediately locks the ledger, hides it from normal access and signs the host out. Recovery is available for 30 days, followed by permanent automated deletion of the account and all owned application data. Provider backups age out under the provider's documented retention schedule.
 
-## Current behavior verified from source
+## Baseline behavior verified at planning start
 
 The app uses Next.js 16, React 19, Vercel and Neon Postgres. `components/poker-ledger.tsx` combines UI and orchestration. `lib/poker/game.ts` contains game rules and leaderboard calculations. `schema.sql` defines global players and poker sessions; route handlers in `app/api/players` and `app/api/sessions` access them.
 
@@ -178,7 +178,7 @@ Official sources checked 2026-09-20; recheck during implementation/release:
 | Login methods/provider | Confirmed: Neon Managed Better Auth with email magic links only |
 | Historical session ownership | A–G and J–L rehearsed into Rajarshi's isolated ledger; M belongs to a separate Emon-led group; H–I and the Emon group host account remain unresolved. No production backfill |
 | Account deletion/backup retention | Confirmed: immediate lock/hide/sign-out, 30-day recovery, then automated permanent purge; disclose provider backup aging schedule before release |
-| Multi-user transition | In progress on `feature/multi-user-transition`; Step 3G account-scoped browser storage complete, normalized accounting records next |
+| Multi-user transition | In progress on `feature/multi-user-transition`; Step 3H normalized accounting complete, normalized standings next |
 | Sporty glass design | Paused on `ui-sporty-glass-refresh` |
 | Cloud draft sync / device handoff | Deferred; needs conflict policy |
 | Shared ledgers/invitations | Out of initial scope; add only if requested |
@@ -213,3 +213,5 @@ For each future feature, add: date, problem, accepted behavior, non-goals, archi
 2026-09-21 implementation step 3F: Added transaction-local verified-user context to all application database operations and enabled Postgres row-level security for accounts, players, sessions, migration mappings and audit records. The app now uses a least-privilege SQL-created `menoka_app` role; it has no administrative or `BYPASSRLS` capability and cannot read the migration ledger. A real two-account rehearsal verified blocked foreign reads, updates and inserts and confirmed that context is cleared across pooled HTTP connection reuse. After test cleanup, the restricted local browser loaded the expected nine players and 24 sessions. Production remains unchanged. Next: key active-game and legacy browser storage by account, disable automatic unowned uploads and define an explicit adoption flow.
 
 2026-09-21 implementation step 3G: Active games in browser storage are now keyed by the verified internal account ID, so switching accounts on one device cannot load another host's draft. The old global active-game and history keys remain unassigned and are never uploaded during page load. When legacy data exists, the home screen explains its status: an unfinished game can be explicitly adopted only when the account has no current game, while saved sessions open a review dialog where the host checks individual sessions after seeing their date, stakes and players. Only checked sessions are mapped into the current account; unchecked sessions remain unassigned on the device. The unused privileged rehearsal role was deleted with user approval. Production remains unchanged. Next: normalize session results and buy-in events, derive accounting values on the server and add integrity constraints needed by percentage rankings.
+
+2026-09-21 implementation step 3H: Added owner-bound `session_results` and ordered `buy_in_events` records and rehearsed the backfill on the isolated Neon branch. All 24 owned sessions became 72 verified relational results and 72 buy-in events with zero player, event, snapshot or whole-session balance mismatches. Reads now use the relational records; the old JSON is retained only as an immutable compatibility snapshot. New saves validate distinct participants and chip conservation, derive investment and net relationships on the server, and insert the session, results and buy-ins atomically. A restricted-role smoke test saved one temporary game, verified an idempotent retry saved zero duplicates and consumed no second number, then removed every fixture. That test also caught and fixed an account-deletion ordering issue by deferring the player-history foreign-key check until transaction end. Runtime access to accounting tables is limited to select and insert. The local browser still shows 9 players and 24 sessions. Production remains unchanged. Next: replace raw-chip ranking and its default graph with average session return while retaining raw chips as supporting information.

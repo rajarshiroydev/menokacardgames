@@ -52,10 +52,9 @@ export async function GET() {
           player.deleted_at,
           EXISTS (
             SELECT 1
-            FROM poker_sessions AS session
-            CROSS JOIN LATERAL jsonb_array_elements(session.results) AS result
-            WHERE session.owner_id = ${ownerId}::uuid
-              AND result->>'playerId' = player.id
+            FROM session_results AS result
+            WHERE result.owner_id = ${ownerId}::uuid
+              AND result.player_id = player.id
           ) AS has_history
         FROM players AS player
         WHERE player.owner_id = ${ownerId}::uuid
@@ -211,10 +210,9 @@ export async function DELETE(request: Request) {
           player.deleted_at,
           EXISTS (
             SELECT 1
-            FROM poker_sessions AS session
-            CROSS JOIN LATERAL jsonb_array_elements(session.results) AS result
-            WHERE session.owner_id = ${ownerId}::uuid
-              AND result->>'playerId' = player.id
+            FROM session_results AS result
+            WHERE result.owner_id = ${ownerId}::uuid
+              AND result.player_id = player.id
           ) AS has_history
         FROM players AS player
         WHERE player.id = ${id}
@@ -250,10 +248,9 @@ export async function DELETE(request: Request) {
           AND player.deleted_at IS NOT NULL
           AND NOT EXISTS (
             SELECT 1
-            FROM poker_sessions AS session
-            CROSS JOIN LATERAL jsonb_array_elements(session.results) AS result
-            WHERE session.owner_id = ${ownerId}::uuid
-              AND result->>'playerId' = player.id
+            FROM session_results AS result
+            WHERE result.owner_id = ${ownerId}::uuid
+              AND result.player_id = player.id
           )
         RETURNING player.id
       `,

@@ -17,6 +17,8 @@ Migration workflow:
 
 `0004_database_enforced_isolation.sql` enables row-level security, creates the transaction-local authenticated-user context helpers and grants only the tables and operations used by the application to the `menoka_app` role. Create that role with SQL as an unprivileged login (`NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS`) before applying the migration, then initialize its password through Neon. Do not use a role created by Neon's role API for application traffic because those roles inherit `neon_superuser` and bypass row security. The migration refuses an administrative or `BYPASSRLS` role. Keep migration credentials separate because the table owner deliberately retains full visibility for reviewed migrations and reconciliation.
 
+`0005_normalized_accounting.sql` creates owner-bound session-result and buy-in-event records, backfills every owned session and aborts unless player references, individual investments and whole-session chip totals reconcile. The relational records become authoritative for reads and analytics; `poker_sessions.results` remains an immutable compatibility snapshot during the transition.
+
 Data migrations under `migrations/data/` require a reviewed ownership manifest and an explicit target account ID. Run `0003_backfill_rajarshi_reviewed_history.sql` with `psql -v target_account_id=<internal-account-uuid>`. It clones the approved records, keeps source rows unowned, records provenance and aborts if its reconciliation checks fail.
 
 Rollback during development is branch reset. Production rollback must use the release plan's authenticated read-only mode and reconciled forward migration; do not blindly drop ownership structures after owner-scoped writes exist.
