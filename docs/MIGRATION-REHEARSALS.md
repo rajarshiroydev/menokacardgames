@@ -38,3 +38,30 @@ Post-migration verification:
 The migration was intentionally expand-only. It created the account lifecycle, nullable ownership keys, owner-local indexes, migration provenance and audit foundations. It did not assign ownership, create application accounts, alter historical results or relax the legacy global uniqueness constraints used by the current API.
 
 Rollback for this development rehearsal is resetting the isolated Neon branch. Do not use a destructive down migration after owner-scoped writes exist. Production application requires separate authorization, a fresh backup/restore rehearsal and the coordinated cutover described in the feature plan.
+
+## 0002 owner-scoped keys
+
+- Date: 2026-09-20
+- Project: `wispy-morning-76468301`
+- Isolated branch: `multi-user-auth` (`br-little-rain-ay5fufwv`)
+- Production changed: no
+- Migration: `migrations/0002_owner_scoped_keys.sql`
+
+The migration removed global player-name and client-session-ID uniqueness, added an internal session primary key, and added an account-local session-number counter. The application was changed in the same step so every player and session read, create, discard, restore and permanent-delete query includes the verified account ID.
+
+Isolation rehearsal results:
+
+| Check | Result |
+| --- | --- |
+| Same normalized player name in two accounts | Passed |
+| Same client session ID in two accounts | Passed |
+| Foreign-owner player mutation | Matched zero rows |
+| One owner's session discard affected the other | No |
+| Retried session save duplicated the session | No |
+| Retried session save consumed another display number | No |
+| Isolation fixtures remaining after test | 0 |
+| Legacy players preserved and unowned | 13 |
+| Legacy sessions preserved and unowned | 28 |
+| Application accounts after test cleanup | 1 |
+
+The authenticated browser showed zero players and zero sessions after cutover, confirming that unowned legacy history is no longer returned by the application. This is the expected pre-backfill state. Row-level security and restricted runtime credentials remain required defense-in-depth work before deployment.

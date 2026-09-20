@@ -24,43 +24,11 @@ type SessionRow = {
   results: PokerSession["results"];
 };
 
-type SessionCounterRow = {
-  is_called: boolean;
-  last_value: number | string;
-};
-
 function json(body: object, status = 200) {
   return Response.json(body, {
     status,
     headers: { "Cache-Control": "no-store" },
   });
-}
-
-function missingBlindHistoryColumn(error: unknown) {
-  if (!error || typeof error !== "object") return false;
-  const databaseError = error as { code?: unknown; message?: unknown };
-  return (
-    databaseError.code === "42703" &&
-    typeof databaseError.message === "string" &&
-    databaseError.message.includes("blind_history")
-  );
-}
-
-async function withBlindHistoryColumn<T>(
-  sql: ReturnType<typeof getDatabase>,
-  query: () => Promise<T>,
-): Promise<T> {
-  try {
-    return await query();
-  } catch (error) {
-    if (!missingBlindHistoryColumn(error)) throw error;
-    // Existing production databases may predate the blind-history column.
-    await sql`
-      ALTER TABLE poker_sessions
-      ADD COLUMN IF NOT EXISTS blind_history jsonb
-    `;
-    return query();
-  }
 }
 
 function mapSession(row: SessionRow): PokerSession {
@@ -84,16 +52,15 @@ function mapSession(row: SessionRow): PokerSession {
 export async function GET() {
   const authResult = await requireHostAccount();
   if ("response" in authResult) return authResult.response;
+  const ownerId = authResult.account.id;
 
   try {
     const sql = getDatabase();
-    const rows = (await withBlindHistoryColumn(
-      sql,
-      () => sql`
+    const rows = (await sql`
         SELECT
           id,
           game_name,
-          session_number,
+          owner_session_number AS session_number,
           played_at,
           ended_at,
           ante,
@@ -103,20 +70,21 @@ export async function GET() {
           results,
           discarded_at
         FROM poker_sessions
+        WHERE owner_id = ${ownerId}::uuid
         ORDER BY played_at DESC, created_at DESC
-      `,
-    )) as SessionRow[];
+      `) as SessionRow[];
     const [counter] = (await sql`
-      SELECT last_value, is_called
-      FROM poker_sessions_session_number_seq
-    `) as SessionCounterRow[];
+      SELECT next_session_number
+      FROM accounts
+      WHERE id = ${ownerId}::uuid
+    `) as Array<{ next_session_number: number | string }>;
     const allSessions = rows.map(mapSession);
     const sessions = allSessions.filter((session) => !session.discardedAt);
     const discardedSessions = allSessions.filter(
       (session) => session.discardedAt,
     );
     const nextSessionNumber = counter
-      ? Number(counter.last_value) + (counter.is_called ? 1 : 0)
+      ? Number(counter.next_session_number)
       : 1;
     return json({ discardedSessions, sessions, nextSessionNumber });
   } catch (error) {
@@ -128,6 +96,7 @@ export async function GET() {
 export async function POST(request: Request) {
   const authResult = await requireHostAccount();
   if ("response" in authResult) return authResult.response;
+  const ownerId = authResult.account.id;
 
   try {
     const sql = getDatabase();
@@ -169,9 +138,10 @@ export async function POST(request: Request) {
       await sql.transaction(
         [...missingPlayerNames].map(
           ([nameKey, name]) => sql`
-            INSERT INTO players (name, name_key)
-            VALUES (${name}, ${nameKey})
-            ON CONFLICT (name_key) DO NOTHING
+            INSERT INTO players (owner_id, name, name_key)
+            VALUES (${ownerId}::uuid, ${name}, ${nameKey})
+            ON CONFLICT (owner_id, name_key) WHERE owner_id IS NOT NULL
+            DO NOTHING
           `,
         ),
       );
@@ -180,6 +150,7 @@ export async function POST(request: Request) {
     const playerRows = (await sql`
       SELECT id, name, name_key
       FROM players
+      WHERE owner_id = ${ownerId}::uuid
     `) as Array<{ id: string; name: string; name_key: string }>;
     const playersById = new Map(playerRows.map((player) => [player.id, player]));
     const playersByName = new Map(
@@ -213,11 +184,33 @@ export async function POST(request: Request) {
       }),
     }));
 
-    const results = await withBlindHistoryColumn(sql, () =>
-      sql.transaction(
+    const results = await sql.transaction(
         resolvedSessions.map(
           (session) => sql`
+            WITH owner_lock AS MATERIALIZED (
+              SELECT pg_advisory_xact_lock(
+                hashtextextended(${ownerId}, 0)
+              )
+            ),
+            existing AS MATERIALIZED (
+              SELECT session.record_id
+              FROM poker_sessions AS session, owner_lock
+              WHERE session.owner_id = ${ownerId}::uuid
+                AND session.id = ${session.id}
+            ),
+            allocated AS (
+              UPDATE accounts
+              SET
+                next_session_number = next_session_number + 1,
+                updated_at = now()
+              WHERE id = ${ownerId}::uuid
+                AND lifecycle_state = 'active'
+                AND NOT EXISTS (SELECT 1 FROM existing)
+              RETURNING next_session_number - 1 AS session_number
+            )
             INSERT INTO poker_sessions (
+              owner_id,
+              owner_session_number,
               id,
               game_name,
               played_at,
@@ -227,7 +220,9 @@ export async function POST(request: Request) {
               hands,
               blind_history,
               results
-            ) VALUES (
+            ) SELECT
+              ${ownerId}::uuid,
+              allocated.session_number,
               ${session.id},
               ${session.name || null},
               ${new Date(session.date).toISOString()},
@@ -237,12 +232,11 @@ export async function POST(request: Request) {
               ${session.hands},
               ${session.blindHistory ? JSON.stringify(session.blindHistory) : null}::jsonb,
               ${JSON.stringify(session.results)}::jsonb
-            )
-            ON CONFLICT (id) DO NOTHING
+            FROM allocated
+            ON CONFLICT (owner_id, id) WHERE owner_id IS NOT NULL DO NOTHING
             RETURNING id
           `,
         ),
-      ),
     );
     return json({
       saved: results.reduce((count, rows) => count + rows.length, 0),
@@ -256,6 +250,7 @@ export async function POST(request: Request) {
 export async function PATCH(request: Request) {
   const authResult = await requireHostAccount();
   if ("response" in authResult) return authResult.response;
+  const ownerId = authResult.account.id;
 
   try {
     const body = (await request.json()) as {
@@ -276,13 +271,17 @@ export async function PATCH(request: Request) {
         ? await sql`
             UPDATE poker_sessions
             SET discarded_at = now()
-            WHERE id = ${id} AND discarded_at IS NULL
+            WHERE id = ${id}
+              AND owner_id = ${ownerId}::uuid
+              AND discarded_at IS NULL
             RETURNING id
           `
         : await sql`
             UPDATE poker_sessions
             SET discarded_at = NULL
-            WHERE id = ${id} AND discarded_at IS NOT NULL
+            WHERE id = ${id}
+              AND owner_id = ${ownerId}::uuid
+              AND discarded_at IS NOT NULL
             RETURNING id
           `;
 
@@ -307,6 +306,7 @@ export async function PATCH(request: Request) {
 export async function DELETE(request: Request) {
   const authResult = await requireHostAccount();
   if ("response" in authResult) return authResult.response;
+  const ownerId = authResult.account.id;
 
   try {
     const deletionPassword =
@@ -332,7 +332,9 @@ export async function DELETE(request: Request) {
     const sql = getDatabase();
     const rows = await sql`
       DELETE FROM poker_sessions
-      WHERE id = ${id} AND discarded_at IS NOT NULL
+      WHERE id = ${id}
+        AND owner_id = ${ownerId}::uuid
+        AND discarded_at IS NOT NULL
       RETURNING id
     `;
     if (!rows.length) {

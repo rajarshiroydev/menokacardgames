@@ -39,6 +39,7 @@ function mapPlayer(row: PlayerRow): PlayerProfile {
 export async function GET() {
   const authResult = await requireHostAccount();
   if ("response" in authResult) return authResult.response;
+  const ownerId = authResult.account.id;
 
   try {
     const sql = getDatabase();
@@ -52,9 +53,11 @@ export async function GET() {
           SELECT 1
           FROM poker_sessions AS session
           CROSS JOIN LATERAL jsonb_array_elements(session.results) AS result
-          WHERE result->>'playerId' = player.id
+          WHERE session.owner_id = ${ownerId}::uuid
+            AND result->>'playerId' = player.id
         ) AS has_history
       FROM players AS player
+      WHERE player.owner_id = ${ownerId}::uuid
       ORDER BY
         player.deleted_at NULLS FIRST,
         lower(player.name),
@@ -76,6 +79,7 @@ export async function GET() {
 export async function POST(request: Request) {
   const authResult = await requireHostAccount();
   if ("response" in authResult) return authResult.response;
+  const ownerId = authResult.account.id;
 
   try {
     const body = (await request.json()) as { name?: unknown };
@@ -94,9 +98,9 @@ export async function POST(request: Request) {
 
     const sql = getDatabase();
     const rows = (await sql`
-      INSERT INTO players (name, name_key)
-      VALUES (${name}, ${playerNameKey(name)})
-      ON CONFLICT (name_key) DO UPDATE
+      INSERT INTO players (owner_id, name, name_key)
+      VALUES (${ownerId}::uuid, ${name}, ${playerNameKey(name)})
+      ON CONFLICT (owner_id, name_key) WHERE owner_id IS NOT NULL DO UPDATE
       SET name = EXCLUDED.name, deleted_at = NULL
       RETURNING id, name, created_at, deleted_at
     `) as PlayerRow[];
@@ -111,6 +115,7 @@ export async function POST(request: Request) {
 export async function PATCH(request: Request) {
   const authResult = await requireHostAccount();
   if ("response" in authResult) return authResult.response;
+  const ownerId = authResult.account.id;
 
   try {
     const body = (await request.json()) as {
@@ -132,13 +137,17 @@ export async function PATCH(request: Request) {
         ? ((await sql`
             UPDATE players
             SET deleted_at = now()
-            WHERE id = ${id} AND deleted_at IS NULL
+            WHERE id = ${id}
+              AND owner_id = ${ownerId}::uuid
+              AND deleted_at IS NULL
             RETURNING id, name, created_at, deleted_at
           `) as PlayerRow[])
         : ((await sql`
             UPDATE players
             SET deleted_at = NULL
-            WHERE id = ${id} AND deleted_at IS NOT NULL
+            WHERE id = ${id}
+              AND owner_id = ${ownerId}::uuid
+              AND deleted_at IS NOT NULL
             RETURNING id, name, created_at, deleted_at
           `) as PlayerRow[]);
 
@@ -163,6 +172,7 @@ export async function PATCH(request: Request) {
 export async function DELETE(request: Request) {
   const authResult = await requireHostAccount();
   if ("response" in authResult) return authResult.response;
+  const ownerId = authResult.account.id;
 
   try {
     const deletionPassword =
@@ -194,10 +204,12 @@ export async function DELETE(request: Request) {
           SELECT 1
           FROM poker_sessions AS session
           CROSS JOIN LATERAL jsonb_array_elements(session.results) AS result
-          WHERE result->>'playerId' = player.id
+          WHERE session.owner_id = ${ownerId}::uuid
+            AND result->>'playerId' = player.id
         ) AS has_history
       FROM players AS player
       WHERE player.id = ${id}
+        AND player.owner_id = ${ownerId}::uuid
     `) as Array<{
       deleted_at: Date | string | null;
       has_history: boolean;
@@ -222,12 +234,14 @@ export async function DELETE(request: Request) {
     const rows = await sql`
       DELETE FROM players AS player
       WHERE player.id = ${id}
+        AND player.owner_id = ${ownerId}::uuid
         AND player.deleted_at IS NOT NULL
         AND NOT EXISTS (
           SELECT 1
           FROM poker_sessions AS session
           CROSS JOIN LATERAL jsonb_array_elements(session.results) AS result
-          WHERE result->>'playerId' = player.id
+          WHERE session.owner_id = ${ownerId}::uuid
+            AND result->>'playerId' = player.id
         )
       RETURNING player.id
     `;
