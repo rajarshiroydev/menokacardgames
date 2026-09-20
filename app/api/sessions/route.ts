@@ -1,4 +1,4 @@
-import { requireHostSession } from "@/lib/auth/server";
+import { requireHostAccount } from "@/lib/auth/server";
 import { getDatabase } from "@/lib/poker/database";
 import { playerNameKey } from "@/lib/poker/player-validation";
 import {
@@ -82,7 +82,7 @@ function mapSession(row: SessionRow): PokerSession {
 }
 
 export async function GET() {
-  const authResult = await requireHostSession();
+  const authResult = await requireHostAccount();
   if ("response" in authResult) return authResult.response;
 
   try {
@@ -126,7 +126,7 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const authResult = await requireHostSession();
+  const authResult = await requireHostAccount();
   if ("response" in authResult) return authResult.response;
 
   try {
@@ -254,7 +254,7 @@ export async function POST(request: Request) {
 }
 
 export async function PATCH(request: Request) {
-  const authResult = await requireHostSession();
+  const authResult = await requireHostAccount();
   if ("response" in authResult) return authResult.response;
 
   try {
@@ -305,7 +305,7 @@ export async function PATCH(request: Request) {
 }
 
 export async function DELETE(request: Request) {
-  const authResult = await requireHostSession();
+  const authResult = await requireHostAccount();
   if ("response" in authResult) return authResult.response;
 
   try {
