@@ -178,7 +178,7 @@ Official sources checked 2026-09-20; recheck during implementation/release:
 | Login methods/provider | Confirmed: Neon Managed Better Auth with email magic links only |
 | Historical session ownership | Cohorts A–G and J–L confirmed for Rajarshi; M belongs to a separate Emon-led group; H–I and the Emon group host account remain unresolved. See `docs/HISTORICAL-OWNERSHIP.md`; no backfill yet |
 | Account deletion/backup retention | Confirmed: immediate lock/hide/sign-out, 30-day recovery, then automated permanent purge; disclose provider backup aging schedule before release |
-| Multi-user transition | In progress on `feature/multi-user-transition`; Step 2 auth boundary complete on isolated Neon branch, owner isolation next |
+| Multi-user transition | In progress on `feature/multi-user-transition`; Step 3B owner-scope schema foundation rehearsed, owner-scoped data access next |
 | Sporty glass design | Paused on `ui-sporty-glass-refresh` |
 | Cloud draft sync / device handoff | Deferred; needs conflict policy |
 | Shared ledgers/invitations | Out of initial scope; add only if requested |
@@ -201,3 +201,5 @@ For each future feature, add: date, problem, accepted behavior, non-goals, archi
 2026-09-20 implementation step 3A: Queried only the isolated `multi-user-auth` branch and recorded a read-only inventory of 28 sessions and 13 players in `docs/HISTORICAL-OWNERSHIP.md`. Grouped adjacent sessions into 13 review cohorts without assigning ownership. No schema, data or production mutation was performed. Owner mapping is required before the backfill design can be finalized.
 
 2026-09-20 ownership review: User assigned cohorts A–G and J–L to Rajarshi's ledger and cohort M to a separate Emon-led friend group. Abhirup intentionally belongs to both friend lists and must have an independent owner-local profile in each ledger. Cohorts H–I and players Aiush, Ashit and Rana remain unresolved. Ratan is confirmed for Rajarshi's friend list but has no historical database record. The eventual host account for the Emon-led group is not yet known. No backfill is authorized while these decisions remain incomplete.
+
+2026-09-20 implementation step 3B: Added the versioned, expand-only `0001_owner_scope_foundation` migration and rehearsed it on the isolated `multi-user-auth` Neon branch. It introduces account lifecycle records, nullable owner keys, owner-local indexes, migration provenance and audit foundations while preserving compatibility with the global API. Reconciliation retained all 13 players and 28 sessions; zero historical rows were assigned and zero application accounts were fabricated. Evidence is in `docs/MIGRATION-REHEARSALS.md`. Row-level security, global-constraint removal, route cutover and historical backfill remain later coordinated steps.

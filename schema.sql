@@ -1,3 +1,24 @@
+CREATE TABLE IF NOT EXISTS app_migrations (
+  version text PRIMARY KEY,
+  applied_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS accounts (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  auth_user_id uuid NOT NULL UNIQUE,
+  lifecycle_state text NOT NULL DEFAULT 'active' CHECK (
+    lifecycle_state IN ('active', 'deletion_requested', 'purging')
+  ),
+  deletion_requested_at timestamptz,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT accounts_deletion_state_consistent CHECK (
+    (lifecycle_state = 'active' AND deletion_requested_at IS NULL)
+    OR
+    (lifecycle_state IN ('deletion_requested', 'purging') AND deletion_requested_at IS NOT NULL)
+  )
+);
+
 CREATE TABLE IF NOT EXISTS players (
   id text PRIMARY KEY DEFAULT gen_random_uuid()::text,
   name text NOT NULL CHECK (char_length(name) BETWEEN 1 AND 80),
@@ -8,6 +29,17 @@ CREATE TABLE IF NOT EXISTS players (
 
 ALTER TABLE players
   ADD COLUMN IF NOT EXISTS deleted_at timestamptz;
+
+ALTER TABLE players
+  ADD COLUMN IF NOT EXISTS owner_id uuid REFERENCES accounts(id) ON DELETE CASCADE;
+
+CREATE UNIQUE INDEX IF NOT EXISTS players_owner_name_key_idx
+  ON players (owner_id, name_key)
+  WHERE owner_id IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS players_owner_active_name_idx
+  ON players (owner_id, lower(name))
+  WHERE owner_id IS NOT NULL AND deleted_at IS NULL;
 
 CREATE INDEX IF NOT EXISTS players_active_name_idx
   ON players (lower(name))
@@ -42,17 +74,39 @@ ALTER TABLE poker_sessions
 ALTER TABLE poker_sessions
   ADD COLUMN IF NOT EXISTS blind_history jsonb;
 
+ALTER TABLE poker_sessions
+  ADD COLUMN IF NOT EXISTS owner_id uuid REFERENCES accounts(id) ON DELETE CASCADE;
+
+ALTER TABLE poker_sessions
+  ADD COLUMN IF NOT EXISTS owner_session_number bigint;
+
 DO $$
 BEGIN
   IF NOT EXISTS (
     SELECT 1
     FROM pg_constraint
     WHERE conname = 'poker_sessions_game_name_length'
+      AND conrelid = 'public.poker_sessions'::regclass
   ) THEN
     ALTER TABLE poker_sessions
       ADD CONSTRAINT poker_sessions_game_name_length
       CHECK (
         game_name IS NULL OR char_length(game_name) BETWEEN 1 AND 80
+      );
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'poker_sessions_owner_number_pair'
+      AND conrelid = 'public.poker_sessions'::regclass
+  ) THEN
+    ALTER TABLE poker_sessions
+      ADD CONSTRAINT poker_sessions_owner_number_pair
+      CHECK (
+        (owner_id IS NULL AND owner_session_number IS NULL)
+        OR
+        (owner_id IS NOT NULL AND owner_session_number IS NOT NULL)
       );
   END IF;
 END
@@ -70,6 +124,55 @@ ALTER TABLE poker_sessions
 CREATE INDEX IF NOT EXISTS poker_sessions_active_played_at_idx
   ON poker_sessions (played_at DESC, created_at DESC)
   WHERE discarded_at IS NULL;
+
+CREATE UNIQUE INDEX IF NOT EXISTS poker_sessions_owner_number_idx
+  ON poker_sessions (owner_id, owner_session_number)
+  WHERE owner_id IS NOT NULL;
+
+CREATE UNIQUE INDEX IF NOT EXISTS poker_sessions_owner_client_id_idx
+  ON poker_sessions (owner_id, id)
+  WHERE owner_id IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS poker_sessions_owner_played_at_idx
+  ON poker_sessions (owner_id, played_at DESC, created_at DESC)
+  WHERE owner_id IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS migration_mapping (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  source_kind text NOT NULL CHECK (source_kind IN ('player', 'session')),
+  source_id text NOT NULL,
+  target_owner_id uuid REFERENCES accounts(id) ON DELETE CASCADE,
+  target_id text,
+  review_status text NOT NULL DEFAULT 'pending' CHECK (
+    review_status IN ('pending', 'approved', 'quarantined', 'migrated')
+  ),
+  provenance jsonb NOT NULL DEFAULT '{}'::jsonb CHECK (
+    jsonb_typeof(provenance) = 'object'
+  ),
+  reviewed_at timestamptz,
+  migrated_at timestamptz,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS migration_mapping_owner_source_idx
+  ON migration_mapping (source_kind, source_id, target_owner_id)
+  WHERE target_owner_id IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS audit_events (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  owner_id uuid NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+  actor_auth_user_id uuid NOT NULL,
+  action text NOT NULL CHECK (char_length(action) BETWEEN 1 AND 100),
+  target_kind text NOT NULL CHECK (char_length(target_kind) BETWEEN 1 AND 60),
+  target_id text,
+  details jsonb NOT NULL DEFAULT '{}'::jsonb CHECK (
+    jsonb_typeof(details) = 'object'
+  ),
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS audit_events_owner_created_at_idx
+  ON audit_events (owner_id, created_at DESC);
 
 INSERT INTO players (name, name_key)
 SELECT DISTINCT ON (name_key) name, name_key
