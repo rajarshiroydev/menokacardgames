@@ -52,5 +52,6 @@ For each target host ledger, create independent player profiles from the session
 - Inventory: complete, 28 sessions and 13 player records.
 - Ownership decisions: cohorts A–G and J–L confirmed for Rajarshi; cohort M confirmed for a separate Emon-led group whose host account is pending; cohorts H–I remain unresolved.
 - Friend-list decisions: two owner-local profiles are required for Abhirup; Aiush, Ashit and Rana remain unresolved; Ratan is confirmed for Rajarshi but has no historical record.
-- Database backfill: not started.
+- Isolated database backfill: cohorts A–G and J–L cloned into Rajarshi's private ledger with provenance; 9 friend profiles, 24 sessions and 72 results reconciled. Legacy source rows remain intact. Cohorts H–I and M remain unowned.
+- Production backfill: not started or authorized.
 - Production changes: none.

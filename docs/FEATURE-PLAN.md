@@ -131,7 +131,7 @@ Legacy data without buy-in history is eligible using starting stack only when en
 
 ## Legacy migration and release sequence
 
-The current isolated-branch inventory and its unassigned review cohorts are recorded in [`docs/HISTORICAL-OWNERSHIP.md`](./HISTORICAL-OWNERSHIP.md). That manifest is the source for explicit user ownership decisions; it is not authorization to backfill production.
+The current isolated-branch inventory, review cohorts and ownership decisions are recorded in [`docs/HISTORICAL-OWNERSHIP.md`](./HISTORICAL-OWNERSHIP.md). That manifest is the source for explicit user ownership decisions; it is not authorization to backfill production.
 
 1. **Inventory and backup:** obtain authorized read-only production inventory, record counts/totals/discard states and validation failures, back up and test restore. No such production operation is authorized by this planning task. Rehearse on an isolated staging database or Neon branch.
 2. **Ownership mapping:** review actual sessions with the original host and other hosts. Assign each session to exactly one account using an explicit manifest. Do not guess from Emon's name, stakes or overlapping players. Unresolved records enter a restricted legacy archive; no public fallback ledger. If old shared sessions are wanted by two accounts, define deliberate copy/provenance semantics later rather than silently duplicating them.
@@ -176,9 +176,9 @@ Official sources checked 2026-09-20; recheck during implementation/release:
 | Average session return | Explicitly confirmed by user |
 | Ranking eligibility | Confirmed: rank from the first eligible session, with no provisional label; show session count |
 | Login methods/provider | Confirmed: Neon Managed Better Auth with email magic links only |
-| Historical session ownership | Cohorts A–G and J–L confirmed for Rajarshi; M belongs to a separate Emon-led group; H–I and the Emon group host account remain unresolved. See `docs/HISTORICAL-OWNERSHIP.md`; no backfill yet |
+| Historical session ownership | A–G and J–L rehearsed into Rajarshi's isolated ledger; M belongs to a separate Emon-led group; H–I and the Emon group host account remain unresolved. No production backfill |
 | Account deletion/backup retention | Confirmed: immediate lock/hide/sign-out, 30-day recovery, then automated permanent purge; disclose provider backup aging schedule before release |
-| Multi-user transition | In progress on `feature/multi-user-transition`; Step 3D application-level owner isolation complete, reviewed historical backfill next |
+| Multi-user transition | In progress on `feature/multi-user-transition`; Step 3E reviewed isolated backfill complete, database-enforced isolation next |
 | Sporty glass design | Paused on `ui-sporty-glass-refresh` |
 | Cloud draft sync / device handoff | Deferred; needs conflict policy |
 | Shared ledgers/invitations | Out of initial scope; add only if requested |
@@ -207,3 +207,5 @@ For each future feature, add: date, problem, accepted behavior, non-goals, archi
 2026-09-20 implementation step 3C: Added a server-only account data layer that provisions one internal account from the verified Neon Auth UUID, never from email or client input. All poker APIs now pass through the active-account lifecycle gate, and a minimal no-store account endpoint exposes only lifecycle status. The signed-in local browser provisioned exactly one active account linked to the isolated branch's Auth user; historical ownership remained zero players and zero sessions. This is an authentication/lifecycle boundary only: player and session queries remain global until they are switched together in the next reviewed step, so this branch is still not deployable.
 
 2026-09-20 implementation step 3D: Applied `0002_owner_scoped_keys` to the isolated branch and switched every player/session API operation to the verified internal account ID. Player names, client session IDs and display numbers are now account-local. Session-number allocation uses a per-owner counter and transaction advisory lock so an idempotent retry does not create a duplicate or consume another number. Removed request-time DDL. A two-account database rehearsal verified same-name players, same client IDs, scoped mutations and retry behavior, then removed all fixtures. The signed-in browser now sees an empty private ledger rather than the 13 unowned players and 28 unowned sessions. Historical backfill is next; RLS and restricted runtime credentials remain required before deployment.
+
+2026-09-21 implementation step 3E: Added a parameterized, restartable data migration and cloned only the explicitly approved cohorts A–G and J–L into Rajarshi's isolated private ledger. Created nine owner-local friend profiles including history-free Ratan, copied 24 sessions and 72 results, replaced player IDs with owner-local IDs, recorded eight player and 24 session provenance mappings, and set the next local game number to 25. Full field/result reconciliation passed and an idempotent rerun produced no duplicates. All 13 legacy players and 28 legacy sessions remain intact; H–I and M remain unowned. Browser verification showed the expected private list, standings and history. Production remains unchanged.
