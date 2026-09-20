@@ -62,3 +62,10 @@ npm run build
 - `components/poker-ledger.tsx` — interactive home, player, and poker UI
 - `lib/poker/` — game rules, shared types, and API validation
 - `schema.sql` — Postgres schema for the later database connection
+
+## Planning and project context
+
+- [Feature plan](docs/FEATURE-PLAN.md) — ongoing roadmap, multi-user transition, ranking decisions and acceptance criteria.
+- [Project memory](docs/PROJECT-MEMORY.md) — durable working agreements and current decisions.
+- [Domain glossary](CONTEXT.md) — shared terminology.
+- [Agent instructions](AGENTS.md) — repository workflow and verification guidance.
