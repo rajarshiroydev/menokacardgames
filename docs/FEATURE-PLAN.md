@@ -1,6 +1,6 @@
 # Feature plan: accounts and normalized standings
 
-Updated: 2026-09-20. Status: planning complete; implementation not authorized.
+Updated: 2026-09-20. Status: implementation in progress on `feature/multi-user-transition`; production unchanged.
 
 This is the canonical living feature-planning document. Add future feature plans here, record decisions and acceptance criteria, and update status as work progresses. Detailed designs may be linked from here; avoid competing roadmaps.
 
@@ -11,7 +11,8 @@ This is the canonical living feature-planning document. Add future feature plans
 - Friends are player names/profiles managed by the host. They do not need accounts.
 - No groups, invitations, shared memberships, or friend-account claiming in the initial release. The same person in two hosts' lists has two independent profiles and histories.
 - Use average session return percentage, including all buy-ins, with the supporting session count shown for context.
-- This task is documentation only. No application, database or deployment changes. Push only when requested.
+- Implement the transition one reviewed step at a time and report after each step. Push only when requested.
+- Use Neon Managed Better Auth with email magic links only for the initial login flow. Password and social login are out of the initial scope.
 
 ## Current behavior verified from source
 
@@ -41,7 +42,7 @@ Retain the existing Next.js application and Postgres backend as a modular applic
 
 ### Identity and authorization
 
-Use a maintained identity provider/library rather than custom password cryptography. Before implementation, run a short provider evaluation: verified email login and recovery, Google/Apple options, native callbacks, session revocation, account deletion, export, pricing at expected usage, and deployment isolation. Existing Neon integration makes its auth offering a candidate; Neon Auth is now the preferred provider direction requested by the user, subject to checking compatibility with this project; exact login methods remain pending discussion during the transition. Do not provision anything during planning.
+Use Neon Managed Better Auth rather than custom password cryptography. The initial login method is email magic link only. The implementation must support secure web sessions, logout, session revocation, account deletion and export; native callbacks remain a later mobile-distribution concern. Development Auth and test users live on an isolated Neon branch until the owner-scoped model has passed its isolation gates.
 
 Derive owner identity from a server-verified session for every endpoint. Filter every read/write by that owner, including lookups, imports, exports, analytics, discard, restore and deletion. Never trust client-supplied `owner_id`, player ID, session ID or cached state as authorization. Unknown/foreign IDs should return consistent not-found responses without revealing another account's data.
 
@@ -167,10 +168,10 @@ Official sources checked 2026-09-20; recheck during implementation/release:
 | Host-owned accounts, guest friends | Confirmed by user; no invitations or groups in initial scope |
 | Average session return | Explicitly confirmed by user |
 | Ranking eligibility | Confirmed: rank from the first eligible session, with no provisional label; show session count |
-| Login methods/provider | Prefer Neon Auth; confirm project compatibility and ask about login methods during transition |
+| Login methods/provider | Confirmed: Neon Managed Better Auth with email magic links only |
 | Historical session ownership | Ask user for ownership explicitly; review session-level mapping before migration |
 | Account deletion/backup retention | User requested discussion alongside Neon login transition; expects existing behavior mostly retained, details not finalized |
-| Multi-user transition | Planned only; await implementation request |
+| Multi-user transition | In progress on `feature/multi-user-transition`; Step 2 auth boundary complete on isolated Neon branch, owner isolation next |
 | Sporty glass design | Paused on `ui-sporty-glass-refresh` |
 | Cloud draft sync / device handoff | Deferred; needs conflict policy |
 | Shared ledgers/invitations | Out of initial scope; add only if requested |
@@ -185,3 +186,5 @@ For each future feature, add: date, problem, accepted behavior, non-goals, archi
 2026-09-20 follow-up: User explicitly confirmed host-owned accounts with guest friends and average session return. Rank all eligible players immediately; do not use a provisional label. Neon Auth requested as preferred identity direction. Ask user about historical ownership during data separation, and revisit deletion/retention alongside login migration. Ask remaining architecture questions when relevant. Neon handles identity, while owner access rules still need explicit server checks and database policies. Reference: https://neon.com/docs/auth/overview.
 
 2026-09-20 implementation step 1: Created `feature/multi-user-transition`. Removed the provisional threshold from the planned ranking. Verified Neon MCP is installed and enabled in Codex. Installed project-scoped Next.js DevTools MCP in `.codex/config.toml`. No application, database, auth, or production data changes in this step.
+
+2026-09-20 implementation step 2: Confirmed email magic links as the sole initial login method. Authenticated Neon MCP and created the isolated Neon branch `multi-user-auth` from production. Provisioned Managed Better Auth there and enabled Magic Link with a five-minute expiry and new-user registration. Configured the local app to use the branch's database/Auth endpoints, added a custom magic-link sign-in screen, secure cookie session handling, logout, auth proxy and server-side API session checks. Verified the provider configuration from `neon_auth.project_config`, the unauthenticated API response, the sign-in UI and the full application quality gate. Production remains unchanged and the branch is not deployable until Step 3 scopes every data operation by owner. Patched Next.js to 16.3.5 for the current critical advisory. Account deletion/grace-period and backup-retention behavior remains a pending user decision.

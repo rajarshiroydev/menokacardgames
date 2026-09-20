@@ -1,7 +1,11 @@
 <!-- BEGIN:nextjs-agent-rules -->
+
 # This is NOT the Next.js you know
 
-This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` before writing any code. Heed deprecation notices.
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
+
+This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
+
 <!-- END:nextjs-agent-rules -->
 
 # Project instructions
@@ -19,7 +23,7 @@ Read `docs/PROJECT-MEMORY.md`, `docs/FEATURE-PLAN.md`, and `CONTEXT.md` before s
 ## Working agreements
 
 - Never push unless explicitly requested. Preserve paused branches and unrelated local work.
-- UI redesign is paused on `ui-sporty-glass-refresh`; multi-user transition is planning only until requested.
+- UI redesign is paused on `ui-sporty-glass-refresh`; multi-user transition implementation is active on `feature/multi-user-transition`, one reviewed step at a time.
 - Keep preview on port 3005 available during UI work; inspect the existing listener before starting another.
 - Preserve betting, blinds, seating, rebuys, undo and session flows unless explicitly changing them.
 - Never expose environment secrets or seed/test production. Database changes require versioned migrations, isolated rehearsal and rollback planning.
