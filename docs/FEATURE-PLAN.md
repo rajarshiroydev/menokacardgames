@@ -176,7 +176,7 @@ Official sources checked 2026-09-20; recheck during implementation/release:
 | Average session return | Explicitly confirmed by user |
 | Ranking eligibility | Confirmed: rank from the first eligible session, with no provisional label; show session count |
 | Login methods/provider | Confirmed: Neon Managed Better Auth with email magic links only |
-| Historical session ownership | Isolated inventory complete: 28 sessions grouped into 13 review cohorts in `docs/HISTORICAL-OWNERSHIP.md`; awaiting explicit owner mapping before backfill |
+| Historical session ownership | Cohorts A–G and J–L confirmed for Rajarshi; M belongs to a separate Emon-led group; H–I and the Emon group host account remain unresolved. See `docs/HISTORICAL-OWNERSHIP.md`; no backfill yet |
 | Account deletion/backup retention | Confirmed: immediate lock/hide/sign-out, 30-day recovery, then automated permanent purge; disclose provider backup aging schedule before release |
 | Multi-user transition | In progress on `feature/multi-user-transition`; Step 2 auth boundary complete on isolated Neon branch, owner isolation next |
 | Sporty glass design | Paused on `ui-sporty-glass-refresh` |
@@ -199,3 +199,5 @@ For each future feature, add: date, problem, accepted behavior, non-goals, archi
 2026-09-20 lifecycle decision: User approved immediate account lock/hide/sign-out on deletion request, a 30-day recovery grace period, and automated permanent purge afterward. Provider backup copies age out on the documented provider schedule. Implementation must include revocation, reauthenticated recovery, idempotent purge, audit state, failed-job handling and release-time disclosure of the current backup schedule.
 
 2026-09-20 implementation step 3A: Queried only the isolated `multi-user-auth` branch and recorded a read-only inventory of 28 sessions and 13 players in `docs/HISTORICAL-OWNERSHIP.md`. Grouped adjacent sessions into 13 review cohorts without assigning ownership. No schema, data or production mutation was performed. Owner mapping is required before the backfill design can be finalized.
+
+2026-09-20 ownership review: User assigned cohorts A–G and J–L to Rajarshi's ledger and cohort M to a separate Emon-led friend group. Abhirup intentionally belongs to both friend lists and must have an independent owner-local profile in each ledger. Cohorts H–I and players Aiush, Ashit and Rana remain unresolved. Ratan is confirmed for Rajarshi's friend list but has no historical database record. The eventual host account for the Emon-led group is not yet known. No backfill is authorized while these decisions remain incomplete.

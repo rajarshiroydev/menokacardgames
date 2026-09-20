@@ -10,23 +10,31 @@ Times are Asia/Kolkata. A cohort groups adjacent sessions with the same particip
 
 | Cohort | Games | Date/time | Starting stack | Players | Proposed owner |
 | --- | --- | --- | --- | --- | --- |
-| A | 5 | 2026-07-28 20:39 | 5,000 | Rajarshi, Soham | Unassigned |
-| B | 6–7 | 2026-08-02 18:52–21:15 | 10,000 | Debraj, Rajarshi, Shubhankar, Soham | Unassigned |
-| C | 8 | 2026-08-09 20:27 | 10,000 | Debraj, Rajarshi | Unassigned |
-| D | 9–12 | 2026-08-16 19:13–21:15 | 10,000 | Debraj, Rajarshi, Shubhankar | Unassigned |
-| E | 13–21 | 2026-08-16 22:42 through 2026-08-17 15:16 | 10,000 | Rahul Basak, Rajarshi | Unassigned |
-| F | 22 | 2026-08-30 19:43 | 10,000 | Debraj, Rajarshi, Shubhankar, Soham | Unassigned |
-| G | 23 | 2026-08-30 20:31 | 10,000 | Abhirup, Debraj, Rajarshi, Shubhankar, Soham | Unassigned |
-| H | 24 | 2026-09-04 14:26 | 10,000 | Ashit, Rahul Basak | Unassigned |
-| I | 25 | 2026-09-04 15:55 | 10,000 | Rahul Basak, Rana | Unassigned |
-| J | 26 | 2026-09-06 20:18 | 10,000 | Debraj, Rajarshi | Unassigned |
-| K | 27–29 | 2026-09-13 20:13–21:27 | 10,000 then 15,000 | Debraj, Rahul Basak, Rajarshi, Shubhankar, Utsav | Unassigned |
-| L | 31 | 2026-09-19 00:55 | 10,000 | Debraj, Pratik, Rajarshi, Shubhankar | Unassigned |
-| M | 32–33 | 2026-09-19 23:39 through 2026-09-20 00:28 | 500,000 then 1,000,000 | Abhirup, Emon, Supratik | Unassigned |
+| A | 5 | 2026-07-28 20:39 | 5,000 | Rajarshi, Soham | Rajarshi |
+| B | 6–7 | 2026-08-02 18:52–21:15 | 10,000 | Debraj, Rajarshi, Shubhankar, Soham | Rajarshi |
+| C | 8 | 2026-08-09 20:27 | 10,000 | Debraj, Rajarshi | Rajarshi |
+| D | 9–12 | 2026-08-16 19:13–21:15 | 10,000 | Debraj, Rajarshi, Shubhankar | Rajarshi |
+| E | 13–21 | 2026-08-16 22:42 through 2026-08-17 15:16 | 10,000 | Rahul Basak, Rajarshi | Rajarshi |
+| F | 22 | 2026-08-30 19:43 | 10,000 | Debraj, Rajarshi, Shubhankar, Soham | Rajarshi |
+| G | 23 | 2026-08-30 20:31 | 10,000 | Abhirup, Debraj, Rajarshi, Shubhankar, Soham | Rajarshi |
+| H | 24 | 2026-09-04 14:26 | 10,000 | Ashit, Rahul Basak | Unresolved |
+| I | 25 | 2026-09-04 15:55 | 10,000 | Rahul Basak, Rana | Unresolved |
+| J | 26 | 2026-09-06 20:18 | 10,000 | Debraj, Rajarshi | Rajarshi |
+| K | 27–29 | 2026-09-13 20:13–21:27 | 10,000 then 15,000 | Debraj, Rahul Basak, Rajarshi, Shubhankar, Utsav | Rajarshi |
+| L | 31 | 2026-09-19 00:55 | 10,000 | Debraj, Pratik, Rajarshi, Shubhankar | Rajarshi |
+| M | 32–33 | 2026-09-19 23:39 through 2026-09-20 00:28 | 500,000 then 1,000,000 | Abhirup, Emon, Supratik | Emon-led group; target host account TBD |
 
 ## Player directory awaiting review
 
-The shared directory currently contains Abhirup, Aiush, Ashit, Debraj, Emon, Pratik, Rahul Basak, Rajarshi, Rana, Shubhankar, Soham, Supratik and Utsav. Aiush has no saved session in this inventory.
+The shared directory currently contains Abhirup, Aiush, Ashit, Debraj, Emon, Pratik, Rahul Basak, Rajarshi, Rana, Shubhankar, Soham, Supratik and Utsav. Aiush has no saved session in this inventory. Ratan is a confirmed member of Rajarshi's friend list but does not appear in the historical directory or sessions.
+
+Confirmed friend-list ownership:
+
+- Rajarshi's ledger: Rajarshi, Debraj, Pratik, Rahul Basak, Ratan, Shubhankar, Soham, Utsav and Abhirup.
+- Emon-led group: Emon, Abhirup and Supratik. The eventual host account is still to be confirmed.
+- Unresolved: Aiush, Ashit and Rana.
+
+Abhirup belongs in both friend lists. His historical results must map to an independent owner-local Abhirup profile in each ledger: cohort G in Rajarshi's ledger and cohort M in the Emon-led ledger.
 
 For each target host ledger, create independent player profiles from the sessions assigned to that host. A name appearing in multiple hosts' sessions becomes a separate profile in each ledger. Preserve an unused player such as Aiush only when the user explicitly assigns that player to a host's friend list.
 
@@ -42,6 +50,7 @@ For each target host ledger, create independent player profiles from the session
 ## Review status
 
 - Inventory: complete, 28 sessions and 13 player records.
-- Ownership decisions: waiting for user confirmation.
+- Ownership decisions: cohorts A–G and J–L confirmed for Rajarshi; cohort M confirmed for a separate Emon-led group whose host account is pending; cohorts H–I remain unresolved.
+- Friend-list decisions: two owner-local profiles are required for Abhirup; Aiush, Ashit and Rana remain unresolved; Ratan is confirmed for Rajarshi but has no historical record.
 - Database backfill: not started.
 - Production changes: none.
