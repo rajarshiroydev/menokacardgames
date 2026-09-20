@@ -6,8 +6,6 @@ import type {
   PokerSession,
 } from "./types";
 
-export const GAME_STORAGE_KEY = "pokerLedger.v1";
-export const HISTORY_STORAGE_KEY = "pokerLedger.history.v1";
 export const STAGES = ["PREFLOP", "FLOP", "TURN", "RIVER"] as const;
 export const MINUTE = 60_000;
 export const DEFAULT_BLIND_SCHEDULE: BlindSchedule = {

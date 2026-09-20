@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 
 import { PokerLedger } from "@/components/poker-ledger";
+import { provisionHostAccount } from "@/lib/accounts/server";
 import { getHostSession } from "@/lib/auth/server";
 
 import { signOut } from "./auth/sign-in/actions";
@@ -10,6 +11,7 @@ export const dynamic = "force-dynamic";
 export default async function Home() {
   const session = await getHostSession();
   if (!session) redirect("/auth/sign-in");
+  const account = await provisionHostAccount(session.user.id);
 
   return (
     <>
@@ -21,7 +23,7 @@ export default async function Home() {
           <button type="submit">Sign out</button>
         </form>
       </header>
-      <PokerLedger />
+      <PokerLedger accountId={account.id} />
     </>
   );
 }

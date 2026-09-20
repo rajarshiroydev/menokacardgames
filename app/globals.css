@@ -388,6 +388,51 @@ hr {
   margin: 34px auto 0;
 }
 
+.legacy-data-card {
+  display: grid;
+  gap: 14px;
+  width: 100%;
+  max-width: 500px;
+  margin: 24px auto 0;
+  padding: 16px;
+  border: 1px solid color-mix(in srgb, var(--gold) 48%, var(--line));
+  border-radius: 15px;
+  background: color-mix(in srgb, var(--gold) 7%, var(--card));
+}
+
+.legacy-data-kicker {
+  color: var(--gold);
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+.legacy-data-card h2,
+.legacy-review-heading h2 {
+  margin: 4px 0 5px;
+  font-size: 18px;
+}
+
+.legacy-data-card p,
+.legacy-review-heading p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.legacy-data-actions {
+  display: grid;
+  gap: 8px;
+}
+
+.legacy-data-actions button {
+  width: 100%;
+  padding: 11px 13px;
+  font-size: 13px;
+}
+
 .home-action {
   display: grid;
   grid-template-columns: 42px minmax(0, 1fr);
@@ -1903,6 +1948,75 @@ hr {
   padding: 0;
 }
 
+.legacy-review-sheet {
+  display: flex;
+  flex-direction: column;
+  max-width: 620px;
+  max-height: min(90dvh, 780px);
+}
+
+.legacy-review-heading {
+  flex: none;
+  margin-bottom: 16px;
+}
+
+.legacy-session-list {
+  display: grid;
+  gap: 8px;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.legacy-session-option {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: 11px;
+  margin: 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--sunk);
+  cursor: pointer;
+}
+
+.sheet .legacy-session-option input {
+  width: 18px;
+  height: 18px;
+  margin: 2px 0 0;
+  accent-color: var(--gold);
+}
+
+.legacy-session-option strong,
+.legacy-session-option small {
+  display: block;
+}
+
+.legacy-session-option strong {
+  color: var(--fg);
+  font-size: 14px;
+}
+
+.legacy-session-option small {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.legacy-review-actions {
+  display: grid;
+  grid-template-columns: 0.8fr 1.2fr;
+  gap: 8px;
+  flex: none;
+  padding-top: 16px;
+}
+
+.sheet .legacy-review-actions button {
+  margin: 0;
+}
+
 .hands-sheet .poker-hands-chart {
   flex: 1;
   min-height: 0;
@@ -2289,7 +2403,7 @@ hr {
   }
 
   .view-home .home-hero {
-    grid-row: 1 / span 3;
+    grid-row: 1 / span 4;
     align-self: center;
   }
 
@@ -2302,12 +2416,17 @@ hr {
 
   .view-home .home-hands {
     grid-column: 2;
+    grid-row: 3;
+  }
+
+  .view-home .legacy-data-card {
+    grid-column: 2;
     grid-row: 2;
   }
 
   .view-home .home-rules {
     grid-column: 2;
-    grid-row: 3;
+    grid-row: 4;
   }
 
   .ledger-shell:not(.view-home) {

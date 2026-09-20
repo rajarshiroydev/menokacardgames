@@ -23,8 +23,6 @@ import {
   editBlindSchedule,
   formatDate,
   formatRupees,
-  GAME_STORAGE_KEY,
-  HISTORY_STORAGE_KEY,
   minimumRaise,
   nextBuyIn,
   nextPlayerToAct,
@@ -38,6 +36,12 @@ import {
   startingBigBlind,
   totalBuyIns,
 } from "@/lib/poker/game";
+import {
+  accountGameStorageKey,
+  LEGACY_GAME_STORAGE_KEY,
+  LEGACY_HISTORY_STORAGE_KEY,
+  prepareLegacySessionsForAdoption,
+} from "@/lib/poker/storage";
 import type {
   BlindSchedule,
   GameState,
@@ -123,10 +127,10 @@ async function playersApi<T>(
   return data;
 }
 
-function readStoredGame() {
+function readStoredGame(storageKey: string) {
   try {
     const data = JSON.parse(
-      window.localStorage.getItem(GAME_STORAGE_KEY) || "null",
+      window.localStorage.getItem(storageKey) || "null",
     ) as GameState | null;
     if (!data?.players) return null;
     // Games saved before escalating blinds kept one fixed big blind.
@@ -174,10 +178,10 @@ function readStoredGame() {
   }
 }
 
-function readStoredHistory() {
+function readStoredHistory(storageKey: string) {
   try {
     const data = JSON.parse(
-      window.localStorage.getItem(HISTORY_STORAGE_KEY) || "[]",
+      window.localStorage.getItem(storageKey) || "[]",
     ) as PokerSession[];
     return Array.isArray(data) ? data : [];
   } catch {
@@ -266,7 +270,8 @@ function awardPot(game: GameState, playerIndex: number, automatic = false) {
   return pot;
 }
 
-export function PokerLedger() {
+export function PokerLedger({ accountId }: { accountId: string }) {
+  const gameStorageKey = accountGameStorageKey(accountId);
   const [game, setGame] = useState<GameState | null>(null);
   const [history, setHistory] = useState<PokerSession[]>([]);
   const [discardedSessions, setDiscardedSessions] = useState<PokerSession[]>(
@@ -287,6 +292,10 @@ export function PokerLedger() {
   const [toast, setToast] = useState("");
   const [modal, setModal] = useState<ModalState | null>(null);
   const [editingBlinds, setEditingBlinds] = useState(false);
+  const [legacyGame, setLegacyGame] = useState<GameState | null>(null);
+  const [legacySessions, setLegacySessions] = useState<PokerSession[]>([]);
+  const [reviewingLegacySessions, setReviewingLegacySessions] =
+    useState(false);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const showToast = useCallback((message: string) => {
@@ -313,14 +322,6 @@ export function PokerLedger() {
     setHistoryLoading(true);
     setHistoryError("");
     try {
-      const localHistory = readStoredHistory();
-      if (localHistory.length) {
-        await sessionsApi("", {
-          method: "POST",
-          body: JSON.stringify({ sessions: localHistory }),
-        });
-        window.localStorage.removeItem(HISTORY_STORAGE_KEY);
-      }
       const data = await sessionsApi<{
         discardedSessions?: PokerSession[];
         nextSessionNumber?: number;
@@ -370,8 +371,10 @@ export function PokerLedger() {
 
   useEffect(() => {
     const hydrationTimer = setTimeout(() => {
-      const storedGame = readStoredGame();
+      const storedGame = readStoredGame(gameStorageKey);
       setGame(storedGame);
+      setLegacyGame(readStoredGame(LEGACY_GAME_STORAGE_KEY));
+      setLegacySessions(readStoredHistory(LEGACY_HISTORY_STORAGE_KEY));
       setHandsPinned(
         window.localStorage.getItem(HANDS_PINNED_KEY) === "true",
       );
@@ -394,7 +397,7 @@ export function PokerLedger() {
       clearTimeout(hydrationTimer);
       if (toastTimer.current) clearTimeout(toastTimer.current);
     };
-  }, [refreshHistory, refreshPlayers]);
+  }, [gameStorageKey, refreshHistory, refreshPlayers]);
 
   useEffect(() => {
     function handleBrowserBack(event: PopStateEvent) {
@@ -425,11 +428,11 @@ export function PokerLedger() {
   useEffect(() => {
     if (!ready) return;
     if (game) {
-      window.localStorage.setItem(GAME_STORAGE_KEY, JSON.stringify(game));
+      window.localStorage.setItem(gameStorageKey, JSON.stringify(game));
     } else {
-      window.localStorage.removeItem(GAME_STORAGE_KEY);
+      window.localStorage.removeItem(gameStorageKey);
     }
-  }, [game, ready]);
+  }, [game, gameStorageKey, ready]);
 
   useEffect(() => {
     if (!ready) return;
@@ -442,6 +445,66 @@ export function PokerLedger() {
     },
     [],
   );
+
+  function offerLegacyGameAdoption() {
+    if (!legacyGame || game) return;
+    const playerNames = legacyGame.players
+      .map((player) => player.name)
+      .join(", ");
+    ask(
+      `Adopt ${legacyGame.gameName || "this unfinished game"} with ${playerNames} into this account? It will then be available only to this signed-in account on this device.`,
+      "Adopt Game",
+      () => {
+        window.localStorage.setItem(
+          gameStorageKey,
+          JSON.stringify(legacyGame),
+        );
+        window.localStorage.removeItem(LEGACY_GAME_STORAGE_KEY);
+        setGame(legacyGame);
+        setLegacyGame(null);
+        navigate("game");
+        showToast("Game adopted into this account");
+      },
+    );
+  }
+
+  async function adoptLegacySessions(selectedIds: Set<string>) {
+    const selected = prepareLegacySessionsForAdoption(
+      legacySessions,
+      selectedIds,
+    );
+    if (!selected.length) return;
+
+    try {
+      const result = await sessionsApi<{ saved?: number }>("", {
+        method: "POST",
+        body: JSON.stringify({ sessions: selected }),
+      });
+      const remaining = legacySessions.filter(
+        (session) => !selectedIds.has(session.id),
+      );
+      if (remaining.length) {
+        window.localStorage.setItem(
+          LEGACY_HISTORY_STORAGE_KEY,
+          JSON.stringify(remaining),
+        );
+      } else {
+        window.localStorage.removeItem(LEGACY_HISTORY_STORAGE_KEY);
+      }
+      setLegacySessions(remaining);
+      setReviewingLegacySessions(false);
+      await Promise.all([refreshHistory(), refreshPlayers()]);
+      showToast(
+        result.saved
+          ? `Adopted ${result.saved} session${result.saved === 1 ? "" : "s"}`
+          : "Selected sessions were already in this account",
+      );
+    } catch (error) {
+      showToast(
+        error instanceof Error ? error.message : "Sessions were not adopted",
+      );
+    }
+  }
 
   const startGame = useCallback(
     (input: {
@@ -1233,11 +1296,15 @@ export function PokerLedger() {
           <HomeView
             hasGame={Boolean(game)}
             historyCount={history.length}
+            legacyGame={legacyGame}
+            legacySessionCount={legacySessions.length}
             playerCount={players.length}
+            onAdoptLegacyGame={offerLegacyGameAdoption}
             onGame={() => navigate(game ? "game" : "setup")}
             onHistory={() => navigate("history")}
             onPlayers={openPlayers}
             onOpenHands={openHands}
+            onReviewLegacySessions={() => setReviewingLegacySessions(true)}
             onRules={() => setModal({ kind: "rules" })}
           />
         ) : view === "history" ? (
@@ -1299,11 +1366,15 @@ export function PokerLedger() {
           <HomeView
             hasGame={false}
             historyCount={history.length}
+            legacyGame={legacyGame}
+            legacySessionCount={legacySessions.length}
             playerCount={players.length}
+            onAdoptLegacyGame={offerLegacyGameAdoption}
             onGame={() => navigate("setup")}
             onHistory={() => navigate("history")}
             onPlayers={openPlayers}
             onOpenHands={openHands}
+            onReviewLegacySessions={() => setReviewingLegacySessions(true)}
             onRules={() => setModal({ kind: "rules" })}
           />
         )}
@@ -1334,6 +1405,13 @@ export function PokerLedger() {
           onSave={saveBlindSchedule}
         />
       ) : null}
+      {reviewingLegacySessions ? (
+        <LegacySessionReview
+          sessions={legacySessions}
+          onAdopt={adoptLegacySessions}
+          onClose={() => setReviewingLegacySessions(false)}
+        />
+      ) : null}
     </main>
   );
 }
@@ -1341,20 +1419,28 @@ export function PokerLedger() {
 function HomeView({
   hasGame,
   historyCount,
+  legacyGame,
+  legacySessionCount,
   playerCount,
+  onAdoptLegacyGame,
   onGame,
   onHistory,
   onPlayers,
   onOpenHands,
+  onReviewLegacySessions,
   onRules,
 }: {
   hasGame: boolean;
   historyCount: number;
+  legacyGame: GameState | null;
+  legacySessionCount: number;
   playerCount: number;
+  onAdoptLegacyGame: () => void;
   onGame: () => void;
   onHistory: () => void;
   onPlayers: () => void;
   onOpenHands: () => void;
+  onReviewLegacySessions: () => void;
   onRules: () => void;
 }) {
   return (
@@ -1373,6 +1459,41 @@ function HomeView({
           Remember The Rest.
         </p>
       </div>
+
+      {legacyGame || legacySessionCount ? (
+        <section className="legacy-data-card" aria-labelledby="legacy-data-title">
+          <div>
+            <span className="legacy-data-kicker">Unassigned Device Data</span>
+            <h2 id="legacy-data-title">Review Before Adding It</h2>
+            <p>
+              Data saved before accounts stays separate until you choose which
+              account owns it.
+            </p>
+          </div>
+          <div className="legacy-data-actions">
+            {legacyGame ? (
+              <button
+                className="ghost"
+                type="button"
+                disabled={hasGame}
+                onClick={onAdoptLegacyGame}
+              >
+                {hasGame ? "Finish Current Game First" : "Review Legacy Game"}
+              </button>
+            ) : null}
+            {legacySessionCount ? (
+              <button
+                className="ghost"
+                type="button"
+                onClick={onReviewLegacySessions}
+              >
+                Review {legacySessionCount} Saved Session
+                {legacySessionCount === 1 ? "" : "s"}
+              </button>
+            ) : null}
+          </div>
+        </section>
+      ) : null}
 
       <div className="home-menu">
         <button className="home-action featured" type="button" onClick={onGame}>
@@ -1435,6 +1556,99 @@ function HomeView({
         Read The Poker Rules
       </button>
     </section>
+  );
+}
+
+function LegacySessionReview({
+  sessions,
+  onAdopt,
+  onClose,
+}: {
+  sessions: PokerSession[];
+  onAdopt: (selectedIds: Set<string>) => Promise<void>;
+  onClose: () => void;
+}) {
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [submitting, setSubmitting] = useState(false);
+
+  function toggleSession(id: string) {
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  async function adoptSelected() {
+    if (!selectedIds.size || submitting) return;
+    setSubmitting(true);
+    try {
+      await onAdopt(selectedIds);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="modal legacy-review-modal show" role="presentation">
+      <div
+        className="sheet legacy-review-sheet"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="legacy-review-title"
+      >
+        <div className="legacy-review-heading">
+          <span className="legacy-data-kicker">Unassigned Device Data</span>
+          <h2 id="legacy-review-title">Choose Sessions For This Account</h2>
+          <p>
+            Review the date, players and stakes. Only checked sessions will be
+            added; unchecked sessions remain unassigned on this device.
+          </p>
+        </div>
+
+        <div className="legacy-session-list">
+          {sessions.map((session) => (
+            <label className="legacy-session-option" key={session.id}>
+              <input
+                type="checkbox"
+                checked={selectedIds.has(session.id)}
+                onChange={() => toggleSession(session.id)}
+              />
+              <span>
+                <strong>{session.name || "Saved Game"}</strong>
+                <small>
+                  {formatDate(session.date)} · Big Blind {formatRupees(session.ante)}
+                  {" · "}
+                  {session.results.map((result) => result.name).join(", ")}
+                </small>
+              </span>
+            </label>
+          ))}
+        </div>
+
+        <div className="legacy-review-actions">
+          <button
+            className="ghost"
+            type="button"
+            disabled={submitting}
+            onClick={onClose}
+          >
+            Leave Unassigned
+          </button>
+          <button
+            className="primary"
+            type="button"
+            disabled={!selectedIds.size || submitting}
+            onClick={() => void adoptSelected()}
+          >
+            {submitting
+              ? "Adding…"
+              : `Add ${selectedIds.size || "Selected"} To This Account`}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 

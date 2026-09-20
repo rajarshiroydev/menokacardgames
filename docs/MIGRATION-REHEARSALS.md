@@ -122,3 +122,5 @@ Isolation rehearsal results:
 | Isolation fixtures remaining after test | 0 |
 
 The rehearsal also found that roles created through Neon's role API inherit `neon_superuser` and therefore bypass row security. That role type is explicitly rejected for runtime use. The application role must be created through SQL with the attributes recorded in the migration README, then given an independently initialized credential.
+
+The unused API-created rehearsal role was deleted after explicit user approval. Only the restricted `menoka_app` runtime role remains in application configuration.
