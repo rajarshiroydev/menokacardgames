@@ -131,6 +131,8 @@ Legacy data without buy-in history is eligible using starting stack only when en
 
 ## Legacy migration and release sequence
 
+The current isolated-branch inventory and its unassigned review cohorts are recorded in [`docs/HISTORICAL-OWNERSHIP.md`](./HISTORICAL-OWNERSHIP.md). That manifest is the source for explicit user ownership decisions; it is not authorization to backfill production.
+
 1. **Inventory and backup:** obtain authorized read-only production inventory, record counts/totals/discard states and validation failures, back up and test restore. No such production operation is authorized by this planning task. Rehearse on an isolated staging database or Neon branch.
 2. **Ownership mapping:** review actual sessions with the original host and other hosts. Assign each session to exactly one account using an explicit manifest. Do not guess from Emon's name, stakes or overlapping players. Unresolved records enter a restricted legacy archive; no public fallback ledger. If old shared sessions are wanted by two accounts, define deliberate copy/provenance semantics later rather than silently duplicating them.
 3. **Identity and isolation:** select provider, build account onboarding and owner-scoped repositories/schema, and test every operation with two independent accounts before UI integration.
@@ -174,7 +176,7 @@ Official sources checked 2026-09-20; recheck during implementation/release:
 | Average session return | Explicitly confirmed by user |
 | Ranking eligibility | Confirmed: rank from the first eligible session, with no provisional label; show session count |
 | Login methods/provider | Confirmed: Neon Managed Better Auth with email magic links only |
-| Historical session ownership | Ask user for ownership explicitly; review session-level mapping before migration |
+| Historical session ownership | Isolated inventory complete: 28 sessions grouped into 13 review cohorts in `docs/HISTORICAL-OWNERSHIP.md`; awaiting explicit owner mapping before backfill |
 | Account deletion/backup retention | Confirmed: immediate lock/hide/sign-out, 30-day recovery, then automated permanent purge; disclose provider backup aging schedule before release |
 | Multi-user transition | In progress on `feature/multi-user-transition`; Step 2 auth boundary complete on isolated Neon branch, owner isolation next |
 | Sporty glass design | Paused on `ui-sporty-glass-refresh` |
@@ -195,3 +197,5 @@ For each future feature, add: date, problem, accepted behavior, non-goals, archi
 2026-09-20 implementation step 2: Confirmed email magic links as the sole initial login method. Authenticated Neon MCP and created the isolated Neon branch `multi-user-auth` from production. Provisioned Managed Better Auth there and enabled Magic Link with a five-minute expiry and new-user registration. Configured the local app to use the branch's database/Auth endpoints, added a custom magic-link sign-in screen, secure cookie session handling, logout, auth proxy and server-side API session checks. Verified the provider configuration from `neon_auth.project_config`, unauthenticated API rejection and the complete email-link-to-authenticated-ledger flow with the user's test address. The app-owned callback performs the one-time verifier exchange before setting session cookies. Production remains unchanged and the branch is not deployable until Step 3 scopes every data operation by owner. Patched Next.js to 16.3.5 for the current critical advisory.
 
 2026-09-20 lifecycle decision: User approved immediate account lock/hide/sign-out on deletion request, a 30-day recovery grace period, and automated permanent purge afterward. Provider backup copies age out on the documented provider schedule. Implementation must include revocation, reauthenticated recovery, idempotent purge, audit state, failed-job handling and release-time disclosure of the current backup schedule.
+
+2026-09-20 implementation step 3A: Queried only the isolated `multi-user-auth` branch and recorded a read-only inventory of 28 sessions and 13 players in `docs/HISTORICAL-OWNERSHIP.md`. Grouped adjacent sessions into 13 review cohorts without assigning ownership. No schema, data or production mutation was performed. Owner mapping is required before the backfill design can be finalized.
