@@ -13,6 +13,7 @@ This is the canonical living feature-planning document. Add future feature plans
 - Use average session return percentage, including all buy-ins, with the supporting session count shown for context.
 - Implement the transition one reviewed step at a time and report after each step. Push only when requested.
 - Use Neon Managed Better Auth with email magic links only for the initial login flow. Password and social login are out of the initial scope.
+- Account deletion immediately locks the ledger, hides it from normal access and signs the host out. Recovery is available for 30 days, followed by permanent automated deletion of the account and all owned application data. Provider backups age out under the provider's documented retention schedule.
 
 ## Current behavior verified from source
 
@@ -49,6 +50,10 @@ Derive owner identity from a server-verified session for every endpoint. Filter 
 Use centralized authorization and Postgres row-level security as defense in depth. Application connections must use a restricted role; table owners and BYPASSRLS roles can bypass policies. Derive owner context from verified identity, set it transaction-locally and test connection reuse. Separate migration credentials from runtime credentials. Keep DB access behind server APIs.
 
 Use secure cookie sessions for the web with appropriate CSRF/origin checks, rate limits on auth/import/mutations, bounded request sizes, redacted logs and safe error messages. Replace the shared deletion password with ownership checks and recent reauthentication for permanent deletion. Preserve user confirmations. Logout clears private in-memory data; define how unsynced drafts are retained safely before clearing caches.
+
+Magic links return through the app-owned `/auth/callback` endpoint. That endpoint accepts only the provider's one-time verifier, exchanges it server-side through the Neon Auth proxy and forwards only the resulting secure cookies before redirecting to the ledger. It must never log verifier or session values. Keep callback and replay/failure cases in the browser acceptance suite.
+
+Account deletion uses an explicit lifecycle state and `deletion_requested_at`. The initial request revokes active sessions, blocks reads and mutations, and removes the ledger from ordinary UI immediately. A reauthenticated host can cancel during the 30-day grace period. An idempotent scheduled purge deletes owner-scoped records and the Auth identity after the deadline, with auditable status and retry handling. Define purge ordering, failed-job alerts and the exact Neon backup retention disclosure before implementation; backup copies expire through Neon retention rather than direct row-level deletion.
 
 ### Proposed data model
 
@@ -151,7 +156,7 @@ Keep game rules and API contracts portable. Decide responsive web/PWA, wrapper o
 
 Plan auth deep links, revocation, secure native credential storage, offline feedback, accessible controls, account export and deletion. For this single-owner model, define deletion of the host's entire ledger and associated identifiers, a documented backup retention window, and recovery/grace-period policy. Do not retain deleted data indefinitely by default.
 
-Before store release recheck current rules for login, account deletion, privacy disclosures, minimum app quality and gambling-related classification. This is a chip ledger. Payments, payouts or gambling services would require separate product decisions and review; this plan does not add them.
+Before store release recheck current rules for login, account deletion, privacy disclosures, minimum app quality and gambling-related classification. The deletion UI must expose both immediate lockout and the 30-day recovery deadline, and the privacy policy must state the then-current provider backup retention schedule. This is a chip ledger. Payments, payouts or gambling services would require separate product decisions and review; this plan does not add them.
 
 ## References
 
@@ -170,7 +175,7 @@ Official sources checked 2026-09-20; recheck during implementation/release:
 | Ranking eligibility | Confirmed: rank from the first eligible session, with no provisional label; show session count |
 | Login methods/provider | Confirmed: Neon Managed Better Auth with email magic links only |
 | Historical session ownership | Ask user for ownership explicitly; review session-level mapping before migration |
-| Account deletion/backup retention | User requested discussion alongside Neon login transition; expects existing behavior mostly retained, details not finalized |
+| Account deletion/backup retention | Confirmed: immediate lock/hide/sign-out, 30-day recovery, then automated permanent purge; disclose provider backup aging schedule before release |
 | Multi-user transition | In progress on `feature/multi-user-transition`; Step 2 auth boundary complete on isolated Neon branch, owner isolation next |
 | Sporty glass design | Paused on `ui-sporty-glass-refresh` |
 | Cloud draft sync / device handoff | Deferred; needs conflict policy |
@@ -187,4 +192,6 @@ For each future feature, add: date, problem, accepted behavior, non-goals, archi
 
 2026-09-20 implementation step 1: Created `feature/multi-user-transition`. Removed the provisional threshold from the planned ranking. Verified Neon MCP is installed and enabled in Codex. Installed project-scoped Next.js DevTools MCP in `.codex/config.toml`. No application, database, auth, or production data changes in this step.
 
-2026-09-20 implementation step 2: Confirmed email magic links as the sole initial login method. Authenticated Neon MCP and created the isolated Neon branch `multi-user-auth` from production. Provisioned Managed Better Auth there and enabled Magic Link with a five-minute expiry and new-user registration. Configured the local app to use the branch's database/Auth endpoints, added a custom magic-link sign-in screen, secure cookie session handling, logout, auth proxy and server-side API session checks. Verified the provider configuration from `neon_auth.project_config`, the unauthenticated API response, the sign-in UI and the full application quality gate. Production remains unchanged and the branch is not deployable until Step 3 scopes every data operation by owner. Patched Next.js to 16.3.5 for the current critical advisory. Account deletion/grace-period and backup-retention behavior remains a pending user decision.
+2026-09-20 implementation step 2: Confirmed email magic links as the sole initial login method. Authenticated Neon MCP and created the isolated Neon branch `multi-user-auth` from production. Provisioned Managed Better Auth there and enabled Magic Link with a five-minute expiry and new-user registration. Configured the local app to use the branch's database/Auth endpoints, added a custom magic-link sign-in screen, secure cookie session handling, logout, auth proxy and server-side API session checks. Verified the provider configuration from `neon_auth.project_config`, unauthenticated API rejection and the complete email-link-to-authenticated-ledger flow with the user's test address. The app-owned callback performs the one-time verifier exchange before setting session cookies. Production remains unchanged and the branch is not deployable until Step 3 scopes every data operation by owner. Patched Next.js to 16.3.5 for the current critical advisory.
+
+2026-09-20 lifecycle decision: User approved immediate account lock/hide/sign-out on deletion request, a 30-day recovery grace period, and automated permanent purge afterward. Provider backup copies age out on the documented provider schedule. Implementation must include revocation, reauthenticated recovery, idempotent purge, audit state, failed-job handling and release-time disclosure of the current backup schedule.

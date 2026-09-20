@@ -1,18 +1,51 @@
 "use client";
 
-import { useActionState } from "react";
+import { type FormEvent, useState } from "react";
 
-import { sendMagicLink, type MagicLinkState } from "./actions";
-
-const initialState: MagicLinkState = { status: "idle" };
+import { authClient } from "@/lib/auth/client";
 
 export function MagicLinkForm() {
-  const [state, formAction, isPending] = useActionState(
-    sendMagicLink,
-    initialState,
-  );
+  const [sentEmail, setSentEmail] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isPending, setIsPending] = useState(false);
 
-  if (state.status === "sent") {
+  async function submitMagicLink(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const email = String(form.get("email") || "")
+      .trim()
+      .toLowerCase();
+
+    if (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setErrorMessage("Enter a valid email address.");
+      return;
+    }
+
+    setIsPending(true);
+    setErrorMessage(null);
+
+    try {
+      const { error } = await authClient.signIn.magicLink({
+        email,
+        callbackURL: "/auth/callback",
+      });
+
+      if (error) {
+        console.error("magic link request failed", error.code);
+        setErrorMessage("We could not send the sign-in link. Please try again.");
+        return;
+      }
+
+      setSentEmail(email);
+    } catch (error) {
+      console.error("magic link request failed", error);
+      setErrorMessage("We could not send the sign-in link. Please try again.");
+    } finally {
+      setIsPending(false);
+    }
+  }
+
+  if (sentEmail) {
     return (
       <div className="auth-confirmation" role="status">
         <span className="auth-confirmation-icon" aria-hidden="true">
@@ -20,10 +53,10 @@ export function MagicLinkForm() {
         </span>
         <h2>Check your email</h2>
         <p>
-          We sent a sign-in link to <strong>{state.email}</strong>. The link can
+          We sent a sign-in link to <strong>{sentEmail}</strong>. The link can
           be used once and expires shortly.
         </p>
-        <button type="button" onClick={() => window.location.reload()}>
+        <button type="button" onClick={() => setSentEmail(null)}>
           Use another email
         </button>
       </div>
@@ -31,7 +64,7 @@ export function MagicLinkForm() {
   }
 
   return (
-    <form action={formAction} className="auth-form">
+    <form onSubmit={submitMagicLink} className="auth-form">
       <label htmlFor="email">Email address</label>
       <input
         id="email"
@@ -43,9 +76,9 @@ export function MagicLinkForm() {
         required
         autoFocus
       />
-      {state.status === "error" ? (
+      {errorMessage ? (
         <p className="auth-error" role="alert">
-          {state.message}
+          {errorMessage}
         </p>
       ) : null}
       <button type="submit" disabled={isPending}>

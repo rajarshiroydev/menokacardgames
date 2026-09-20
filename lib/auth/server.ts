@@ -1,6 +1,7 @@
 import "server-only";
 
 import { createNeonAuth } from "@neondatabase/auth/next/server";
+import { handleAuthProxyRequest } from "@neondatabase/auth/server";
 
 function requiredEnvironmentVariable(name: string) {
   const value = process.env[name];
@@ -10,12 +11,24 @@ function requiredEnvironmentVariable(name: string) {
   return value;
 }
 
+const baseUrl = requiredEnvironmentVariable("NEON_AUTH_BASE_URL");
+const cookieSecret = requiredEnvironmentVariable("NEON_AUTH_COOKIE_SECRET");
+
 export const auth = createNeonAuth({
-  baseUrl: requiredEnvironmentVariable("NEON_AUTH_BASE_URL"),
+  baseUrl,
   cookies: {
-    secret: requiredEnvironmentVariable("NEON_AUTH_COOKIE_SECRET"),
+    secret: cookieSecret,
   },
 });
+
+export function exchangeMagicLinkVerifier(request: Request) {
+  return handleAuthProxyRequest({
+    request,
+    path: "get-session",
+    baseUrl,
+    cookieSecret,
+  });
+}
 
 export async function getHostSession() {
   const { data, error } = await auth.getSession();
