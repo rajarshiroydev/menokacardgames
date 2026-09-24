@@ -67,6 +67,7 @@ npm run build
 
 ## Planning and project context
 
+- [Session handoff](docs/HANDOFF.md) — where work stopped and what comes next.
 - [Feature list](docs/FEATURES.md) — plain-language list of everything the app does today.
 - [Feature plan](docs/FEATURE-PLAN.md) — ongoing roadmap, multi-user transition, ranking decisions and acceptance criteria.
 - [Project memory](docs/PROJECT-MEMORY.md) — durable working agreements and current decisions.

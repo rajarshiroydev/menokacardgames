@@ -15,19 +15,9 @@ This is the canonical living feature-planning document. Add future feature plans
 - Use Neon Managed Better Auth with email magic links only for the initial login flow. Password and social login are out of the initial scope.
 - Account deletion immediately locks the ledger, hides it from normal access and signs the host out. Recovery is available for 30 days, followed by permanent automated deletion of the account and all owned application data. Provider backups age out under the provider's documented retention schedule.
 
-## Baseline behavior verified at planning start
+## Starting point
 
-The app uses Next.js 16, React 19, Vercel and Neon Postgres. `components/poker-ledger.tsx` combines UI and orchestration. `lib/poker/game.ts` contains game rules and leaderboard calculations. `schema.sql` defines global players and poker sessions; route handlers in `app/api/players` and `app/api/sessions` access them.
-
-- Player names are globally unique by normalized name. IDs identify players, not authenticated users.
-- Reads, saves/imports, discard and restore have no account authorization. Permanent deletion uses a shared server password. Adding a login screen alone will not isolate data.
-- Saved result JSON includes player ID, name, ending chips, net and optional buy-in history. Session-level data includes starting stack, hand count and blind history. `ante` currently means big blind.
-- `buildLeaderboard` sorts by sum of raw net results. Its `wins` counter means profitable sessions, not hands won. The graph also accumulates raw chip results.
-- Active games use unscoped browser local storage. History refresh can automatically upload legacy history from another unscoped key. Account migration must handle this explicitly.
-- Session numbers are global, and the API returns the full ledger. A route can add a missing database column at request time; replace this with versioned migrations.
-- Validation checks net against investment when buy-in history exists, but does not fully enforce whole-session chip conservation or distinct participants.
-
-The screenshots show the scale problem, not verified ownership or original investment. No production database inspection was performed for this plan. Never assign historical sessions by guessing from names or chip amounts.
+At planning start (2026-09-20) the app had one global, unauthenticated ledger: globally unique player names, a shared deletion password, raw-chip rankings, unscoped browser storage with automatic legacy upload, and table changes made during requests. Steps 2–3L replaced all of these; the decision history below records how.
 
 ## Product model and initial scope
 

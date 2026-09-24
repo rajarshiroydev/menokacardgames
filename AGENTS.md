@@ -10,7 +10,7 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 # Project instructions
 
-Read `docs/PROJECT-MEMORY.md`, `docs/FEATURE-PLAN.md`, and `CONTEXT.md` before substantial work. The feature plan is the canonical shared planning document. Record decisions, unresolved questions, acceptance criteria and status there; plans are not implementation authorization.
+Start with `docs/HANDOFF.md` (current state and next step), then read `docs/PROJECT-MEMORY.md`, `docs/FEATURE-PLAN.md`, and `CONTEXT.md` before substantial work. The feature plan is the canonical shared planning document. Record decisions, unresolved questions, acceptance criteria and status there; plans are not implementation authorization.
 
 ## Repository map
 
@@ -23,7 +23,7 @@ Read `docs/PROJECT-MEMORY.md`, `docs/FEATURE-PLAN.md`, and `CONTEXT.md` before s
 ## Working agreements
 
 - Never push unless explicitly requested. Preserve paused branches and unrelated local work.
-- UI redesign is paused on `ui-sporty-glass-refresh`; multi-user transition implementation is active on `feature/multi-user-transition`, one reviewed step at a time.
+- UI redesign is paused on `ui-sporty-glass-refresh`; multi-user transition implementation is active on `feature/multi-user-transition`, one reviewed step at a time. Update `docs/HANDOFF.md` at the end of each session.
 - Keep preview on port 3005 available during UI work; inspect the existing listener before starting another.
 - Preserve betting, blinds, seating, rebuys, undo and session flows unless explicitly changing them.
 - Never expose environment secrets or seed/test production. Database changes require versioned migrations, isolated rehearsal and rollback planning.
