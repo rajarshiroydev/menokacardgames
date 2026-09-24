@@ -62,6 +62,8 @@ export type Hand = {
   bigBlindIndex: number;
   currentPlayer: number | null;
   splitSel?: number[] | null;
+  /** When the hand was dealt. Older hands lack it. */
+  dealtAt?: number;
   /** State restored when a newly dealt hand returns to the between-hands page. */
   dealerIndexBefore?: number;
   anteBefore?: number;
@@ -94,6 +96,20 @@ export type BlindLevelRecord = {
   bigBlind: number;
 };
 
+/** What undo needs to deal the last completed hand again exactly. */
+export type CompletedHand = {
+  stacksBefore: number[];
+  buyInsBefore?: number[][];
+  /** Older games lack the fields below; undo then works them out. */
+  handNo?: number;
+  dealtAt?: number;
+  dealerIndexBefore?: number;
+  anteBefore?: number;
+  blindLevelBefore?: number;
+  blindsBefore?: BlindSchedule | null;
+  blindLevelsBefore?: BlindLevelRecord[];
+};
+
 export type BlindHistory = {
   plans: BlindPlan[];
   levels: BlindLevelRecord[];
@@ -118,10 +134,7 @@ export type GameState = {
   dealerIndex: number;
   log: string[];
   winnerAnnouncement?: WinnerAnnouncement | null;
-  lastHand?: {
-    stacksBefore: number[];
-    buyInsBefore?: number[][];
-  } | null;
+  lastHand?: CompletedHand | null;
   _setupCount: number;
 };
 

@@ -1,6 +1,6 @@
 # Session handoff
 
-Updated 2026-09-24 on `feature/multi-user-transition`. Steps 3M and 3N (security hardening) are committed. Step 3O (import preview) is committed. Step 3P (Pin Chart removal) is committed. Step 3Q (rebuys are the full starting stack) is committed. Step 3R is committed. Step 3S (bet slider up to all in) is committed. Step 3T (raise sizes and short all-ins) is committed. Nothing pushed. A follow-up shows raises as totals ("min raise to ₹1,300 (₹200 more)", "Raise to ₹1,300"); it is committed. The user declined adding cumulative short all-ins and the full-big-blind call for a short-posted blind. Replace this file at the end of each session; don't let it grow.
+Updated 2026-09-24 on `feature/multi-user-transition`. Steps 3M and 3N (security hardening) are committed. Step 3O (import preview) is committed. Step 3P (Pin Chart removal) is committed. Step 3Q (rebuys are the full starting stack) is committed. Step 3R is committed. Step 3S (bet slider up to all in) is committed. Step 3T (raise sizes and short all-ins) is committed. Step 3U (undo last hand restores the same dealer and blinds) is built and checked but not committed yet. Nothing pushed. A follow-up shows raises as totals ("min raise to ₹1,300 (₹200 more)", "Raise to ₹1,300"); it is committed. The user declined adding cumulative short all-ins and the full-big-blind call for a short-posted blind. Replace this file at the end of each session; don't let it grow.
 
 ## Read first
 
@@ -23,9 +23,10 @@ The multi-user transition is built and rehearsed on the isolated Neon branch `mu
 - Step 3Q: every rebuy is the full starting stack (up to 64 buy-ins per player); older half-size rebuys stay valid
 - Step 3R: blinds shown large in a box under the pot and between hands
 - Step 3S: a bet slider snaps from the minimum through 1.5×, 2×, 5× and 10× to all in; the Bet/Raise button follows it, and the separate All In button is gone
+- Step 3U: Undo last hand deals the undone hand again with the same dealer, blinds and blind level
 - Step 3T: a raise must add at least the last full raise on the street (starting at the big blind); a short all-in lets players who already acted only call or fold
 
-Production and Vercel are unchanged. Step 3T passed 105 tests, types and lint; the last build ran at 3S (3T changes no build or runtime setup).
+Production and Vercel are unchanged. Step 3U passed 110 tests, types and lint. Step 3T passed 105 tests, types and lint; the last build ran at 3S (3T changes no build or runtime setup).
 
 ## Next step
 

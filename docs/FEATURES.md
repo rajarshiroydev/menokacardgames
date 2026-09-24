@@ -114,7 +114,7 @@ This is a plain-language list of everything Menoka Card Games can do today. It i
 - **Undo (one action):** undoes a player's latest action in the current betting round, and that player acts again.
 - **Back To Between Hands:** clears everything from the current hand, returns every chip including the blinds, and puts the dealer, blinds and hand number back to how they were before the hand was dealt.
 - **Cancel hand:** refunds every chip from the current hand, including the blinds, and immediately deals a fresh hand with the same hand number. The dealer button moves on to the next player. To keep the same dealer, use Back To Between Hands instead.
-- **Undo last hand:** reverses the last completed hand, restoring everyone's stacks and buy-ins from before it.
+- **Undo last hand:** reverses the last completed hand and deals it again exactly as it was first dealt: the same dealer, small blind and big blind, the same blind level (even for timed blinds that have since gone up), everyone's stacks and buy-ins from before it, and its log lines removed. If the next hand was already dealt, that hand is undone too, and any rebuy made in between is taken back. Only the most recent completed hand can be undone.
 - **Discard game:** throws away the game in progress without saving. Asks for confirmation first.
 - Every one of these asks for confirmation before anything changes.
 

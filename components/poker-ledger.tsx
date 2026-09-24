@@ -14,10 +14,12 @@ import {
 
 import {
   activeIndexes,
+  belongsToHand,
   bigBlindAtLevel,
   betStops,
   blindStatus,
   buyInPlayer,
+  completedHandRecord,
   dealNewHand,
   DEFAULT_BLIND_SCHEDULE,
   editBlindSchedule,
@@ -34,12 +36,12 @@ import {
   nextPlayerToAct,
   pendingIndexes,
   pendingBlindPlan,
-  playerBuyIns,
   returnToBetweenHands,
   smallBlindFor,
   STAGES,
   startingBigBlind,
   totalBuyIns,
+  undoLastHand,
 } from "@/lib/poker/game";
 import {
   accountGameStorageKey,
@@ -288,15 +290,6 @@ function recordWin(game: GameState, line: string) {
   game.log = game.log.slice(0, 80);
 }
 
-function belongsToHand(line: string, handNo: number) {
-  return (
-    line.startsWith(`Hand ${handNo} `) ||
-    line.startsWith(`Hand ${handNo}:`) ||
-    line.startsWith(`H${handNo} `) ||
-    line.startsWith(`H${handNo}:`)
-  );
-}
-
 function awardPot(game: GameState, playerIndex: number, automatic = false) {
   const hand = game.hand;
   if (!hand) return 0;
@@ -308,12 +301,7 @@ function awardPot(game: GameState, playerIndex: number, automatic = false) {
       pot,
     )}${automatic ? " (others folded)" : ""}`,
   );
-  game.lastHand = {
-    stacksBefore: [...hand.stacksBeforeHand],
-    buyInsBefore: game.players.map((_, index) => [
-      ...playerBuyIns(game, index),
-    ]),
-  };
+  game.lastHand = completedHandRecord(game);
   game.winnerAnnouncement = {
     names: [game.players[playerIndex].name],
     pot,
@@ -1006,12 +994,7 @@ export function PokerLedger({
         .map((index) => next.players[index].name)
         .join(", ")}`,
     );
-    next.lastHand = {
-      stacksBefore: [...hand.stacksBeforeHand],
-      buyInsBefore: next.players.map((_, index) => [
-        ...playerBuyIns(next, index),
-      ]),
-    };
+    next.lastHand = completedHandRecord(next);
     next.winnerAnnouncement = {
       names: winners.map((index) => next.players[index].name),
       pot: hand.pot,
@@ -1123,22 +1106,7 @@ export function PokerLedger({
     }
     ask("Undo the last completed hand?", "Undo hand", () => {
       const next = structuredClone(game);
-      if (!next.lastHand) return;
-      next.players.forEach((player, index) => {
-        player.stack = next.lastHand?.stacksBefore[index] ?? player.stack;
-        player.buyIns = next.lastHand?.buyInsBefore?.[index] ?? player.buyIns;
-      });
-      const undoneNumber = next.hand ? next.hand.no - 1 : next.handNo;
-      const currentHandNumber = next.hand?.no;
-      next.log = next.log.filter(
-        (line) =>
-          !belongsToHand(line, undoneNumber) &&
-          (!currentHandNumber || !belongsToHand(line, currentHandNumber)),
-      );
-      next.handNo = undoneNumber - 1;
-      next.lastHand = null;
-      next.hand = null;
-      dealNewHand(next);
+      if (!undoLastHand(next)) return;
       setGame(next);
       showToast("Hand undone");
     });
@@ -4223,8 +4191,8 @@ function Modal({
                 <p>
                   Undo Restores A Player&apos;s Latest Action On The Current
                   Street. Cancel Hand Refunds Every Chip From That Hand,
-                  Including Blinds. Undo Last Hand Restores Its Starting
-                  Stacks. Finish And Save Game Session Requires One Completed
+                  Including Blinds. Undo Last Hand Deals It Again Exactly As
+                  Before, With The Same Stacks, Dealer And Blinds. Finish And Save Game Session Requires One Completed
                   Hand; Any Unfinished Hand Is Refunded In The Saved Results.
                 </p>
               </div>
