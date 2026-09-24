@@ -142,7 +142,7 @@ export function validateSession(input: unknown): PokerSession {
   const ended = asSafeInteger(candidate.ended, "ended", { min: date });
   const ante = asSafeInteger(candidate.ante, "ante", { min: 1 });
   const startStack = asSafeInteger(candidate.startStack, "starting stack", {
-    min: 0,
+    min: 1,
   });
   const hands = asSafeInteger(candidate.hands, "hands", { min: 1 });
   const blindHistory =

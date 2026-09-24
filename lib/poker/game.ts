@@ -2,8 +2,6 @@ import type {
   BlindPlan,
   BlindSchedule,
   GameState,
-  LeaderboardEntry,
-  PokerSession,
 } from "./types";
 
 export const STAGES = ["PREFLOP", "FLOP", "TURN", "RIVER"] as const;
@@ -17,6 +15,23 @@ export const DEFAULT_BLIND_SCHEDULE: BlindSchedule = {
 
 export function formatRupees(value: number) {
   return `₹${Number(value).toLocaleString("en-IN")}`;
+}
+
+const chipFormat = new Intl.NumberFormat("en-IN", { signDisplay: "exceptZero" });
+const percentFormat = new Intl.NumberFormat("en-IN", {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+  signDisplay: "exceptZero",
+});
+
+/** Signed chip amount for standings, without implying real money. */
+export function formatChipChange(value: number) {
+  return chipFormat.format(value);
+}
+
+/** Signed percentage rounded for display only. */
+export function formatPercent(value: number) {
+  return `${percentFormat.format(value)}%`;
 }
 
 export function formatDate(timestamp: number) {
@@ -397,37 +412,4 @@ export function returnToBetweenHands(game: GameState) {
   game.winnerAnnouncement = null;
   game.hand = null;
   return true;
-}
-
-export function buildLeaderboard(sessions: PokerSession[]) {
-  const entries = new Map<string, LeaderboardEntry>();
-
-  sessions.filter((session) => !session.discardedAt).forEach((session) => {
-    session.results.forEach((result) => {
-      const key = result.playerId
-        ? `id:${result.playerId}`
-        : `name:${playerKey(result.name)}`;
-      const entry = entries.get(key) ?? {
-        playerId: result.playerId,
-        name: result.name,
-        net: 0,
-        sessions: 0,
-        hands: 0,
-        wins: 0,
-        best: result.net,
-        worst: result.net,
-      };
-
-      entry.name = result.name;
-      entry.net += result.net;
-      entry.sessions += 1;
-      entry.hands += session.hands;
-      if (result.net > 0) entry.wins += 1;
-      entry.best = Math.max(entry.best, result.net);
-      entry.worst = Math.min(entry.worst, result.net);
-      entries.set(key, entry);
-    });
-  });
-
-  return [...entries.values()].sort((a, b) => b.net - a.net);
 }

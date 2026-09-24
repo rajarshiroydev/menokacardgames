@@ -16,19 +16,19 @@ import {
   activeIndexes,
   bigBlindAtLevel,
   blindStatus,
-  buildLeaderboard,
   buyInPlayer,
   dealNewHand,
   DEFAULT_BLIND_SCHEDULE,
   editBlindSchedule,
+  formatChipChange,
   formatDate,
+  formatPercent,
   formatRupees,
   minimumRaise,
   nextBuyIn,
   nextPlayerToAct,
   pendingIndexes,
   pendingBlindPlan,
-  playerKey,
   playerBuyIns,
   returnToBetweenHands,
   smallBlindFor,
@@ -42,10 +42,15 @@ import {
   LEGACY_HISTORY_STORAGE_KEY,
   prepareLegacySessionsForAdoption,
 } from "@/lib/poker/storage";
+import {
+  buildStandings,
+  type IneligibleReason,
+  type Standings,
+  type StandingsEntry,
+} from "@/lib/poker/standings";
 import type {
   BlindSchedule,
   GameState,
-  LeaderboardEntry,
   PlayerAction,
   PlayerProfile,
   PokerSession,
@@ -2002,7 +2007,7 @@ function SetupView({
             id="stack"
             type="number"
             inputMode="numeric"
-            min="0"
+            min="1"
             value={stack}
             onChange={(event) => setStack(Number(event.target.value))}
           />
@@ -2274,7 +2279,7 @@ function SetupView({
         className="primary full start-game"
         type="submit"
         disabled={
-          !selectionComplete || stack < 0 || ante < 1 || !scheduleValid
+          !selectionComplete || stack < 1 || ante < 1 || !scheduleValid
         }
       >
         Start Game
@@ -3224,6 +3229,11 @@ function SessionCard({
   );
 }
 
+const INELIGIBLE_REASON_TEXT: Record<IneligibleReason, string> = {
+  "no-investment": "no chips were bought in",
+  "unverified-accounting": "the saved chip totals do not add up",
+};
+
 function HistoryView({
   history,
   discardedSessions,
@@ -3247,39 +3257,85 @@ function HistoryView({
   onExport: () => void;
   onImport: (event: ChangeEvent<HTMLInputElement>) => void;
 }) {
-  const leaderboard = useMemo(() => buildLeaderboard(history), [history]);
+  const standings = useMemo(() => buildStandings(history), [history]);
+  const leaderboard = standings.entries;
+  const sessionTitles = useMemo(
+    () =>
+      new Map(
+        history.map((session) => [
+          session.id,
+          session.name || `Game ${session.sessionNumber || ""}`,
+        ]),
+      ),
+    [history],
+  );
   const latestSessions = useMemo(
     () => [...history].sort((a, b) => b.date - a.date),
     [history],
   );
   const importInput = useRef<HTMLInputElement>(null);
 
-  function leaderboardRow(entry: LeaderboardEntry, rank: number) {
+  function leaderboardRow(entry: StandingsEntry) {
+    const profitableRate = Math.round(
+      (entry.profitableSessions / entry.totalSessions) * 100,
+    );
+    const stats = [
+      ["Ranked", `${entry.eligibleSessions}/${entry.totalSessions}`],
+      ["Hands", entry.hands.toLocaleString("en-IN")],
+      ["Profitable", `${entry.profitableSessions} (${profitableRate}%)`],
+      ["Invested", entry.invested.toLocaleString("en-IN")],
+      ["Net chips", formatChipChange(entry.net)],
+    ];
     return (
-      <div
-        className="prow leaderboard-row"
-        key={entry.playerId ?? entry.name}
-      >
-        <span className={`rank ${rank === 0 ? "gold" : ""}`}>
-          {rank + 1}
-        </span>
-        <div className="nm">
-          <b>{entry.name}</b>
-          <small>
-            {entry.sessions} session{entry.sessions === 1 ? "" : "s"} ·{" "}
-            {entry.hands} hands · won {entry.wins}
-          </small>
-        </div>
-        <div className="align-right">
-          <b className={entry.net >= 0 ? "pos" : "neg"}>
-            {entry.net >= 0 ? "+" : ""}
-            {formatRupees(entry.net)}
-          </b>
-          <div className="muted best">
-            best {entry.best >= 0 ? "+" : ""}
-            {formatRupees(entry.best)}
+      <div className="prow leaderboard-row" key={entry.key}>
+        <div className="leaderboard-head">
+          <span className={`rank ${entry.rank === 1 ? "gold" : ""}`}>
+            {entry.rank ?? "–"}
+          </span>
+          <b className="leaderboard-name">{entry.name}</b>
+          <div className="leaderboard-score">
+            {entry.averageReturn === null ? (
+              <>
+                <b className="muted">Unranked</b>
+                <small>no verified buy-ins</small>
+              </>
+            ) : (
+              <>
+                <b className={entry.averageReturn >= 0 ? "pos" : "neg"}>
+                  {formatPercent(entry.averageReturn)}
+                </b>
+                <small>
+                  {entry.eligibleSessions} session
+                  {entry.eligibleSessions === 1 ? "" : "s"}
+                </small>
+              </>
+            )}
           </div>
         </div>
+        <dl className="leaderboard-stats">
+          {stats.map(([label, value]) => (
+            <div key={label}>
+              <dt>{label}</dt>
+              <dd
+                className={
+                  label === "Net chips" ? (entry.net >= 0 ? "pos" : "neg") : ""
+                }
+              >
+                {value}
+              </dd>
+            </div>
+          ))}
+        </dl>
+        {entry.ineligible.length ? (
+          <ul className="leaderboard-excluded">
+            {entry.ineligible.map(({ sessionId, reason }) => (
+              <li key={sessionId}>
+                Not ranked: {sessionTitles.get(sessionId) ?? sessionId} —{" "}
+                {INELIGIBLE_REASON_TEXT[reason]}
+              </li>
+            ))}
+          </ul>
+        ) : null}
       </div>
     );
   }
@@ -3305,7 +3361,7 @@ function HistoryView({
         ) : loading ? (
           <p className="muted">Loading the shared ledger…</p>
         ) : leaderboard.length ? (
-          <LeaderboardChart entries={leaderboard} sessions={history} />
+          <LeaderboardChart standings={standings} />
         ) : (
           <p className="muted">
             No Saved Sessions Yet. Finish A Game With “Finish And Save Game
@@ -3332,9 +3388,7 @@ function HistoryView({
                 {leaderboard.length - 5 === 1 ? "" : "s"}
               </summary>
               <div className="history-expander-content leaderboard-list">
-                {leaderboard
-                  .slice(5)
-                  .map((entry, index) => leaderboardRow(entry, index + 5))}
+                {leaderboard.slice(5).map(leaderboardRow)}
               </div>
             </details>
           ) : null}
@@ -3421,81 +3475,118 @@ function HistoryView({
   );
 }
 
-function LeaderboardChart({
-  entries,
-  sessions,
-}: {
-  entries: LeaderboardEntry[];
-  sessions: PokerSession[];
-}) {
+type ChartMetric = "return" | "chips";
+
+function LeaderboardChart({ standings }: { standings: Standings }) {
+  const [metric, setMetric] = useState<ChartMetric>("return");
   const chartWidth = 480;
   const chartHeight = 280;
   const plot = { top: 18, right: 14, bottom: 48, left: 58 };
   const plotWidth = chartWidth - plot.left - plot.right;
   const plotHeight = chartHeight - plot.top - plot.bottom;
-  const chronologicalSessions = [...sessions].sort(
-    (a, b) => a.date - b.date,
-  );
-  const keyFor = (playerId: string | undefined, name: string) =>
-    playerId ? `id:${playerId}` : `name:${playerKey(name)}`;
-  const colors = ["#e2ad4f", "#72b9e6", "#83c9a6", "#d8735b", "#b99be8", "#e190bd"];
-  const sortedKeys = entries
-    .map((entry) => keyFor(entry.playerId, entry.name))
-    .sort();
+  const sessionCount = standings.timeline.length;
+  const colors = [
+    "#e2ad4f",
+    "#72b9e6",
+    "#83c9a6",
+    "#d8735b",
+    "#b99be8",
+    "#e190bd",
+    "#d9dde0",
+    "#a9ad5c",
+  ];
+  const sortedKeys = standings.entries.map((entry) => entry.key).sort();
   const colorByKey = new Map(
     sortedKeys.map((key, index) => [key, colors[index % colors.length]]),
   );
-  const totals = new Map(sortedKeys.map((key) => [key, 0]));
-  const series = entries.map((entry) => {
-    const key = keyFor(entry.playerId, entry.name);
+  const series = standings.entries.map((entry) => {
+    const line = standings.series.get(entry.key);
+    const points =
+      metric === "return"
+        ? (line?.returns ?? []).flatMap((point) =>
+            point
+              ? [
+                  {
+                    index: point.sessionIndex,
+                    value: point.runningAverage,
+                    marked: point.sessionReturn !== null,
+                    label: `${entry.name}, session ${point.sessionIndex}: ${
+                      point.sessionReturn === null
+                        ? "did not play"
+                        : `session return ${formatPercent(point.sessionReturn)}`
+                    } · running average ${formatPercent(point.runningAverage)} over ${
+                      point.sampleCount
+                    } session${point.sampleCount === 1 ? "" : "s"}`,
+                  },
+                ]
+              : [],
+          )
+        : (line?.cumulativeNet ?? []).map((value, index, values) => ({
+            index,
+            value,
+            marked: index > 0 && value !== values[index - 1],
+            label: `${entry.name}, session ${index}: ${formatChipChange(value)} chips`,
+          }));
     return {
-      color: colorByKey.get(key) ?? colors[0],
+      color: colorByKey.get(entry.key) ?? colors[0],
       entry,
-      key,
-      values: [0],
+      points,
     };
-  });
-
-  chronologicalSessions.forEach((session) => {
-    session.results.forEach((result) => {
-      const key = keyFor(result.playerId, result.name);
-      totals.set(key, (totals.get(key) ?? 0) + result.net);
-    });
-    series.forEach((player) => {
-      player.values.push(totals.get(player.key) ?? 0);
-    });
   });
 
   const maxMagnitude = Math.max(
     1,
-    ...series.flatMap((player) => player.values.map(Math.abs)),
+    ...series.flatMap((player) => player.points.map((point) => Math.abs(point.value))),
   );
-  const axisMagnitude = Math.max(5_000, Math.ceil(maxMagnitude / 5_000) * 5_000);
+  const step = metric === "return" ? 25 : 5_000;
+  const axisMagnitude = Math.max(step, Math.ceil(maxMagnitude / step) * step);
   const yTicks = [axisMagnitude, axisMagnitude / 2, 0, -axisMagnitude / 2, -axisMagnitude];
   const xFor = (index: number) =>
-    plot.left +
-    (index / Math.max(1, chronologicalSessions.length)) * plotWidth;
+    plot.left + (index / Math.max(1, sessionCount)) * plotWidth;
   const yFor = (value: number) =>
     plot.top + ((axisMagnitude - value) / (axisMagnitude * 2)) * plotHeight;
-  const xLabelEvery = Math.max(
-    1,
-    Math.ceil(chronologicalSessions.length / 13),
-  );
+  const xLabelEvery = Math.max(1, Math.ceil(sessionCount / 13));
   const tickLabel = (value: number) => {
-    if (value === 0) return "₹0";
+    if (value === 0) return metric === "return" ? "0%" : "0";
     const sign = value > 0 ? "+" : "−";
     const magnitude = Math.abs(value);
-    return `${sign}₹${magnitude >= 1_000 ? `${magnitude / 1_000}k` : magnitude}`;
+    if (metric === "return") return `${sign}${magnitude}%`;
+    return `${sign}${magnitude >= 1_000 ? `${magnitude / 1_000}k` : magnitude}`;
   };
+  const title =
+    metric === "return" ? "Average session return" : "Raw chip results";
+  const description =
+    metric === "return"
+      ? "Each colored line shows one player's running average session return, starting at their first ranked session. Sessions they missed carry the previous average forward."
+      : "Each colored line shows one player's cumulative raw chip result after every session.";
 
   return (
-    <figure
-      className="leaderboard-chart"
-      aria-label="Overall standings by net profit and loss"
-    >
+    <figure className="leaderboard-chart" aria-label={title}>
       <figcaption>
-        <b>Profit and loss over time</b>
-        <span>Cumulative net after each session</span>
+        <div>
+          <b>{title}</b>
+          <span>
+            {metric === "return"
+              ? "Running average after each session"
+              : "Cumulative chips after each session"}
+          </span>
+        </div>
+        <div className="chart-metric-toggle" role="group" aria-label="Graph view">
+          <button
+            type="button"
+            aria-pressed={metric === "return"}
+            onClick={() => setMetric("return")}
+          >
+            Return %
+          </button>
+          <button
+            type="button"
+            aria-pressed={metric === "chips"}
+            onClick={() => setMetric("chips")}
+          >
+            Raw Chips
+          </button>
+        </div>
       </figcaption>
       <svg
         className="leaderboard-line-plot"
@@ -3503,11 +3594,8 @@ function LeaderboardChart({
         role="img"
         aria-labelledby="standings-chart-title standings-chart-description"
       >
-        <title id="standings-chart-title">Cumulative poker profit and loss</title>
-        <desc id="standings-chart-description">
-          Each colored line shows one player&apos;s cumulative net result after
-          every session.
-        </desc>
+        <title id="standings-chart-title">{title}</title>
+        <desc id="standings-chart-description">{description}</desc>
 
         {yTicks.map((tick) => (
           <g key={tick}>
@@ -3537,7 +3625,7 @@ function LeaderboardChart({
           y2={chartHeight - plot.bottom}
         />
 
-        {Array.from({ length: chronologicalSessions.length + 1 }, (_, index) => (
+        {Array.from({ length: sessionCount + 1 }, (_, index) => (
           <g key={index}>
             <line
               className="leaderboard-session-tick"
@@ -3547,7 +3635,7 @@ function LeaderboardChart({
               y2={chartHeight - plot.bottom + 5}
             />
             {index === 0 ||
-            index === chronologicalSessions.length ||
+            index === sessionCount ||
             index % xLabelEvery === 0 ? (
               <text
                 className="leaderboard-axis-value"
@@ -3571,52 +3659,53 @@ function LeaderboardChart({
         </text>
 
         {series.map((player) => {
-          const points = player.values
-            .map((value, index) => `${xFor(index)},${yFor(value)}`)
-            .join(" ");
-
+          const last = player.points.at(-1);
           return (
-            <g key={player.key}>
+            <g key={player.entry.key}>
               <polyline
                 className="leaderboard-player-line"
-                points={points}
+                points={player.points
+                  .map((point) => `${xFor(point.index)},${yFor(point.value)}`)
+                  .join(" ")}
                 stroke={player.color}
               />
-              {player.values.map((value, index) => {
-                if (index === 0 || value === player.values[index - 1]) {
-                  return null;
-                }
-                return (
+              {player.points.map((point) =>
+                point.marked ? (
                   <circle
                     className="leaderboard-player-point"
-                    cx={xFor(index)}
-                    cy={yFor(value)}
+                    cx={xFor(point.index)}
+                    cy={yFor(point.value)}
                     fill={player.color}
-                    key={index}
-                    r={index === player.values.length - 1 ? 4.5 : 3}
+                    key={point.index}
+                    r={point === last ? 4.5 : 3}
                   >
-                    <title>
-                      {player.entry.name}, session {index}: {value >= 0 ? "+" : ""}
-                      {formatRupees(value)}
-                    </title>
+                    <title>{point.label}</title>
                   </circle>
-                );
-              })}
+                ) : null,
+              )}
             </g>
           );
         })}
       </svg>
       <div className="leaderboard-line-legend">
-        {series.map((player) => (
-          <div className="leaderboard-legend-player" key={player.key}>
-            <span style={{ backgroundColor: player.color }} />
-            <b>{player.entry.name}</b>
-            <small className={player.entry.net >= 0 ? "pos" : "neg"}>
-              {player.entry.net >= 0 ? "+" : ""}
-              {formatRupees(player.entry.net)}
-            </small>
-          </div>
-        ))}
+        {series.map(({ color, entry }) => {
+          const value = metric === "return" ? entry.averageReturn : entry.net;
+          return (
+            <div className="leaderboard-legend-player" key={entry.key}>
+              <span style={{ backgroundColor: color }} />
+              <b>{entry.name}</b>
+              <small
+                className={value === null ? "muted" : value >= 0 ? "pos" : "neg"}
+              >
+                {value === null
+                  ? "unranked"
+                  : metric === "return"
+                    ? formatPercent(value)
+                    : formatChipChange(value)}
+              </small>
+            </div>
+          );
+        })}
       </div>
     </figure>
   );

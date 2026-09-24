@@ -41,6 +41,18 @@ describe("session validation", () => {
 
   test("rejects unsafe or incomplete session data", () => {
     assert.throws(
+      () =>
+        validateSession({
+          ...validSession,
+          startStack: 0,
+          results: [
+            { name: "Raj", net: 0, end: 0 },
+            { name: "Sam", net: 0, end: 0 },
+          ],
+        }),
+      /starting stack must be a valid whole number/,
+    );
+    assert.throws(
       () => validateSession({ ...validSession, hands: 0 }),
       /hands must be a valid whole number/,
     );

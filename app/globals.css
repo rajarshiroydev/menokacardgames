@@ -1362,9 +1362,135 @@ hr {
   font-weight: 400;
 }
 
+.leaderboard-chart figcaption {
+  flex-wrap: wrap;
+}
+
+.leaderboard-chart figcaption > div:first-child {
+  display: grid;
+  flex: 1 1 180px;
+  gap: 3px;
+  min-width: 0;
+}
+
+.prow.leaderboard-row {
+  display: grid;
+  gap: 12px;
+}
+
+.leaderboard-head {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.leaderboard-name {
+  font-size: 16px;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.leaderboard-score {
+  display: grid;
+  justify-items: end;
+  gap: 1px;
+  text-align: right;
+}
+
+.leaderboard-score b {
+  font-family: var(--mono);
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.leaderboard-score small {
+  color: var(--dim);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.leaderboard-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(74px, 1fr));
+  gap: 8px 12px;
+  margin: 0;
+  padding-top: 10px;
+  border-top: 1px solid var(--hair);
+}
+
+.leaderboard-stats dt {
+  color: var(--dim);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+.leaderboard-stats dd {
+  margin: 1px 0 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.leaderboard-stats dd.pos {
+  color: var(--green);
+}
+
+.leaderboard-stats dd.neg {
+  color: var(--danger);
+}
+
+.leaderboard-excluded {
+  display: grid;
+  gap: 3px;
+  margin: 0;
+  padding: 0;
+  color: var(--dim);
+  font-size: 11px;
+  list-style: none;
+}
+
 .leaderboard-chart figcaption span {
   color: var(--dim);
   font-size: 10px;
+}
+
+.chart-metric-toggle {
+  display: flex;
+  flex: none;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--bg);
+}
+
+.chart-metric-toggle button {
+  min-height: 32px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--dim);
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.chart-metric-toggle button[aria-pressed="true"] {
+  background: var(--gold);
+  color: var(--on-gold);
+}
+
+.chart-metric-toggle button:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
 }
 
 .leaderboard-line-plot {

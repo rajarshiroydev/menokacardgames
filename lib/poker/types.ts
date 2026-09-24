@@ -126,14 +126,3 @@ export type PokerSession = {
   hands: number;
   results: SessionResult[];
 };
-
-export type LeaderboardEntry = {
-  playerId?: string;
-  name: string;
-  net: number;
-  sessions: number;
-  hands: number;
-  wins: number;
-  best: number;
-  worst: number;
-};
