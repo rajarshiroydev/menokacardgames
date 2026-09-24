@@ -182,7 +182,12 @@ This is a plain-language list of everything Menoka Card Games can do today. It i
   - the game in progress on this device is cleared
   - the sign-in page confirms the account is locked
 - **30 days to change your mind.** Sign in again with the same email within **30 days** to see the "Deletion is scheduled" screen. It shows when you asked and the exact date and time everything will be deleted. Press **Recover my account** and everything comes back exactly as it was.
-- **After 30 days** the account can no longer be recovered, and everything is permanently deleted. *The automatic permanent deletion is the next piece of work and is not running yet.*
+- **After 30 days** the account can no longer be recovered. An automatic check runs once a day (around 08:30 India time) and permanently deletes every account whose 30 days are up:
+  - first the sign-in identity, so the email can no longer sign in to it
+  - then the account and everything in it: players, games, results, buy-ins and records
+  - if anything goes wrong, nothing is half-deleted: the account stays locked and the check tries again the next day
+- **Deletion can be up to a day late** because the check runs daily. An account is never deleted early.
+- **After deletion,** signing in with the same email starts a brand-new, empty account.
 - **Backups:** our database provider (Neon) keeps short-term recovery copies of deleted data for up to **6 hours**, after which it is gone for good.
 - **A record is kept** of each deletion request and each recovery, visible only to that account.
 - **Using another email** signs you in to a different, separate account; it does not recover the locked one.
@@ -220,4 +225,3 @@ These are known limitations, not planned features. Planned work is in the [featu
 - The **Pin Chart** button on the hand-rankings chart remembers its setting but no longer does anything visible. It used to keep the chart on the game screen, which was removed on 19 September 2026.
 - A game in progress can't be moved to another device before it's saved.
 - Import handles up to 250 new games per file.
-- Accounts waiting for deletion are not yet permanently deleted automatically after 30 days; that scheduled job is the next piece of work. Until it exists, this version must not be released.

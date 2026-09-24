@@ -184,3 +184,30 @@ Post-migration: the same counts, with the migration recorded, the trigger presen
 Browser round trip: a request locked the dev account and left zero live Neon Auth sessions, and the ledger APIs returned 401. After sign-in, the locked screen showed the 30-day deadline. Recovery restored 9 players, 24 sessions and 72 results, and the audit trail showed `account.deletion_requested → account.deletion_cancelled`.
 
 Rollback for development is branch reset. The migration only adds a policy, a grant and a trigger; it changes no data.
+
+## 0007 account purge
+
+- Date: 2026-09-24
+- Project: `wispy-morning-76468301`
+- Isolated branch: `multi-user-auth` (`br-little-rain-ay5fufwv`)
+- Production changed: no
+- Migration: `migrations/0007_account_purge.sql`
+
+Setup: `menoka_purge` was created with SQL as `LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS`. It got a random in-database password, then a Neon console reset whose value only the user handled.
+
+Purge-role permission probes (10 of 10 passed): it connects as `menoka_purge` and can call `purge_auth_identity_exists`. It cannot read `accounts`, `players`, `poker_sessions`, `session_results`, `audit_events`, `account_purges` or `neon_auth.user`, and cannot delete from `accounts`.
+
+End-to-end run through `GET /api/cron/purge-accounts`:
+
+| Check | Result |
+| --- | --- |
+| No or wrong bearer secret | 401 |
+| Overdue fixture (Auth user, account 31 days past request, 1 player, 1 audit event) | Purged in one run (`due 1, purged 1, failed 0`) |
+| Fixture Auth user and sessions | 0 remaining |
+| Fixture account, player and audit rows | 0 remaining |
+| Purge log | Complete after 1 attempt, no error, Auth user ID cleared |
+| Second run | `due 0` |
+| Other accounts | Real ledger at 9 players, 24 sessions, 72 results; second host account unchanged |
+| Healthchecks.io | Start and success pings sent without errors |
+
+Rollback for development is branch reset. The migration adds a table, functions and grants. It deletes data only when the job runs, and only for accounts past their 30-day deadline.
