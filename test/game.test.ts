@@ -8,6 +8,7 @@ import {
   betStops,
   buildLeaderboard,
   buyInPlayer,
+  completedHandRecord,
   dealNewHand,
   editBlindSchedule,
   mayRaise,
@@ -20,6 +21,7 @@ import {
   resetRaiseRules,
   returnToBetweenHands,
   totalBuyIns,
+  undoLastHand,
   undoRaiseRules,
 } from "../lib/poker/game.ts";
 import type {
@@ -682,3 +684,113 @@ describe("bet slider stops", () => {
     assert.deepEqual(betStops(100, 0), []);
   });
 });
+
+/** Awards the pot the way the table does, leaving the between-hands state. */
+function finishHand(game: GameState, winner: number) {
+  const hand = dealtHand(game);
+  game.players[winner].stack += hand.pot;
+  game.lastHand = completedHandRecord(game);
+  game.hand = null;
+}
+
+describe("undo last hand", () => {
+  const MINUTE_MS = 60_000;
+
+  function playTo(game: GameState, hands: number, start = 1_000) {
+    // Stored games always carry buy-ins (see readStoredGame).
+    game.players.forEach((player) => {
+      player.buyIns ??= [game.startStack];
+    });
+    for (let index = 0; index < hands; index += 1) {
+      dealNewHand(game, start + index * MINUTE_MS);
+      betTo(game, dealtHand(game).currentPlayer!, 300);
+      finishHand(game, index % game.players.length);
+    }
+  }
+
+  function snapshot(game: GameState) {
+    return { ...structuredClone(game), lastHand: null, winnerAnnouncement: null };
+  }
+
+  test("deals the undone hand again with the same dealer and blinds", () => {
+    const game = gameState();
+    playTo(game, 3);
+    dealNewHand(game, 10 * MINUTE_MS);
+    const before = snapshot(game);
+    betTo(game, dealtHand(game).currentPlayer!, 400);
+    finishHand(game, 1);
+
+    assert.ok(undoLastHand(game, 99 * MINUTE_MS));
+    assert.deepEqual(game, before);
+  });
+
+  test("also undoes a next hand that was already dealt", () => {
+    const game = gameState();
+    playTo(game, 2);
+    dealNewHand(game, 10 * MINUTE_MS);
+    const before = snapshot(game);
+    finishHand(game, 2);
+    dealNewHand(game, 11 * MINUTE_MS);
+    betTo(game, dealtHand(game).currentPlayer!, 500);
+
+    assert.ok(undoLastHand(game, 99 * MINUTE_MS));
+    assert.deepEqual(game, before);
+  });
+
+  test("keeps the blind level of the undone hand, by hands or by time", () => {
+    for (const schedule of [
+      { unit: "hands", every: 1, raiseType: "multiply", raiseBy: 2 },
+      { unit: "minutes", every: 2, raiseType: "add", raiseBy: 100 },
+    ] satisfies BlindSchedule[]) {
+      const game = gameState(schedule);
+      game.blindPlans = [
+        { effectiveHand: 1, effectiveAt: 0, baseBigBlind: 100, schedule },
+      ];
+      playTo(game, 3, 0);
+      dealNewHand(game, 5 * MINUTE_MS);
+      const before = snapshot(game);
+      finishHand(game, 0);
+      dealNewHand(game, 9 * MINUTE_MS);
+
+      assert.ok(undoLastHand(game, 60 * MINUTE_MS));
+      assert.deepEqual(game, before, schedule.unit);
+    }
+  });
+
+  test("takes back a rebuy made after the undone hand", () => {
+    const game = gameState();
+    playTo(game, 1);
+    dealNewHand(game, 10 * MINUTE_MS);
+    const before = snapshot(game);
+    const hand = dealtHand(game);
+    const loser = hand.currentPlayer!;
+    betTo(game, loser, game.players[loser].stack + hand.committed[loser]);
+    finishHand(game, (loser + 1) % 3);
+    buyInPlayer(game, loser);
+
+    assert.ok(undoLastHand(game));
+    assert.deepEqual(game, before);
+  });
+
+  test("finds the dealer for games saved before the fuller undo record", () => {
+    const game = gameState();
+    playTo(game, 2);
+    dealNewHand(game, 10 * MINUTE_MS);
+    const before = snapshot(game);
+    finishHand(game, 0);
+    const last = game.lastHand!;
+    game.lastHand = {
+      stacksBefore: last.stacksBefore,
+      buyInsBefore: last.buyInsBefore,
+    };
+
+    assert.ok(undoLastHand(game, 10 * MINUTE_MS));
+    assert.equal(game.dealerIndex, before.dealerIndex);
+    assert.deepEqual(game.players, before.players);
+    assert.equal(
+      dealtHand(game).bigBlindIndex,
+      before.hand!.bigBlindIndex,
+    );
+  });
+});
+

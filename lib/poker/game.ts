@@ -2,6 +2,7 @@ import { MAX_BUY_INS } from "./buy-ins.ts";
 import type {
   BlindPlan,
   BlindSchedule,
+  CompletedHand,
   GameState,
   LeaderboardEntry,
   PokerSession,
@@ -440,6 +441,7 @@ export function dealNewHand(game: GameState, now = Date.now()) {
     smallBlindIndex,
     bigBlindIndex,
     currentPlayer: null,
+    dealtAt: now,
     dealerIndexBefore,
     anteBefore,
     blindLevelBefore,
@@ -456,6 +458,83 @@ function previousEligibleIndex(inHand: boolean[], from: number) {
     if (inHand[index]) return index;
   }
   return -1;
+}
+
+export function belongsToHand(line: string, handNo: number) {
+  return (
+    line.startsWith(`Hand ${handNo} `) ||
+    line.startsWith(`Hand ${handNo}:`) ||
+    line.startsWith(`H${handNo} `) ||
+    line.startsWith(`H${handNo}:`)
+  );
+}
+
+/** Recorded when a hand's pot is awarded, before the hand is cleared. */
+export function completedHandRecord(game: GameState): CompletedHand {
+  const hand = game.hand!;
+  return {
+    stacksBefore: [...hand.stacksBeforeHand],
+    buyInsBefore: game.players.map((_, index) => [
+      ...playerBuyIns(game, index),
+    ]),
+    handNo: hand.no,
+    dealtAt: hand.dealtAt,
+    dealerIndexBefore: hand.dealerIndexBefore,
+    anteBefore: hand.anteBefore,
+    blindLevelBefore: hand.blindLevelBefore,
+    blindsBefore: hand.blindsBefore,
+    blindLevelsBefore: hand.blindLevelsBefore
+      ? structuredClone(hand.blindLevelsBefore)
+      : undefined,
+  };
+}
+
+/**
+ * Undoes the last completed hand, and the next hand if it has been dealt,
+ * then deals the undone hand again from the same seat, blinds and time, so
+ * it matches the moment it was first dealt. Only one hand can be undone.
+ */
+export function undoLastHand(game: GameState, now = Date.now()) {
+  const last = game.lastHand;
+  if (!last) return false;
+  const undoneNumber =
+    last.handNo ?? (game.hand ? game.hand.no - 1 : game.handNo);
+  const currentHandNumber = game.hand?.no;
+  // The dealer of the undone hand, for games saved without the record.
+  const undoneDealer =
+    game.hand?.no === undoneNumber + 1
+      ? (game.hand.dealerIndexBefore ?? game.dealerIndex)
+      : game.dealerIndex;
+
+  game.players.forEach((player, index) => {
+    player.stack = last.stacksBefore[index] ?? player.stack;
+    player.buyIns = last.buyInsBefore?.[index] ?? player.buyIns;
+  });
+  game.log = game.log.filter(
+    (line) =>
+      !belongsToHand(line, undoneNumber) &&
+      (!currentHandNumber || !belongsToHand(line, currentHandNumber)),
+  );
+  game.handNo = undoneNumber - 1;
+  if (last.dealerIndexBefore !== undefined) {
+    game.dealerIndex = last.dealerIndexBefore;
+  } else {
+    // Any seat whose next funded player is the undone dealer deals the
+    // same positions again.
+    const funded = last.stacksBefore.map((stack) => stack > 0);
+    game.dealerIndex = previousEligibleIndex(funded, undoneDealer);
+  }
+  if (last.anteBefore !== undefined) {
+    game.ante = last.anteBefore;
+    game.blindLevel = last.blindLevelBefore ?? game.blindLevel;
+    game.blinds = last.blindsBefore ?? null;
+    game.blindLevels = structuredClone(last.blindLevelsBefore ?? []);
+  }
+  game.lastHand = null;
+  game.winnerAnnouncement = null;
+  game.hand = null;
+  dealNewHand(game, last.dealtAt ?? now);
+  return true;
 }
 
 /** Refunds the current hand and restores the state from immediately before it was dealt. */
