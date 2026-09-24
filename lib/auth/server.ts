@@ -49,13 +49,6 @@ function signInRequiredResponse() {
   );
 }
 
-export async function requireHostSession() {
-  const session = await getHostSession();
-  if (session) return { session } as const;
-
-  return { response: signInRequiredResponse() } as const;
-}
-
 export async function requireHostAccount() {
   const session = await getHostSession();
   if (!session) return { response: signInRequiredResponse() } as const;

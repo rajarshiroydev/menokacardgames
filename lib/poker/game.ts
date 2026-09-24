@@ -42,10 +42,6 @@ export function formatDate(timestamp: number) {
   });
 }
 
-export function playerKey(name: string) {
-  return name.trim().toLowerCase().replace(/\s+/g, " ");
-}
-
 export function activeIndexes(game: GameState) {
   if (!game.hand) return [];
   return game.players
