@@ -2239,7 +2239,8 @@ function GameView(props: GameViewProps) {
   const net = (index: number) =>
     game.players[index].stack - totalBuyIns(game, index);
   const enoughPlayers = game.players.filter((player) => player.stack > 0).length >= 2;
-  const now = useBlindClock(Boolean(hand) && game.blinds?.unit === "minutes");
+  // Timed levels run on the clock between hands too, so keep the countdown live.
+  const now = useBlindClock(game.blinds?.unit === "minutes");
   const blinds = blindStatus(game, now);
   const pendingPlan = pendingBlindPlan(game);
   const nextBlinds = `${formatRupees(blinds.nextSmallBlind)}/${formatRupees(
@@ -2254,6 +2255,35 @@ function GameView(props: GameViewProps) {
             blinds.handsLeft === 1 ? "" : "s"
           }`
         : `${nextBlinds} in ${formatCountdown(blinds.msLeft)}`;
+  const blindsDisplay = (
+    <div className="blinds-display" aria-label="Current blinds">
+      <div className="blinds-label">
+        <span>Blinds</span>
+        {blinds.schedule ? (
+          <span className="blinds-level">Level {blinds.level + 1}</span>
+        ) : null}
+      </div>
+      <div className="blinds-value">
+        <span>{formatRupees(blinds.smallBlind)}</span>
+        <span className="blinds-separator">/</span>
+        <span>{formatRupees(blinds.bigBlind)}</span>
+      </div>
+      {blinds.schedule && !pendingPlan ? (
+        <div
+          className={`blind-timer ${blinds.dueNow ? "due" : ""}`}
+          aria-live="polite"
+        >
+          {blindNote}
+        </div>
+      ) : null}
+      {pendingPlan ? (
+        <div className="blind-timer due">
+          From hand {pendingPlan.effectiveHand}:{" "}
+          {describeBlindSchedule(pendingPlan.schedule)}
+        </div>
+      ) : null}
+    </div>
+  );
 
   return (
     <>
@@ -2265,6 +2295,7 @@ function GameView(props: GameViewProps) {
               ? "The table has enough players with chips to deal again."
               : "Fewer than two players have chips remaining. A busted player can buy in to continue."}
           </p>
+          {blindsDisplay}
           {!game.winnerAnnouncement ? (
             <div className="between-hands-actions">
               <button
@@ -2311,25 +2342,8 @@ function GameView(props: GameViewProps) {
           <div className="pot-panel">
             <div className="stage">Pot</div>
             <div className="pot">{formatRupees(hand.pot)}</div>
-            <div className="muted pot-meta">
-              hand {hand.no} · blinds {formatRupees(blinds.smallBlind)}/
-              {formatRupees(blinds.bigBlind)}
-              {blinds.schedule ? ` · level ${blinds.level + 1}` : ""}
-            </div>
-            {blinds.schedule && !pendingPlan ? (
-              <div
-                className={`blind-timer ${blinds.dueNow ? "due" : ""}`}
-                aria-live="polite"
-              >
-                {blindNote}
-              </div>
-            ) : null}
-            {pendingPlan ? (
-              <div className="blind-timer due">
-                From hand {pendingPlan.effectiveHand}:{" "}
-                {describeBlindSchedule(pendingPlan.schedule)}
-              </div>
-            ) : null}
+            <div className="muted pot-meta">hand {hand.no}</div>
+            {blindsDisplay}
             <div className="table-positions" aria-label="Table positions">
               <span>Dealer · {game.players[hand.dealerIndex].name}</span>
               <span>
