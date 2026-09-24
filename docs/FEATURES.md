@@ -61,7 +61,7 @@ This is a plain-language list of everything Menoka Card Games can do today. It i
   - how: **multiply** the big blind (for example ×2, minimum ×1.1) or **add** a fixed amount (at least 1)
   - the setup screen previews the next few big blind levels, for example 100 → 200 → 400 → 800
 - **Blinds never change mid-hand.** A new level always starts when the next hand is dealt. For timed blinds, if the time runs out during a hand, the increase waits for the next deal.
-- **During play** the screen shows the current blinds and level, plus a countdown: hands left for hand-based levels, or minutes and seconds for timed ones. When the blinds go up, a short message says so.
+- **Blinds are easy to see.** During a hand, the current blinds appear in large numbers in a box right under the pot, labelled with the level when blinds rise. The same box appears between hands. Inside it is the countdown to the next level: hands left for hand-based levels, or minutes and seconds for timed ones (this keeps counting between hands). When the blinds go up, a short message says so.
 - **Edit Blind Plan** between hands. You can switch rising blinds on or off or change the schedule. Changes start with the next dealt hand, and the screen shows when the new plan begins.
 - **Blind history is saved** with each game (see section 11).
 

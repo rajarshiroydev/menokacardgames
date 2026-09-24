@@ -1,16 +1,16 @@
 # Session handoff
 
-Updated 2026-09-24 on `feature/multi-user-transition`. Steps 3M and 3N (security hardening) are committed. Step 3O (import preview) is committed. Step 3P (Pin Chart removal) is committed. Step 3Q (rebuys are the full starting stack) is committed (clean tree, nothing pushed). Replace this file at the end of each session; don't let it grow.
+Updated 2026-09-24 on `feature/multi-user-transition`. Steps 3M and 3N (security hardening) are committed. Step 3O (import preview) is committed. Step 3P (Pin Chart removal) is committed. Step 3Q (rebuys are the full starting stack) is committed. Step 3R (larger blinds display) is committed (clean tree, nothing pushed). Replace this file at the end of each session; don't let it grow.
 
 ## Read first
 
 1. [`PROJECT-MEMORY.md`](./PROJECT-MEMORY.md): working agreements, decisions and environment facts. Short.
-2. [`FEATURE-PLAN.md`](./FEATURE-PLAN.md): the "Pending choices" table and the latest decision-history entries (Step 3Q is the newest).
+2. [`FEATURE-PLAN.md`](./FEATURE-PLAN.md): the "Pending choices" table and the latest decision-history entries (Step 3R is the newest).
 3. [`FEATURES.md`](./FEATURES.md): what the app does today, in plain language. Update it with every user-visible change.
 
 ## Where things stand
 
-The multi-user transition is built and rehearsed on the isolated Neon branch `multi-user-auth`, through Step 3Q:
+The multi-user transition is built and rehearsed on the isolated Neon branch `multi-user-auth`, through Step 3R:
 
 - magic-link sign-in; owner-scoped data enforced by server checks, row-level security and the restricted `menoka_app` role
 - normalized accounting and average-session-return standings
@@ -21,6 +21,7 @@ The multi-user transition is built and rehearsed on the isolated Neon branch `mu
 - Step 3O: Import shows a review screen (counts, how each player maps, new games) before saving; re-importing an export adds nothing
 - Step 3P: the dead Pin Chart button is gone
 - Step 3Q: every rebuy is the full starting stack (up to 64 buy-ins per player); older half-size rebuys stay valid
+- Step 3R: blinds shown large in a box under the pot and between hands
 
 Production and Vercel are unchanged. The last full gate passed: 95 tests, types, lint and build.
 
