@@ -42,6 +42,9 @@ import {
   LEGACY_HISTORY_STORAGE_KEY,
   prepareLegacySessionsForAdoption,
 } from "@/lib/poker/storage";
+import { useRouter } from "next/navigation";
+
+import { DELETION_GRACE_PERIOD_DAYS } from "@/lib/accounts/lifecycle";
 import { authClient } from "@/lib/auth/client";
 import {
   RECENT_SIGN_IN_REQUIRED,
@@ -79,6 +82,7 @@ type ModalState =
     }
   | {
       kind: "recent-sign-in";
+      purpose: string;
       email: string;
       confirmLabel: string;
       onConfirm: () => void;
@@ -312,6 +316,7 @@ export function PokerLedger({
   accountId: string;
   accountEmail: string;
 }) {
+  const router = useRouter();
   const gameStorageKey = accountGameStorageKey(accountId);
   const [game, setGame] = useState<GameState | null>(null);
   const [history, setHistory] = useState<PokerSession[]>([]);
@@ -675,9 +680,10 @@ export function PokerLedger({
     });
   }
 
-  function askForRecentSignIn() {
+  function askForRecentSignIn(purpose = "permanent deletion") {
     setModal({
       kind: "recent-sign-in",
+      purpose,
       email: accountEmail,
       confirmLabel: "Email Me A Sign-In Link",
       onConfirm: () => void sendRecentSignInLink(),
@@ -695,6 +701,47 @@ export function PokerLedger({
     } catch (error) {
       console.error("recent sign-in link request failed", error);
       showToast("We Could Not Send The Sign-In Link");
+    }
+  }
+
+  function deleteAccount() {
+    setModal({
+      kind: "confirm",
+      danger: true,
+      message: `Delete your account? Your players, games and standings are locked and hidden straight away, and you are signed out on every device. You can recover everything by signing in again within ${DELETION_GRACE_PERIOD_DAYS} days. After that, everything is permanently deleted and cannot be recovered. Our database provider keeps short-term recovery copies of deleted data for up to 6 hours.`,
+      confirmLabel: "Delete My Account",
+      onConfirm: () => void requestAccountDeletion(),
+    });
+  }
+
+  async function requestAccountDeletion() {
+    try {
+      const response = await fetch("/api/account", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "request-deletion" }),
+      });
+      const data = (await response.json().catch(() => ({}))) as {
+        code?: string;
+        error?: string;
+      };
+      if (!response.ok) {
+        throw new ApiError(
+          data.error || "Account deletion was not requested",
+          response.status,
+          data.code,
+        );
+      }
+      window.localStorage.removeItem(gameStorageKey);
+      router.replace("/auth/sign-in?deletion=requested");
+    } catch (error) {
+      if (needsRecentSignIn(error)) {
+        askForRecentSignIn("deleting your account");
+        return;
+      }
+      showToast(
+        error instanceof Error ? error.message : "Account deletion was not requested",
+      );
     }
   }
 
@@ -1370,6 +1417,7 @@ export function PokerLedger({
             onOpenHands={openHands}
             onReviewLegacySessions={() => setReviewingLegacySessions(true)}
             onRules={() => setModal({ kind: "rules" })}
+            onDeleteAccount={deleteAccount}
           />
         ) : view === "history" ? (
           <HistoryView
@@ -1440,6 +1488,7 @@ export function PokerLedger({
             onOpenHands={openHands}
             onReviewLegacySessions={() => setReviewingLegacySessions(true)}
             onRules={() => setModal({ kind: "rules" })}
+            onDeleteAccount={deleteAccount}
           />
         )}
       </div>
@@ -1493,6 +1542,7 @@ function HomeView({
   onOpenHands,
   onReviewLegacySessions,
   onRules,
+  onDeleteAccount,
 }: {
   hasGame: boolean;
   historyCount: number;
@@ -1506,6 +1556,7 @@ function HomeView({
   onOpenHands: () => void;
   onReviewLegacySessions: () => void;
   onRules: () => void;
+  onDeleteAccount: () => void;
 }) {
   return (
     <section className="home-view">
@@ -1618,6 +1669,14 @@ function HomeView({
 
       <button className="home-rules" type="button" onClick={onRules}>
         Read The Poker Rules
+      </button>
+
+      <button
+        className="home-delete-account"
+        type="button"
+        onClick={onDeleteAccount}
+      >
+        Delete My Account
       </button>
     </section>
   );
@@ -3973,11 +4032,11 @@ function Modal({
         <div className="msg">
           {state.kind === "recent-sign-in" ? (
             <>
-              For safety, permanent deletion needs a sign-in from the last{" "}
+              For safety, {state.purpose} needs a sign-in from the last{" "}
               {RECENT_SIGN_IN_WINDOW_MS / 60_000} minutes. We will email a new
               sign-in link to{" "}
               <span className="literal-text">{state.email}</span>. Open it on
-              this device, then delete again.
+              this device, then try again.
             </>
           ) : (
             state.message

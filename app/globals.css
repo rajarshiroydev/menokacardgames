@@ -508,6 +508,23 @@ hr {
   color: rgb(33 23 5 / 70%);
 }
 
+.home-delete-account {
+  display: block;
+  margin: 18px auto 0;
+  padding: 8px 12px;
+  border: 0;
+  background: transparent;
+  color: var(--dim);
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.home-delete-account:hover {
+  color: var(--danger);
+}
+
 .home-rules {
   width: max-content;
   margin: 18px auto 0;
@@ -2533,7 +2550,7 @@ hr {
   }
 
   .view-home .home-hero {
-    grid-row: 1 / span 4;
+    grid-row: 1 / span 5;
     align-self: center;
   }
 
@@ -2557,6 +2574,11 @@ hr {
   .view-home .home-rules {
     grid-column: 2;
     grid-row: 4;
+  }
+
+  .view-home .home-delete-account {
+    grid-column: 2;
+    grid-row: 5;
   }
 
   .ledger-shell:not(.view-home) {
@@ -2675,7 +2697,8 @@ hr {
 }
 
 .auth-form button,
-.auth-confirmation button {
+.auth-confirmation button,
+.auth-primary {
   min-height: 54px;
   margin-top: 6px;
   border: 0;
@@ -2687,7 +2710,23 @@ hr {
   cursor: pointer;
 }
 
-.auth-form button:disabled {
+.auth-primary {
+  width: 100%;
+}
+
+.auth-notice {
+  margin: 0 0 18px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--sunk);
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.auth-form button:disabled,
+.auth-primary:disabled {
   cursor: wait;
   opacity: 0.65;
 }

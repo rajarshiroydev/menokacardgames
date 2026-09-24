@@ -151,3 +151,36 @@ Reconciliation:
 A restricted `menoka_app` smoke test created a temporary account and saved a balanced two-player session through the same atomic query used by the API. The first request saved one session, two results and two events; repeating the same client session ID saved zero rows and left the next local number at 2. Cleanup removed the temporary account and every dependent row.
 
 The initial cleanup attempt exposed that an immediate `RESTRICT` player-history foreign key could be checked before the parallel session cascade during whole-account deletion. The final migration uses a deferred `NO ACTION` check instead. It still rejects direct deletion of a player with history at transaction commit, while allowing all account-owned rows to cascade together. Runtime grants on both accounting tables are limited to `SELECT` and `INSERT`.
+
+## 0006 account deletion requests
+
+- Date: 2026-09-24
+- Project: `wispy-morning-76468301`
+- Isolated branch: `multi-user-auth` (`br-little-rain-ay5fufwv`)
+- Production changed: no
+- Migration: `migrations/0006_account_deletion_requests.sql`
+
+Pre-migration: 1 account (active), 9 owned players, 24 owned sessions, 72 results, 0 audit events, no lifecycle trigger, no runtime audit grants.
+
+Restricted-role rehearsal (as `menoka_app`, one transaction, rolled back):
+
+| Check | Result |
+| --- | --- |
+| Runs as the restricted role | Passed |
+| Request locks the account | Passed |
+| Database stamps the request time, ignoring a supplied date | Passed |
+| Repeated request changes nothing | Passed |
+| Backdating a pending request is rejected | Passed |
+| App role cannot move an account to `purging` | Passed |
+| Audit events for another account are rejected by row policy | Passed |
+| Another account cannot be locked | Passed |
+| Recovery inside the grace period reactivates the account | Passed |
+| Audit trail records request and cancellation | Passed |
+| Another account cannot read the audit trail | Passed |
+| Ordinary account updates, such as session numbering, still work | Passed |
+
+Post-migration: the same counts, with the migration recorded, the trigger present and runtime `audit_events` grants of `INSERT, SELECT`. No fixtures remained.
+
+Browser round trip: a request locked the dev account and left zero live Neon Auth sessions, and the ledger APIs returned 401. After sign-in, the locked screen showed the 30-day deadline. Recovery restored 9 players, 24 sessions and 72 results, and the audit trail showed `account.deletion_requested → account.deletion_cancelled`.
+
+Rollback for development is branch reset. The migration only adds a policy, a grant and a trigger; it changes no data.

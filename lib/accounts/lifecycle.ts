@@ -10,6 +10,23 @@ export type HostAccount = {
   deletionRequestedAt: number | null;
 };
 
+/** Days a host can recover their account after requesting deletion. */
+export const DELETION_GRACE_PERIOD_DAYS = 30;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** When a deletion request stops being recoverable and becomes due for purging. */
+export function deletionDeadline(deletionRequestedAt: number) {
+  return deletionRequestedAt + DELETION_GRACE_PERIOD_DAYS * DAY_MS;
+}
+
+export function canRecoverAccount(account: HostAccount, now = Date.now()) {
+  return (
+    account.lifecycleState === "deletion_requested" &&
+    account.deletionRequestedAt !== null &&
+    now < deletionDeadline(account.deletionRequestedAt)
+  );
+}
+
 export function accountAccessError(account: HostAccount) {
   if (account.lifecycleState === "active") return null;
 

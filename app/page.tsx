@@ -1,6 +1,8 @@
 import { redirect } from "next/navigation";
 
+import { AccountLocked } from "@/components/account-locked";
 import { PokerLedger } from "@/components/poker-ledger";
+import { canRecoverAccount, deletionDeadline } from "@/lib/accounts/lifecycle";
 import { provisionHostAccount } from "@/lib/accounts/server";
 import { getHostSession } from "@/lib/auth/server";
 
@@ -23,7 +25,20 @@ export default async function Home() {
           <button type="submit">Sign out</button>
         </form>
       </header>
-      <PokerLedger accountId={account.id} accountEmail={session.user.email} />
+      {account.lifecycleState === "active" ? (
+        <PokerLedger accountId={account.id} accountEmail={session.user.email} />
+      ) : (
+        <AccountLocked
+          email={session.user.email}
+          deletionRequestedAt={account.deletionRequestedAt}
+          deletionDeadline={
+            account.deletionRequestedAt === null
+              ? null
+              : deletionDeadline(account.deletionRequestedAt)
+          }
+          recoverable={canRecoverAccount(account)}
+        />
+      )}
     </>
   );
 }

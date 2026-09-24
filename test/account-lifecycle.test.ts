@@ -3,6 +3,9 @@ import { describe, test } from "node:test";
 
 import {
   accountAccessError,
+  canRecoverAccount,
+  DELETION_GRACE_PERIOD_DAYS,
+  deletionDeadline,
   isAuthUserId,
   type HostAccount,
 } from "../lib/accounts/lifecycle.ts";
@@ -39,5 +42,27 @@ describe("host account boundary", () => {
       accountAccessError(account("purging")) || "",
       /permanently deleted/,
     );
+  });
+});
+
+describe("account deletion grace period", () => {
+  const requestedAt = Date.UTC(2026, 8, 20);
+  const day = 24 * 60 * 60 * 1000;
+
+  test("schedules permanent deletion thirty days after the request", () => {
+    assert.equal(DELETION_GRACE_PERIOD_DAYS, 30);
+    assert.equal(deletionDeadline(requestedAt), requestedAt + 30 * day);
+  });
+
+  test("allows recovery only before the deadline", () => {
+    const pending = account("deletion_requested");
+    assert.equal(canRecoverAccount(pending, requestedAt + 29 * day), true);
+    assert.equal(canRecoverAccount(pending, requestedAt + 30 * day - 1), true);
+    assert.equal(canRecoverAccount(pending, requestedAt + 30 * day), false);
+  });
+
+  test("never recovers active or purging accounts", () => {
+    assert.equal(canRecoverAccount(account("active"), requestedAt), false);
+    assert.equal(canRecoverAccount(account("purging"), requestedAt), false);
   });
 });

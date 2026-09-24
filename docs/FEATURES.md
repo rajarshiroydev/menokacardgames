@@ -17,7 +17,7 @@ This is a plain-language list of everything Menoka Card Games can do today. It i
 - **Staying signed in.** A sign-in lasts about a week on that device. The top of the screen shows "Signed in as" your email address, with a **Sign out** button.
 - **Every host has a private ledger.** The person who signs in is the *host*. Each host has their own friend list, games, history and standings. Two hosts never see each other's data, even if they both have a friend called "Rajarshi". The same friend in two hosts' lists is two separate records with separate histories.
 - **Friends don't need accounts.** Friends are just names in the host's list. Only the host signs in.
-- **Locked accounts.** If an account is locked (for example after a deletion request, once that feature exists), the app blocks all of its data until it is recovered.
+- **Locked accounts.** While an account is waiting to be deleted, all of its data is blocked and hidden. Signing in shows the "Deletion is scheduled" screen instead of the ledger (see section 14).
 
 ## 2. Home screen
 
@@ -25,8 +25,9 @@ This is a plain-language list of everything Menoka Card Games can do today. It i
 - **All Time Standings**, showing how many saved game sessions there are.
 - **Existing Players**, showing how many players are ready to play.
 - **Poker Hand Rankings**: a chart of all ten poker hands, strongest to weakest, with an example for each.
-- **Read the poker rules**: the house rules explained in the app (see section 16).
-- **Unassigned device data**: appears only if this device has games saved before accounts existed (see section 15).
+- **Read the poker rules**: the house rules explained in the app (see section 17).
+- **Delete My Account**: a small link at the bottom (see section 14).
+- **Unassigned device data**: appears only if this device has games saved before accounts existed (see section 16).
 
 ## 3. Players (your friend list)
 
@@ -171,25 +172,40 @@ This is a plain-language list of everything Menoka Card Games can do today. It i
 - **Only your own data.** A host can never delete, or even see, another host's players or games.
 - **The 10-minute window may change** once we see how it works in practice.
 
-## 14. Backup: export and import
+## 14. Deleting your account
+
+- **Delete My Account** is a small link at the bottom of the home screen. A confirmation explains exactly what happens before anything changes.
+- **Recent sign-in required.** Like permanent deletion, it only works within **10 minutes** of signing in. Otherwise the app offers to email a fresh sign-in link.
+- **What happens straight away:**
+  - your players, games and standings are locked and hidden
+  - you are signed out on **every** device, not just this one
+  - the game in progress on this device is cleared
+  - the sign-in page confirms the account is locked
+- **30 days to change your mind.** Sign in again with the same email within **30 days** to see the "Deletion is scheduled" screen. It shows when you asked and the exact date and time everything will be deleted. Press **Recover my account** and everything comes back exactly as it was.
+- **After 30 days** the account can no longer be recovered, and everything is permanently deleted. *The automatic permanent deletion is the next piece of work and is not running yet.*
+- **Backups:** our database provider (Neon) keeps short-term recovery copies of deleted data for up to **6 hours**, after which it is gone for good.
+- **A record is kept** of each deletion request and each recovery, visible only to that account.
+- **Using another email** signs you in to a different, separate account; it does not recover the locked one.
+
+## 15. Backup: export and import
 
 - **Export Backup** downloads a file of all your saved games (not discarded ones), dated with today's date.
 - **Import** reads a backup file and adds only games that aren't already in your ledger. It never overwrites or duplicates existing games. Every imported game goes through the same server checks as a normal save.
 - Imported games belong to the signed-in host. Games from your own backup keep their links to your players. Players listed only by name are matched to your friend list by name, and new names are added to it.
 - If a file refers to player records that aren't in your ledger, for example a backup from another host's account, the whole import is refused with an "Unknown player" message and nothing is added.
 
-## 15. Data from before accounts
+## 16. Data from before accounts
 
 - **Games saved on a device before accounts existed** stay separate and are never added to anyone's ledger automatically.
 - **Unfinished game:** the host can review it and adopt it into their account, as long as they don't already have a game in progress on that device.
 - **Saved games:** the host sees a list with each game's date, big blind and players, ticks the ones that belong to them, and adds only those. Unticked games stay unassigned on the device.
 
-## 16. Reference and help
+## 17. Reference and help
 
 - **Poker hand rankings chart**, from the home screen.
 - **Poker rules**, from the home screen. They explain this table's house rules: setup, positions, turn order, minimum raises, buy-ins, splits and how to fix mistakes.
 
-## 17. Devices and installation
+## 18. Devices and installation
 
 - Designed for phones first, with layouts for tablets and desktops.
 - Can be added to a phone's home screen and opened like an app, full screen and without the browser bar.
@@ -204,4 +220,4 @@ These are known limitations, not planned features. Planned work is in the [featu
 - The **Pin Chart** button on the hand-rankings chart remembers its setting but no longer does anything visible. It used to keep the chart on the game screen, which was removed on 19 September 2026.
 - A game in progress can't be moved to another device before it's saved.
 - Import handles up to 250 new games per file.
-- Account deletion (with a 30-day recovery period) is approved but not built yet.
+- Accounts waiting for deletion are not yet permanently deleted automatically after 30 days; that scheduled job is the next piece of work. Until it exists, this version must not be released.

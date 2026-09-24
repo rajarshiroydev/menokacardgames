@@ -38,6 +38,8 @@ export function exchangeMagicLinkVerifier(request: Request) {
   });
 }
 
+export type HostSession = NonNullable<Awaited<ReturnType<typeof getHostSession>>>;
+
 export async function getHostSession() {
   const { data, error } = await auth.getSession();
   if (error || !data?.user) return null;
@@ -45,48 +47,60 @@ export async function getHostSession() {
 }
 
 function signInRequiredResponse() {
-  return Response.json(
-    { error: "Sign in to access this ledger" },
+  return noStoreJson({ error: "Sign in to access this ledger" }, 401);
+}
+
+function noStoreJson(body: unknown, status: number) {
+  return Response.json(body, {
+    status,
+    headers: { "Cache-Control": "no-store" },
+  });
+}
+
+export function recentSignInRequiredResponse(action: string) {
+  return noStoreJson(
     {
-      status: 401,
-      headers: { "Cache-Control": "no-store" },
+      error: `Sign in again to confirm ${action}`,
+      code: RECENT_SIGN_IN_REQUIRED,
     },
+    403,
   );
 }
 
-export async function requireHostAccount() {
+/**
+ * Verified session and account in any lifecycle state. Only account
+ * management may use this; ledger data must go through requireHostAccount.
+ */
+export async function requireAccountSession() {
   const session = await getHostSession();
   if (!session) return { response: signInRequiredResponse() } as const;
 
   try {
     const account = await provisionHostAccount(session.user.id);
-    const accessError = accountAccessError(account);
-
-    if (accessError) {
-      return {
-        response: Response.json(
-          { error: accessError },
-          {
-            status: 423,
-            headers: { "Cache-Control": "no-store" },
-          },
-        ),
-      } as const;
-    }
-
     return { session, account } as const;
   } catch (error) {
     console.error("host account provisioning error", error);
     return {
-      response: Response.json(
-        { error: "Could not access this account" },
-        {
-          status: 500,
-          headers: { "Cache-Control": "no-store" },
-        },
-      ),
+      response: noStoreJson({ error: "Could not access this account" }, 500),
     } as const;
   }
+}
+
+/** Ledger access: a verified session for an active, unlocked account. */
+export async function requireHostAccount() {
+  const result = await requireAccountSession();
+  if ("response" in result) return result;
+
+  const accessError = accountAccessError(result.account);
+  if (accessError) {
+    return { response: noStoreJson({ error: accessError }, 423) } as const;
+  }
+  return result;
+}
+
+/** True when the verified session was created by a recent sign-in link. */
+export function hasRecentSignIn(session: HostSession) {
+  return signedInRecently(session.session?.createdAt);
 }
 
 /**
@@ -97,20 +111,11 @@ export async function requireRecentHostAccount() {
   const result = await requireHostAccount();
   if ("response" in result) return result;
 
-  if (!signedInRecently(result.session.session?.createdAt)) {
+  if (!hasRecentSignIn(result.session)) {
     return {
-      response: Response.json(
-        {
-          error: "Sign in again to confirm permanent deletion",
-          code: RECENT_SIGN_IN_REQUIRED,
-        },
-        {
-          status: 403,
-          headers: { "Cache-Control": "no-store" },
-        },
-      ),
+      response: recentSignInRequiredResponse("permanent deletion"),
     } as const;
   }
-
   return result;
 }
+

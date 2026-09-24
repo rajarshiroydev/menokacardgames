@@ -19,6 +19,8 @@ Migration workflow:
 
 `0005_normalized_accounting.sql` creates owner-bound session-result and buy-in-event records, backfills every owned session and aborts unless player references, individual investments and whole-session chip totals reconcile. The relational records become authoritative for reads and analytics; `poker_sessions.results` remains an immutable compatibility snapshot during the transition.
 
+`0006_account_deletion_requests.sql` lets the runtime role write audit events for its own account only, and adds a lifecycle guard trigger. For `menoka_app`, the trigger allows only active → deletion requested (stamping the database's own time) and deletion requested → active within 30 days. It rejects backdating and any move to `purging`, which is reserved for the future purge job and its separate credentials.
+
 Data migrations under `migrations/data/` require a reviewed ownership manifest and an explicit target account ID. Run `0003_backfill_rajarshi_reviewed_history.sql` with `psql -v target_account_id=<internal-account-uuid>`. It clones the approved records, keeps source rows unowned, records provenance and aborts if its reconciliation checks fail.
 
 Rollback during development is branch reset. Production rollback must use the release plan's authenticated read-only mode and reconciled forward migration; do not blindly drop ownership structures after owner-scoped writes exist.
