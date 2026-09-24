@@ -69,7 +69,6 @@ type ModalState =
       onConfirm: (password: string) => void;
     };
 
-const HANDS_PINNED_KEY = "pokerLedger.handsPinned.v1";
 const POKER_HANDS = [
   { name: "Royal Flush", cards: "A K Q J 10", note: "Same Suit" },
   { name: "Straight Flush", cards: "9 8 7 6 5", note: "Same Suit" },
@@ -282,7 +281,6 @@ export function PokerLedger() {
   const [playersLoading, setPlayersLoading] = useState(true);
   const [playersError, setPlayersError] = useState("");
   const [view, setView] = useState<View>("home");
-  const [handsPinned, setHandsPinned] = useState(false);
   const [ready, setReady] = useState(false);
   const [toast, setToast] = useState("");
   const [modal, setModal] = useState<ModalState | null>(null);
@@ -372,9 +370,6 @@ export function PokerLedger() {
     const hydrationTimer = setTimeout(() => {
       const storedGame = readStoredGame();
       setGame(storedGame);
-      setHandsPinned(
-        window.localStorage.getItem(HANDS_PINNED_KEY) === "true",
-      );
       window.history.replaceState(
         { ...window.history.state, menokaView: "home" },
         "",
@@ -430,11 +425,6 @@ export function PokerLedger() {
       window.localStorage.removeItem(GAME_STORAGE_KEY);
     }
   }, [game, ready]);
-
-  useEffect(() => {
-    if (!ready) return;
-    window.localStorage.setItem(HANDS_PINNED_KEY, String(handsPinned));
-  }, [handsPinned, ready]);
 
   const ask = useCallback(
     (message: string, confirmLabel: string, onConfirm: () => void) => {
@@ -1190,10 +1180,6 @@ export function PokerLedger() {
     setModal(null);
   }
 
-  function toggleHandsPinned() {
-    setHandsPinned((current) => !current);
-  }
-
   const screenTitle =
     view === "game"
       ? game?.sessionLabel || game?.gameName || "Game"
@@ -1315,8 +1301,6 @@ export function PokerLedger() {
       {modal ? (
         <Modal
           state={modal}
-          handsPinned={handsPinned}
-          onToggleHandsPin={toggleHandsPinned}
           onClose={closeModal}
           onConfirm={() => setModal(null)}
         />
@@ -2478,23 +2462,14 @@ function GameView(props: GameViewProps) {
   );
 }
 
-function PokerHandsChart({
-  pinned,
-  onTogglePin,
-}: {
-  pinned?: boolean;
-  onTogglePin?: () => void;
-}) {
+function PokerHandsChart() {
   return (
-    <section className={`poker-hands-chart ${pinned ? "pinned" : ""}`}>
+    <section className="poker-hands-chart">
       <div className="poker-hands-heading">
         <div>
           <span className="hands-kicker">Strongest To Weakest</span>
           <h2>Poker Hand Rankings</h2>
         </div>
-        <button type="button" onClick={onTogglePin}>
-          {pinned ? "Unpin" : "Pin Chart"}
-        </button>
       </div>
       <div className="hand-rank-grid">
         {POKER_HANDS.map((hand, index) => (
@@ -3410,14 +3385,10 @@ function LeaderboardChart({
 
 function Modal({
   state,
-  handsPinned,
-  onToggleHandsPin,
   onClose,
   onConfirm,
 }: {
   state: ModalState;
-  handsPinned: boolean;
-  onToggleHandsPin: () => void;
   onClose: () => void;
   onConfirm: () => void;
 }) {
@@ -3452,10 +3423,7 @@ function Modal({
           aria-modal="true"
           aria-label="Poker Hand Rankings"
         >
-          <PokerHandsChart
-            pinned={handsPinned}
-            onTogglePin={onToggleHandsPin}
-          />
+          <PokerHandsChart />
           <button className="ghost full" type="button" onClick={onClose}>
             Close Chart
           </button>
