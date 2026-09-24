@@ -25,6 +25,15 @@ export type PlayerAction = {
   type: "fold" | "check" | "call" | "bet" | "all-in";
   chips: number;
   line: string;
+  /** Raise rules from just before this action, so undo can restore them. */
+  raiseBefore?: RaiseRecord;
+};
+
+export type RaiseRecord = {
+  size: number;
+  open: boolean[];
+  /** The action was a full raise, which changed the rules for everyone. */
+  full: boolean;
 };
 
 export type Hand = {
@@ -36,6 +45,17 @@ export type Hand = {
   acted: boolean[];
   last: Array<PlayerAction | null>;
   roundHigh: number;
+  /**
+   * Size of the last full bet or raise this street; a raise must add at
+   * least this much. Starts at the big blind. Older hands lack it.
+   */
+  raiseSize?: number;
+  /**
+   * Who may still raise this street. A player who acted loses the right
+   * until someone makes a full raise, so a short all-in only lets them call
+   * or fold. Older hands lack it, and everyone may raise.
+   */
+  raiseOpen?: boolean[];
   stacksBeforeHand: number[];
   dealerIndex: number;
   smallBlindIndex: number;

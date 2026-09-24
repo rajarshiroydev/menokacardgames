@@ -26,7 +26,11 @@ import {
   formatRupees,
   GAME_STORAGE_KEY,
   HISTORY_STORAGE_KEY,
+  applyRaiseRules,
+  mayRaise,
   minimumRaise,
+  resetRaiseRules,
+  undoRaiseRules,
   nextBuyIn,
   nextPlayerToAct,
   pendingIndexes,
@@ -602,11 +606,11 @@ export function PokerLedger() {
 
     if (type === "fold") {
       hand.in[playerIndex] = false;
-      hand.acted[playerIndex] = true;
+      const raiseBefore = applyRaiseRules(next, playerIndex);
       recordAction(
         next,
         playerIndex,
-        { type, chips: 0 },
+        { type, chips: 0, raiseBefore },
         `${player.name} folds`,
       );
     } else if (type === "check") {
@@ -618,11 +622,11 @@ export function PokerLedger() {
         );
         return;
       }
-      hand.acted[playerIndex] = true;
+      const raiseBefore = applyRaiseRules(next, playerIndex);
       recordAction(
         next,
         playerIndex,
-        { type, chips: 0 },
+        { type, chips: 0, raiseBefore },
         `${player.name} checks`,
       );
     } else if (type === "call") {
@@ -637,11 +641,11 @@ export function PokerLedger() {
       player.stack -= needed;
       hand.committed[playerIndex] += needed;
       hand.pot += needed;
-      hand.acted[playerIndex] = true;
+      const raiseBefore = applyRaiseRules(next, playerIndex);
       recordAction(
         next,
         playerIndex,
-        { type, chips: needed },
+        { type, chips: needed, raiseBefore },
         `${player.name} calls ${formatRupees(needed)}`,
       );
     } else {
@@ -665,24 +669,22 @@ export function PokerLedger() {
 
       const total = hand.committed[playerIndex] + chips;
       const wasRaise = total > hand.roundHigh;
+      if (wasRaise && !mayRaise(next, playerIndex)) {
+        showToast("Only call or fold: the all-in was less than a full raise");
+        return;
+      }
       const opening = !hand.committed.some(
         (committed, index) => index !== playerIndex && committed > 0,
       );
       player.stack -= chips;
       hand.committed[playerIndex] += chips;
       hand.pot += chips;
-      hand.acted[playerIndex] = true;
-      if (wasRaise) {
-        hand.roundHigh = total;
-        hand.acted = hand.acted.map((_, index) =>
-          index === playerIndex || !hand.in[index] || next.players[index].stack === 0,
-        );
-      }
+      const raiseBefore = applyRaiseRules(next, playerIndex);
       const description =
         type === "all-in"
           ? `goes all-in for ${formatRupees(chips)}${
               wasRaise ? ` (to ${formatRupees(total)})` : ""
-            }`
+            }${wasRaise && !raiseBefore.full ? ", short of a full raise" : ""}`
           : wasRaise
             ? opening
               ? `bets ${formatRupees(chips)}`
@@ -691,7 +693,7 @@ export function PokerLedger() {
       recordAction(
         next,
         playerIndex,
-        { type, chips },
+        { type, chips, raiseBefore },
         `${player.name} ${description}`,
       );
     }
@@ -722,6 +724,7 @@ export function PokerLedger() {
     hand.acted[playerIndex] = false;
     hand.last[playerIndex] = null;
     hand.roundHigh = Math.max(0, ...hand.committed);
+    undoRaiseRules(next, playerIndex, action.raiseBefore);
     hand.currentPlayer = playerIndex;
     const logIndex = next.log.indexOf(action.line);
     if (logIndex >= 0) next.log.splice(logIndex, 1);
@@ -747,6 +750,7 @@ export function PokerLedger() {
     hand.roundHigh = 0;
     hand.acted = next.players.map(() => false);
     hand.last = next.players.map(() => null);
+    resetRaiseRules(next);
     hand.currentPlayer = nextPlayerToAct(next, hand.dealerIndex);
     setGame(next);
   }
@@ -1792,8 +1796,8 @@ function SetupView({
       </div>
       <p className="muted rule-note">
         Small blind {formatRupees(smallBlindFor(Math.max(1, ante)))} · first
-        pre-flop raise to {formatRupees(Math.max(1, ante) * 2)} · later raises
-        can be any higher amount.
+        pre-flop raise to {formatRupees(Math.max(1, ante) * 2)} · each raise
+        must add at least as much as the last one.
       </p>
 
       <div className="blind-toggle">
@@ -2752,6 +2756,8 @@ function PlayerRow({
   const isTurn = hand.currentPlayer === playerIndex;
   const owed = hand.roundHigh - hand.committed[playerIndex];
   const minimum = minimumRaise(game, playerIndex);
+  // After a short all-in, a player who already acted may only call or fold.
+  const raiseClosed = !mayRaise(game, playerIndex) && player.stack > owed;
   const canUndo = hand.last[playerIndex] && !hand.splitSel;
   const hasAmount = amount.trim() !== "";
   const stops = betStops(minimum, player.stack);
@@ -2796,47 +2802,58 @@ function PlayerRow({
         <b>{player.name} <span className="turn-chip">Your turn</span></b>
         <small className="stack-value">
           Stack {formatRupees(player.stack)}
-          {owed > 0 ? ` · to call ${formatRupees(owed)}` : ""} · min{" "}
-          {owed > 0 ? "raise" : "bet"} {formatRupees(minimum)}
+          {owed > 0 ? ` · to call ${formatRupees(owed)}` : ""}
+          {raiseClosed
+            ? ""
+            : ` · min ${owed > 0 ? "raise" : "bet"} ${formatRupees(minimum)}`}
         </small>
       </div>
-      <div className="ctl">
-        <div className="amtwrap">
-          <span>₹</span>
-          <input
-            className="amt"
-            type="number"
-            inputMode="numeric"
-            min={minimum}
-            aria-label={owed > 0 ? "Raise amount" : "Bet amount"}
-            value={amount}
-            onChange={(event) => setAmount(event.target.value)}
-          />
-        </div>
-        {stops.length > 1 ? (
-          <div className="bet-slider">
-            <input
-              type="range"
-              min={0}
-              max={stops.length - 1}
-              step={1}
-              value={stopIndex}
-              aria-label={owed > 0 ? "Raise size" : "Bet size"}
-              aria-valuetext={
-                allIn ? `All in ${formatRupees(betAmount)}` : formatRupees(betAmount)
-              }
-              onChange={(event) => {
-                const index = Number(event.target.value);
-                // The first stop is the default, so it leaves Call and Fold on.
-                setAmount(index === 0 ? "" : String(stops[index]));
-              }}
-            />
-            <div className="bet-slider-ends" aria-hidden="true">
-              <span>{formatRupees(stops[0])}</span>
-              <span>All In {formatRupees(player.stack)}</span>
+      <div className={raiseClosed ? "ctl call-or-fold" : "ctl"}>
+        {raiseClosed ? (
+          <p className="raise-closed">
+            Short all-in: call or fold. It was less than a full raise, so
+            betting isn&apos;t reopened for you.
+          </p>
+        ) : (
+          <>
+            <div className="amtwrap">
+              <span>₹</span>
+              <input
+                className="amt"
+                type="number"
+                inputMode="numeric"
+                min={minimum}
+                aria-label={owed > 0 ? "Raise amount" : "Bet amount"}
+                value={amount}
+                onChange={(event) => setAmount(event.target.value)}
+              />
             </div>
-          </div>
-        ) : null}
+            {stops.length > 1 ? (
+              <div className="bet-slider">
+                <input
+                  type="range"
+                  min={0}
+                  max={stops.length - 1}
+                  step={1}
+                  value={stopIndex}
+                  aria-label={owed > 0 ? "Raise size" : "Bet size"}
+                  aria-valuetext={
+                    allIn ? `All in ${formatRupees(betAmount)}` : formatRupees(betAmount)
+                  }
+                  onChange={(event) => {
+                    const index = Number(event.target.value);
+                    // The first stop is the default, so it leaves Call and Fold on.
+                    setAmount(index === 0 ? "" : String(stops[index]));
+                  }}
+                />
+                <div className="bet-slider-ends" aria-hidden="true">
+                  <span>{formatRupees(stops[0])}</span>
+                  <span>All In {formatRupees(player.stack)}</span>
+                </div>
+              </div>
+            ) : null}
+          </>
+        )}
         <div className="acts">
           <button
             className="action-call"
@@ -2845,18 +2862,20 @@ function PlayerRow({
           >
             {owed > 0 ? "Call" : "Check"}
           </button>
-          <button
-            className={`action-raise ${allIn ? "all-in" : ""}`}
-            disabled={!(betAmount > 0)}
-            onClick={() =>
-              allIn
-                ? onAct(playerIndex, "all-in")
-                : onAct(playerIndex, "bet", betAmount)
-            }
-          >
-            {allIn ? "All In" : owed > 0 ? "Raise" : "Bet"}
-            {betAmount > 0 ? ` ${formatRupees(Math.min(betAmount, player.stack))}` : ""}
-          </button>
+          {raiseClosed ? null : (
+            <button
+              className={`action-raise ${allIn ? "all-in" : ""}`}
+              disabled={!(betAmount > 0)}
+              onClick={() =>
+                allIn
+                  ? onAct(playerIndex, "all-in")
+                  : onAct(playerIndex, "bet", betAmount)
+              }
+            >
+              {allIn ? "All In" : owed > 0 ? "Raise" : "Bet"}
+              {betAmount > 0 ? ` ${formatRupees(Math.min(betAmount, player.stack))}` : ""}
+            </button>
+          )}
           <button
             className="danger"
             disabled={hasAmount}
@@ -3564,13 +3583,16 @@ function Modal({
             <section>
               <span className="rule-number">05</span>
               <div>
-                <h3>Raise From Under The Gun</h3>
+                <h3>Minimum Bets And Raises</h3>
                 <p>
-                  The First Player After The Big Blind Is Under The Gun. Their
-                  Minimum Pre-Flop Raise Makes The Total Bet Twice The Big
-                  Blind. After That First Action, Any Raise Only Needs To Be
-                  Higher Than The Current Bet. A Player May Always Go All-In
-                  For Less.
+                  The Smallest Bet Is The Big Blind. A Raise Must Add At Least
+                  As Much As The Last Bet Or Raise On This Street, So Before
+                  The Flop The First Raise Makes The Total Twice The Big
+                  Blind, And After A Raise From ₹100 To ₹400 The Next Raise Is
+                  To At Least ₹700. Each New Street Starts Again At The Big
+                  Blind. A Player May Always Go All-In For Less, But That Short
+                  All-In Doesn&apos;t Let Players Who Already Acted Raise Again:
+                  They May Only Call Or Fold.
                 </p>
               </div>
             </section>

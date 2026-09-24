@@ -2,6 +2,7 @@ import { strict as assert } from "node:assert";
 import { describe, test } from "node:test";
 
 import {
+  applyRaiseRules,
   bigBlindAtLevel,
   blindStatus,
   betStops,
@@ -9,13 +10,17 @@ import {
   buyInPlayer,
   dealNewHand,
   editBlindSchedule,
+  mayRaise,
   minimumRaise,
   nextBuyIn,
   nextPlayerToAct,
   pendingBlindPlan,
   pendingIndexes,
+  raiseSize,
+  resetRaiseRules,
   returnToBetweenHands,
   totalBuyIns,
+  undoRaiseRules,
 } from "../lib/poker/game.ts";
 import type {
   BlindSchedule,
@@ -127,6 +132,20 @@ describe("leaderboard player identity", () => {
     assert.equal(leaderboard[0].sessions, 1);
   });
 });
+/** Puts a player's chips in to reach `total` this street, as the table does. */
+function betTo(game: GameState, playerIndex: number, total: number) {
+  const hand = dealtHand(game);
+  const chips = total - hand.committed[playerIndex];
+  game.players[playerIndex].stack -= chips;
+  hand.committed[playerIndex] += chips;
+  hand.pot += chips;
+  return applyRaiseRules(game, playerIndex);
+}
+
+function fold(game: GameState, playerIndex: number) {
+  dealtHand(game).in[playerIndex] = false;
+  return applyRaiseRules(game, playerIndex);
+}
 
 describe("rising blinds", () => {
   test("edits the plan after the current hand and restarts the hand interval", () => {
@@ -465,22 +484,143 @@ describe("positional betting", () => {
     assert.equal(hand.currentPlayer, 0);
     assert.equal(minimumRaise(game, 0), 200);
 
-    hand.committed[0] = 200;
-    hand.roundHigh = 200;
-    hand.acted[0] = true;
-    assert.equal(minimumRaise(game, 1), 151);
+    betTo(game, 0, 200);
+    assert.equal(minimumRaise(game, 1), 250);
 
     hand.stage = 1;
     hand.committed = [0, 0, 0];
     hand.roundHigh = 0;
     hand.acted = [false, false, false];
+    resetRaiseRules(game);
     assert.equal(minimumRaise(game, 1), 100);
 
     game.ante = 250;
+    resetRaiseRules(game);
     assert.equal(minimumRaise(game, 1), 250);
 
     game.players[1].stack = 80;
     assert.equal(minimumRaise(game, 1), 80);
+  });
+});
+
+describe("raise sizes", () => {
+  test("keeps the pre-flop minimum at twice the big blind after a fold or call", () => {
+    const game = gameState();
+    dealNewHand(game);
+
+    fold(game, 0);
+    // The small blind has 50 in, so a raise to 200 adds 150.
+    assert.equal(minimumRaise(game, 1), 150);
+
+    betTo(game, 1, 100);
+    assert.equal(minimumRaise(game, 2), 100);
+  });
+
+  test("makes each re-raise at least as big as the last raise", () => {
+    const game = gameState();
+    dealNewHand(game);
+
+    betTo(game, 0, 400);
+    assert.equal(raiseSize(game), 300);
+    assert.equal(minimumRaise(game, 1), 650);
+
+    betTo(game, 1, 1_000);
+    assert.equal(raiseSize(game), 600);
+    assert.equal(minimumRaise(game, 2), 1_500);
+  });
+
+  test("starts each street again at the big blind", () => {
+    const game = gameState();
+    dealNewHand(game);
+    const hand = dealtHand(game);
+    betTo(game, 0, 1_000);
+
+    hand.stage = 1;
+    hand.committed = [0, 0, 0];
+    hand.roundHigh = 0;
+    hand.acted = [false, false, false];
+    resetRaiseRules(game);
+    assert.equal(minimumRaise(game, 1), 100);
+
+    betTo(game, 1, 300);
+    assert.equal(minimumRaise(game, 2), 600);
+  });
+
+  test("lets a short all-in be called but not re-raised by players who acted", () => {
+    const game = gameState();
+    dealNewHand(game);
+    const hand = dealtHand(game);
+
+    betTo(game, 0, 400);
+    game.players[1].stack = 450;
+    const before = betTo(game, 1, 500);
+    assert.equal(before.full, false);
+    assert.equal(hand.roundHigh, 500);
+    assert.equal(raiseSize(game), 300);
+    assert.equal(mayRaise(game, 0), false);
+    assert.equal(mayRaise(game, 2), true);
+    assert.equal(minimumRaise(game, 2), 700);
+
+    betTo(game, 2, 500);
+    assert.deepEqual(pendingIndexes(game), [0]);
+    assert.equal(nextPlayerToAct(game, 2), 0);
+    assert.equal(mayRaise(game, 0), false);
+  });
+
+  test("reopens raising after a full-sized all-in", () => {
+    const game = gameState();
+    dealNewHand(game);
+
+    betTo(game, 0, 400);
+    game.players[1].stack = 750;
+    const before = betTo(game, 1, 800);
+    assert.equal(before.full, true);
+    assert.equal(raiseSize(game), 400);
+    assert.equal(mayRaise(game, 0), true);
+    assert.equal(minimumRaise(game, 0), 800);
+  });
+
+  test("a later full raise reopens raising after a short all-in", () => {
+    const game = gameState();
+    dealNewHand(game);
+
+    betTo(game, 0, 400);
+    game.players[1].stack = 450;
+    betTo(game, 1, 500);
+    assert.equal(mayRaise(game, 0), false);
+
+    betTo(game, 2, 800);
+    assert.equal(mayRaise(game, 0), true);
+    assert.equal(minimumRaise(game, 0), 700);
+  });
+
+  test("undo puts the raise rules back", () => {
+    const game = gameState();
+    dealNewHand(game);
+    const hand = dealtHand(game);
+
+    betTo(game, 0, 400);
+    const full = betTo(game, 1, 1_000);
+    undoRaiseRules(game, 1, full);
+    assert.equal(raiseSize(game), 300);
+    assert.deepEqual(hand.raiseOpen, [false, true, true]);
+
+    game.players[1].stack = 450;
+    const short = betTo(game, 1, 500);
+    undoRaiseRules(game, 1, short);
+    assert.deepEqual(hand.raiseOpen, [false, true, true]);
+  });
+
+  test("treats hands saved before these rules as open at the big blind", () => {
+    const game = gameState();
+    dealNewHand(game);
+    const hand = dealtHand(game);
+    delete hand.raiseSize;
+    delete hand.raiseOpen;
+
+    assert.equal(raiseSize(game), 100);
+    assert.equal(mayRaise(game, 1), true);
+    assert.equal(minimumRaise(game, 0), 200);
   });
 });
 

@@ -2427,3 +2427,14 @@ hr {
     transition-duration: 0.01ms !important;
   }
 }
+
+.raise-closed {
+  grid-column: 1 / -1;
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.ctl.call-or-fold {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
