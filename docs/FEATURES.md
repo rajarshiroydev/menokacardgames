@@ -99,8 +99,9 @@ This is a plain-language list of everything Menoka Card Games can do today. It i
 - **Deal The Next Hand** when at least two players have chips.
 - **Game over** message when fewer than two players have chips. A busted player can buy in to keep the game going.
 - **Buy-ins (rebuys):** a player with no chips can buy back in, between hands only.
-  - The amount is half of their previous buy-in, rounded down. For example 10,000, then 5,000, then 2,500.
-  - Buy-ins stop once half would be zero.
+  - Every buy-in is the full starting stack. In a 10,000-chip game, each buy-in is 10,000, however high the blinds have gone.
+  - A player can buy in as often as needed, up to 63 times in one game (64 buy-ins including the first).
+  - Games saved before 24 September 2026 used half the previous buy-in (10,000, then 5,000, then 2,500). Those games, and old backups, stay valid and are ranked as before. A game already in progress when the rule changed keeps its earlier half buy-ins, and any new buy-in is the full stack.
   - Each buy-in asks for confirmation and appears in the log.
   - Every buy-in counts as money invested in the standings.
 - **Edit Blind Plan** (see section 5).
@@ -146,8 +147,8 @@ This is a plain-language list of everything Menoka Card Games can do today. It i
 - **Examples:**
   - put in 10,000 and finished with 15,000: +50%
   - put in 1,000,000 and finished with 1,500,000: also +50%
-  - put in 10,000 plus a 5,000 buy-in and finished with 18,000: +20%
-  - put in 10,000 plus a 5,000 buy-in and finished with nothing: −100%
+  - put in 10,000 plus a 10,000 buy-in and finished with 24,000: +20%
+  - put in 10,000 plus a 10,000 buy-in and finished with nothing: −100%
 - **Everyone is ranked from their first game.** There's no minimum number of games, and the number of games is always shown beside the score.
 - **Ties share a rank.** Two players with exactly the same score get the same rank.
 - **What the score does not measure:** it doesn't adjust for luck, opponents, table size or how long a game lasted. It's a summary of results, not a skill rating.
