@@ -15,6 +15,7 @@ import {
 import {
   activeIndexes,
   bigBlindAtLevel,
+  betStops,
   blindStatus,
   buyInPlayer,
   dealNewHand,
@@ -3259,6 +3260,16 @@ function PlayerRow({
   const minimum = minimumRaise(game, playerIndex);
   const canUndo = hand.last[playerIndex] && !hand.splitSel;
   const hasAmount = amount.trim() !== "";
+  const stops = betStops(minimum, player.stack);
+  const betAmount = hasAmount
+    ? Math.floor(Number(amount))
+    : (stops[0] ?? 0);
+  const allIn = betAmount >= player.stack;
+  // The slider sits on the highest stop not above the entered amount.
+  const stopIndex = Math.max(
+    0,
+    stops.findLastIndex((stop) => stop <= betAmount),
+  );
 
   if (folded || done || !isTurn) {
     return (
@@ -3308,6 +3319,30 @@ function PlayerRow({
             onChange={(event) => setAmount(event.target.value)}
           />
         </div>
+        {stops.length > 1 ? (
+          <div className="bet-slider">
+            <input
+              type="range"
+              min={0}
+              max={stops.length - 1}
+              step={1}
+              value={stopIndex}
+              aria-label={owed > 0 ? "Raise size" : "Bet size"}
+              aria-valuetext={
+                allIn ? `All in ${formatRupees(betAmount)}` : formatRupees(betAmount)
+              }
+              onChange={(event) => {
+                const index = Number(event.target.value);
+                // The first stop is the default, so it leaves Call and Fold on.
+                setAmount(index === 0 ? "" : String(stops[index]));
+              }}
+            />
+            <div className="bet-slider-ends" aria-hidden="true">
+              <span>{formatRupees(stops[0])}</span>
+              <span>All In {formatRupees(player.stack)}</span>
+            </div>
+          </div>
+        ) : null}
         <div className="acts">
           <button
             className="action-call"
@@ -3317,13 +3352,16 @@ function PlayerRow({
             {owed > 0 ? "Call" : "Check"}
           </button>
           <button
-            className="action-raise"
-            disabled={!hasAmount}
+            className={`action-raise ${allIn ? "all-in" : ""}`}
+            disabled={!(betAmount > 0)}
             onClick={() =>
-              onAct(playerIndex, "bet", Math.floor(Number(amount)))
+              allIn
+                ? onAct(playerIndex, "all-in")
+                : onAct(playerIndex, "bet", betAmount)
             }
           >
-            {owed > 0 ? "Raise" : "Bet"}
+            {allIn ? "All In" : owed > 0 ? "Raise" : "Bet"}
+            {betAmount > 0 ? ` ${formatRupees(Math.min(betAmount, player.stack))}` : ""}
           </button>
           <button
             className="danger"
@@ -3331,12 +3369,6 @@ function PlayerRow({
             onClick={() => onAct(playerIndex, "fold")}
           >
             Fold
-          </button>
-          <button
-            className="action-all-in"
-            onClick={() => onAct(playerIndex, "all-in")}
-          >
-            All In · {formatRupees(player.stack)}
           </button>
         </div>
       </div>

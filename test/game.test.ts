@@ -4,6 +4,7 @@ import { describe, test } from "node:test";
 import {
   bigBlindAtLevel,
   blindStatus,
+  betStops,
   buyInPlayer,
   dealNewHand,
   editBlindSchedule,
@@ -448,5 +449,19 @@ describe("buy-ins", () => {
     dealNewHand(game);
     assert.equal(nextBuyIn(game, 0), null);
     assert.equal(buyInPlayer(game, 0), null);
+  });
+});
+
+describe("bet slider stops", () => {
+  test("runs from the minimum through exact multiples to all in", () => {
+    assert.deepEqual(betStops(100, 10_000), [100, 150, 200, 500, 1_000, 10_000]);
+    assert.deepEqual(betStops(1_000, 6_000), [1_000, 1_500, 2_000, 5_000, 6_000]);
+    assert.deepEqual(betStops(1, 100), [1, 2, 5, 10, 100]);
+  });
+
+  test("leaves only all in for a short stack", () => {
+    assert.deepEqual(betStops(1_000, 1_500), [1_000, 1_500]);
+    assert.deepEqual(betStops(1_000, 800), [800]);
+    assert.deepEqual(betStops(100, 0), []);
   });
 });

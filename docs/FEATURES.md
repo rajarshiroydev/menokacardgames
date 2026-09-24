@@ -74,9 +74,11 @@ This is a plain-language list of everything Menoka Card Games can do today. It i
 - **Actions:**
   - **Check** when nothing is owed
   - **Call** the current bet
-  - **Bet / Raise**: type an amount, then press Bet or Raise. While an amount is typed, Call and Fold are switched off, so a typed bet can't be lost by pressing the wrong button.
+  - **Bet / Raise**: the button shows the amount and bets it in one tap. It starts at the minimum, for example "Bet ₹100".
+  - **Bet slider**: above the amount box, a slider snaps to exact amounts: the minimum, 1.5×, 2×, 5× and 10× the minimum (for example ₹100, ₹150, ₹200, ₹500, ₹1,000), then the player's whole stack. The button follows the slider; at the far end it reads "All In ₹9,900" and puts in the whole stack. Steps that would reach the stack are skipped, and a player who can't cover the minimum sees only All In. An exact amount can still be typed in the box.
+  - While the slider is off the minimum or an amount is typed, Check/Call and Fold are switched off, so an entered bet can't be lost by pressing the wrong button.
   - **Fold**
-  - **All In**: puts in the player's whole stack, even if it's less than a full call
+  - **All In**: slide the bet slider to the end; the button puts in the player's whole stack, even if it's less than a full call
 - **Minimum amounts:**
   - the first player after the big blind ("under the gun") must raise to at least twice the big blind before the flop
   - when nobody has bet yet, the minimum bet is the big blind

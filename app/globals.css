@@ -1267,12 +1267,44 @@ hr {
   color: var(--fg);
 }
 
-.acts button.action-all-in {
+/* The bet button carries its amount, which can wrap onto a second line. */
+.acts button.action-raise {
+  white-space: normal;
+  line-height: 1.15;
+}
+
+.bet-slider {
   grid-column: 1 / -1;
+  order: -1;
+  padding: 2px 2px 0;
+}
+
+.bet-slider input[type="range"] {
+  width: 100%;
+  height: 28px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  accent-color: var(--action-green);
+  cursor: pointer;
+}
+
+.bet-slider-ends {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--dim2);
+  font-family: var(--mono);
+  font-size: 11px;
+}
+
+.acts button.action-raise.all-in {
   border-color: var(--gold);
-  background: color-mix(in srgb, var(--gold) 15%, var(--sunk));
+  background: color-mix(in srgb, var(--gold) 22%, var(--sunk));
   color: var(--gold);
 }
+
 
 .acts button.danger {
   padding: 11px 6px;

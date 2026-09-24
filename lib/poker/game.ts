@@ -135,6 +135,24 @@ export function nextPlayerToAct(game: GameState, from: number) {
   return null;
 }
 
+/** Bet slider stops between the minimum and all in, as multiples of the minimum. */
+export const BET_PRESET_MULTIPLES = [1.5, 2, 5, 10] as const;
+
+/**
+ * Exact chip amounts the bet slider snaps to: the minimum, each multiple of
+ * it rounded to a whole chip, then the whole stack (all in). Stops at or
+ * above the stack collapse into all in; a stack no larger than the minimum
+ * leaves only all in.
+ */
+export function betStops(minimum: number, stack: number) {
+  if (stack <= 0) return [];
+  if (minimum >= stack) return [stack];
+  const multiples = BET_PRESET_MULTIPLES.map((multiple) =>
+    Math.round(minimum * multiple),
+  ).filter((amount) => amount > minimum && amount < stack);
+  return [...new Set([minimum, ...multiples, stack])];
+}
+
 export function minimumRaise(game: GameState, playerIndex: number) {
   const hand = game.hand;
   if (!hand) return 0;
