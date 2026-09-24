@@ -57,6 +57,12 @@ import {
   type Standings,
   type StandingsEntry,
 } from "@/lib/poker/standings";
+import {
+  planImport,
+  sessionsInBackup,
+  type ImportPlan,
+  type ImportPlayerMapping,
+} from "@/lib/poker/import-plan";
 import type {
   BlindSchedule,
   GameState,
@@ -347,6 +353,7 @@ export function PokerLedger({
   const [legacySessions, setLegacySessions] = useState<PokerSession[]>([]);
   const [reviewingLegacySessions, setReviewingLegacySessions] =
     useState(false);
+  const [importPlan, setImportPlan] = useState<ImportPlan | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const showToast = useCallback((message: string) => {
@@ -1307,39 +1314,42 @@ export function PokerLedger({
     event.target.value = "";
     if (!file) return;
 
+    let entries: unknown[] | null;
     try {
-      const data = JSON.parse(await file.text()) as
-        | PokerSession[]
-        | { sessions?: PokerSession[] };
-      const incoming = Array.isArray(data) ? data : data.sessions;
-      if (!Array.isArray(incoming)) {
-        showToast("No sessions in that file");
-        return;
-      }
-      const existing = new Set(
-        [...history, ...discardedSessions].map((session) => session.id),
-      );
-      const additions = incoming.filter(
-        (session) =>
-          session?.id && session.results && !existing.has(session.id),
-      );
-      if (!additions.length) {
-        showToast("Already up to date");
-        return;
-      }
-      await sessionsApi("", {
-        method: "POST",
-        body: JSON.stringify({ sessions: additions }),
-      });
-      await refreshHistory();
-      showToast(
-        `Added ${additions.length} session${additions.length === 1 ? "" : "s"}`,
-      );
-    } catch (error) {
-      showToast(
-        error instanceof SyntaxError ? "Not a valid file" : "Import failed",
-      );
+      entries = sessionsInBackup(JSON.parse(await file.text()));
+    } catch {
+      showToast("Not a valid file");
+      return;
     }
+    if (!entries) {
+      showToast("No sessions in that file");
+      return;
+    }
+
+    const plan = planImport(
+      entries,
+      [...history, ...discardedSessions].map((session) => session.id),
+      [...players, ...discardedPlayers],
+    );
+    if (!plan.additions.length) {
+      showToast(
+        plan.alreadySaved ? "Already up to date" : "No readable sessions in that file",
+      );
+      return;
+    }
+    setImportPlan(plan);
+  }
+
+  async function confirmImport(plan: ImportPlan) {
+    await sessionsApi("", {
+      method: "POST",
+      body: JSON.stringify({ sessions: plan.additions }),
+    });
+    setImportPlan(null);
+    await Promise.all([refreshHistory(), refreshPlayers()]);
+    showToast(
+      `Added ${plan.additions.length} session${plan.additions.length === 1 ? "" : "s"}`,
+    );
   }
 
   function openPlayers() {
@@ -1525,6 +1535,13 @@ export function PokerLedger({
           game={game}
           onClose={() => setEditingBlinds(false)}
           onSave={saveBlindSchedule}
+        />
+      ) : null}
+      {importPlan ? (
+        <ImportReview
+          plan={importPlan}
+          onConfirm={confirmImport}
+          onClose={() => setImportPlan(null)}
         />
       ) : null}
       {reviewingLegacySessions ? (
@@ -1777,6 +1794,149 @@ function LegacySessionReview({
             {submitting
               ? "Adding…"
               : `Add ${selectedIds.size || "Selected"} To This Account`}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function importMappingNote(mapping: ImportPlayerMapping) {
+  switch (mapping.kind) {
+    case "existing":
+      return mapping.player.name === mapping.fileName
+        ? "Your player"
+        : `Your player ${mapping.player.name}`;
+    case "discarded":
+      return `Your discarded player ${mapping.player.name}; stays discarded`;
+    case "new":
+      return "New player; will be added to your list";
+    case "unknown-record":
+      return "Player record from another ledger; can't be imported";
+  }
+}
+
+function ImportReview({
+  plan,
+  onConfirm,
+  onClose,
+}: {
+  plan: ImportPlan;
+  onConfirm: (plan: ImportPlan) => Promise<void>;
+  onClose: () => void;
+}) {
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
+  const count = plan.additions.length;
+  const skipped = [
+    plan.alreadySaved
+      ? `${plan.alreadySaved} already in your ledger`
+      : null,
+    plan.duplicatesInFile
+      ? `${plan.duplicatesInFile} repeated in the file`
+      : null,
+    plan.unreadable ? `${plan.unreadable} unreadable` : null,
+  ].filter(Boolean);
+  const newPlayers = plan.players.filter((mapping) => mapping.kind === "new");
+
+  async function confirm() {
+    if (submitting || plan.blocked) return;
+    setSubmitting(true);
+    setError("");
+    try {
+      await onConfirm(plan);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Import failed");
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="modal legacy-review-modal show" role="presentation">
+      <div
+        className="sheet legacy-review-sheet"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="import-review-title"
+      >
+        <div className="legacy-review-heading">
+          <span className="legacy-data-kicker">Import Backup</span>
+          <h2 id="import-review-title">
+            {count} New Game{count === 1 ? "" : "s"} To Add
+          </h2>
+          <p>
+            Check how each player in the file matches your list before
+            anything is saved.
+            {skipped.length ? ` Skipped: ${skipped.join(", ")}.` : ""}
+          </p>
+        </div>
+
+        <div className="legacy-session-list import-review-list">
+          <h3 className="import-review-subhead">
+            Players ({plan.players.length}
+            {newPlayers.length ? `, ${newPlayers.length} new` : ""})
+          </h3>
+          {plan.players.map((mapping) => (
+            <div
+              className={`legacy-session-option import-mapping import-mapping-${mapping.kind}`}
+              key={`${mapping.kind}:${mapping.fileName}:${"player" in mapping ? mapping.player.id : ""}`}
+            >
+              <span>
+                <strong>{mapping.fileName}</strong>
+                <small>
+                  {importMappingNote(mapping)} · {mapping.games} game
+                  {mapping.games === 1 ? "" : "s"}
+                </small>
+              </span>
+            </div>
+          ))}
+
+          <h3 className="import-review-subhead">Games</h3>
+          {plan.additions.map((session) => (
+            <div className="legacy-session-option import-mapping" key={session.id}>
+              <span>
+                <strong>{session.name || "Saved Game"}</strong>
+                <small>
+                  {formatDate(session.date)} · Big Blind{" "}
+                  {formatRupees(session.ante)}
+                  {" · "}
+                  {session.results.map((result) => result.name).join(", ")}
+                </small>
+              </span>
+            </div>
+          ))}
+        </div>
+
+        {plan.blocked ? (
+          <p className="import-review-error" role="alert">
+            This file has player records from another host&apos;s ledger, so
+            it can&apos;t be imported here. Nothing will be added.
+          </p>
+        ) : null}
+        {error ? (
+          <p className="import-review-error" role="alert">
+            {error}
+          </p>
+        ) : null}
+
+        <div className="legacy-review-actions">
+          <button
+            className="ghost"
+            type="button"
+            disabled={submitting}
+            onClick={onClose}
+          >
+            Cancel
+          </button>
+          <button
+            className="primary"
+            type="button"
+            disabled={plan.blocked || submitting}
+            onClick={() => void confirm()}
+          >
+            {submitting
+              ? "Adding…"
+              : `Add ${count} Game${count === 1 ? "" : "s"}`}
           </button>
         </div>
       </div>

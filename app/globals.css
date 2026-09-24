@@ -2811,3 +2811,41 @@ hr {
     white-space: nowrap;
   }
 }
+
+.import-review-subhead {
+  margin: 4px 0 0;
+  color: var(--dim2);
+  font-size: 11px;
+  font-weight: 750;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+.import-mapping {
+  grid-template-columns: minmax(0, 1fr);
+  cursor: default;
+}
+
+.import-mapping-new {
+  border-color: var(--line2);
+}
+
+.import-mapping-new small {
+  color: var(--green);
+}
+
+.import-mapping-unknown-record {
+  border-color: var(--danger-line);
+}
+
+.import-mapping-unknown-record small,
+.import-review-error {
+  color: var(--danger);
+}
+
+.import-review-error {
+  flex: none;
+  margin: 12px 0 0;
+  font-size: 13px;
+  line-height: 1.45;
+}

@@ -197,9 +197,14 @@ This is a plain-language list of everything Menoka Card Games can do today. It i
 ## 15. Backup: export and import
 
 - **Export Backup** downloads a file of all your saved games (not discarded ones), dated with today's date.
-- **Import** reads a backup file and adds only games that aren't already in your ledger. It never overwrites or duplicates existing games. Every imported game goes through the same server checks as a normal save.
-- Imported games belong to the signed-in host. Games from your own backup keep their links to your players. Players listed only by name are matched to your friend list by name, and new names are added to it.
-- If a file refers to player records that aren't in your ledger, for example a backup from another host's account, the whole import is refused with an "Unknown player" message and nothing is added.
+- **Import** reads a backup file and adds only games that aren't already in your ledger, including discarded ones. It never overwrites or duplicates existing games. Importing your own export again changes nothing and just says "Already up to date".
+- **Review before saving.** Before anything is saved, a review screen shows how many new games will be added and what was skipped (already in your ledger, repeated in the file, or unreadable). It lists every player in those games and how each one will be saved:
+  - **Your player**: matched to someone on your list. Games from your own backup match by player record, even if the name has changed since. Names alone match ignoring capital letters.
+  - **Your discarded player**: matched to a discarded player, who stays discarded.
+  - **New player**: not on your list, and added to it when you confirm.
+  - **Player record from another ledger**: for example, a backup from another host's account. The import can't go ahead, and nothing is added.
+- **Add** saves the games; **Cancel** saves nothing. Every game goes through the same server checks as a normal save. If the server refuses one (for example, chips that don't add up), the review screen shows the reason and nothing is added.
+- Imported games belong to the signed-in host.
 - A single import can send at most **2 MB** of new games (a ledger of a few dozen games is well under 100 KB). Larger files are refused and nothing is added.
 
 ## 16. Data from before accounts
