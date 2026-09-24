@@ -5,6 +5,11 @@ import { handleAuthProxyRequest } from "@neondatabase/auth/server";
 
 import { accountAccessError } from "@/lib/accounts/lifecycle";
 import { provisionHostAccount } from "@/lib/accounts/server";
+import {
+  RECENT_SIGN_IN_REQUIRED,
+  signedInRecently,
+} from "@/lib/auth/recent-sign-in";
+import { withoutSessionCookies } from "@/lib/auth/session-cookies";
 
 function requiredEnvironmentVariable(name: string) {
   const value = process.env[name];
@@ -26,7 +31,7 @@ export const auth = createNeonAuth({
 
 export function exchangeMagicLinkVerifier(request: Request) {
   return handleAuthProxyRequest({
-    request,
+    request: withoutSessionCookies(request),
     path: "get-session",
     baseUrl,
     cookieSecret,
@@ -82,4 +87,30 @@ export async function requireHostAccount() {
       ),
     } as const;
   }
+}
+
+/**
+ * Permanent deletion requires an active account whose verified session was
+ * created by a recent sign-in link, in place of a shared deletion password.
+ */
+export async function requireRecentHostAccount() {
+  const result = await requireHostAccount();
+  if ("response" in result) return result;
+
+  if (!signedInRecently(result.session.session?.createdAt)) {
+    return {
+      response: Response.json(
+        {
+          error: "Sign in again to confirm permanent deletion",
+          code: RECENT_SIGN_IN_REQUIRED,
+        },
+        {
+          status: 403,
+          headers: { "Cache-Control": "no-store" },
+        },
+      ),
+    } as const;
+  }
+
+  return result;
 }

@@ -1,10 +1,7 @@
 import { strict as assert } from "node:assert";
 import { describe, test } from "node:test";
 
-import {
-  passwordMatches,
-  validateSession,
-} from "../lib/poker/session-validation.ts";
+import { validateSession } from "../lib/poker/session-validation.ts";
 
 const validSession = {
   id: "s1720000000000",
@@ -72,12 +69,6 @@ describe("session validation", () => {
         }),
       /Invalid session id/,
     );
-  });
-
-  test("compares deletion passwords exactly", () => {
-    assert.equal(passwordMatches("correct horse", "correct horse"), true);
-    assert.equal(passwordMatches("correct horse!", "correct horse"), false);
-    assert.equal(passwordMatches("", "correct horse"), false);
   });
 
   test("keeps a valid stable player id", () => {

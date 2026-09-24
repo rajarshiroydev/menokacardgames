@@ -173,6 +173,10 @@ hr {
   border-top: 1px solid var(--line);
 }
 
+.literal-text {
+  text-transform: none;
+}
+
 .ledger-shell {
   width: 100%;
   max-width: 640px;

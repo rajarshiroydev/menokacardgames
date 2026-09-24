@@ -1,5 +1,3 @@
-import { timingSafeEqual } from "node:crypto";
-
 import { deriveSessionAccounting } from "./accounting.ts";
 import type {
   BlindHistory,
@@ -231,13 +229,4 @@ export function validateSession(input: unknown): PokerSession {
   };
   deriveSessionAccounting(session);
   return session;
-}
-
-export function passwordMatches(candidate?: string | null, expected?: string) {
-  if (!candidate || !expected) return false;
-  const supplied = Buffer.from(candidate);
-  const secret = Buffer.from(expected);
-  return (
-    supplied.length === secret.length && timingSafeEqual(supplied, secret)
-  );
 }

@@ -23,7 +23,7 @@ export default async function Home() {
           <button type="submit">Sign out</button>
         </form>
       </header>
-      <PokerLedger accountId={account.id} />
+      <PokerLedger accountId={account.id} accountEmail={session.user.email} />
     </>
   );
 }

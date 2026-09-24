@@ -1,10 +1,12 @@
-import { requireHostAccount } from "@/lib/auth/server";
+import {
+  requireHostAccount,
+  requireRecentHostAccount,
+} from "@/lib/auth/server";
 import { deriveSessionAccounting } from "@/lib/poker/accounting";
 import { runAsAuthenticatedUser } from "@/lib/poker/database";
 import { playerNameKey } from "@/lib/poker/player-validation";
 import {
   MAX_SESSIONS_PER_REQUEST,
-  passwordMatches,
   validateSession,
 } from "@/lib/poker/session-validation";
 import type { PokerSession } from "@/lib/poker/types";
@@ -413,27 +415,12 @@ export async function PATCH(request: Request) {
 }
 
 export async function DELETE(request: Request) {
-  const authResult = await requireHostAccount();
+  const authResult = await requireRecentHostAccount();
   if ("response" in authResult) return authResult.response;
   const ownerId = authResult.account.id;
   const authUserId = authResult.session.user.id;
 
   try {
-    const deletionPassword =
-      process.env.DELETE_PASSWORD || process.env.DELETION_PASSWORD;
-    if (!deletionPassword) {
-      console.error("Deletion password is not configured");
-      return json({ error: "Deletion is not configured" }, 503);
-    }
-    if (
-      !passwordMatches(
-        request.headers.get("x-delete-password"),
-        deletionPassword,
-      )
-    ) {
-      return json({ error: "Wrong deletion password" }, 401);
-    }
-
     const id = new URL(request.url).searchParams.get("id") || "";
     if (!/^[A-Za-z0-9._:-]{1,100}$/.test(id)) {
       return json({ error: "Invalid session id" }, 400);

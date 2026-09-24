@@ -42,6 +42,11 @@ import {
   LEGACY_HISTORY_STORAGE_KEY,
   prepareLegacySessionsForAdoption,
 } from "@/lib/poker/storage";
+import { authClient } from "@/lib/auth/client";
+import {
+  RECENT_SIGN_IN_REQUIRED,
+  RECENT_SIGN_IN_WINDOW_MS,
+} from "@/lib/auth/recent-sign-in";
 import {
   buildStandings,
   type IneligibleReason,
@@ -69,13 +74,14 @@ type ModalState =
       kind: "confirm";
       message: string;
       confirmLabel: string;
+      danger?: boolean;
       onConfirm: () => void;
     }
   | {
-      kind: "password";
-      message: string;
+      kind: "recent-sign-in";
+      email: string;
       confirmLabel: string;
-      onConfirm: (password: string) => void;
+      onConfirm: () => void;
     };
 
 const HANDS_PINNED_KEY = "pokerLedger.handsPinned.v1";
@@ -92,6 +98,20 @@ const POKER_HANDS = [
   { name: "High Card", cards: "A J 8 6 2", note: "" },
 ] as const;
 
+class ApiError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+    readonly code?: string,
+  ) {
+    super(message);
+  }
+}
+
+function needsRecentSignIn(error: unknown) {
+  return error instanceof ApiError && error.code === RECENT_SIGN_IN_REQUIRED;
+}
+
 async function sessionsApi<T>(
   path = "",
   options: RequestInit = {},
@@ -104,10 +124,15 @@ async function sessionsApi<T>(
     },
   });
   const data = (await response.json().catch(() => ({}))) as T & {
+    code?: string;
     error?: string;
   };
   if (!response.ok) {
-    throw new Error(data.error || "Could not reach the ledger");
+    throw new ApiError(
+      data.error || "Could not reach the ledger",
+      response.status,
+      data.code,
+    );
   }
   return data;
 }
@@ -124,10 +149,15 @@ async function playersApi<T>(
     },
   });
   const data = (await response.json().catch(() => ({}))) as T & {
+    code?: string;
     error?: string;
   };
   if (!response.ok) {
-    throw new Error(data.error || "Could not reach the player list");
+    throw new ApiError(
+      data.error || "Could not reach the player list",
+      response.status,
+      data.code,
+    );
   }
   return data;
 }
@@ -275,7 +305,13 @@ function awardPot(game: GameState, playerIndex: number, automatic = false) {
   return pot;
 }
 
-export function PokerLedger({ accountId }: { accountId: string }) {
+export function PokerLedger({
+  accountId,
+  accountEmail,
+}: {
+  accountId: string;
+  accountEmail: string;
+}) {
   const gameStorageKey = accountGameStorageKey(accountId);
   const [game, setGame] = useState<GameState | null>(null);
   const [history, setHistory] = useState<PokerSession[]>([]);
@@ -631,28 +667,51 @@ export function PokerLedger({ accountId }: { accountId: string }) {
 
   function deletePlayerPermanently(player: PlayerProfile) {
     setModal({
-      kind: "password",
+      kind: "confirm",
+      danger: true,
       message: `Permanently delete ${player.name}? This cannot be undone. Players with saved session history cannot be permanently deleted.`,
       confirmLabel: "Delete Permanently",
-      onConfirm: (password) =>
-        void deleteRemotePlayerPermanently(player, password),
+      onConfirm: () => void deleteRemotePlayerPermanently(player),
     });
   }
 
-  async function deleteRemotePlayerPermanently(
-    player: PlayerProfile,
-    password: string,
-  ) {
+  function askForRecentSignIn() {
+    setModal({
+      kind: "recent-sign-in",
+      email: accountEmail,
+      confirmLabel: "Email Me A Sign-In Link",
+      onConfirm: () => void sendRecentSignInLink(),
+    });
+  }
+
+  async function sendRecentSignInLink() {
+    try {
+      const { error } = await authClient.signIn.magicLink({
+        email: accountEmail,
+        callbackURL: "/auth/callback",
+      });
+      if (error) throw new Error(error.code);
+      showToast("Sign-In Link Sent. Open It On This Device.");
+    } catch (error) {
+      console.error("recent sign-in link request failed", error);
+      showToast("We Could Not Send The Sign-In Link");
+    }
+  }
+
+  async function deleteRemotePlayerPermanently(player: PlayerProfile) {
     try {
       await playersApi(`?id=${encodeURIComponent(player.id)}`, {
         method: "DELETE",
-        headers: { "X-Delete-Password": password },
       });
       setDiscardedPlayers((current) =>
         current.filter((item) => item.id !== player.id),
       );
       showToast("Player Permanently Deleted");
     } catch (error) {
+      if (needsRecentSignIn(error)) {
+        askForRecentSignIn();
+        return;
+      }
       showToast(
         error instanceof Error
           ? error.message
@@ -1141,30 +1200,30 @@ export function PokerLedger({ accountId }: { accountId: string }) {
     const session = discardedSessions.find((item) => item.id === id);
     if (!session) return;
     setModal({
-      kind: "password",
+      kind: "confirm",
+      danger: true,
       message: `Permanently delete ${session.name || "this game"} from ${formatDate(
         session.date,
       )}? This cannot be undone.`,
       confirmLabel: "Delete Permanently",
-      onConfirm: (password) =>
-        void deleteRemoteSessionPermanently(id, password),
+      onConfirm: () => void deleteRemoteSessionPermanently(id),
     });
   }
 
-  async function deleteRemoteSessionPermanently(
-    id: string,
-    password: string,
-  ) {
+  async function deleteRemoteSessionPermanently(id: string) {
     try {
       await sessionsApi(`?id=${encodeURIComponent(id)}`, {
         method: "DELETE",
-        headers: { "X-Delete-Password": password },
       });
       setDiscardedSessions((current) =>
         current.filter((session) => session.id !== id),
       );
       showToast("Session Permanently Deleted");
     } catch (error) {
+      if (needsRecentSignIn(error)) {
+        askForRecentSignIn();
+        return;
+      }
       showToast(
         error instanceof Error
           ? error.message
@@ -3724,19 +3783,12 @@ function Modal({
   onClose: () => void;
   onConfirm: () => void;
 }) {
-  const [password, setPassword] = useState("");
-
   function confirm() {
     if (state.kind === "rules" || state.kind === "hands") {
       onClose();
       return;
     }
-    if (state.kind === "password") {
-      if (!password) return;
-      state.onConfirm(password);
-    } else {
-      state.onConfirm();
-    }
+    state.onConfirm();
     onConfirm();
   }
 
@@ -3918,27 +3970,23 @@ function Modal({
         aria-modal="true"
         aria-label="Confirm action"
       >
-        <div className="msg">{state.message}</div>
-        {state.kind === "password" ? (
-          <>
-            <label htmlFor="delete-password">Deletion password</label>
-            <input
-              id="delete-password"
-              type="password"
-              autoComplete="current-password"
-              autoFocus
-              placeholder="Enter password"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") confirm();
-              }}
-            />
-          </>
-        ) : null}
+        <div className="msg">
+          {state.kind === "recent-sign-in" ? (
+            <>
+              For safety, permanent deletion needs a sign-in from the last{" "}
+              {RECENT_SIGN_IN_WINDOW_MS / 60_000} minutes. We will email a new
+              sign-in link to{" "}
+              <span className="literal-text">{state.email}</span>. Open it on
+              this device, then delete again.
+            </>
+          ) : (
+            state.message
+          )}
+        </div>
         <button
-          className={state.kind === "password" ? "danger" : "primary"}
-          disabled={state.kind === "password" && !password}
+          className={
+            state.kind === "confirm" && state.danger ? "danger" : "primary"
+          }
           onClick={confirm}
         >
           {state.confirmLabel}
