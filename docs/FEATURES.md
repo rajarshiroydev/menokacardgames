@@ -70,12 +70,12 @@ This is a plain-language list of everything Menoka Card Games can do today. It i
 - **Positions rotate automatically.** Each hand the dealer button, small blind and big blind move to the next player in seat order who still has chips. With only two players left, the dealer posts the small blind. The screen shows who is dealer, small blind and big blind.
 - **Blinds are posted automatically** when a hand is dealt. A player with fewer chips than the blind posts what they have.
 - **Stages:** pre-flop, flop, turn and river, shown as a progress bar. Cards are dealt physically; the app only tracks chips.
-- **Only the highlighted player can act**, marked "Your turn". Their row shows their stack, how much they need to call, and the minimum bet or raise.
+- **Only the highlighted player can act**, marked "Your turn". Their row shows their stack, how much they need to call, and the minimum bet or raise. Raises are shown as the total the bet reaches, the way players say it at the table, plus the chips to put in now: for example "min raise to ₹1,300 (₹200 more)" for a player who already has ₹1,100 in. A player who can't cover the minimum sees "all in" and their stack instead.
 - **Actions:**
   - **Check** when nothing is owed
   - **Call** the current bet
-  - **Bet / Raise**: the button shows the amount and bets it in one tap. It starts at the minimum, for example "Bet ₹100".
-  - **Bet slider**: above the amount box, a slider snaps to exact amounts: the minimum, 1.5×, 2×, 5× and 10× the minimum (for example ₹100, ₹150, ₹200, ₹500, ₹1,000), then the player's whole stack. The button follows the slider; at the far end it reads "All In ₹9,900" and puts in the whole stack. Steps that would reach the stack are skipped, and a player who can't cover the minimum sees only All In. An exact amount can still be typed in the box.
+  - **Bet / Raise**: the button shows the amount and bets it in one tap. It starts at the minimum, for example "Bet ₹100". A raise shows the total it reaches, for example "Raise to ₹1,300". Once a bet stands (before the flop the big blind counts), putting in more is always called a raise, so the big blind's own raise also reads "Raise to".
+  - **Bet slider**: above the amount box, a slider snaps to exact amounts: the minimum, 1.5×, 2×, 5× and 10× the minimum (for example ₹100, ₹150, ₹200, ₹500, ₹1,000), then the player's whole stack. The button follows the slider; at the far end it reads "All In ₹9,900" and puts in the whole stack. Steps that would reach the stack are skipped, and a player who can't cover the minimum sees only All In. An exact amount can still be typed in the box. The box and slider are always the chips to put in now, not the total.
   - While the slider is off the minimum or an amount is typed, Check/Call and Fold are switched off, so an entered bet can't be lost by pressing the wrong button.
   - **Fold**
   - **All In**: slide the bet slider to the end; the button puts in the player's whole stack, even if it's less than a full call

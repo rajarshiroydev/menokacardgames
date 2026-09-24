@@ -1,6 +1,6 @@
 # Session handoff
 
-Updated 2026-09-24 on `feature/multi-user-transition`. Steps 3M and 3N (security hardening) are committed. Step 3O (import preview) is committed. Step 3P (Pin Chart removal) is committed. Step 3Q (rebuys are the full starting stack) is committed. Step 3R is committed. Step 3S (bet slider up to all in) is committed. Step 3T (raise sizes and short all-ins) is committed. Nothing pushed. Open question: the "Min Raise ₹X" label shows chips to put in, which confused the user; options offered were showing both ("Min raise to ₹1,300 (₹200 more)", recommended), switching all inputs to raise-to totals, or renaming the label. The user declined adding cumulative short all-ins and the full-big-blind call for a short-posted blind. Replace this file at the end of each session; don't let it grow.
+Updated 2026-09-24 on `feature/multi-user-transition`. Steps 3M and 3N (security hardening) are committed. Step 3O (import preview) is committed. Step 3P (Pin Chart removal) is committed. Step 3Q (rebuys are the full starting stack) is committed. Step 3R is committed. Step 3S (bet slider up to all in) is committed. Step 3T (raise sizes and short all-ins) is committed. Nothing pushed. A follow-up shows raises as totals ("min raise to ₹1,300 (₹200 more)", "Raise to ₹1,300"); it is committed. The user declined adding cumulative short all-ins and the full-big-blind call for a short-posted blind. Replace this file at the end of each session; don't let it grow.
 
 ## Read first
 

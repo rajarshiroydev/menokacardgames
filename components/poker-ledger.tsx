@@ -3264,6 +3264,19 @@ function PlayerRow({
   const minimum = minimumRaise(game, playerIndex);
   // After a short all-in, a player who already acted may only call or fold.
   const raiseClosed = !mayRaise(game, playerIndex) && player.stack > owed;
+  const committed = hand.committed[playerIndex];
+  // Once a bet stands (the big blind counts), putting in more is a raise.
+  // Raises are shown as the total they reach, like "raise to ₹1,300",
+  // while the box and slider stay as chips to put in now.
+  const raising = hand.roundHigh > 0;
+  const minimumLabel =
+    minimum >= player.stack
+      ? ` · all in ${formatRupees(player.stack)}`
+      : raising
+        ? ` · min raise to ${formatRupees(committed + minimum)}${
+            committed > 0 ? ` (${formatRupees(minimum)} more)` : ""
+          }`
+        : ` · min bet ${formatRupees(minimum)}`;
   const canUndo = hand.last[playerIndex] && !hand.splitSel;
   const hasAmount = amount.trim() !== "";
   const stops = betStops(minimum, player.stack);
@@ -3309,9 +3322,7 @@ function PlayerRow({
         <small className="stack-value">
           Stack {formatRupees(player.stack)}
           {owed > 0 ? ` · to call ${formatRupees(owed)}` : ""}
-          {raiseClosed
-            ? ""
-            : ` · min ${owed > 0 ? "raise" : "bet"} ${formatRupees(minimum)}`}
+          {raiseClosed ? "" : minimumLabel}
         </small>
       </div>
       <div className={raiseClosed ? "ctl call-or-fold" : "ctl"}>
@@ -3329,7 +3340,7 @@ function PlayerRow({
                 type="number"
                 inputMode="numeric"
                 min={minimum}
-                aria-label={owed > 0 ? "Raise amount" : "Bet amount"}
+                aria-label={raising ? "Chips to put in for the raise" : "Bet amount"}
                 value={amount}
                 onChange={(event) => setAmount(event.target.value)}
               />
@@ -3342,9 +3353,13 @@ function PlayerRow({
                   max={stops.length - 1}
                   step={1}
                   value={stopIndex}
-                  aria-label={owed > 0 ? "Raise size" : "Bet size"}
+                  aria-label={raising ? "Raise size" : "Bet size"}
                   aria-valuetext={
-                    allIn ? `All in ${formatRupees(betAmount)}` : formatRupees(betAmount)
+                    allIn
+                  ? `All in ${formatRupees(betAmount)}`
+                  : raising
+                    ? `Raise to ${formatRupees(committed + betAmount)}`
+                    : formatRupees(betAmount)
                   }
                   onChange={(event) => {
                     const index = Number(event.target.value);
@@ -3378,8 +3393,15 @@ function PlayerRow({
                   : onAct(playerIndex, "bet", betAmount)
               }
             >
-              {allIn ? "All In" : owed > 0 ? "Raise" : "Bet"}
-              {betAmount > 0 ? ` ${formatRupees(Math.min(betAmount, player.stack))}` : ""}
+              {!(betAmount > 0)
+                ? raising
+                  ? "Raise"
+                  : "Bet"
+                : allIn
+                  ? `All In ${formatRupees(player.stack)}`
+                  : raising
+                    ? `Raise to ${formatRupees(committed + betAmount)}`
+                    : `Bet ${formatRupees(betAmount)}`}
             </button>
           )}
           <button
