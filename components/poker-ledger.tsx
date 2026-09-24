@@ -3,6 +3,7 @@
 import {
   ChangeEvent,
   FormEvent,
+  ReactNode,
   PointerEvent as ReactPointerEvent,
   useCallback,
   useEffect,
@@ -3440,6 +3441,67 @@ function SplitView({
   );
 }
 
+/** Items shown before the first press, and added by each press. */
+const LIST_START = 5;
+const LIST_STEP = 10;
+
+/**
+ * Shows the first items of a long list and 10 more per press. The button
+ * sits under the last visible item, so it moves down as the list grows;
+ * once everything is shown it collapses the list back.
+ */
+function ExpandingList<T>({
+  items,
+  render,
+  more,
+  className,
+}: {
+  items: T[];
+  render: (item: T) => ReactNode;
+  more: (count: number) => string;
+  className?: string;
+}) {
+  const [shown, setShown] = useState(LIST_START);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const visible = items.slice(0, shown).map(render);
+  const remaining = items.length - shown;
+
+  function toggle() {
+    if (remaining > 0) {
+      setShown(shown + LIST_STEP);
+      return;
+    }
+    setShown(LIST_START);
+    // Collapsing leaves the page scrolled far below the short list.
+    requestAnimationFrame(() =>
+      buttonRef.current?.scrollIntoView({ block: "nearest" }),
+    );
+  }
+
+  return (
+    <>
+      {className ? <div className={className}>{visible}</div> : visible}
+      {items.length > LIST_START ? (
+        <div className="history-expander">
+          <button
+            ref={buttonRef}
+            type="button"
+            className={`expander-button ${remaining > 0 ? "" : "open"}`}
+            onClick={toggle}
+          >
+            <span>
+              {remaining > 0
+                ? more(Math.min(LIST_STEP, remaining))
+                : "Show fewer"}
+            </span>
+            {remaining > LIST_STEP ? <small>{remaining} left</small> : null}
+          </button>
+        </div>
+      ) : null}
+    </>
+  );
+}
+
 function SessionCard({
   session,
   discarded = false,
@@ -3695,20 +3757,12 @@ function HistoryView({
               {leaderboard.length} player{leaderboard.length === 1 ? "" : "s"}
             </span>
           </div>
-          <div className="leaderboard-list">
-            {leaderboard.slice(0, 5).map(leaderboardRow)}
-          </div>
-          {leaderboard.length > 5 ? (
-            <details className="history-expander">
-              <summary>
-                Show {leaderboard.length - 5} more player
-                {leaderboard.length - 5 === 1 ? "" : "s"}
-              </summary>
-              <div className="history-expander-content leaderboard-list">
-                {leaderboard.slice(5).map(leaderboardRow)}
-              </div>
-            </details>
-          ) : null}
+          <ExpandingList
+            className="leaderboard-list"
+            items={leaderboard}
+            render={leaderboardRow}
+            more={(count) => `Show ${count} more player${count === 1 ? "" : "s"}`}
+          />
         </section>
       ) : null}
 
@@ -3720,30 +3774,17 @@ function HistoryView({
               {history.length} game{history.length === 1 ? "" : "s"}
             </span>
           </div>
-          {latestSessions.slice(0, 5).map((session) => (
-            <SessionCard
-              key={session.id}
-              session={session}
-              onDiscard={onDiscard}
-            />
-          ))}
-          {latestSessions.length > 5 ? (
-            <details className="history-expander">
-              <summary>
-                Show {latestSessions.length - 5} older game
-                {latestSessions.length - 5 === 1 ? "" : "s"}
-              </summary>
-              <div className="history-expander-content">
-                {latestSessions.slice(5).map((session) => (
-                  <SessionCard
-                    key={session.id}
-                    session={session}
-                    onDiscard={onDiscard}
-                  />
-                ))}
-              </div>
-            </details>
-          ) : null}
+          <ExpandingList
+            items={latestSessions}
+            render={(session) => (
+              <SessionCard
+                key={session.id}
+                session={session}
+                onDiscard={onDiscard}
+              />
+            )}
+            more={(count) => `Show ${count} older game${count === 1 ? "" : "s"}`}
+          />
         </section>
       ) : null}
 

@@ -131,7 +131,7 @@ This is a plain-language list of everything Menoka Card Games can do today. It i
 - **Saving twice is safe.** If a save is retried, for example after a network problem, the game is still saved only once and doesn't use up a second game number.
 - **A different game can't hide behind a retry.** A retry only counts as the same save if it describes the same game: the same times, stakes, hands, blinds, players in the same seats, buy-ins and final chips. If a save arrives with the ID of an already saved game but different details, it is refused with "A different session with the same ID is already saved" and nothing is changed.
 - **The server double-checks every save.** A game is rejected if the chip totals don't add up, the same player appears twice, or a number is invalid. A bad game can't reach your history.
-- **Game history** lists saved games, newest first. The five most recent are shown, with a button to reveal older ones. Each game card shows:
+- **Game history** lists saved games, newest first. The five most recent are shown. The button under the list, for example "Show 10 older games", adds 10 more at a time and says how many are left when more than 10 remain; the button moves down below the newly shown games. Once every game is shown, it becomes "Show fewer" and goes back to five. Each game card shows:
   - name or number, date, number of hands, big blind and number of players
   - each player's result, biggest winner first with a 🏆
   - total buy-ins for any player who bought in more than once
@@ -168,7 +168,7 @@ This is a plain-language list of everything Menoka Card Games can do today. It i
   - **Raw Chips:** each player's running total of chips won or lost.
   - Up to eight players get distinct colours.
 - **Discarded games** don't count anywhere in the standings or graph until restored.
-- The five top players are shown first, with a button to reveal the rest.
+- The five top players are shown first. The button under the list adds 10 more players at a time and stays below the last one shown; once everyone is shown it becomes "Show fewer" and goes back to five.
 
 ## 13. Safety for permanent deletion
 
