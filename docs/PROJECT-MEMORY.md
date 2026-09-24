@@ -17,7 +17,8 @@ Updated 2026-09-24. Durable working agreements, decisions and environment facts,
 
 - One signed-in host owns a private friend list, games and standings. Friends are names and need no account. No groups, invitations or shared ledgers in the initial release.
 - Ranking is average session return: the mean of `100 × (ending − invested) / invested` per eligible session, including every rebuy. Players are ranked from their first eligible session, with no provisional label, and the session count is shown. All supporting stats cover eligible sessions only.
-- Sign-in is Neon Managed Better Auth with email magic links only (links expire after 5 minutes).
+- Sign-in is Neon Managed Better Auth with email magic links only (links expire after 5 minutes). Password sign-up and shared Google are disabled in the Neon Auth config on the isolated branch (Step 3N); each new Neon branch or production needs the same check, because Neon enables them by default.
+- Rate limiting uses one Vercel Firewall rule (the Hobby plan allows one), applied at cutover; see the plan's go-live checklist.
 - Permanent deletion of players or games requires discarding first and a sign-in within the last **10 minutes**. The user kept 10 minutes for now and may revisit it.
 - Account deletion: immediate lock, hide and sign-out everywhere; recovery within **30 days**; then a daily automated purge. The disclosure quotes Neon's **6-hour** history retention, which applies to the current free plan.
 - Purge infrastructure: a daily Vercel Cron job, a project-scoped Neon API key to delete the sign-in identity, and Healthchecks.io alerts.

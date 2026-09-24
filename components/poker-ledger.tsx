@@ -46,6 +46,7 @@ import { useRouter } from "next/navigation";
 
 import { DELETION_GRACE_PERIOD_DAYS } from "@/lib/accounts/lifecycle";
 import { authClient } from "@/lib/auth/client";
+import { apiErrorMessage } from "@/lib/security/rate-limit-message";
 import {
   RECENT_SIGN_IN_REQUIRED,
   RECENT_SIGN_IN_WINDOW_MS,
@@ -133,7 +134,7 @@ async function sessionsApi<T>(
   };
   if (!response.ok) {
     throw new ApiError(
-      data.error || "Could not reach the ledger",
+      apiErrorMessage(response.status, data.error, "Could not reach the ledger"),
       response.status,
       data.code,
     );
@@ -158,7 +159,11 @@ async function playersApi<T>(
   };
   if (!response.ok) {
     throw new ApiError(
-      data.error || "Could not reach the player list",
+      apiErrorMessage(
+        response.status,
+        data.error,
+        "Could not reach the player list",
+      ),
       response.status,
       data.code,
     );
@@ -727,7 +732,11 @@ export function PokerLedger({
       };
       if (!response.ok) {
         throw new ApiError(
-          data.error || "Account deletion was not requested",
+          apiErrorMessage(
+            response.status,
+            data.error,
+            "Account deletion was not requested",
+          ),
           response.status,
           data.code,
         );

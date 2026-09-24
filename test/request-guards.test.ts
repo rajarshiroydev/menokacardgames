@@ -3,6 +3,10 @@ import { describe, it } from "node:test";
 
 import { readJsonBody } from "../lib/security/json-body.ts";
 import {
+  apiErrorMessage,
+  TOO_MANY_REQUESTS_MESSAGE,
+} from "../lib/security/rate-limit-message.ts";
+import {
   isMutatingMethod,
   isSameOriginRequest,
 } from "../lib/security/request-origin.ts";
@@ -144,5 +148,22 @@ describe("bounded JSON body", () => {
 
     const malformed = await readJsonBody(jsonRequest("{nope"), 100);
     assert.equal(!malformed.ok && malformed.status, 400);
+  });
+});
+
+describe("rate-limited response message", () => {
+  it("explains a 429 instead of showing the fallback", () => {
+    assert.equal(
+      apiErrorMessage(429, undefined, "Could not reach the ledger"),
+      TOO_MANY_REQUESTS_MESSAGE,
+    );
+    assert.equal(
+      apiErrorMessage(400, "Invalid player id", "Could not reach the ledger"),
+      "Invalid player id",
+    );
+    assert.equal(
+      apiErrorMessage(500, undefined, "Could not reach the ledger"),
+      "Could not reach the ledger",
+    );
   });
 });

@@ -1,29 +1,29 @@
 # Session handoff
 
-Updated 2026-09-24 on `feature/multi-user-transition`. Step 3M (security hardening, part 1) is committed (clean tree, nothing pushed). Replace this file at the end of each session; don't let it grow.
+Updated 2026-09-24 on `feature/multi-user-transition`. Steps 3M and 3N (security hardening) are committed (clean tree, nothing pushed). Replace this file at the end of each session; don't let it grow.
 
 ## Read first
 
 1. [`PROJECT-MEMORY.md`](./PROJECT-MEMORY.md): working agreements, decisions and environment facts. Short.
-2. [`FEATURE-PLAN.md`](./FEATURE-PLAN.md): the "Pending choices" table and the latest decision-history entries (Step 3M is the newest).
+2. [`FEATURE-PLAN.md`](./FEATURE-PLAN.md): the "Pending choices" table and the latest decision-history entries (Step 3N is the newest).
 3. [`FEATURES.md`](./FEATURES.md): what the app does today, in plain language. Update it with every user-visible change.
 
 ## Where things stand
 
-The multi-user transition is built and rehearsed on the isolated Neon branch `multi-user-auth`, through Step 3M:
+The multi-user transition is built and rehearsed on the isolated Neon branch `multi-user-auth`, through Step 3N:
 
 - magic-link sign-in; owner-scoped data enforced by server checks, row-level security and the restricted `menoka_app` role
 - normalized accounting and average-session-return standings
 - recent sign-in (10 minutes) for permanent deletion
 - account deletion: request, lock, 30-day recovery, then a daily automated purge
 - Step 3M: mutating `/api/*` requests must be same-origin (`proxy.ts`), JSON bodies are size-limited (16 KB, or 2 MB for session saves), and a session retry with the same ID but different content returns 409
+- Step 3N: password sign-up and shared Google sign-in disabled in the branch's Neon Auth config (magic links only, as decided); a 429 shows a clear "Too many requests" message. The Vercel Firewall rate-limit rule is specified in the plan's auth and firewall go-live checklist, not applied (it would change production)
 
-Production and Vercel are unchanged. The last full gate passed: 86 tests, types, lint and build.
+Production and Vercel are unchanged. The last full gate passed: 87 tests, types, lint and build.
 
-## Next step (recommended, not started): security hardening, part 2
+## Next step
 
-- **Rate limiting** for sign-in link requests, imports and mutations. Needs a user decision on where the counters live (Vercel Firewall rules, a Postgres table, or Upstash Redis); see the pending-choices table.
-- **Magic-link verifier in logs:** confirm `neon_auth_session_verifier` in the `/auth/callback` URL isn't retained in production or Vercel request logs. `next dev` logs it locally.
+- **Magic-link verifier in logs:** confirm `neon_auth_session_verifier` in the `/auth/callback` URL isn't retained in production or Vercel request logs. `next dev` logs it locally. Production doesn't run this branch yet, so this belongs with the first preview deployment.
 
 After that:
 - **Import/export acceptance:** preview the player mapping before saving. Re-sending all 24 exported sessions already returns `saved: 0` (checked in 3M); a full export-file round trip through the Import button is still to do.

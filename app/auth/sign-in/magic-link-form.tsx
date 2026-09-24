@@ -3,6 +3,7 @@
 import { type FormEvent, useState } from "react";
 
 import { authClient } from "@/lib/auth/client";
+import { TOO_MANY_REQUESTS_MESSAGE } from "@/lib/security/rate-limit-message";
 
 export function MagicLinkForm() {
   const [sentEmail, setSentEmail] = useState<string | null>(null);
@@ -32,7 +33,11 @@ export function MagicLinkForm() {
 
       if (error) {
         console.error("magic link request failed", error.code);
-        setErrorMessage("We could not send the sign-in link. Please try again.");
+        setErrorMessage(
+          error.status === 429
+            ? TOO_MANY_REQUESTS_MESSAGE
+            : "We could not send the sign-in link. Please try again.",
+        );
         return;
       }
 

@@ -8,6 +8,7 @@ import {
   RECENT_SIGN_IN_REQUIRED,
   RECENT_SIGN_IN_WINDOW_MS,
 } from "@/lib/auth/recent-sign-in";
+import { apiErrorMessage } from "@/lib/security/rate-limit-message";
 
 function formatDeadline(timestamp: number) {
   return new Date(timestamp).toLocaleString("en-IN", {
@@ -57,7 +58,13 @@ export function AccountLocked({
         setStatus("needs-sign-in");
         return;
       }
-      setError(data.error || "The account could not be recovered");
+      setError(
+        apiErrorMessage(
+          response.status,
+          data.error,
+          "The account could not be recovered",
+        ),
+      );
       setStatus("error");
     } catch {
       setError("The account could not be recovered");
