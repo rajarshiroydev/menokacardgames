@@ -5,7 +5,7 @@ Updated 2026-09-24. Durable working agreements, decisions and environment facts,
 ## Working agreements
 
 - Work on `feature/multi-user-transition`, one reviewed step at a time. Stop and report after each step, then commit when the user approves. Never push unless asked.
-- Production rollout, production data changes and historical ownership migration are **not authorized**. All database work happens on the isolated Neon branch.
+- Production rollout of the multi-user transition, production data changes and historical ownership migration are **not authorized**. All database work happens on the isolated Neon branch. Game-only changes (no database or auth change) may be released separately: backport them onto a branch from `main`, test on a Vercel preview, then push to `main` one commit at a time, with the user's go-ahead (first done 2026-09-24).
 - Preserve existing game rules and flows unless a requested feature changes them.
 - When the user delegates a trade-off, choose the long-term, easy-to-debug option and explain why. Ask when the choice changes behaviour the user will notice.
 - Keep [`FEATURES.md`](./FEATURES.md) (plain language, for non-technical readers) updated in the same change as any user-visible behaviour, with exact numbers and limits.
@@ -27,7 +27,8 @@ Updated 2026-09-24. Durable working agreements, decisions and environment facts,
 
 ## Environment facts
 
-- Neon project `wispy-morning-76468301`. Isolated development branch `multi-user-auth` (`br-little-rain-ay5fufwv`). Local `.env.local` targets that branch.
+- Neon project `menokacardgames` (ID `wispy-morning-76468301`, account roystark.dev@gmail.com). Vercel Preview's `DATABASE_URL` points at the Neon branch `vercel-preview` (`br-orange-river-aywd7pca`), a copy of production; Production's points at `production`.
+- Neon project ID `wispy-morning-76468301`. Isolated development branch `multi-user-auth` (`br-little-rain-ay5fufwv`). Local `.env.local` targets that branch.
 - Dev branch accounts: the user's real ledger (therajarshiroy@gmail.com: 9 players, 24 sessions, 72 results) and an empty second host (roystark24@gmail.com), kept for two-account tests.
 - Database roles: the runtime role `menoka_app` and the purge role `menoka_purge`. Both are SQL-created and unprivileged (`NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS`).
   - Roles created through Neon's role API inherit `neon_superuser` and bypass row-level security; never use them for the app.

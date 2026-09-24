@@ -1,41 +1,40 @@
 # Session handoff
 
-Updated 2026-09-24 on `feature/multi-user-transition`. Steps 3M and 3N (security hardening) are committed. Step 3O (import preview) is committed. Step 3P (Pin Chart removal) is committed. Step 3Q (rebuys are the full starting stack) is committed. Step 3R is committed. Step 3S (bet slider up to all in) is committed. Step 3T (raise sizes and short all-ins) is committed. Step 3U (undo last hand restores the same dealer and blinds) is committed. Step 3V (standings lists reveal 10 at a time, button below the list) is committed. Nothing pushed. A follow-up shows raises as totals ("min raise to ₹1,300 (₹200 more)", "Raise to ₹1,300"); it is committed. The user declined adding cumulative short all-ins and the full-big-blind call for a short-posted blind. Replace this file at the end of each session; don't let it grow.
+Updated 2026-09-24 on `feature/multi-user-transition`. The 8 game changes (Steps 3P–3V plus the raise-totals follow-up) were backported to `release/game-changes`, tested on a Vercel preview against a test database, and pushed to `main` one commit at a time, so they are **live in production**. The accounts, sign-in and database work on this branch is still not in production. Replace this file at the end of each session; don't let it grow.
 
 ## Read first
 
 1. [`PROJECT-MEMORY.md`](./PROJECT-MEMORY.md): working agreements, decisions and environment facts. Short.
-2. [`FEATURE-PLAN.md`](./FEATURE-PLAN.md): the "Pending choices" table and the latest decision-history entries (Step 3T is the newest).
+2. [`FEATURE-PLAN.md`](./FEATURE-PLAN.md): the "Pending choices" table and the latest decision-history entries (the game-changes release is the newest).
 3. [`FEATURES.md`](./FEATURES.md): what the app does today, in plain language. Update it with every user-visible change.
 
 ## Where things stand
 
-The multi-user transition is built and rehearsed on the isolated Neon branch `multi-user-auth`, through Step 3T:
+**Production (`main`)** now has, on top of the old global ledger: Pin Chart removed, full-stack rebuys, the large blinds box, the bet slider, last-full-raise minimums and short all-ins, raise-to labels, the exact Undo last hand, and standings lists that reveal 10 at a time. `main` has no `docs/` folder; the release commits leave docs out. Backport notes: `main`'s player rows take a rank index, so `ExpandingList.render` passes `(item, index)`; `main` keeps `timingSafeEqual` and `playerKey` imports that this branch dropped.
 
-- magic-link sign-in; owner-scoped data enforced by server checks, row-level security and the restricted `menoka_app` role
-- normalized accounting and average-session-return standings
-- recent sign-in (10 minutes) for permanent deletion
-- account deletion: request, lock, 30-day recovery, then a daily automated purge
-- Step 3M: mutating `/api/*` requests must be same-origin (`proxy.ts`), JSON bodies are size-limited (16 KB, or 2 MB for session saves), and a session retry with the same ID but different content returns 409
-- Step 3N: password sign-up and shared Google sign-in disabled in the branch's Neon Auth config (magic links only, as decided); a 429 shows a clear "Too many requests" message. The Vercel Firewall rate-limit rule is specified in the plan's auth and firewall go-live checklist, not applied (it would change production)
-- Step 3O: Import shows a review screen (counts, how each player maps, new games) before saving; re-importing an export adds nothing
-- Step 3P: the dead Pin Chart button is gone
-- Step 3Q: every rebuy is the full starting stack (up to 64 buy-ins per player); older half-size rebuys stay valid
-- Step 3R: blinds shown large in a box under the pot and between hands
-- Step 3S: a bet slider snaps from the minimum through 1.5×, 2×, 5× and 10× to all in; the Bet/Raise button follows it, and the separate All In button is gone
-- Step 3V: player standings and game history reveal 10 more per press, with the button under the list
-- Step 3U: Undo last hand deals the undone hand again with the same dealer, blinds and blind level
-- Step 3T: a raise must add at least the last full raise on the street (starting at the big blind); a short all-in lets players who already acted only call or fold
+**This branch** has the multi-user transition, built and rehearsed on the isolated Neon branch `multi-user-auth`: magic-link sign-in, owner-scoped data (server checks, row-level security, the restricted `menoka_app` role), normalized accounting and average-session-return standings, recent sign-in for permanent deletion, account deletion with 30-day recovery and a daily purge, same-origin and body-size checks (3M), magic-link-only auth config (3N) and the import preview (3O). None of it is in production.
 
-Production and Vercel are unchanged. Step 3U passed 110 tests, types and lint. Step 3T passed 105 tests, types and lint; the last build ran at 3S (3T changes no build or runtime setup).
+When this branch is eventually merged into `main`, expect conflicts where the same game commits exist twice (`components/poker-ledger.tsx`, `lib/poker/game.ts`, `lib/poker/session-validation.ts`, `test/game.test.ts`, `app/globals.css`). Take this branch's side, which already contains the game changes.
 
-## Next step
+## Vercel and Neon setup
 
-The user wants to work on other app changes before touching previews and production. After those:
+- Vercel project `menokacardgames` (`prj_YYgZXYIfdHRPwOyC6rkv7sFTGG6u`) deploys production from `main` and previews from other branches. Deployments are behind Vercel login; the user signs in to Vercel in the in-app browser for checks.
+- The Preview `DATABASE_URL` now points at the Neon branch `vercel-preview` (`br-orange-river-aywd7pca`), a copy of production made on 2026-09-24. It holds one extra test game (Game 38: Abhirup, Debraj, Pratik) saved during preview testing. Production has 32 games.
+- Vercel still has no Neon Auth variables, so a preview of this branch would not sign in until they're added for Preview.
 
+## Cutover progress (started 2026-09-24, user authorized "proceed with the rest")
 
-1. **Preview deployment** of this branch (not production). Use it to confirm `neon_auth_session_verifier` in the `/auth/callback` URL isn't retained in Vercel request logs. The production-mode server itself doesn't log it.
-2. **Production cutover:** needs the user's explicit authorization, a backup/restore rehearsal, both go-live checklists in the plan (purge; auth and firewall), and answers on history cohorts H–I and cohort M's host.
+Ownership is fully decided (see `HISTORICAL-OWNERSHIP.md`): Rajarshi gets legacy games 5–23, 26–29, 31 and 34–36; the Emon-led group (32, 33, 37) and Rahul Basak (24, 25) stay in the unclaimed archive until their hosts sign in; Aiush is dropped. Neon's shared email sender stays for now.
+
+Done:
+1. Migration `0008_claim_reviewed_history` (owner-only claim function) written and added to `schema.sql`.
+2. Neon branch `cutover-rehearsal` (`br-tiny-forest-ayt6f3fe`), a copy of production: roles `menoka_app` and `menoka_purge` created by SQL with random passwords, migrations 0001, 0002, 0004–0008 applied, Neon Auth provisioned (base URL `https://ep-blue-fire-ayuksq4w.neonauth.c-5.us-east-2.aws.neon.tech/neondb/auth`), password sign-up off, shared Google removed, magic link on with 5-minute expiry, app name "Menoka Card Games". The organization plugin can't be switched off through the API (405).
+3. Throwaway branch `claim-test-throwaway` (`br-autumn-tooth-ayksxle3`): all three claims with stand-in accounts gave 27, 3 and 2 games and 95 results, all reconciled; a rerun returned 0; bad friend lists and game sets were refused. Ask the user before deleting it.
+
+Next:
+1. Vercel Preview variables scoped to this git branch: `DATABASE_URL` (menoka_app on `cutover-rehearsal`), `NEON_AUTH_BASE_URL`, `NEON_AUTH_COOKIE_SECRET`. Add the preview's domain to the rehearsal branch's trusted domains.
+2. Preview test: sign in as therajarshiroy@gmail.com, run the Rajarshi claim with the new account ID, check standings, a two-account isolation check, and the verifier in Vercel request logs.
+3. Production: backup branch, then the same steps as the rehearsal on `production`, production Vercel variables (plan's checklists), then push this branch to `main`.
 
 ## Session gotchas
 
@@ -43,4 +42,5 @@ The user wants to work on other app changes before touching previews and product
 - Restart the preview server (`dev`, port 3005) after server-side changes or new `.env.local` values. Next.js allows one `next dev` per folder, so if another chat holds 3005, build and run `next start` on a spare port (magic links work on any localhost port on the dev branch); don't commit the temporary launch entry.
 - Never print or handle secrets. `.env.local` holds `DATABASE_URL`, the Neon Auth values, `PURGE_DATABASE_URL`, `NEON_API_KEY`, `CRON_SECRET`, `HEALTHCHECKS_PING_URL`, `NEON_PROJECT_ID` and `NEON_AUTH_BRANCH_ID`. Check with `grep -c "^NAME=" .env.local`.
 - `DELETE_PASSWORD` in `.env.local` is unused and can be removed by the user.
+- In zsh scripts, write `"${sha}:refs/heads/main"`: a bare `$sha:r…` is read as a filename modifier.
 - Report each step in simple language, and ask before committing.
