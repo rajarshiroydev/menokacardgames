@@ -3,6 +3,7 @@ import type {
   BlindPlan,
   BlindSchedule,
   GameState,
+  RaiseRecord,
 } from "./types";
 
 export const STAGES = ["PREFLOP", "FLOP", "TURN", "RIVER"] as const;
@@ -153,21 +154,25 @@ export function betStops(minimum: number, stack: number) {
   return [...new Set([minimum, ...multiples, stack])];
 }
 
+/** How much a raise must add this street: the last full bet or raise, or the big blind. */
+export function raiseSize(game: GameState) {
+  return game.hand?.raiseSize ?? game.ante;
+}
+
+/** False after a short all-in: the player already acted, so they may only call or fold. */
+export function mayRaise(game: GameState, playerIndex: number) {
+  return game.hand?.raiseOpen?.[playerIndex] ?? true;
+}
+
+/**
+ * Chips this player must add for the smallest legal bet or raise: the
+ * current bet plus the last full raise (the big blind when nobody has
+ * raised), capped at their stack, which is always allowed as an all in.
+ */
 export function minimumRaise(game: GameState, playerIndex: number) {
   const hand = game.hand;
   if (!hand) return 0;
-
-  const utgIndex = nextEligibleIndex(hand.in, hand.bigBlindIndex);
-  const isUtgOpeningAction =
-    hand.stage === 0 &&
-    playerIndex === utgIndex &&
-    !hand.acted.some(Boolean);
-  const target = isUtgOpeningAction
-    ? game.ante * 2
-    : hand.roundHigh === 0
-      ? game.ante
-      : hand.roundHigh + 1;
-
+  const target = hand.roundHigh + raiseSize(game);
   return Math.max(
     1,
     Math.min(
@@ -175,6 +180,70 @@ export function minimumRaise(game: GameState, playerIndex: number) {
       game.players[playerIndex].stack,
     ),
   );
+}
+
+/**
+ * Updates the betting after a player's chips for this street have been
+ * added to `committed`. Going above the current bet makes everyone else
+ * act again. Only a full raise (adding at least the last raise size) sets
+ * a new raise size and lets players who already acted raise again; a
+ * short all-in doesn't. Returns the rules from before, for undo.
+ */
+export function applyRaiseRules(
+  game: GameState,
+  playerIndex: number,
+): RaiseRecord {
+  const hand = game.hand!;
+  const open = hand.raiseOpen ?? game.players.map(() => true);
+  const before: RaiseRecord = {
+    size: raiseSize(game),
+    open: [...open],
+    full: false,
+  };
+  const total = hand.committed[playerIndex];
+  const increase = total - hand.roundHigh;
+  hand.acted[playerIndex] = true;
+  if (increase > 0) {
+    hand.roundHigh = total;
+    hand.acted = hand.acted.map(
+      (_, index) =>
+        index === playerIndex ||
+        !hand.in[index] ||
+        game.players[index].stack === 0,
+    );
+    if (increase >= before.size) {
+      before.full = true;
+      hand.raiseSize = increase;
+      open.fill(true);
+    }
+  }
+  open[playerIndex] = false;
+  hand.raiseOpen = open;
+  return before;
+}
+
+/** Puts the raise rules back to how they were before an undone action. */
+export function undoRaiseRules(
+  game: GameState,
+  playerIndex: number,
+  before: RaiseRecord | undefined,
+) {
+  const hand = game.hand!;
+  if (before?.full) {
+    hand.raiseSize = before.size;
+    hand.raiseOpen = [...before.open];
+    return;
+  }
+  const open = hand.raiseOpen ?? game.players.map(() => true);
+  open[playerIndex] = before?.open[playerIndex] ?? true;
+  hand.raiseOpen = open;
+}
+
+/** Each street starts with raises of one big blind, open to everyone. */
+export function resetRaiseRules(game: GameState) {
+  const hand = game.hand!;
+  hand.raiseSize = game.ante;
+  hand.raiseOpen = game.players.map(() => true);
 }
 
 export function smallBlindFor(bigBlind: number) {
@@ -386,6 +455,7 @@ export function dealNewHand(game: GameState, now = Date.now()) {
     blindsBefore,
     blindLevelsBefore,
   };
+  resetRaiseRules(game);
   game.hand.currentPlayer = nextPlayerToAct(game, bigBlindIndex);
 }
 

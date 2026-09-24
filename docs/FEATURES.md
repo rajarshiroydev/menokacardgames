@@ -80,10 +80,11 @@ This is a plain-language list of everything Menoka Card Games can do today. It i
   - **Fold**
   - **All In**: slide the bet slider to the end; the button puts in the player's whole stack, even if it's less than a full call
 - **Minimum amounts:**
-  - the first player after the big blind ("under the gun") must raise to at least twice the big blind before the flop
-  - when nobody has bet yet, the minimum bet is the big blind
-  - after that, a raise only needs to be higher than the current bet
+  - when nobody has bet yet on a street, the minimum bet is the big blind
+  - a raise must add at least as much as the last bet or raise on the same street. Before the flop the big blind counts as the first bet, so the first raise goes to at least twice the big blind (blinds ₹50/₹100: raise to ₹200). If someone then raises to ₹400 (₹300 more), the next raise must go to at least ₹700
+  - each new street (flop, turn, river) starts again at the big blind
   - a player can always go all in for less
+- **Short all-ins.** An all-in that raises by less than the minimum is a "short all-in". Players who already acted must still call it or fold, but they can't raise again: their row shows only Call and Fold, with a note saying why. Players who haven't acted yet on that street can still raise. A later full raise lets everyone raise again. The action log marks it as "short of a full raise".
 - **A raise reopens the betting.** The round ends only when every player still in has called, checked, folded or gone all in. The button to deal the next stage stays disabled until then.
 - **Everyone else folds:** the last player left wins the pot automatically.
 - **All-in run-out:** once betting can't continue (for example, everyone else is all in), the host can deal the remaining stages straight to the showdown without more betting.
