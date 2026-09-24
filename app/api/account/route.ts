@@ -10,6 +10,7 @@ import {
   recentSignInRequiredResponse,
   requireAccountSession,
 } from "@/lib/auth/server";
+import { readJsonBody, SMALL_JSON_BODY_LIMIT } from "@/lib/security/json-body";
 
 export const dynamic = "force-dynamic";
 
@@ -43,12 +44,9 @@ export async function POST(request: Request) {
   if ("response" in result) return result.response;
   const { account, session } = result;
 
-  let action: unknown;
-  try {
-    action = ((await request.json()) as { action?: unknown }).action;
-  } catch {
-    return json({ error: "Invalid request" }, 400);
-  }
+  const read = await readJsonBody(request, SMALL_JSON_BODY_LIMIT);
+  if (!read.ok) return json({ error: read.error }, read.status);
+  const action = (read.body as { action?: unknown } | null)?.action;
 
   if (action === "request-deletion") {
     if (account.lifecycleState !== "active") {

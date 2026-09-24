@@ -8,6 +8,7 @@ import {
   playerNameKey,
 } from "@/lib/poker/player-validation";
 import type { PlayerProfile } from "@/lib/poker/types";
+import { readJsonBody, SMALL_JSON_BODY_LIMIT } from "@/lib/security/json-body";
 
 export const dynamic = "force-dynamic";
 
@@ -86,8 +87,11 @@ export async function POST(request: Request) {
   const ownerId = authResult.account.id;
   const authUserId = authResult.session.user.id;
 
+  const read = await readJsonBody(request, SMALL_JSON_BODY_LIMIT);
+  if (!read.ok) return json({ error: read.error }, read.status);
+
   try {
-    const body = (await request.json()) as { name?: unknown };
+    const body = read.body as { name?: unknown } | null;
     let name: string;
 
     try {
@@ -125,8 +129,11 @@ export async function PATCH(request: Request) {
   const ownerId = authResult.account.id;
   const authUserId = authResult.session.user.id;
 
+  const read = await readJsonBody(request, SMALL_JSON_BODY_LIMIT);
+  if (!read.ok) return json({ error: read.error }, read.status);
+
   try {
-    const body = (await request.json()) as {
+    const body = (read.body ?? {}) as {
       action?: unknown;
       id?: unknown;
     };

@@ -17,6 +17,7 @@ This is a plain-language list of everything Menoka Card Games can do today. It i
 - **Staying signed in.** A sign-in lasts about a week on that device. The top of the screen shows "Signed in as" your email address, with a **Sign out** button.
 - **Every host has a private ledger.** The person who signs in is the *host*. Each host has their own friend list, games, history and standings. Two hosts never see each other's data, even if they both have a friend called "Rajarshi". The same friend in two hosts' lists is two separate records with separate histories.
 - **Friends don't need accounts.** Friends are just names in the host's list. Only the host signs in.
+- **Only the app can change your data.** Requests that add, change or delete data are accepted only when they come from the app's own pages. A request sent from another website, or by a script without the browser's origin information, is refused, even if you are signed in.
 - **Locked accounts.** While an account is waiting to be deleted, all of its data is blocked and hidden. Signing in shows the "Deletion is scheduled" screen instead of the ledger (see section 14).
 
 ## 2. Home screen
@@ -124,6 +125,7 @@ This is a plain-language list of everything Menoka Card Games can do today. It i
 
 - **Finish And Save Game Session** saves the game to your private history. It needs at least one completed hand. If a hand is still in progress, it's refunded and doesn't count in the saved results. After saving, the app opens the standings.
 - **Saving twice is safe.** If a save is retried, for example after a network problem, the game is still saved only once and doesn't use up a second game number.
+- **A different game can't hide behind a retry.** A retry only counts as the same save if it describes the same game: the same times, stakes, hands, blinds, players in the same seats, buy-ins and final chips. If a save arrives with the ID of an already saved game but different details, it is refused with "A different session with the same ID is already saved" and nothing is changed.
 - **The server double-checks every save.** A game is rejected if the chip totals don't add up, the same player appears twice, or a number is invalid. A bad game can't reach your history.
 - **Game history** lists saved games, newest first. The five most recent are shown, with a button to reveal older ones. Each game card shows:
   - name or number, date, number of hands, big blind and number of players
@@ -198,6 +200,7 @@ This is a plain-language list of everything Menoka Card Games can do today. It i
 - **Import** reads a backup file and adds only games that aren't already in your ledger. It never overwrites or duplicates existing games. Every imported game goes through the same server checks as a normal save.
 - Imported games belong to the signed-in host. Games from your own backup keep their links to your players. Players listed only by name are matched to your friend list by name, and new names are added to it.
 - If a file refers to player records that aren't in your ledger, for example a backup from another host's account, the whole import is refused with an "Unknown player" message and nothing is added.
+- A single import can send at most **2 MB** of new games (a ledger of a few dozen games is well under 100 KB). Larger files are refused and nothing is added.
 
 ## 16. Data from before accounts
 

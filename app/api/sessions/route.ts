@@ -6,10 +6,21 @@ import { deriveSessionAccounting } from "@/lib/poker/accounting";
 import { runAsAuthenticatedUser } from "@/lib/poker/database";
 import { playerNameKey } from "@/lib/poker/player-validation";
 import {
+  isSameSession,
+  SESSION_CONFLICT,
+  type SavedSession,
+} from "@/lib/poker/session-conflict";
+import {
   MAX_SESSIONS_PER_REQUEST,
   validateSession,
 } from "@/lib/poker/session-validation";
-import type { PokerSession } from "@/lib/poker/types";
+import type { PokerSession, SessionResult } from "@/lib/poker/types";
+import {
+  readJsonBody,
+  SESSION_BATCH_BODY_LIMIT,
+  SMALL_JSON_BODY_LIMIT,
+} from "@/lib/security/json-body";
+import type { NeonQueryFunctionInTransaction } from "@neondatabase/serverless";
 
 export const dynamic = "force-dynamic";
 
@@ -34,7 +45,7 @@ function json(body: object, status = 200) {
   });
 }
 
-function mapSession(row: SessionRow): PokerSession {
+function mapSession(row: SessionRow): SavedSession {
   return {
     id: row.id,
     name: row.game_name?.trim() || `Game ${Number(row.session_number)}`,
@@ -52,17 +63,15 @@ function mapSession(row: SessionRow): PokerSession {
   };
 }
 
-export async function GET() {
-  const authResult = await requireHostAccount();
-  if ("response" in authResult) return authResult.response;
-  const ownerId = authResult.account.id;
-  const authUserId = authResult.session.user.id;
+type TransactionSql = NeonQueryFunctionInTransaction<false, false>;
 
-  try {
-    const [sessionsResult, counterResult] = await runAsAuthenticatedUser(
-      authUserId,
-      (sql) => [
-        sql`
+/** Saved sessions with their verified results; `ids` narrows to those IDs. */
+function selectSessions(
+  sql: TransactionSql,
+  ownerId: string,
+  ids: string[] | null,
+) {
+  return sql`
         SELECT
           id,
           game_name,
@@ -107,8 +116,25 @@ export async function GET() {
           HAVING count(*) > 0
         ) AS normalized ON true
         WHERE session.owner_id = ${ownerId}::uuid
+          AND (
+            ${ids}::text[] IS NULL
+            OR session.id = ANY(${ids}::text[])
+          )
         ORDER BY session.played_at DESC, session.created_at DESC
-        `,
+  `;
+}
+
+export async function GET() {
+  const authResult = await requireHostAccount();
+  if ("response" in authResult) return authResult.response;
+  const ownerId = authResult.account.id;
+  const authUserId = authResult.session.user.id;
+
+  try {
+    const [sessionsResult, counterResult] = await runAsAuthenticatedUser(
+      authUserId,
+      (sql) => [
+        selectSessions(sql, ownerId, null),
         sql`
           SELECT next_session_number
           FROM accounts
@@ -135,16 +161,109 @@ export async function GET() {
   }
 }
 
+type PlayerRecord = { id: string; name: string; name_key: string };
+
+type PlayerDirectory = {
+  byId: Map<string, PlayerRecord>;
+  byName: Map<string, PlayerRecord>;
+};
+
+function playerDirectory(rows: PlayerRecord[]): PlayerDirectory {
+  return {
+    byId: new Map(rows.map((player) => [player.id, player])),
+    byName: new Map(rows.map((player) => [player.name_key, player])),
+  };
+}
+
+function findPlayer(result: SessionResult, players: PlayerDirectory) {
+  return result.playerId
+    ? players.byId.get(result.playerId)
+    : players.byName.get(playerNameKey(result.name));
+}
+
+/** Replaces each result's player with the owner's record, or returns null. */
+function resolveSession(
+  session: PokerSession,
+  players: PlayerDirectory,
+): PokerSession | null {
+  const results: SessionResult[] = [];
+  for (const result of session.results) {
+    const player = findPlayer(result, players);
+    if (!player) return null;
+    results.push({
+      playerId: player.id,
+      name: player.name,
+      net: result.net,
+      end: result.end,
+      ...(result.buyIns ? { buyIns: result.buyIns } : {}),
+    });
+  }
+  return { ...session, results };
+}
+
+/** IDs of incoming sessions that differ from the saved session with that ID. */
+function conflictingSessionIds(
+  sessions: PokerSession[],
+  saved: Map<string, SavedSession>,
+  players: PlayerDirectory,
+) {
+  return sessions
+    .filter((session) => {
+      const existing = saved.get(session.id);
+      if (!existing) return false;
+      const resolved = resolveSession(session, players);
+      return !resolved || !isSameSession(existing, resolved);
+    })
+    .map((session) => session.id);
+}
+
+function sessionConflictResponse(ids: string[], savedOthers: number) {
+  return json(
+    {
+      error:
+        "A different session with the same ID is already saved. " +
+        (savedOthers
+          ? "The other sessions in this request were saved."
+          : "Nothing was saved."),
+      code: SESSION_CONFLICT,
+      conflicts: ids,
+      saved: savedOthers,
+    },
+    409,
+  );
+}
+
+function savedSessionMap(rows: SessionRow[]) {
+  return new Map(
+    rows.map((row) => {
+      const session = mapSession(row);
+      return [session.id, session];
+    }),
+  );
+}
+
+async function loadSavedSessions(
+  authUserId: string,
+  ownerId: string,
+  ids: string[],
+) {
+  const [result] = await runAsAuthenticatedUser(authUserId, (sql) => [
+    selectSessions(sql, ownerId, ids),
+  ]);
+  return savedSessionMap(result as SessionRow[]);
+}
+
 export async function POST(request: Request) {
   const authResult = await requireHostAccount();
   if ("response" in authResult) return authResult.response;
   const ownerId = authResult.account.id;
   const authUserId = authResult.session.user.id;
 
+  const read = await readJsonBody(request, SESSION_BATCH_BODY_LIMIT);
+  if (!read.ok) return json({ error: read.error }, read.status);
+
   try {
-    const body = (await request.json()) as {
-      sessions?: unknown[];
-    };
+    const body = read.body as { sessions?: unknown[] } | null;
     const inputs = Array.isArray(body?.sessions) ? body.sessions : [body];
     if (!inputs.length || inputs.length > MAX_SESSIONS_PER_REQUEST) {
       return json(
@@ -166,6 +285,31 @@ export async function POST(request: Request) {
         400,
       );
     }
+    const sessionIds = sessions.map((session) => session.id);
+    if (new Set(sessionIds).size !== sessionIds.length) {
+      return json({ error: "Each session in a request needs its own ID" }, 400);
+    }
+
+    // A retry with the same ID must describe the same session. Check before
+    // writing anything, so a conflicting request saves nothing.
+    const [existingPlayers, existingSessionsResult] =
+      await runAsAuthenticatedUser(authUserId, (sql) => [
+        sql`
+          SELECT id, name, name_key
+          FROM players
+          WHERE owner_id = ${ownerId}::uuid
+        `,
+        selectSessions(sql, ownerId, sessionIds),
+      ]);
+    const savedBefore = savedSessionMap(
+      existingSessionsResult as SessionRow[],
+    );
+    const conflicts = conflictingSessionIds(
+      sessions,
+      savedBefore,
+      playerDirectory(existingPlayers as PlayerRecord[]),
+    );
+    if (conflicts.length) return sessionConflictResponse(conflicts, 0);
 
     const missingPlayerNames = new Map<string, string>();
     sessions.forEach((session) => {
@@ -196,42 +340,18 @@ export async function POST(request: Request) {
         WHERE owner_id = ${ownerId}::uuid
       `,
     ]);
-    const playerRows = playersResult as Array<{
-      id: string;
-      name: string;
-      name_key: string;
-    }>;
-    const playersById = new Map(playerRows.map((player) => [player.id, player]));
-    const playersByName = new Map(
-      playerRows.map((player) => [player.name_key, player]),
-    );
+    const players = playerDirectory(playersResult as PlayerRecord[]);
 
     const unknownPlayer = sessions
       .flatMap((session) => session.results)
-      .find((result) =>
-        result.playerId
-          ? !playersById.has(result.playerId)
-          : !playersByName.has(playerNameKey(result.name)),
-      );
+      .find((result) => !findPlayer(result, players));
     if (unknownPlayer) {
       return json({ error: `Unknown player: ${unknownPlayer.name}` }, 400);
     }
 
-    const resolvedSessions = sessions.map((session) => ({
-      ...session,
-      results: session.results.map((result) => {
-        const player = result.playerId
-          ? playersById.get(result.playerId)
-          : playersByName.get(playerNameKey(result.name));
-        return {
-          playerId: player!.id,
-          name: player!.name,
-          net: result.net,
-          end: result.end,
-          ...(result.buyIns ? { buyIns: result.buyIns } : {}),
-        };
-      }),
-    }));
+    const resolvedSessions = sessions.map(
+      (session) => resolveSession(session, players)!,
+    );
 
     const results = await runAsAuthenticatedUser(authUserId, (sql) =>
       resolvedSessions.map((session) => {
@@ -347,9 +467,31 @@ export async function POST(request: Request) {
           `;
       }),
     );
-    return json({
-      saved: results.reduce((count, rows) => count + rows.length, 0),
-    });
+    const saved = results.reduce((count, rows) => count + rows.length, 0);
+
+    // A session that was neither saved now nor seen above was saved by a
+    // concurrent request; it must still match what this request sent.
+    const raced = resolvedSessions.filter(
+      (session, index) => !results[index].length && !savedBefore.has(session.id),
+    );
+    if (raced.length) {
+      const savedNow = await loadSavedSessions(
+        authUserId,
+        ownerId,
+        raced.map((session) => session.id),
+      );
+      const racedConflicts = raced
+        .filter((session) => {
+          const existing = savedNow.get(session.id);
+          return !existing || !isSameSession(existing, session);
+        })
+        .map((session) => session.id);
+      if (racedConflicts.length) {
+        return sessionConflictResponse(racedConflicts, saved);
+      }
+    }
+
+    return json({ saved });
   } catch (error) {
     console.error("sessions POST error", error);
     return json({ error: "Could not reach the ledger database" }, 500);
@@ -362,8 +504,11 @@ export async function PATCH(request: Request) {
   const ownerId = authResult.account.id;
   const authUserId = authResult.session.user.id;
 
+  const read = await readJsonBody(request, SMALL_JSON_BODY_LIMIT);
+  if (!read.ok) return json({ error: read.error }, read.status);
+
   try {
-    const body = (await request.json()) as {
+    const body = (read.body ?? {}) as {
       action?: unknown;
       id?: unknown;
     };

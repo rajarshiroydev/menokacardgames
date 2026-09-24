@@ -173,6 +173,7 @@ Official sources checked 2026-09-20; recheck during implementation/release:
 | Sporty glass design | Paused on `ui-sporty-glass-refresh` |
 | Recent sign-in window for permanent deletion | Kept at 10 minutes by user decision (2026-09-24). Revisit if real use shows it is too strict or too loose; longer windows are a one-line change |
 | Magic-link verifier in request logs | `next dev` request logging prints the one-time `/auth/callback` verifier. Before release, confirm production/Vercel request logs do not retain it, or redact it |
+| Rate limiting (security hardening) | Not started. Needs shared state across serverless instances; choose between Vercel Firewall rate-limit rules, a Postgres-backed counter, or a hosted store such as Upstash Redis. Covers sign-in link requests, imports and mutations |
 | Cloud draft sync / device handoff | Deferred; needs conflict policy |
 | Shared ledgers/invitations | Out of initial scope; add only if requested |
 | App Store / Play Store | Future separate plan after web stability |
@@ -239,6 +240,13 @@ Rehearsal on the isolated branch:
 - **Healthchecks.io:** pings sent without errors.
 
 Neon's console cannot reset the password of an SQL-created role that has none, so the role first gets a random in-database password nobody sees, then a reset (see `migrations/README.md`). Production unchanged.
+
+2026-09-24 implementation step 3M (security hardening, part 1): Three request protections, no database change.
+- **Same-origin mutations.** `proxy.ts` now also runs for `/api/*`. Any request other than GET, HEAD or OPTIONS must carry `Sec-Fetch-Site: same-origin`, or, for browsers without that header, an `Origin` whose host equals `X-Forwarded-Host` (or `Host`). Anything else, including requests with neither header, gets 403 with code `cross-site-request` before any route code runs. This covers the Neon Auth handler (magic-link requests) and every future API route. The rule is the pure `lib/security/request-origin.ts`.
+- **Bounded JSON bodies.** `lib/security/json-body.ts` requires a JSON content type (415 otherwise), rejects a declared or streamed size over the limit (413), and reports malformed JSON as 400 instead of the previous 500. Limits: 16 KB for players, account and discard/restore requests; 2 MB for session saves and imports (Vercel's platform limit is 4.5 MB).
+- **Conflicting retries.** A session save whose client ID already exists must describe the same session, compared by `lib/poker/session-conflict.ts`: times, stakes, hands, blind history, resolved player IDs in seat order, ending stacks, nets and buy-ins (a missing buy-in list equals `[startStack]`). Player display names are ignored, and an unnamed incoming session matches the default "Game N" name, so a re-imported export still matches. The check reads existing sessions before any write, so a conflicting request saves nothing and returns 409 with code `session-conflict` and the conflicting IDs. If a concurrent request inserts the same ID between that check and the insert, the route re-reads and compares afterwards; that rare case reports 409 with the number of other sessions that were saved. Duplicate IDs inside one request are now rejected with 400.
+
+Verification: 86 unit tests (14 new), types, lint and build pass. Against a production build on a spare port: POSTs with no provenance headers, a foreign `Origin` or `Sec-Fetch-Site: cross-site` (including to `/api/auth/sign-in/magic-link`) returned 403; same-origin requests reached the routes. In the signed-in browser: a 20 KB player name returned 413, `text/plain` 415, malformed JSON 400; re-sending an existing session returned `saved: 0`; the same session with two ending stacks shifted by one chip returned 409; re-sending all 24 sessions exactly as exported returned `saved: 0`. The ledger stayed at 24 sessions with next game number 25. Remaining hardening: rate limiting (needs a storage decision) and the production log check for the magic-link verifier. Production unchanged.
 
 ### Purge go-live checklist (production, requires separate authorization)
 
