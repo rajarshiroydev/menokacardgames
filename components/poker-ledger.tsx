@@ -2661,7 +2661,7 @@ function BuyInOptions({
       className={embedded ? "buy-in-options embedded" : "card buy-in-options"}
     >
       <b>Buy In</b>
-      <p className="muted">A busted player can return for half their last buy-in.</p>
+      <p className="muted">A busted player can buy back in for the starting stack.</p>
       {offers.map(({ player, index, amount }) => (
         <button
           className="buy-in-button"
@@ -3509,9 +3509,8 @@ function Modal({
                   The Current Bet, Raise It, Or Fold. All In Commits The
                   Player&apos;s Entire Remaining Stack, Even If It Cannot Cover
                   A Call. If Only One Player Remains, They Win Automatically.
-                  Between Hands, A Busted Player Can Buy In For Half Their
-                  Previous Buy-In, Rounded Down To A Whole Chip. Buy-Ins Stop
-                  Once Half Would Be Zero.
+                  Between Hands, A Busted Player Can Buy Back In For The Full
+                  Starting Stack, As Many Times As Needed.
                 </p>
               </div>
             </section>

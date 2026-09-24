@@ -484,30 +484,43 @@ describe("positional betting", () => {
 });
 
 describe("buy-ins", () => {
-  test("halves each busted player's previous buy-in", () => {
+  test("rebuys each busted player for the full starting stack", () => {
     const game = gameState();
     game.startStack = 10_000;
     game.players[0].stack = 0;
 
-    assert.equal(nextBuyIn(game, 0), 5_000);
-    assert.equal(buyInPlayer(game, 0), 5_000);
-    assert.equal(game.players[0].stack, 5_000);
-    assert.deepEqual(game.players[0].buyIns, [10_000, 5_000]);
+    assert.equal(nextBuyIn(game, 0), 10_000);
+    assert.equal(buyInPlayer(game, 0), 10_000);
+    assert.equal(game.players[0].stack, 10_000);
+    assert.deepEqual(game.players[0].buyIns, [10_000, 10_000]);
 
     game.players[0].stack = 0;
-    assert.equal(nextBuyIn(game, 0), 2_500);
-    assert.equal(buyInPlayer(game, 0), 2_500);
-    assert.equal(totalBuyIns(game, 0), 17_500);
-    assert.equal(game.players[0].stack, 2_500);
-    assert.equal(nextBuyIn(game, 0), null);
+    assert.equal(buyInPlayer(game, 0), 10_000);
+    assert.equal(totalBuyIns(game, 0), 30_000);
+    assert.equal(nextBuyIn(game, 0), null, "only busted players rebuy");
   });
 
-  test("offers no buy-in during a hand or after the amount reaches zero", () => {
+  test("continues a game that already had a halved rebuy", () => {
     const game = gameState();
+    game.startStack = 10_000;
     game.players[0].stack = 0;
-    game.players[0].buyIns = [1];
+    game.players[0].buyIns = [10_000, 5_000];
+
+    assert.equal(buyInPlayer(game, 0), 10_000);
+    assert.deepEqual(game.players[0].buyIns, [10_000, 5_000, 10_000]);
+  });
+
+  test("offers no buy-in during a hand or past the buy-in limit", () => {
+    const game = gameState();
+    game.startStack = 1;
+    game.players[0].stack = 0;
+    game.players[0].buyIns = Array(64).fill(1);
     assert.equal(nextBuyIn(game, 0), null);
 
+    game.players[0].buyIns = Array(63).fill(1);
+    assert.equal(nextBuyIn(game, 0), 1);
+
+    game.startStack = 100_000;
     game.players[0].buyIns = [100_000];
     dealNewHand(game);
     assert.equal(nextBuyIn(game, 0), null);

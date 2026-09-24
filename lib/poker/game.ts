@@ -1,3 +1,4 @@
+import { MAX_BUY_INS } from "./buy-ins.ts";
 import type {
   BlindPlan,
   BlindSchedule,
@@ -55,10 +56,12 @@ export function totalBuyIns(game: GameState, playerIndex: number) {
 export function nextBuyIn(game: GameState, playerIndex: number) {
   const player = game.players[playerIndex];
   if (!player || game.hand || player.stack !== 0) return null;
-  const previous = playerBuyIns(game, playerIndex).at(-1) ?? 0;
-  const amount = Math.floor(previous / 2);
+  // Every rebuy is the full starting stack.
+  const amount = game.startStack;
   return (
-    amount > 0 && Number.isSafeInteger(totalBuyIns(game, playerIndex) + amount)
+    amount > 0 &&
+    playerBuyIns(game, playerIndex).length < MAX_BUY_INS &&
+    Number.isSafeInteger(totalBuyIns(game, playerIndex) + amount)
   )
     ? amount
     : null;

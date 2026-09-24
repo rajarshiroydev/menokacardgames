@@ -80,6 +80,37 @@ describe("session validation", () => {
     assert.equal(session.results[0].playerId, "player-1");
   });
 
+  test("accepts full-stack rebuys, alone or after older halved rebuys", () => {
+    const full = [
+      { name: "Raj", net: -15000, end: 15000, buyIns: [10000, 10000, 10000] },
+      { name: "Sam", net: 15000, end: 25000 },
+    ];
+    assert.deepEqual(
+      validateSession({ ...validSession, results: full }).results,
+      full,
+    );
+
+    const crossover = [
+      { name: "Raj", net: -15000, end: 10000, buyIns: [10000, 5000, 10000] },
+      { name: "Sam", net: 15000, end: 25000 },
+    ];
+    assert.deepEqual(
+      validateSession({ ...validSession, results: crossover }).results,
+      crossover,
+    );
+
+    assert.throws(
+      () => validateSession({
+        ...validSession,
+        results: [
+          { name: "Raj", net: -12000, end: 5000, buyIns: [10000, 7000] },
+          { name: "Sam", net: 12000, end: 22000 },
+        ],
+      }),
+      /Invalid buy-in sequence/,
+    );
+  });
+
   test("keeps halved buy-ins and checks net against total invested", () => {
     const results = [
       { name: "Raj", net: -2500, end: 15000, buyIns: [10000, 5000, 2500] },
