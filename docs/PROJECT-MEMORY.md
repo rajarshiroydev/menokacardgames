@@ -2,6 +2,7 @@
 
 Updated 2026-09-24. This repository file is durable agent memory; no external memory service is assumed.
 
+- `docs/FEATURES.md` (added 2026-09-24 at the user's request) is the plain-language, non-technical list of current features. Keep it updated with every user-visible change; the user wants detailed behaviour recorded so it isn't lost.
 - Read `docs/FEATURE-PLAN.md` before substantial work. It is the canonical living feature plan. Update decisions, status and future feature plans there.
 - Multi-user implementation is authorized on `feature/multi-user-transition`, one reviewed step at a time. Stop and report after each step. Production rollout and historical ownership migration are not authorized yet.
 - User clarified: one host account owns its own friend list and games; friends need no account. No groups, invitations or memberships in initial scope.

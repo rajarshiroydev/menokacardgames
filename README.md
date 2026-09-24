@@ -67,6 +67,7 @@ npm run build
 
 ## Planning and project context
 
+- [Feature list](docs/FEATURES.md) — plain-language list of everything the app does today.
 - [Feature plan](docs/FEATURE-PLAN.md) — ongoing roadmap, multi-user transition, ranking decisions and acceptance criteria.
 - [Project memory](docs/PROJECT-MEMORY.md) — durable working agreements and current decisions.
 - [Domain glossary](CONTEXT.md) — shared terminology.

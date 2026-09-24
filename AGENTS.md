@@ -31,3 +31,4 @@ Read `docs/PROJECT-MEMORY.md`, `docs/FEATURE-PLAN.md`, and `CONTEXT.md` before s
 - Keep pure game rules separate from persistence and identity. Derive authoritative accounting values and validate inputs on the server.
 - Run relevant checks: `npm run lint`, `npx tsc --noEmit`, `npm test`; run `npm run build` when build/runtime changes warrant it. Verify UI changes in the local browser. Documentation-only work needs link/diff review rather than application test reruns.
 - Update project memory for durable preferences and decisions. Keep detailed feature plans in the canonical planning document.
+- `docs/FEATURES.md` is the plain-language list of what the app does today. Update it in the same change whenever user-visible behaviour is added, changed or removed, including exact limits and time windows.
