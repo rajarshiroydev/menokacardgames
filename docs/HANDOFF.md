@@ -1,16 +1,16 @@
 # Session handoff
 
-Updated 2026-09-24 on `feature/multi-user-transition`. Steps 3M and 3N (security hardening) are committed. Step 3O (import preview) is committed too (clean tree, nothing pushed). Replace this file at the end of each session; don't let it grow.
+Updated 2026-09-24 on `feature/multi-user-transition`. Steps 3M and 3N (security hardening) are committed. Step 3O (import preview) is committed. Step 3P (Pin Chart removal) is committed (clean tree, nothing pushed). Replace this file at the end of each session; don't let it grow.
 
 ## Read first
 
 1. [`PROJECT-MEMORY.md`](./PROJECT-MEMORY.md): working agreements, decisions and environment facts. Short.
-2. [`FEATURE-PLAN.md`](./FEATURE-PLAN.md): the "Pending choices" table and the latest decision-history entries (Step 3O is the newest).
+2. [`FEATURE-PLAN.md`](./FEATURE-PLAN.md): the "Pending choices" table and the latest decision-history entries (Step 3P is the newest).
 3. [`FEATURES.md`](./FEATURES.md): what the app does today, in plain language. Update it with every user-visible change.
 
 ## Where things stand
 
-The multi-user transition is built and rehearsed on the isolated Neon branch `multi-user-auth`, through Step 3O:
+The multi-user transition is built and rehearsed on the isolated Neon branch `multi-user-auth`, through Step 3P:
 
 - magic-link sign-in; owner-scoped data enforced by server checks, row-level security and the restricted `menoka_app` role
 - normalized accounting and average-session-return standings
@@ -19,14 +19,14 @@ The multi-user transition is built and rehearsed on the isolated Neon branch `mu
 - Step 3M: mutating `/api/*` requests must be same-origin (`proxy.ts`), JSON bodies are size-limited (16 KB, or 2 MB for session saves), and a session retry with the same ID but different content returns 409
 - Step 3N: password sign-up and shared Google sign-in disabled in the branch's Neon Auth config (magic links only, as decided); a 429 shows a clear "Too many requests" message. The Vercel Firewall rate-limit rule is specified in the plan's auth and firewall go-live checklist, not applied (it would change production)
 - Step 3O: Import shows a review screen (counts, how each player maps, new games) before saving; re-importing an export adds nothing
+- Step 3P: the dead Pin Chart button is gone
 
 Production and Vercel are unchanged. The last full gate passed: 93 tests, types, lint and build.
 
 ## Next step
 
-1. **Small cleanup:** remove the Pin Chart button, which has done nothing since 19 Sept.
-2. **Preview deployment** of this branch (not production). Use it to confirm `neon_auth_session_verifier` in the `/auth/callback` URL isn't retained in Vercel request logs. The production-mode server itself doesn't log it.
-3. **Production cutover:** needs the user's explicit authorization, a backup/restore rehearsal, both go-live checklists in the plan (purge; auth and firewall), and answers on history cohorts H–I and cohort M's host.
+1. **Preview deployment** of this branch (not production). Use it to confirm `neon_auth_session_verifier` in the `/auth/callback` URL isn't retained in Vercel request logs. The production-mode server itself doesn't log it.
+2. **Production cutover:** needs the user's explicit authorization, a backup/restore rehearsal, both go-live checklists in the plan (purge; auth and firewall), and answers on history cohorts H–I and cohort M's host.
 
 ## Session gotchas
 

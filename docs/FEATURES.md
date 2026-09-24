@@ -230,6 +230,5 @@ This is a plain-language list of everything Menoka Card Games can do today. It i
 
 These are known limitations, not planned features. Planned work is in the [feature plan](./FEATURE-PLAN.md).
 
-- The **Pin Chart** button on the hand-rankings chart remembers its setting but no longer does anything visible. It used to keep the chart on the game screen, which was removed on 19 September 2026.
 - A game in progress can't be moved to another device before it's saved.
 - Import handles up to 250 new games per file.

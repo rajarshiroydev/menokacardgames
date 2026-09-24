@@ -1646,15 +1646,6 @@ hr {
   line-height: 1;
 }
 
-.poker-hands-heading button {
-  min-height: 34px;
-  padding: 7px 10px;
-  border-color: var(--line);
-  background: transparent;
-  color: var(--muted);
-  font-size: 10px;
-}
-
 .hand-rank-grid {
   display: grid;
   grid-template-columns: 1fr;
@@ -2294,12 +2285,6 @@ hr {
 
 .sheet button:last-child {
   margin-bottom: 0;
-}
-
-.sheet .poker-hands-heading button {
-  width: auto;
-  margin: 0;
-  padding: 7px 10px;
 }
 
 .sheet.hands-sheet > button {
