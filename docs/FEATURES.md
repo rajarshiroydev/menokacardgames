@@ -127,7 +127,7 @@ This is a plain-language list of everything Menoka Card Games can do today. It i
 
 - **Games in progress survive a refresh.** The current game is kept on the device, so closing or reloading the page doesn't lose it.
 - **Tied to your account.** A game in progress is saved on the device for the signed-in host only. Another host signing in on the same device doesn't see it.
-- **One device per game.** A game in progress lives on the device where it was started. It isn't synced to other devices until it's saved.
+- **One device per game.** A game in progress lives on the device where it was started. It isn't synced to other devices until it's saved. Players can still follow it on their own phones through a live standings link (see section 19).
 - **Back button works.** The phone or browser back button, and the ← button at the top of each screen, move back through the app's screens.
 
 ## 11. Saving a game and game history
@@ -233,6 +233,18 @@ This is a plain-language list of everything Menoka Card Games can do today. It i
 - Can be added to a phone's home screen and opened like an app, full screen and without the browser bar.
 - Respects the "reduce motion" setting for animations such as the seat-dragging effect.
 
+## 19. Live standings for players
+
+- **Share the game with the table.** During a game, the **Session Standings** card has a **Share live standings** button. **Create live link** makes a link and shows it as a QR code, with **Share link** (the phone's share menu, for example WhatsApp) and **Copy link**.
+- **No sign-in for players.** Anyone who opens the link sees a read-only page. It shows the game name, the hand number (for example "Hand 12 in progress" or "After hand 12"), the blinds, and for every player: rank, stack, total bought in (including rebuys, with the number of rebuys) and net ▲/▼.
+- **When the numbers change.** Stacks update after every action, so a player can check their chips before betting. Net and rank change only when a hand ends, so the order doesn't jump around during a hand.
+- **How fast.** The host's phone sends each change about a second after the host stops tapping, at most once every 3 seconds. Players' phones check every 5 seconds while the page is open on screen, and at once when they come back to it.
+- **Is the host still connected?** The page says "Updated 12s ago". While the host's phone is on, it also checks in once a minute when nothing has changed. After 2½ minutes without any update, the page warns that the host's phone may be offline or asleep.
+- **Tap your name** to highlight your own row. The highlight is remembered on that phone.
+- **What the link does not show:** other games, saved history, all-time standings, the action log, or anything else in the host's account.
+- **When the link stops working.** It ends when the host saves or discards the game, taps **Stop sharing**, or deletes their account. It also stops 12 hours after the host's last update. Afterwards it shows "This game has ended". Sharing again makes a new link; old links never come back.
+- **Who can see it.** Anyone who has the link can see those names and chip counts until it ends, so share it only with the table. The button reads "Sharing live · show link" while a link is active, and "Live link not updating" if the host's updates keep failing.
+
 ---
 
 ## Known gaps
@@ -240,4 +252,5 @@ This is a plain-language list of everything Menoka Card Games can do today. It i
 These are known limitations, not planned features. Planned work is in the [feature plan](./FEATURE-PLAN.md).
 
 - A game in progress can't be moved to another device before it's saved.
+- The live standings link can't be used to play or change the game; only the host's device records it. If the host's phone is locked or offline, the link stops updating until the host opens the app again.
 - Import handles up to 250 new games per file.

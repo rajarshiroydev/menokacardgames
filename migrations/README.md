@@ -27,6 +27,8 @@ Migration workflow:
 
 `0008_claim_reviewed_history.sql` adds the owner-only function `claim_reviewed_history(account, game numbers, friend names, decision)`. It copies reviewed unowned legacy games into one host's ledger with that host's friend profiles, normalized results, buy-ins and provenance, and aborts unless every total reconciles. Rerunning it returns 0. Who gets which games is in `docs/HISTORICAL-OWNERSHIP.md`.
 
+`0009_live_views.sql` adds `live_views` for the live standings link: one row per host, the SHA-256 of the link token, the server-derived standings and an expiry at most 12 hours after the last update. `menoka_app` gets owner-scoped row security on it, and `read_live_view(token_hash)`, a `SECURITY DEFINER` function, lets the public link read one row without a signed-in host, but only while it hasn't expired and the account is active. Rows cascade on account deletion. Status: development branch only (2026-09-25).
+
 Data migrations under `migrations/data/` require a reviewed ownership manifest and an explicit target account ID. `0003_backfill_rajarshi_reviewed_history.sql` is the development-branch predecessor of 0008, kept for the record. Run it with `psql -v target_account_id=<internal-account-uuid>`. It clones the approved records, keeps source rows unowned, records provenance and aborts if its reconciliation checks fail.
 
 Rollback during development is branch reset. Production rollback must use the release plan's authenticated read-only mode and reconciled forward migration; do not blindly drop ownership structures after owner-scoped writes exist.

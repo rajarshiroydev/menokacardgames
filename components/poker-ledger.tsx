@@ -45,11 +45,13 @@ import {
 } from "@/lib/poker/game";
 import {
   accountGameStorageKey,
+  accountLiveTokenStorageKey,
   LEGACY_GAME_STORAGE_KEY,
   LEGACY_HISTORY_STORAGE_KEY,
   prepareLegacySessionsForAdoption,
 } from "@/lib/poker/storage";
 import { useRouter } from "next/navigation";
+import qrcode from "qrcode-generator";
 
 import { signOut } from "@/app/auth/sign-in/actions";
 import { DELETION_GRACE_PERIOD_DAYS } from "@/lib/accounts/lifecycle";
@@ -64,6 +66,10 @@ import {
   type IneligibleReason,
   type Standings,
 } from "@/lib/poker/standings";
+import {
+  buildLiveSnapshot,
+  LIVE_VIEW_HEARTBEAT_MS,
+} from "@/lib/poker/live-view";
 import {
   planImport,
   sessionsInBackup,
@@ -153,6 +159,46 @@ async function sessionsApi<T>(
     );
   }
   return data;
+}
+
+/** Starts, updates or stops the live standings link (`/api/live`). */
+async function liveApi<T>(
+  method: "POST" | "PUT" | "DELETE",
+  body?: object,
+): Promise<T> {
+  const response = await fetch("/api/live", {
+    method,
+    ...(body
+      ? {
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        }
+      : {}),
+  });
+  const data = (await response.json().catch(() => ({}))) as T & {
+    code?: string;
+    error?: string;
+  };
+  if (!response.ok) {
+    throw new ApiError(
+      apiErrorMessage(
+        response.status,
+        data.error,
+        "Could not reach live standings",
+      ),
+      response.status,
+      data.code,
+    );
+  }
+  return data;
+}
+
+function readStoredLiveToken(storageKey: string) {
+  try {
+    return window.localStorage.getItem(storageKey);
+  } catch {
+    return null;
+  }
 }
 
 async function playersApi<T>(
@@ -322,6 +368,7 @@ export function PokerLedger({
 }) {
   const router = useRouter();
   const gameStorageKey = accountGameStorageKey(accountId);
+  const liveTokenStorageKey = accountLiveTokenStorageKey(accountId);
   const [game, setGame] = useState<GameState | null>(null);
   const [history, setHistory] = useState<PokerSession[]>([]);
   const [discardedSessions, setDiscardedSessions] = useState<PokerSession[]>(
@@ -346,6 +393,11 @@ export function PokerLedger({
   const [reviewingLegacySessions, setReviewingLegacySessions] =
     useState(false);
   const [importPlan, setImportPlan] = useState<ImportPlan | null>(null);
+  const [liveToken, setLiveToken] = useState<string | null>(null);
+  const [sharingLive, setSharingLive] = useState(false);
+  const [liveBusy, setLiveBusy] = useState(false);
+  const [liveFailing, setLiveFailing] = useState(false);
+  const liveSync = useRef({ lastSent: 0, failures: 0 });
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const showToast = useCallback((message: string) => {
@@ -423,6 +475,7 @@ export function PokerLedger({
     const hydrationTimer = setTimeout(() => {
       const storedGame = readStoredGame(gameStorageKey);
       setGame(storedGame);
+      setLiveToken(readStoredLiveToken(liveTokenStorageKey));
       setLegacyGame(readStoredGame(LEGACY_GAME_STORAGE_KEY));
       setLegacySessions(readStoredHistory(LEGACY_HISTORY_STORAGE_KEY));
       window.history.replaceState(
@@ -444,7 +497,7 @@ export function PokerLedger({
       clearTimeout(hydrationTimer);
       if (toastTimer.current) clearTimeout(toastTimer.current);
     };
-  }, [gameStorageKey, refreshHistory, refreshPlayers]);
+  }, [gameStorageKey, liveTokenStorageKey, refreshHistory, refreshPlayers]);
 
   useEffect(() => {
     function handleBrowserBack(event: PopStateEvent) {
@@ -466,6 +519,108 @@ export function PokerLedger({
       window.localStorage.removeItem(gameStorageKey);
     }
   }, [game, gameStorageKey, ready]);
+
+  const rememberLiveToken = useCallback(
+    (token: string | null) => {
+      setLiveToken(token);
+      setLiveFailing(false);
+      liveSync.current.failures = 0;
+      try {
+        if (token) window.localStorage.setItem(liveTokenStorageKey, token);
+        else window.localStorage.removeItem(liveTokenStorageKey);
+      } catch {
+        // Blocked storage: sharing still works until the page reloads.
+      }
+    },
+    [liveTokenStorageKey],
+  );
+
+  const sendLiveSnapshot = useCallback(
+    async (current: GameState) => {
+      liveSync.current.lastSent = Date.now();
+      try {
+        await liveApi("PUT", { snapshot: buildLiveSnapshot(current) });
+        liveSync.current.failures = 0;
+        setLiveFailing(false);
+      } catch (error) {
+        if (error instanceof ApiError && error.status === 404) {
+          // Sharing was stopped elsewhere, for example on another device.
+          rememberLiveToken(null);
+          return;
+        }
+        liveSync.current.failures += 1;
+        if (liveSync.current.failures >= 2) setLiveFailing(true);
+      }
+    },
+    [rememberLiveToken],
+  );
+
+  // Sends the standings to the live link after the game changes. Waits for a
+  // second of quiet and at least three seconds between updates, so a burst of
+  // actions is one request and stays well inside the API write limit. While
+  // nothing changes, a heartbeat each minute tells players the host is online.
+  useEffect(() => {
+    if (!ready || !liveToken || !game) return;
+    const wait = Math.max(
+      1000,
+      liveSync.current.lastSent + 3000 - Date.now(),
+    );
+    const timer = setTimeout(() => void sendLiveSnapshot(game), wait);
+    const heartbeat = setInterval(() => {
+      if (Date.now() - liveSync.current.lastSent >= LIVE_VIEW_HEARTBEAT_MS) {
+        void sendLiveSnapshot(game);
+      }
+    }, 15_000);
+    return () => {
+      clearTimeout(timer);
+      clearInterval(heartbeat);
+    };
+  }, [game, liveToken, ready, sendLiveSnapshot]);
+
+  /** Saving or discarding the game ends its live link. */
+  function endLiveSharing() {
+    if (!liveToken) return;
+    rememberLiveToken(null);
+    setSharingLive(false);
+    liveApi("DELETE").catch(() => {
+      // The link still expires 12 hours after its last update.
+    });
+  }
+
+  async function startLiveSharing() {
+    if (!game || liveBusy) return;
+    setLiveBusy(true);
+    try {
+      const data = await liveApi<{ token: string }>("POST", {
+        snapshot: buildLiveSnapshot(game),
+      });
+      liveSync.current.lastSent = Date.now();
+      rememberLiveToken(data.token);
+    } catch (error) {
+      showToast(
+        error instanceof Error ? error.message : "Could not start sharing",
+      );
+    } finally {
+      setLiveBusy(false);
+    }
+  }
+
+  async function stopLiveSharing() {
+    if (liveBusy) return;
+    setLiveBusy(true);
+    try {
+      await liveApi("DELETE");
+      rememberLiveToken(null);
+      setSharingLive(false);
+      showToast("Stopped sharing live standings");
+    } catch (error) {
+      showToast(
+        error instanceof Error ? error.message : "Could not stop sharing",
+      );
+    } finally {
+      setLiveBusy(false);
+    }
+  }
 
   const ask = useCallback(
     (message: string, confirmLabel: string, onConfirm: () => void) => {
@@ -1104,6 +1259,7 @@ export function PokerLedger({
       "Reset everything and start a new game? All current stacks are lost.",
       "Reset game",
       () => {
+        endLiveSharing();
         setGame(null);
         navigate("home", { replace: true });
       },
@@ -1152,6 +1308,7 @@ export function PokerLedger({
         method: "POST",
         body: JSON.stringify({ sessions: [session] }),
       });
+      endLiveSharing();
       setGame(null);
       navigate("history", { replace: true });
       await refreshHistory();
@@ -1469,6 +1626,9 @@ export function PokerLedger({
             onUndoHand={undoHand}
             onDiscard={discardGame}
             onEditBlinds={() => setEditingBlinds(true)}
+            liveSharing={Boolean(liveToken)}
+            liveFailing={liveFailing}
+            onShareLive={() => setSharingLive(true)}
           />
         ) : (
           homeView
@@ -1504,6 +1664,17 @@ export function PokerLedger({
           game={game}
           onClose={() => setEditingBlinds(false)}
           onSave={saveBlindSchedule}
+        />
+      ) : null}
+      {sharingLive && game ? (
+        <LiveShareSheet
+          token={liveToken}
+          busy={liveBusy}
+          failing={liveFailing}
+          onStart={() => void startLiveSharing()}
+          onStop={() => void stopLiveSharing()}
+          onCopied={() => showToast("Link copied")}
+          onClose={() => setSharingLive(false)}
         />
       ) : null}
       {importPlan ? (
@@ -3004,6 +3175,9 @@ type GameViewProps = {
   onUndoHand: () => void;
   onDiscard: () => void;
   onEditBlinds: () => void;
+  liveSharing: boolean;
+  liveFailing: boolean;
+  onShareLive: () => void;
 };
 
 function GameView(props: GameViewProps) {
@@ -3245,6 +3419,24 @@ function GameView(props: GameViewProps) {
           <h2 className="card-title">Session Standings</h2>
           <span className="card-note">Start {formatRupees(game.startStack)}</span>
         </div>
+        <button
+          className={`glass-button full live-share-button${
+            props.liveSharing ? " sharing" : ""
+          }`}
+          type="button"
+          onClick={props.onShareLive}
+        >
+          {props.liveSharing ? (
+            <>
+              <span className="live-dot" aria-hidden="true" />
+              {props.liveFailing
+                ? "Live link not updating"
+                : "Sharing live · show link"}
+            </>
+          ) : (
+            "Share live standings"
+          )}
+        </button>
         <div className="rows">
           {standings.map(({ player, index }, rank) => (
             <div className="standing-row" key={index}>
@@ -3501,6 +3693,149 @@ function BlindEditor({
           Cancel
         </button>
       </form>
+    </div>
+  );
+}
+
+/** QR code as SVG squares, so no generated markup is injected. */
+function QrCode({ text }: { text: string }) {
+  const path = useMemo(() => {
+    const code = qrcode(0, "M");
+    code.addData(text);
+    code.make();
+    const size = code.getModuleCount();
+    let d = "";
+    for (let row = 0; row < size; row += 1) {
+      for (let col = 0; col < size; col += 1) {
+        if (code.isDark(row, col)) d += `M${col + 4} ${row + 4}h1v1h-1z`;
+      }
+    }
+    return { d, size: size + 8 };
+  }, [text]);
+  return (
+    <svg
+      className="live-qr"
+      viewBox={`0 0 ${path.size} ${path.size}`}
+      role="img"
+      aria-label="QR code for the live standings link"
+      shapeRendering="crispEdges"
+    >
+      <rect width={path.size} height={path.size} fill="#fff" />
+      <path d={path.d} fill="#000" />
+    </svg>
+  );
+}
+
+function LiveShareSheet({
+  token,
+  busy,
+  failing,
+  onStart,
+  onStop,
+  onCopied,
+  onClose,
+}: {
+  token: string | null;
+  busy: boolean;
+  failing: boolean;
+  onStart: () => void;
+  onStop: () => void;
+  onCopied: () => void;
+  onClose: () => void;
+}) {
+  const url = token ? `${window.location.origin}/live/${token}` : "";
+  const canShare = typeof navigator !== "undefined" && "share" in navigator;
+
+  async function share() {
+    try {
+      await navigator.share({ title: "Live standings", url });
+    } catch {
+      // The host closed the share sheet.
+    }
+  }
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(url);
+      onCopied();
+    } catch {
+      // Clipboard blocked: the link is still shown for copying by hand.
+    }
+  }
+
+  return (
+    <div
+      className="modal show"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <div
+        className="sheet live-share-sheet"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="live-share-title"
+      >
+        <h2 id="live-share-title">Live Standings</h2>
+        {token ? (
+          <>
+            <p className="muted rule-note">
+              Players scan this or open the link to see every stack and this
+              game&apos;s standings on their own phones. It updates a few
+              seconds after each change and ends when you save or discard the
+              game.
+            </p>
+            <QrCode text={url} />
+            <p className="live-link">{url}</p>
+            {failing ? (
+              <p className="field-error">
+                The live link isn&apos;t updating. It will retry after the next
+                change.
+              </p>
+            ) : null}
+            {canShare ? (
+              <button className="primary full" type="button" onClick={() => void share()}>
+                Share link
+              </button>
+            ) : null}
+            <button
+              className={`${canShare ? "ghost" : "primary"} full`}
+              type="button"
+              onClick={() => void copy()}
+            >
+              Copy link
+            </button>
+            <button
+              className="ghost full danger-text"
+              type="button"
+              disabled={busy}
+              onClick={onStop}
+            >
+              Stop sharing
+            </button>
+          </>
+        ) : (
+          <>
+            <p className="muted rule-note">
+              Create a link players can open without signing in. They see each
+              player&apos;s stack, total bought in and net for this game only,
+              read-only. Anyone with the link can see it until the game is
+              saved or discarded, or you stop sharing.
+            </p>
+            <button
+              className="primary full"
+              type="button"
+              disabled={busy}
+              onClick={onStart}
+            >
+              {busy ? "Creating link…" : "Create live link"}
+            </button>
+          </>
+        )}
+        <button className="ghost full" type="button" onClick={onClose}>
+          Close
+        </button>
+      </div>
     </div>
   );
 }

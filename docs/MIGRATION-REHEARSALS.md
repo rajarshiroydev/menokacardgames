@@ -212,6 +212,33 @@ End-to-end run through `GET /api/cron/purge-accounts`:
 
 Rollback for development is branch reset. The migration adds a table, functions and grants. It deletes data only when the job runs, and only for accounts past their 30-day deadline.
 
+## 0009 live views
+
+- Date: 2026-09-25
+- Isolated branch: `multi-user-auth` (`br-little-rain-ay5fufwv`)
+- Production changed: no
+- Migration: `migrations/0009_live_views.sql`, applied as the owner in one transaction, no errors
+
+Run as `menoka_app` from `.env.local` inside one `DO` block that ends by raising an exception, so every fixture was rolled back (12 of 12 passed):
+
+| Check | Result |
+| --- | --- |
+| Host writes its own row | Allowed |
+| Host inserts a row for another owner | Refused (42501, row security) |
+| Second host lists rows | 0 |
+| Second host updates or deletes the first host's row | 0 rows each |
+| No signed-in host, direct select | 0 rows |
+| No signed-in host, `read_live_view` with the right token hash | Returns the standings |
+| Unknown token hash | 0 rows |
+| Expiry more than 12 hours after the update | Refused (check constraint) |
+| Expired link | 0 rows |
+| Account in `deletion_requested` | 0 rows |
+| Stopped link (row deleted) | 0 rows |
+
+Afterwards: 2 accounts and 0 `live_views` rows, as before. A browser round trip on the same branch (see the plan entry) left 0 rows and four `live_view.*` audit events on the real dev account.
+
+Rollback: `DROP FUNCTION public.read_live_view(bytea); DROP TABLE live_views; DELETE FROM app_migrations WHERE version = '0009_live_views';`. Only live links are lost.
+
 ## Production application
 
 - Date: 2026-09-25

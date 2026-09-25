@@ -2880,6 +2880,111 @@ p {
    Small phones and motion preferences
    ------------------------------------------------------------------ */
 
+/* ------------------------------------------------------------------
+   Live standings (read-only page players open from the share link)
+   ------------------------------------------------------------------ */
+
+.live-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-bottom: calc(24px + env(safe-area-inset-bottom));
+}
+
+.live-status {
+  padding: 40px 4px;
+  text-align: center;
+}
+
+.live-updated {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ink2);
+}
+
+.live-dot {
+  width: 8px;
+  height: 8px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--g);
+  animation: live-pulse 2s ease-in-out infinite;
+}
+
+.live-updated.stale .live-dot {
+  background: oklch(0.8 0.15 80);
+  animation: none;
+}
+
+.live-updated.stale {
+  color: oklch(0.8 0.15 80);
+}
+
+:root[data-theme="light"] .live-updated.stale {
+  color: oklch(0.55 0.14 70);
+}
+
+.live-list {
+  gap: 0;
+  padding: 6px 16px;
+}
+
+.live-row {
+  margin: 0 -8px;
+  padding: 10px 8px;
+  width: calc(100% + 16px);
+  border: 0;
+  border-radius: var(--rs);
+  background: transparent;
+  text-align: left;
+}
+
+.live-row + .live-row {
+  border-top: 1px solid var(--line);
+}
+
+.live-row.me {
+  background: var(--glass2);
+  box-shadow: inset 3px 0 0 var(--g);
+}
+
+.live-footnote {
+  padding: 0 4px;
+}
+
+.live-share-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.live-share-button.sharing {
+  color: var(--g);
+}
+
+.live-qr {
+  display: block;
+  width: min(100%, 240px);
+  margin: 4px auto;
+  border-radius: var(--rs);
+}
+
+.live-link {
+  color: var(--ink2);
+  font-size: 12px;
+  text-align: center;
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+
+@keyframes live-pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+
 @media (max-width: 360px) {
   :root {
     --gutter: 12px;

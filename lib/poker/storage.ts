@@ -7,6 +7,11 @@ export function accountGameStorageKey(accountId: string) {
   return `pokerLedger.account.${accountId}.game.v1`;
 }
 
+/** The share token for this account's live standings link, if sharing. */
+export function accountLiveTokenStorageKey(accountId: string) {
+  return `pokerLedger.account.${accountId}.live.v1`;
+}
+
 export function prepareLegacySessionsForAdoption(
   sessions: PokerSession[],
   selectedIds: Set<string>,

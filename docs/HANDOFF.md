@@ -1,15 +1,22 @@
 # Session handoff
 
-Updated 2026-09-25 on **`ui-sporty-glass-refresh`**. **The multi-user version is live** (production runs `0a8b814` from `main`). This session resumed the UI redesign: the Scoreboard design from `design_handoff_sporty_glass_redesign/` is built on the redesign branch and waits for the user's review. The production follow-ups below are unchanged. Replace this file at the end of each session; don't let it grow.
+Updated 2026-09-25 on **`live-view`**. **The multi-user version is live** (production runs `0a8b814` from `main`). This session committed the Scoreboard redesign and built a **live standings link** for players on a new branch. Neither has reached `main` or production. The production follow-ups below are unchanged. Replace this file at the end of each session; don't let it grow.
 
-## Redesign (this session)
+## Live standings link (this session)
 
-- **Branch:** `ui-sporty-glass-refresh`, with `main` merged in (merge commit `c3b2c9d`, conflicts resolved to `main`). The redesign itself is **uncommitted**: `app/globals.css` (rewritten), `app/layout.tsx` (Big Shoulders + Barlow, pre-paint theme script, background orbs), `app/page.tsx` (account bar only on the locked screen; the active app shows it in the home footer), `components/poker-ledger.tsx`, new `lib/theme.ts`, and docs (`FEATURES.md`, plan entry "2026-09-25 Scoreboard redesign", `PROJECT-MEMORY.md`, `AGENTS.md`). Ask before committing.
-- **What was kept vs. the prototype** is listed in the plan entry. In short: every game flow stays; the prototype's simplified engine was not ported.
-- **Verified:** types, lint (tracked files), 110 tests, `npm run build`; browser at 375px and 320px, dark and light, on the dev server (3005) and a production build (3006). Both origins hold someone's in-progress "Game 25" in `localStorage`; it was left alone, so nothing was bet, saved, added or discarded. Setup was opened with a synthetic `popstate` that carries Next's history state (a plain one makes Next reload).
-- **Not yet checked:** sign-in and locked-account pages (signing out would end the user's session), the confirmation sheets, rules sheet, blind editor, import review, winner overlay, drag reordering by touch, and a real phone (iOS Safari `backdrop-filter`).
-- **Next:** the user reviews the look (dev server on 3005, or a Vercel preview if they push the branch, which needs their go-ahead). Then commit, and decide how it reaches `main`.
-- **Next-street button:** always reads "Deal FLOP/TURN/RIVER →", disabled until the betting round ends, and stays in place because the closing player's card stays open (locked) until Deal is pressed (automatic streets and a pinned button were both tried and rejected by the user).
+- **What:** players open a link or scan a QR code (no sign-in) and see every stack, total bought in and net for the game in progress. Stacks are live; net and rank change when a hand ends. Behaviour is in `FEATURES.md` section 19; design and checks are in the plan entry "2026-09-25 live standings link".
+- **Branches:** `ui-sporty-glass-refresh` now has the redesign committed (`ed56525`, with the user's OK). `live-view` branches from it and holds the live-view work (its latest commit, made with the user's OK). Nothing is pushed.
+- **Database:** migration `0009_live_views` is applied **only** to the development branch `br-little-rain-ay5fufwv` and rehearsed (12/12). Production `br-small-sea-ayumyssr` needs the user's go-ahead, and must get 0009 **before** this code deploys, or the share button fails (the rest of the app is unaffected).
+- **New dependency:** `qrcode-generator` 2.0.4 (approved by the user).
+- **Verified:** 129 tests, types, lint, production build; a browser round trip on the dev branch (details in the plan entry). **Not yet checked:** a real phone (iOS share sheet, QR scan, locked screen), a Vercel preview, and CDN caching of the public GET on Vercel.
+- **Next:** the user reviews both branches (dev server on 3005 serves the working tree). Then decide the route to `main`: the redesign first, then live-view, each through a Vercel preview. Apply 0009 to production just before live-view deploys.
+- **Testing tip:** Next 16 allows one `next dev` per folder, and another chat held 3005 (dev) and 3006 (`next start`, which uses `.next`, so don't run `npm run build` in the repo while it's up). This session ran a copy of the working tree from the scratchpad on 3007, and built in a copy. Cookies are shared across localhost ports, so the in-app browser was already signed in. The in-app browser reports tabs as hidden, which pauses the viewer's polling; reload the viewer tab to force a check.
+
+## Redesign (previous session, now committed)
+
+- Commit `ed56525` on `ui-sporty-glass-refresh`: `app/globals.css`, `app/layout.tsx`, `app/page.tsx`, `components/poker-ledger.tsx`, `lib/theme.ts` and docs. `design_handoff_sporty_glass_redesign/` stays untracked.
+- **Not yet checked:** sign-in and locked-account pages, the confirmation sheets, rules sheet, blind editor, import review, winner overlay, drag reordering by touch, and a real phone (iOS Safari `backdrop-filter`).
+- **Next-street button:** always reads "Deal FLOP/TURN/RIVER →", disabled until the betting round ends (automatic streets and a pinned button were tried and rejected by the user).
 - **Note:** the dev server on 3005 uses a non-production Neon endpoint (`ep-withered-hill`), not production (`ep-delicate-pond`).
 
 ## Read first
@@ -25,7 +32,7 @@ Updated 2026-09-25 on **`ui-sporty-glass-refresh`**. **The multi-user version is
 - **Production database: `br-small-sea-ayumyssr`**, now named "production" again, pooled host `ep-delicate-pond-ay8ple8b-pooler`. It has migrations 0001, 0002 and 0004–0008. The legacy games 24, 25, 32, 33 and 37 stay unowned and hidden.
 - **Neon's default branch is still the copy** `br-withered-glitter-ay2zbaoe` (renamed `restore-copy-2026-09-24`). A snapshot restore yesterday swapped the names, which misled the user's console work today. It holds pre-cutover data (32 games) and two unused roles, `menoka_app` and `menoka_purge`, created on it by mistake. **Ask the user** whether to make `br-small-sea` the default and delete the copy.
 - **Vercel Production variables:** all nine are set, and `DELETION_PASSWORD` is gone. The purge cron ran twice by hand, both 200 with nothing due.
-- **`main`** matches GitHub. The redesign work is on `ui-sporty-glass-refresh` (see above); `design_handoff_sporty_glass_redesign/` stays untracked.
+- **`main`** matches GitHub. The redesign is committed on `ui-sporty-glass-refresh`, and the live standings link is on `live-view` (see above).
 
 ## Next steps
 
@@ -34,7 +41,7 @@ Updated 2026-09-25 on **`ui-sporty-glass-refresh`**. **The multi-user version is
 3. **Neon tidy-up (with the user's OK):** make `br-small-sea-ayumyssr` the default branch, and consider deleting `restore-copy-2026-09-24`, `claim-test-throwaway` and `vercel-preview`. Keep `cutover-rehearsal` while the preview uses it. The free plan allows 10 branches and 1 snapshot. The only snapshot, `snap-sparkling-sun-aykr4j1y`, is pre-migration; replacing it with a post-cutover one needs the user's decision.
 4. **Later claims** (when those hosts sign in; the user supplies the emails): the Emon-led group gets `ARRAY[32,33,37]` with friends `Emon, Abhirup, Supratik, Ashish`; Rahul Basak gets `ARRAY[24,25]` with friends `Rahul Basak, Ashit, Rana`. Find the account ID via `accounts` joined to `neon_auth."user"` by email, then run `public.claim_reviewed_history(...)` on `br-small-sea-ayumyssr` with the decision text from `HISTORICAL-OWNERSHIP.md`.
 5. Possibly: pilot with a second, unrelated host (plan's release step 6).
-6. Production follow-ups happen on `main`; switch back with `git switch main` (commit or stash the redesign first).
+6. Production follow-ups happen on `main`; switch back with `git switch main` (commit or stash the live-view work first).
 
 ## Open decisions
 
