@@ -1,10 +1,7 @@
 import { strict as assert } from "node:assert";
 import { describe, test } from "node:test";
 
-import {
-  passwordMatches,
-  validateSession,
-} from "../lib/poker/session-validation.ts";
+import { validateSession } from "../lib/poker/session-validation.ts";
 
 const validSession = {
   id: "s1720000000000",
@@ -41,6 +38,18 @@ describe("session validation", () => {
 
   test("rejects unsafe or incomplete session data", () => {
     assert.throws(
+      () =>
+        validateSession({
+          ...validSession,
+          startStack: 0,
+          results: [
+            { name: "Raj", net: 0, end: 0 },
+            { name: "Sam", net: 0, end: 0 },
+          ],
+        }),
+      /starting stack must be a valid whole number/,
+    );
+    assert.throws(
       () => validateSession({ ...validSession, hands: 0 }),
       /hands must be a valid whole number/,
     );
@@ -62,12 +71,6 @@ describe("session validation", () => {
     );
   });
 
-  test("compares deletion passwords exactly", () => {
-    assert.equal(passwordMatches("correct horse", "correct horse"), true);
-    assert.equal(passwordMatches("correct horse!", "correct horse"), false);
-    assert.equal(passwordMatches("", "correct horse"), false);
-  });
-
   test("keeps a valid stable player id", () => {
     const session = validateSession({
       ...validSession,
@@ -78,6 +81,37 @@ describe("session validation", () => {
     });
 
     assert.equal(session.results[0].playerId, "player-1");
+  });
+
+  test("accepts full-stack rebuys, alone or after older halved rebuys", () => {
+    const full = [
+      { name: "Raj", net: -15000, end: 15000, buyIns: [10000, 10000, 10000] },
+      { name: "Sam", net: 15000, end: 25000 },
+    ];
+    assert.deepEqual(
+      validateSession({ ...validSession, results: full }).results,
+      full,
+    );
+
+    const crossover = [
+      { name: "Raj", net: -15000, end: 10000, buyIns: [10000, 5000, 10000] },
+      { name: "Sam", net: 15000, end: 25000 },
+    ];
+    assert.deepEqual(
+      validateSession({ ...validSession, results: crossover }).results,
+      crossover,
+    );
+
+    assert.throws(
+      () => validateSession({
+        ...validSession,
+        results: [
+          { name: "Raj", net: -12000, end: 5000, buyIns: [10000, 7000] },
+          { name: "Sam", net: 12000, end: 22000 },
+        ],
+      }),
+      /Invalid buy-in sequence/,
+    );
   });
 
   test("keeps halved buy-ins and checks net against total invested", () => {

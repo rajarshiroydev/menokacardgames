@@ -3,6 +3,7 @@
 import {
   ChangeEvent,
   FormEvent,
+  ReactNode,
   PointerEvent as ReactPointerEvent,
   useCallback,
   useEffect,
@@ -14,34 +15,65 @@ import {
 
 import {
   activeIndexes,
+  belongsToHand,
   bigBlindAtLevel,
+  betStops,
   blindStatus,
-  buildLeaderboard,
   buyInPlayer,
+  completedHandRecord,
   dealNewHand,
   DEFAULT_BLIND_SCHEDULE,
   editBlindSchedule,
+  formatChipChange,
   formatDate,
+  formatPercent,
   formatRupees,
-  GAME_STORAGE_KEY,
-  HISTORY_STORAGE_KEY,
+  applyRaiseRules,
+  mayRaise,
   minimumRaise,
+  resetRaiseRules,
+  undoRaiseRules,
   nextBuyIn,
   nextPlayerToAct,
   pendingIndexes,
   pendingBlindPlan,
-  playerKey,
-  playerBuyIns,
   returnToBetweenHands,
   smallBlindFor,
   STAGES,
   startingBigBlind,
   totalBuyIns,
+  undoLastHand,
 } from "@/lib/poker/game";
+import {
+  accountGameStorageKey,
+  LEGACY_GAME_STORAGE_KEY,
+  LEGACY_HISTORY_STORAGE_KEY,
+  prepareLegacySessionsForAdoption,
+} from "@/lib/poker/storage";
+import { useRouter } from "next/navigation";
+
+import { DELETION_GRACE_PERIOD_DAYS } from "@/lib/accounts/lifecycle";
+import { authClient } from "@/lib/auth/client";
+import { apiErrorMessage } from "@/lib/security/rate-limit-message";
+import {
+  RECENT_SIGN_IN_REQUIRED,
+  RECENT_SIGN_IN_WINDOW_MS,
+} from "@/lib/auth/recent-sign-in";
+import {
+  buildStandings,
+  type IneligibleReason,
+  type Standings,
+  type StandingsEntry,
+} from "@/lib/poker/standings";
+import {
+  planImport,
+  sessionsInBackup,
+  type ImportPlan,
+  type ImportPlayerMapping,
+} from "@/lib/poker/import-plan";
 import type {
   BlindSchedule,
   GameState,
-  LeaderboardEntry,
   PlayerAction,
   PlayerProfile,
   PokerSession,
@@ -60,16 +92,17 @@ type ModalState =
       kind: "confirm";
       message: string;
       confirmLabel: string;
+      danger?: boolean;
       onConfirm: () => void;
     }
   | {
-      kind: "password";
-      message: string;
+      kind: "recent-sign-in";
+      purpose: string;
+      email: string;
       confirmLabel: string;
-      onConfirm: (password: string) => void;
+      onConfirm: () => void;
     };
 
-const HANDS_PINNED_KEY = "pokerLedger.handsPinned.v1";
 const POKER_HANDS = [
   { name: "Royal Flush", cards: "A K Q J 10", note: "Same Suit" },
   { name: "Straight Flush", cards: "9 8 7 6 5", note: "Same Suit" },
@@ -83,6 +116,20 @@ const POKER_HANDS = [
   { name: "High Card", cards: "A J 8 6 2", note: "" },
 ] as const;
 
+class ApiError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+    readonly code?: string,
+  ) {
+    super(message);
+  }
+}
+
+function needsRecentSignIn(error: unknown) {
+  return error instanceof ApiError && error.code === RECENT_SIGN_IN_REQUIRED;
+}
+
 async function sessionsApi<T>(
   path = "",
   options: RequestInit = {},
@@ -95,10 +142,15 @@ async function sessionsApi<T>(
     },
   });
   const data = (await response.json().catch(() => ({}))) as T & {
+    code?: string;
     error?: string;
   };
   if (!response.ok) {
-    throw new Error(data.error || "Could not reach the ledger");
+    throw new ApiError(
+      apiErrorMessage(response.status, data.error, "Could not reach the ledger"),
+      response.status,
+      data.code,
+    );
   }
   return data;
 }
@@ -115,18 +167,27 @@ async function playersApi<T>(
     },
   });
   const data = (await response.json().catch(() => ({}))) as T & {
+    code?: string;
     error?: string;
   };
   if (!response.ok) {
-    throw new Error(data.error || "Could not reach the player list");
+    throw new ApiError(
+      apiErrorMessage(
+        response.status,
+        data.error,
+        "Could not reach the player list",
+      ),
+      response.status,
+      data.code,
+    );
   }
   return data;
 }
 
-function readStoredGame() {
+function readStoredGame(storageKey: string) {
   try {
     const data = JSON.parse(
-      window.localStorage.getItem(GAME_STORAGE_KEY) || "null",
+      window.localStorage.getItem(storageKey) || "null",
     ) as GameState | null;
     if (!data?.players) return null;
     // Games saved before escalating blinds kept one fixed big blind.
@@ -174,10 +235,10 @@ function readStoredGame() {
   }
 }
 
-function readStoredHistory() {
+function readStoredHistory(storageKey: string) {
   try {
     const data = JSON.parse(
-      window.localStorage.getItem(HISTORY_STORAGE_KEY) || "[]",
+      window.localStorage.getItem(storageKey) || "[]",
     ) as PokerSession[];
     return Array.isArray(data) ? data : [];
   } catch {
@@ -230,15 +291,6 @@ function recordWin(game: GameState, line: string) {
   game.log = game.log.slice(0, 80);
 }
 
-function belongsToHand(line: string, handNo: number) {
-  return (
-    line.startsWith(`Hand ${handNo} `) ||
-    line.startsWith(`Hand ${handNo}:`) ||
-    line.startsWith(`H${handNo} `) ||
-    line.startsWith(`H${handNo}:`)
-  );
-}
-
 function awardPot(game: GameState, playerIndex: number, automatic = false) {
   const hand = game.hand;
   if (!hand) return 0;
@@ -250,12 +302,7 @@ function awardPot(game: GameState, playerIndex: number, automatic = false) {
       pot,
     )}${automatic ? " (others folded)" : ""}`,
   );
-  game.lastHand = {
-    stacksBefore: [...hand.stacksBeforeHand],
-    buyInsBefore: game.players.map((_, index) => [
-      ...playerBuyIns(game, index),
-    ]),
-  };
+  game.lastHand = completedHandRecord(game);
   game.winnerAnnouncement = {
     names: [game.players[playerIndex].name],
     pot,
@@ -266,7 +313,15 @@ function awardPot(game: GameState, playerIndex: number, automatic = false) {
   return pot;
 }
 
-export function PokerLedger() {
+export function PokerLedger({
+  accountId,
+  accountEmail,
+}: {
+  accountId: string;
+  accountEmail: string;
+}) {
+  const router = useRouter();
+  const gameStorageKey = accountGameStorageKey(accountId);
   const [game, setGame] = useState<GameState | null>(null);
   const [history, setHistory] = useState<PokerSession[]>([]);
   const [discardedSessions, setDiscardedSessions] = useState<PokerSession[]>(
@@ -282,11 +337,15 @@ export function PokerLedger() {
   const [playersLoading, setPlayersLoading] = useState(true);
   const [playersError, setPlayersError] = useState("");
   const [view, setView] = useState<View>("home");
-  const [handsPinned, setHandsPinned] = useState(false);
   const [ready, setReady] = useState(false);
   const [toast, setToast] = useState("");
   const [modal, setModal] = useState<ModalState | null>(null);
   const [editingBlinds, setEditingBlinds] = useState(false);
+  const [legacyGame, setLegacyGame] = useState<GameState | null>(null);
+  const [legacySessions, setLegacySessions] = useState<PokerSession[]>([]);
+  const [reviewingLegacySessions, setReviewingLegacySessions] =
+    useState(false);
+  const [importPlan, setImportPlan] = useState<ImportPlan | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const showToast = useCallback((message: string) => {
@@ -313,14 +372,6 @@ export function PokerLedger() {
     setHistoryLoading(true);
     setHistoryError("");
     try {
-      const localHistory = readStoredHistory();
-      if (localHistory.length) {
-        await sessionsApi("", {
-          method: "POST",
-          body: JSON.stringify({ sessions: localHistory }),
-        });
-        window.localStorage.removeItem(HISTORY_STORAGE_KEY);
-      }
       const data = await sessionsApi<{
         discardedSessions?: PokerSession[];
         nextSessionNumber?: number;
@@ -370,11 +421,10 @@ export function PokerLedger() {
 
   useEffect(() => {
     const hydrationTimer = setTimeout(() => {
-      const storedGame = readStoredGame();
+      const storedGame = readStoredGame(gameStorageKey);
       setGame(storedGame);
-      setHandsPinned(
-        window.localStorage.getItem(HANDS_PINNED_KEY) === "true",
-      );
+      setLegacyGame(readStoredGame(LEGACY_GAME_STORAGE_KEY));
+      setLegacySessions(readStoredHistory(LEGACY_HISTORY_STORAGE_KEY));
       window.history.replaceState(
         { ...window.history.state, menokaView: "home" },
         "",
@@ -394,7 +444,7 @@ export function PokerLedger() {
       clearTimeout(hydrationTimer);
       if (toastTimer.current) clearTimeout(toastTimer.current);
     };
-  }, [refreshHistory, refreshPlayers]);
+  }, [gameStorageKey, refreshHistory, refreshPlayers]);
 
   useEffect(() => {
     function handleBrowserBack(event: PopStateEvent) {
@@ -425,16 +475,11 @@ export function PokerLedger() {
   useEffect(() => {
     if (!ready) return;
     if (game) {
-      window.localStorage.setItem(GAME_STORAGE_KEY, JSON.stringify(game));
+      window.localStorage.setItem(gameStorageKey, JSON.stringify(game));
     } else {
-      window.localStorage.removeItem(GAME_STORAGE_KEY);
+      window.localStorage.removeItem(gameStorageKey);
     }
-  }, [game, ready]);
-
-  useEffect(() => {
-    if (!ready) return;
-    window.localStorage.setItem(HANDS_PINNED_KEY, String(handsPinned));
-  }, [handsPinned, ready]);
+  }, [game, gameStorageKey, ready]);
 
   const ask = useCallback(
     (message: string, confirmLabel: string, onConfirm: () => void) => {
@@ -442,6 +487,66 @@ export function PokerLedger() {
     },
     [],
   );
+
+  function offerLegacyGameAdoption() {
+    if (!legacyGame || game) return;
+    const playerNames = legacyGame.players
+      .map((player) => player.name)
+      .join(", ");
+    ask(
+      `Adopt ${legacyGame.gameName || "this unfinished game"} with ${playerNames} into this account? It will then be available only to this signed-in account on this device.`,
+      "Adopt Game",
+      () => {
+        window.localStorage.setItem(
+          gameStorageKey,
+          JSON.stringify(legacyGame),
+        );
+        window.localStorage.removeItem(LEGACY_GAME_STORAGE_KEY);
+        setGame(legacyGame);
+        setLegacyGame(null);
+        navigate("game");
+        showToast("Game adopted into this account");
+      },
+    );
+  }
+
+  async function adoptLegacySessions(selectedIds: Set<string>) {
+    const selected = prepareLegacySessionsForAdoption(
+      legacySessions,
+      selectedIds,
+    );
+    if (!selected.length) return;
+
+    try {
+      const result = await sessionsApi<{ saved?: number }>("", {
+        method: "POST",
+        body: JSON.stringify({ sessions: selected }),
+      });
+      const remaining = legacySessions.filter(
+        (session) => !selectedIds.has(session.id),
+      );
+      if (remaining.length) {
+        window.localStorage.setItem(
+          LEGACY_HISTORY_STORAGE_KEY,
+          JSON.stringify(remaining),
+        );
+      } else {
+        window.localStorage.removeItem(LEGACY_HISTORY_STORAGE_KEY);
+      }
+      setLegacySessions(remaining);
+      setReviewingLegacySessions(false);
+      await Promise.all([refreshHistory(), refreshPlayers()]);
+      showToast(
+        result.saved
+          ? `Adopted ${result.saved} session${result.saved === 1 ? "" : "s"}`
+          : "Selected sessions were already in this account",
+      );
+    } catch (error) {
+      showToast(
+        error instanceof Error ? error.message : "Sessions were not adopted",
+      );
+    }
+  }
 
   const startGame = useCallback(
     (input: {
@@ -563,28 +668,97 @@ export function PokerLedger() {
 
   function deletePlayerPermanently(player: PlayerProfile) {
     setModal({
-      kind: "password",
+      kind: "confirm",
+      danger: true,
       message: `Permanently delete ${player.name}? This cannot be undone. Players with saved session history cannot be permanently deleted.`,
       confirmLabel: "Delete Permanently",
-      onConfirm: (password) =>
-        void deleteRemotePlayerPermanently(player, password),
+      onConfirm: () => void deleteRemotePlayerPermanently(player),
     });
   }
 
-  async function deleteRemotePlayerPermanently(
-    player: PlayerProfile,
-    password: string,
-  ) {
+  function askForRecentSignIn(purpose = "permanent deletion") {
+    setModal({
+      kind: "recent-sign-in",
+      purpose,
+      email: accountEmail,
+      confirmLabel: "Email Me A Sign-In Link",
+      onConfirm: () => void sendRecentSignInLink(),
+    });
+  }
+
+  async function sendRecentSignInLink() {
+    try {
+      const { error } = await authClient.signIn.magicLink({
+        email: accountEmail,
+        callbackURL: "/auth/callback",
+      });
+      if (error) throw new Error(error.code);
+      showToast("Sign-In Link Sent. Open It On This Device.");
+    } catch (error) {
+      console.error("recent sign-in link request failed", error);
+      showToast("We Could Not Send The Sign-In Link");
+    }
+  }
+
+  function deleteAccount() {
+    setModal({
+      kind: "confirm",
+      danger: true,
+      message: `Delete your account? Your players, games and standings are locked and hidden straight away, and you are signed out on every device. You can recover everything by signing in again within ${DELETION_GRACE_PERIOD_DAYS} days. After that, everything is permanently deleted and cannot be recovered. Our database provider keeps short-term recovery copies of deleted data for up to 6 hours.`,
+      confirmLabel: "Delete My Account",
+      onConfirm: () => void requestAccountDeletion(),
+    });
+  }
+
+  async function requestAccountDeletion() {
+    try {
+      const response = await fetch("/api/account", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "request-deletion" }),
+      });
+      const data = (await response.json().catch(() => ({}))) as {
+        code?: string;
+        error?: string;
+      };
+      if (!response.ok) {
+        throw new ApiError(
+          apiErrorMessage(
+            response.status,
+            data.error,
+            "Account deletion was not requested",
+          ),
+          response.status,
+          data.code,
+        );
+      }
+      window.localStorage.removeItem(gameStorageKey);
+      router.replace("/auth/sign-in?deletion=requested");
+    } catch (error) {
+      if (needsRecentSignIn(error)) {
+        askForRecentSignIn("deleting your account");
+        return;
+      }
+      showToast(
+        error instanceof Error ? error.message : "Account deletion was not requested",
+      );
+    }
+  }
+
+  async function deleteRemotePlayerPermanently(player: PlayerProfile) {
     try {
       await playersApi(`?id=${encodeURIComponent(player.id)}`, {
         method: "DELETE",
-        headers: { "X-Delete-Password": password },
       });
       setDiscardedPlayers((current) =>
         current.filter((item) => item.id !== player.id),
       );
       showToast("Player Permanently Deleted");
     } catch (error) {
+      if (needsRecentSignIn(error)) {
+        askForRecentSignIn();
+        return;
+      }
       showToast(
         error instanceof Error
           ? error.message
@@ -611,11 +785,11 @@ export function PokerLedger() {
 
     if (type === "fold") {
       hand.in[playerIndex] = false;
-      hand.acted[playerIndex] = true;
+      const raiseBefore = applyRaiseRules(next, playerIndex);
       recordAction(
         next,
         playerIndex,
-        { type, chips: 0 },
+        { type, chips: 0, raiseBefore },
         `${player.name} folds`,
       );
     } else if (type === "check") {
@@ -627,11 +801,11 @@ export function PokerLedger() {
         );
         return;
       }
-      hand.acted[playerIndex] = true;
+      const raiseBefore = applyRaiseRules(next, playerIndex);
       recordAction(
         next,
         playerIndex,
-        { type, chips: 0 },
+        { type, chips: 0, raiseBefore },
         `${player.name} checks`,
       );
     } else if (type === "call") {
@@ -646,11 +820,11 @@ export function PokerLedger() {
       player.stack -= needed;
       hand.committed[playerIndex] += needed;
       hand.pot += needed;
-      hand.acted[playerIndex] = true;
+      const raiseBefore = applyRaiseRules(next, playerIndex);
       recordAction(
         next,
         playerIndex,
-        { type, chips: needed },
+        { type, chips: needed, raiseBefore },
         `${player.name} calls ${formatRupees(needed)}`,
       );
     } else {
@@ -674,24 +848,22 @@ export function PokerLedger() {
 
       const total = hand.committed[playerIndex] + chips;
       const wasRaise = total > hand.roundHigh;
+      if (wasRaise && !mayRaise(next, playerIndex)) {
+        showToast("Only call or fold: the all-in was less than a full raise");
+        return;
+      }
       const opening = !hand.committed.some(
         (committed, index) => index !== playerIndex && committed > 0,
       );
       player.stack -= chips;
       hand.committed[playerIndex] += chips;
       hand.pot += chips;
-      hand.acted[playerIndex] = true;
-      if (wasRaise) {
-        hand.roundHigh = total;
-        hand.acted = hand.acted.map((_, index) =>
-          index === playerIndex || !hand.in[index] || next.players[index].stack === 0,
-        );
-      }
+      const raiseBefore = applyRaiseRules(next, playerIndex);
       const description =
         type === "all-in"
           ? `goes all-in for ${formatRupees(chips)}${
               wasRaise ? ` (to ${formatRupees(total)})` : ""
-            }`
+            }${wasRaise && !raiseBefore.full ? ", short of a full raise" : ""}`
           : wasRaise
             ? opening
               ? `bets ${formatRupees(chips)}`
@@ -700,7 +872,7 @@ export function PokerLedger() {
       recordAction(
         next,
         playerIndex,
-        { type, chips },
+        { type, chips, raiseBefore },
         `${player.name} ${description}`,
       );
     }
@@ -731,6 +903,7 @@ export function PokerLedger() {
     hand.acted[playerIndex] = false;
     hand.last[playerIndex] = null;
     hand.roundHigh = Math.max(0, ...hand.committed);
+    undoRaiseRules(next, playerIndex, action.raiseBefore);
     hand.currentPlayer = playerIndex;
     const logIndex = next.log.indexOf(action.line);
     if (logIndex >= 0) next.log.splice(logIndex, 1);
@@ -756,6 +929,7 @@ export function PokerLedger() {
     hand.roundHigh = 0;
     hand.acted = next.players.map(() => false);
     hand.last = next.players.map(() => null);
+    resetRaiseRules(next);
     hand.currentPlayer = nextPlayerToAct(next, hand.dealerIndex);
     setGame(next);
   }
@@ -821,12 +995,7 @@ export function PokerLedger() {
         .map((index) => next.players[index].name)
         .join(", ")}`,
     );
-    next.lastHand = {
-      stacksBefore: [...hand.stacksBeforeHand],
-      buyInsBefore: next.players.map((_, index) => [
-        ...playerBuyIns(next, index),
-      ]),
-    };
+    next.lastHand = completedHandRecord(next);
     next.winnerAnnouncement = {
       names: winners.map((index) => next.players[index].name),
       pot: hand.pot,
@@ -938,22 +1107,7 @@ export function PokerLedger() {
     }
     ask("Undo the last completed hand?", "Undo hand", () => {
       const next = structuredClone(game);
-      if (!next.lastHand) return;
-      next.players.forEach((player, index) => {
-        player.stack = next.lastHand?.stacksBefore[index] ?? player.stack;
-        player.buyIns = next.lastHand?.buyInsBefore?.[index] ?? player.buyIns;
-      });
-      const undoneNumber = next.hand ? next.hand.no - 1 : next.handNo;
-      const currentHandNumber = next.hand?.no;
-      next.log = next.log.filter(
-        (line) =>
-          !belongsToHand(line, undoneNumber) &&
-          (!currentHandNumber || !belongsToHand(line, currentHandNumber)),
-      );
-      next.handNo = undoneNumber - 1;
-      next.lastHand = null;
-      next.hand = null;
-      dealNewHand(next);
+      if (!undoLastHand(next)) return;
       setGame(next);
       showToast("Hand undone");
     });
@@ -1073,30 +1227,30 @@ export function PokerLedger() {
     const session = discardedSessions.find((item) => item.id === id);
     if (!session) return;
     setModal({
-      kind: "password",
+      kind: "confirm",
+      danger: true,
       message: `Permanently delete ${session.name || "this game"} from ${formatDate(
         session.date,
       )}? This cannot be undone.`,
       confirmLabel: "Delete Permanently",
-      onConfirm: (password) =>
-        void deleteRemoteSessionPermanently(id, password),
+      onConfirm: () => void deleteRemoteSessionPermanently(id),
     });
   }
 
-  async function deleteRemoteSessionPermanently(
-    id: string,
-    password: string,
-  ) {
+  async function deleteRemoteSessionPermanently(id: string) {
     try {
       await sessionsApi(`?id=${encodeURIComponent(id)}`, {
         method: "DELETE",
-        headers: { "X-Delete-Password": password },
       });
       setDiscardedSessions((current) =>
         current.filter((session) => session.id !== id),
       );
       showToast("Session Permanently Deleted");
     } catch (error) {
+      if (needsRecentSignIn(error)) {
+        askForRecentSignIn();
+        return;
+      }
       showToast(
         error instanceof Error
           ? error.message
@@ -1124,39 +1278,42 @@ export function PokerLedger() {
     event.target.value = "";
     if (!file) return;
 
+    let entries: unknown[] | null;
     try {
-      const data = JSON.parse(await file.text()) as
-        | PokerSession[]
-        | { sessions?: PokerSession[] };
-      const incoming = Array.isArray(data) ? data : data.sessions;
-      if (!Array.isArray(incoming)) {
-        showToast("No sessions in that file");
-        return;
-      }
-      const existing = new Set(
-        [...history, ...discardedSessions].map((session) => session.id),
-      );
-      const additions = incoming.filter(
-        (session) =>
-          session?.id && session.results && !existing.has(session.id),
-      );
-      if (!additions.length) {
-        showToast("Already up to date");
-        return;
-      }
-      await sessionsApi("", {
-        method: "POST",
-        body: JSON.stringify({ sessions: additions }),
-      });
-      await refreshHistory();
-      showToast(
-        `Added ${additions.length} session${additions.length === 1 ? "" : "s"}`,
-      );
-    } catch (error) {
-      showToast(
-        error instanceof SyntaxError ? "Not a valid file" : "Import failed",
-      );
+      entries = sessionsInBackup(JSON.parse(await file.text()));
+    } catch {
+      showToast("Not a valid file");
+      return;
     }
+    if (!entries) {
+      showToast("No sessions in that file");
+      return;
+    }
+
+    const plan = planImport(
+      entries,
+      [...history, ...discardedSessions].map((session) => session.id),
+      [...players, ...discardedPlayers],
+    );
+    if (!plan.additions.length) {
+      showToast(
+        plan.alreadySaved ? "Already up to date" : "No readable sessions in that file",
+      );
+      return;
+    }
+    setImportPlan(plan);
+  }
+
+  async function confirmImport(plan: ImportPlan) {
+    await sessionsApi("", {
+      method: "POST",
+      body: JSON.stringify({ sessions: plan.additions }),
+    });
+    setImportPlan(null);
+    await Promise.all([refreshHistory(), refreshPlayers()]);
+    showToast(
+      `Added ${plan.additions.length} session${plan.additions.length === 1 ? "" : "s"}`,
+    );
   }
 
   function openPlayers() {
@@ -1188,10 +1345,6 @@ export function PokerLedger() {
       return;
     }
     setModal(null);
-  }
-
-  function toggleHandsPinned() {
-    setHandsPinned((current) => !current);
   }
 
   const screenTitle =
@@ -1233,12 +1386,17 @@ export function PokerLedger() {
           <HomeView
             hasGame={Boolean(game)}
             historyCount={history.length}
+            legacyGame={legacyGame}
+            legacySessionCount={legacySessions.length}
             playerCount={players.length}
+            onAdoptLegacyGame={offerLegacyGameAdoption}
             onGame={() => navigate(game ? "game" : "setup")}
             onHistory={() => navigate("history")}
             onPlayers={openPlayers}
             onOpenHands={openHands}
+            onReviewLegacySessions={() => setReviewingLegacySessions(true)}
             onRules={() => setModal({ kind: "rules" })}
+            onDeleteAccount={deleteAccount}
           />
         ) : view === "history" ? (
           <HistoryView
@@ -1299,12 +1457,17 @@ export function PokerLedger() {
           <HomeView
             hasGame={false}
             historyCount={history.length}
+            legacyGame={legacyGame}
+            legacySessionCount={legacySessions.length}
             playerCount={players.length}
+            onAdoptLegacyGame={offerLegacyGameAdoption}
             onGame={() => navigate("setup")}
             onHistory={() => navigate("history")}
             onPlayers={openPlayers}
             onOpenHands={openHands}
+            onReviewLegacySessions={() => setReviewingLegacySessions(true)}
             onRules={() => setModal({ kind: "rules" })}
+            onDeleteAccount={deleteAccount}
           />
         )}
       </div>
@@ -1315,8 +1478,6 @@ export function PokerLedger() {
       {modal ? (
         <Modal
           state={modal}
-          handsPinned={handsPinned}
-          onToggleHandsPin={toggleHandsPinned}
           onClose={closeModal}
           onConfirm={() => setModal(null)}
         />
@@ -1334,6 +1495,20 @@ export function PokerLedger() {
           onSave={saveBlindSchedule}
         />
       ) : null}
+      {importPlan ? (
+        <ImportReview
+          plan={importPlan}
+          onConfirm={confirmImport}
+          onClose={() => setImportPlan(null)}
+        />
+      ) : null}
+      {reviewingLegacySessions ? (
+        <LegacySessionReview
+          sessions={legacySessions}
+          onAdopt={adoptLegacySessions}
+          onClose={() => setReviewingLegacySessions(false)}
+        />
+      ) : null}
     </main>
   );
 }
@@ -1341,21 +1516,31 @@ export function PokerLedger() {
 function HomeView({
   hasGame,
   historyCount,
+  legacyGame,
+  legacySessionCount,
   playerCount,
+  onAdoptLegacyGame,
   onGame,
   onHistory,
   onPlayers,
   onOpenHands,
+  onReviewLegacySessions,
   onRules,
+  onDeleteAccount,
 }: {
   hasGame: boolean;
   historyCount: number;
+  legacyGame: GameState | null;
+  legacySessionCount: number;
   playerCount: number;
+  onAdoptLegacyGame: () => void;
   onGame: () => void;
   onHistory: () => void;
   onPlayers: () => void;
   onOpenHands: () => void;
+  onReviewLegacySessions: () => void;
   onRules: () => void;
+  onDeleteAccount: () => void;
 }) {
   return (
     <section className="home-view">
@@ -1373,6 +1558,41 @@ function HomeView({
           Remember The Rest.
         </p>
       </div>
+
+      {legacyGame || legacySessionCount ? (
+        <section className="legacy-data-card" aria-labelledby="legacy-data-title">
+          <div>
+            <span className="legacy-data-kicker">Unassigned Device Data</span>
+            <h2 id="legacy-data-title">Review Before Adding It</h2>
+            <p>
+              Data saved before accounts stays separate until you choose which
+              account owns it.
+            </p>
+          </div>
+          <div className="legacy-data-actions">
+            {legacyGame ? (
+              <button
+                className="ghost"
+                type="button"
+                disabled={hasGame}
+                onClick={onAdoptLegacyGame}
+              >
+                {hasGame ? "Finish Current Game First" : "Review Legacy Game"}
+              </button>
+            ) : null}
+            {legacySessionCount ? (
+              <button
+                className="ghost"
+                type="button"
+                onClick={onReviewLegacySessions}
+              >
+                Review {legacySessionCount} Saved Session
+                {legacySessionCount === 1 ? "" : "s"}
+              </button>
+            ) : null}
+          </div>
+        </section>
+      ) : null}
 
       <div className="home-menu">
         <button className="home-action featured" type="button" onClick={onGame}>
@@ -1434,7 +1654,251 @@ function HomeView({
       <button className="home-rules" type="button" onClick={onRules}>
         Read The Poker Rules
       </button>
+
+      <button
+        className="home-delete-account"
+        type="button"
+        onClick={onDeleteAccount}
+      >
+        Delete My Account
+      </button>
     </section>
+  );
+}
+
+function LegacySessionReview({
+  sessions,
+  onAdopt,
+  onClose,
+}: {
+  sessions: PokerSession[];
+  onAdopt: (selectedIds: Set<string>) => Promise<void>;
+  onClose: () => void;
+}) {
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [submitting, setSubmitting] = useState(false);
+
+  function toggleSession(id: string) {
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  async function adoptSelected() {
+    if (!selectedIds.size || submitting) return;
+    setSubmitting(true);
+    try {
+      await onAdopt(selectedIds);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="modal legacy-review-modal show" role="presentation">
+      <div
+        className="sheet legacy-review-sheet"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="legacy-review-title"
+      >
+        <div className="legacy-review-heading">
+          <span className="legacy-data-kicker">Unassigned Device Data</span>
+          <h2 id="legacy-review-title">Choose Sessions For This Account</h2>
+          <p>
+            Review the date, players and stakes. Only checked sessions will be
+            added; unchecked sessions remain unassigned on this device.
+          </p>
+        </div>
+
+        <div className="legacy-session-list">
+          {sessions.map((session) => (
+            <label className="legacy-session-option" key={session.id}>
+              <input
+                type="checkbox"
+                checked={selectedIds.has(session.id)}
+                onChange={() => toggleSession(session.id)}
+              />
+              <span>
+                <strong>{session.name || "Saved Game"}</strong>
+                <small>
+                  {formatDate(session.date)} · Big Blind {formatRupees(session.ante)}
+                  {" · "}
+                  {session.results.map((result) => result.name).join(", ")}
+                </small>
+              </span>
+            </label>
+          ))}
+        </div>
+
+        <div className="legacy-review-actions">
+          <button
+            className="ghost"
+            type="button"
+            disabled={submitting}
+            onClick={onClose}
+          >
+            Leave Unassigned
+          </button>
+          <button
+            className="primary"
+            type="button"
+            disabled={!selectedIds.size || submitting}
+            onClick={() => void adoptSelected()}
+          >
+            {submitting
+              ? "Adding…"
+              : `Add ${selectedIds.size || "Selected"} To This Account`}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function importMappingNote(mapping: ImportPlayerMapping) {
+  switch (mapping.kind) {
+    case "existing":
+      return mapping.player.name === mapping.fileName
+        ? "Your player"
+        : `Your player ${mapping.player.name}`;
+    case "discarded":
+      return `Your discarded player ${mapping.player.name}; stays discarded`;
+    case "new":
+      return "New player; will be added to your list";
+    case "unknown-record":
+      return "Player record from another ledger; can't be imported";
+  }
+}
+
+function ImportReview({
+  plan,
+  onConfirm,
+  onClose,
+}: {
+  plan: ImportPlan;
+  onConfirm: (plan: ImportPlan) => Promise<void>;
+  onClose: () => void;
+}) {
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
+  const count = plan.additions.length;
+  const skipped = [
+    plan.alreadySaved
+      ? `${plan.alreadySaved} already in your ledger`
+      : null,
+    plan.duplicatesInFile
+      ? `${plan.duplicatesInFile} repeated in the file`
+      : null,
+    plan.unreadable ? `${plan.unreadable} unreadable` : null,
+  ].filter(Boolean);
+  const newPlayers = plan.players.filter((mapping) => mapping.kind === "new");
+
+  async function confirm() {
+    if (submitting || plan.blocked) return;
+    setSubmitting(true);
+    setError("");
+    try {
+      await onConfirm(plan);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Import failed");
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="modal legacy-review-modal show" role="presentation">
+      <div
+        className="sheet legacy-review-sheet"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="import-review-title"
+      >
+        <div className="legacy-review-heading">
+          <span className="legacy-data-kicker">Import Backup</span>
+          <h2 id="import-review-title">
+            {count} New Game{count === 1 ? "" : "s"} To Add
+          </h2>
+          <p>
+            Check how each player in the file matches your list before
+            anything is saved.
+            {skipped.length ? ` Skipped: ${skipped.join(", ")}.` : ""}
+          </p>
+        </div>
+
+        <div className="legacy-session-list import-review-list">
+          <h3 className="import-review-subhead">
+            Players ({plan.players.length}
+            {newPlayers.length ? `, ${newPlayers.length} new` : ""})
+          </h3>
+          {plan.players.map((mapping) => (
+            <div
+              className={`legacy-session-option import-mapping import-mapping-${mapping.kind}`}
+              key={`${mapping.kind}:${mapping.fileName}:${"player" in mapping ? mapping.player.id : ""}`}
+            >
+              <span>
+                <strong>{mapping.fileName}</strong>
+                <small>
+                  {importMappingNote(mapping)} · {mapping.games} game
+                  {mapping.games === 1 ? "" : "s"}
+                </small>
+              </span>
+            </div>
+          ))}
+
+          <h3 className="import-review-subhead">Games</h3>
+          {plan.additions.map((session) => (
+            <div className="legacy-session-option import-mapping" key={session.id}>
+              <span>
+                <strong>{session.name || "Saved Game"}</strong>
+                <small>
+                  {formatDate(session.date)} · Big Blind{" "}
+                  {formatRupees(session.ante)}
+                  {" · "}
+                  {session.results.map((result) => result.name).join(", ")}
+                </small>
+              </span>
+            </div>
+          ))}
+        </div>
+
+        {plan.blocked ? (
+          <p className="import-review-error" role="alert">
+            This file has player records from another host&apos;s ledger, so
+            it can&apos;t be imported here. Nothing will be added.
+          </p>
+        ) : null}
+        {error ? (
+          <p className="import-review-error" role="alert">
+            {error}
+          </p>
+        ) : null}
+
+        <div className="legacy-review-actions">
+          <button
+            className="ghost"
+            type="button"
+            disabled={submitting}
+            onClick={onClose}
+          >
+            Cancel
+          </button>
+          <button
+            className="primary"
+            type="button"
+            disabled={plan.blocked || submitting}
+            onClick={() => void confirm()}
+          >
+            {submitting
+              ? "Adding…"
+              : `Add ${count} Game${count === 1 ? "" : "s"}`}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -1788,7 +2252,7 @@ function SetupView({
             id="stack"
             type="number"
             inputMode="numeric"
-            min="0"
+            min="1"
             value={stack}
             onChange={(event) => setStack(Number(event.target.value))}
           />
@@ -1807,8 +2271,8 @@ function SetupView({
       </div>
       <p className="muted rule-note">
         Small blind {formatRupees(smallBlindFor(Math.max(1, ante)))} · first
-        pre-flop raise to {formatRupees(Math.max(1, ante) * 2)} · later raises
-        can be any higher amount.
+        pre-flop raise to {formatRupees(Math.max(1, ante) * 2)} · each raise
+        must add at least as much as the last one.
       </p>
 
       <div className="blind-toggle">
@@ -2060,7 +2524,7 @@ function SetupView({
         className="primary full start-game"
         type="submit"
         disabled={
-          !selectionComplete || stack < 0 || ante < 1 || !scheduleValid
+          !selectionComplete || stack < 1 || ante < 1 || !scheduleValid
         }
       >
         Start Game
@@ -2255,7 +2719,8 @@ function GameView(props: GameViewProps) {
   const net = (index: number) =>
     game.players[index].stack - totalBuyIns(game, index);
   const enoughPlayers = game.players.filter((player) => player.stack > 0).length >= 2;
-  const now = useBlindClock(Boolean(hand) && game.blinds?.unit === "minutes");
+  // Timed levels run on the clock between hands too, so keep the countdown live.
+  const now = useBlindClock(game.blinds?.unit === "minutes");
   const blinds = blindStatus(game, now);
   const pendingPlan = pendingBlindPlan(game);
   const nextBlinds = `${formatRupees(blinds.nextSmallBlind)}/${formatRupees(
@@ -2270,6 +2735,35 @@ function GameView(props: GameViewProps) {
             blinds.handsLeft === 1 ? "" : "s"
           }`
         : `${nextBlinds} in ${formatCountdown(blinds.msLeft)}`;
+  const blindsDisplay = (
+    <div className="blinds-display" aria-label="Current blinds">
+      <div className="blinds-label">
+        <span>Blinds</span>
+        {blinds.schedule ? (
+          <span className="blinds-level">Level {blinds.level + 1}</span>
+        ) : null}
+      </div>
+      <div className="blinds-value">
+        <span>{formatRupees(blinds.smallBlind)}</span>
+        <span className="blinds-separator">/</span>
+        <span>{formatRupees(blinds.bigBlind)}</span>
+      </div>
+      {blinds.schedule && !pendingPlan ? (
+        <div
+          className={`blind-timer ${blinds.dueNow ? "due" : ""}`}
+          aria-live="polite"
+        >
+          {blindNote}
+        </div>
+      ) : null}
+      {pendingPlan ? (
+        <div className="blind-timer due">
+          From hand {pendingPlan.effectiveHand}:{" "}
+          {describeBlindSchedule(pendingPlan.schedule)}
+        </div>
+      ) : null}
+    </div>
+  );
 
   return (
     <>
@@ -2281,6 +2775,7 @@ function GameView(props: GameViewProps) {
               ? "The table has enough players with chips to deal again."
               : "Fewer than two players have chips remaining. A busted player can buy in to continue."}
           </p>
+          {blindsDisplay}
           {!game.winnerAnnouncement ? (
             <div className="between-hands-actions">
               <button
@@ -2327,25 +2822,8 @@ function GameView(props: GameViewProps) {
           <div className="pot-panel">
             <div className="stage">Pot</div>
             <div className="pot">{formatRupees(hand.pot)}</div>
-            <div className="muted pot-meta">
-              hand {hand.no} · blinds {formatRupees(blinds.smallBlind)}/
-              {formatRupees(blinds.bigBlind)}
-              {blinds.schedule ? ` · level ${blinds.level + 1}` : ""}
-            </div>
-            {blinds.schedule && !pendingPlan ? (
-              <div
-                className={`blind-timer ${blinds.dueNow ? "due" : ""}`}
-                aria-live="polite"
-              >
-                {blindNote}
-              </div>
-            ) : null}
-            {pendingPlan ? (
-              <div className="blind-timer due">
-                From hand {pendingPlan.effectiveHand}:{" "}
-                {describeBlindSchedule(pendingPlan.schedule)}
-              </div>
-            ) : null}
+            <div className="muted pot-meta">hand {hand.no}</div>
+            {blindsDisplay}
             <div className="table-positions" aria-label="Table positions">
               <span>Dealer · {game.players[hand.dealerIndex].name}</span>
               <span>
@@ -2478,23 +2956,14 @@ function GameView(props: GameViewProps) {
   );
 }
 
-function PokerHandsChart({
-  pinned,
-  onTogglePin,
-}: {
-  pinned?: boolean;
-  onTogglePin?: () => void;
-}) {
+function PokerHandsChart() {
   return (
-    <section className={`poker-hands-chart ${pinned ? "pinned" : ""}`}>
+    <section className="poker-hands-chart">
       <div className="poker-hands-heading">
         <div>
           <span className="hands-kicker">Strongest To Weakest</span>
           <h2>Poker Hand Rankings</h2>
         </div>
-        <button type="button" onClick={onTogglePin}>
-          {pinned ? "Unpin" : "Pin Chart"}
-        </button>
       </div>
       <div className="hand-rank-grid">
         {POKER_HANDS.map((hand, index) => (
@@ -2686,7 +3155,7 @@ function BuyInOptions({
       className={embedded ? "buy-in-options embedded" : "card buy-in-options"}
     >
       <b>Buy In</b>
-      <p className="muted">A busted player can return for half their last buy-in.</p>
+      <p className="muted">A busted player can buy back in for the starting stack.</p>
       {offers.map(({ player, index, amount }) => (
         <button
           className="buy-in-button"
@@ -2762,8 +3231,33 @@ function PlayerRow({
   const isTurn = hand.currentPlayer === playerIndex;
   const owed = hand.roundHigh - hand.committed[playerIndex];
   const minimum = minimumRaise(game, playerIndex);
+  // After a short all-in, a player who already acted may only call or fold.
+  const raiseClosed = !mayRaise(game, playerIndex) && player.stack > owed;
+  const committed = hand.committed[playerIndex];
+  // Once a bet stands (the big blind counts), putting in more is a raise.
+  // Raises are shown as the total they reach, like "raise to ₹1,300",
+  // while the box and slider stay as chips to put in now.
+  const raising = hand.roundHigh > 0;
+  const minimumLabel =
+    minimum >= player.stack
+      ? ` · all in ${formatRupees(player.stack)}`
+      : raising
+        ? ` · min raise to ${formatRupees(committed + minimum)}${
+            committed > 0 ? ` (${formatRupees(minimum)} more)` : ""
+          }`
+        : ` · min bet ${formatRupees(minimum)}`;
   const canUndo = hand.last[playerIndex] && !hand.splitSel;
   const hasAmount = amount.trim() !== "";
+  const stops = betStops(minimum, player.stack);
+  const betAmount = hasAmount
+    ? Math.floor(Number(amount))
+    : (stops[0] ?? 0);
+  const allIn = betAmount >= player.stack;
+  // The slider sits on the highest stop not above the entered amount.
+  const stopIndex = Math.max(
+    0,
+    stops.findLastIndex((stop) => stop <= betAmount),
+  );
 
   if (folded || done || !isTurn) {
     return (
@@ -2796,23 +3290,60 @@ function PlayerRow({
         <b>{player.name} <span className="turn-chip">Your turn</span></b>
         <small className="stack-value">
           Stack {formatRupees(player.stack)}
-          {owed > 0 ? ` · to call ${formatRupees(owed)}` : ""} · min{" "}
-          {owed > 0 ? "raise" : "bet"} {formatRupees(minimum)}
+          {owed > 0 ? ` · to call ${formatRupees(owed)}` : ""}
+          {raiseClosed ? "" : minimumLabel}
         </small>
       </div>
-      <div className="ctl">
-        <div className="amtwrap">
-          <span>₹</span>
-          <input
-            className="amt"
-            type="number"
-            inputMode="numeric"
-            min={minimum}
-            aria-label={owed > 0 ? "Raise amount" : "Bet amount"}
-            value={amount}
-            onChange={(event) => setAmount(event.target.value)}
-          />
-        </div>
+      <div className={raiseClosed ? "ctl call-or-fold" : "ctl"}>
+        {raiseClosed ? (
+          <p className="raise-closed">
+            Short all-in: call or fold. It was less than a full raise, so
+            betting isn&apos;t reopened for you.
+          </p>
+        ) : (
+          <>
+            <div className="amtwrap">
+              <span>₹</span>
+              <input
+                className="amt"
+                type="number"
+                inputMode="numeric"
+                min={minimum}
+                aria-label={raising ? "Chips to put in for the raise" : "Bet amount"}
+                value={amount}
+                onChange={(event) => setAmount(event.target.value)}
+              />
+            </div>
+            {stops.length > 1 ? (
+              <div className="bet-slider">
+                <input
+                  type="range"
+                  min={0}
+                  max={stops.length - 1}
+                  step={1}
+                  value={stopIndex}
+                  aria-label={raising ? "Raise size" : "Bet size"}
+                  aria-valuetext={
+                    allIn
+                  ? `All in ${formatRupees(betAmount)}`
+                  : raising
+                    ? `Raise to ${formatRupees(committed + betAmount)}`
+                    : formatRupees(betAmount)
+                  }
+                  onChange={(event) => {
+                    const index = Number(event.target.value);
+                    // The first stop is the default, so it leaves Call and Fold on.
+                    setAmount(index === 0 ? "" : String(stops[index]));
+                  }}
+                />
+                <div className="bet-slider-ends" aria-hidden="true">
+                  <span>{formatRupees(stops[0])}</span>
+                  <span>All In {formatRupees(player.stack)}</span>
+                </div>
+              </div>
+            ) : null}
+          </>
+        )}
         <div className="acts">
           <button
             className="action-call"
@@ -2821,27 +3352,33 @@ function PlayerRow({
           >
             {owed > 0 ? "Call" : "Check"}
           </button>
-          <button
-            className="action-raise"
-            disabled={!hasAmount}
-            onClick={() =>
-              onAct(playerIndex, "bet", Math.floor(Number(amount)))
-            }
-          >
-            {owed > 0 ? "Raise" : "Bet"}
-          </button>
+          {raiseClosed ? null : (
+            <button
+              className={`action-raise ${allIn ? "all-in" : ""}`}
+              disabled={!(betAmount > 0)}
+              onClick={() =>
+                allIn
+                  ? onAct(playerIndex, "all-in")
+                  : onAct(playerIndex, "bet", betAmount)
+              }
+            >
+              {!(betAmount > 0)
+                ? raising
+                  ? "Raise"
+                  : "Bet"
+                : allIn
+                  ? `All In ${formatRupees(player.stack)}`
+                  : raising
+                    ? `Raise to ${formatRupees(committed + betAmount)}`
+                    : `Bet ${formatRupees(betAmount)}`}
+            </button>
+          )}
           <button
             className="danger"
             disabled={hasAmount}
             onClick={() => onAct(playerIndex, "fold")}
           >
             Fold
-          </button>
-          <button
-            className="action-all-in"
-            onClick={() => onAct(playerIndex, "all-in")}
-          >
-            All In · {formatRupees(player.stack)}
           </button>
         </div>
       </div>
@@ -2900,6 +3437,67 @@ function SplitView({
       <button className="ghost full split-back" onClick={onBack}>
         Back
       </button>
+    </>
+  );
+}
+
+/** Items shown before the first press, and added by each press. */
+const LIST_START = 5;
+const LIST_STEP = 10;
+
+/**
+ * Shows the first items of a long list and 10 more per press. The button
+ * sits under the last visible item, so it moves down as the list grows;
+ * once everything is shown it collapses the list back.
+ */
+function ExpandingList<T>({
+  items,
+  render,
+  more,
+  className,
+}: {
+  items: T[];
+  render: (item: T) => ReactNode;
+  more: (count: number) => string;
+  className?: string;
+}) {
+  const [shown, setShown] = useState(LIST_START);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const visible = items.slice(0, shown).map(render);
+  const remaining = items.length - shown;
+
+  function toggle() {
+    if (remaining > 0) {
+      setShown(shown + LIST_STEP);
+      return;
+    }
+    setShown(LIST_START);
+    // Collapsing leaves the page scrolled far below the short list.
+    requestAnimationFrame(() =>
+      buttonRef.current?.scrollIntoView({ block: "nearest" }),
+    );
+  }
+
+  return (
+    <>
+      {className ? <div className={className}>{visible}</div> : visible}
+      {items.length > LIST_START ? (
+        <div className="history-expander">
+          <button
+            ref={buttonRef}
+            type="button"
+            className={`expander-button ${remaining > 0 ? "" : "open"}`}
+            onClick={toggle}
+          >
+            <span>
+              {remaining > 0
+                ? more(Math.min(LIST_STEP, remaining))
+                : "Show fewer"}
+            </span>
+            {remaining > LIST_STEP ? <small>{remaining} left</small> : null}
+          </button>
+        </div>
+      ) : null}
     </>
   );
 }
@@ -3010,6 +3608,11 @@ function SessionCard({
   );
 }
 
+const INELIGIBLE_REASON_TEXT: Record<IneligibleReason, string> = {
+  "no-investment": "no chips were bought in",
+  "unverified-accounting": "the saved chip totals do not add up",
+};
+
 function HistoryView({
   history,
   discardedSessions,
@@ -3033,39 +3636,85 @@ function HistoryView({
   onExport: () => void;
   onImport: (event: ChangeEvent<HTMLInputElement>) => void;
 }) {
-  const leaderboard = useMemo(() => buildLeaderboard(history), [history]);
+  const standings = useMemo(() => buildStandings(history), [history]);
+  const leaderboard = standings.entries;
+  const sessionTitles = useMemo(
+    () =>
+      new Map(
+        history.map((session) => [
+          session.id,
+          session.name || `Game ${session.sessionNumber || ""}`,
+        ]),
+      ),
+    [history],
+  );
   const latestSessions = useMemo(
     () => [...history].sort((a, b) => b.date - a.date),
     [history],
   );
   const importInput = useRef<HTMLInputElement>(null);
 
-  function leaderboardRow(entry: LeaderboardEntry, rank: number) {
+  function leaderboardRow(entry: StandingsEntry) {
+    const profitableRate = Math.round(
+      (entry.profitableSessions / entry.totalSessions) * 100,
+    );
+    const stats = [
+      ["Ranked", `${entry.eligibleSessions}/${entry.totalSessions}`],
+      ["Hands", entry.hands.toLocaleString("en-IN")],
+      ["Profitable", `${entry.profitableSessions} (${profitableRate}%)`],
+      ["Invested", entry.invested.toLocaleString("en-IN")],
+      ["Net chips", formatChipChange(entry.net)],
+    ];
     return (
-      <div
-        className="prow leaderboard-row"
-        key={entry.playerId ?? entry.name}
-      >
-        <span className={`rank ${rank === 0 ? "gold" : ""}`}>
-          {rank + 1}
-        </span>
-        <div className="nm">
-          <b>{entry.name}</b>
-          <small>
-            {entry.sessions} session{entry.sessions === 1 ? "" : "s"} ·{" "}
-            {entry.hands} hands · won {entry.wins}
-          </small>
-        </div>
-        <div className="align-right">
-          <b className={entry.net >= 0 ? "pos" : "neg"}>
-            {entry.net >= 0 ? "+" : ""}
-            {formatRupees(entry.net)}
-          </b>
-          <div className="muted best">
-            best {entry.best >= 0 ? "+" : ""}
-            {formatRupees(entry.best)}
+      <div className="prow leaderboard-row" key={entry.key}>
+        <div className="leaderboard-head">
+          <span className={`rank ${entry.rank === 1 ? "gold" : ""}`}>
+            {entry.rank ?? "–"}
+          </span>
+          <b className="leaderboard-name">{entry.name}</b>
+          <div className="leaderboard-score">
+            {entry.averageReturn === null ? (
+              <>
+                <b className="muted">Unranked</b>
+                <small>no verified buy-ins</small>
+              </>
+            ) : (
+              <>
+                <b className={entry.averageReturn >= 0 ? "pos" : "neg"}>
+                  {formatPercent(entry.averageReturn)}
+                </b>
+                <small>
+                  {entry.eligibleSessions} session
+                  {entry.eligibleSessions === 1 ? "" : "s"}
+                </small>
+              </>
+            )}
           </div>
         </div>
+        <dl className="leaderboard-stats">
+          {stats.map(([label, value]) => (
+            <div key={label}>
+              <dt>{label}</dt>
+              <dd
+                className={
+                  label === "Net chips" ? (entry.net >= 0 ? "pos" : "neg") : ""
+                }
+              >
+                {value}
+              </dd>
+            </div>
+          ))}
+        </dl>
+        {entry.ineligible.length ? (
+          <ul className="leaderboard-excluded">
+            {entry.ineligible.map(({ sessionId, reason }) => (
+              <li key={sessionId}>
+                Not ranked: {sessionTitles.get(sessionId) ?? sessionId} —{" "}
+                {INELIGIBLE_REASON_TEXT[reason]}
+              </li>
+            ))}
+          </ul>
+        ) : null}
       </div>
     );
   }
@@ -3091,7 +3740,7 @@ function HistoryView({
         ) : loading ? (
           <p className="muted">Loading the shared ledger…</p>
         ) : leaderboard.length ? (
-          <LeaderboardChart entries={leaderboard} sessions={history} />
+          <LeaderboardChart standings={standings} />
         ) : (
           <p className="muted">
             No Saved Sessions Yet. Finish A Game With “Finish And Save Game
@@ -3108,22 +3757,12 @@ function HistoryView({
               {leaderboard.length} player{leaderboard.length === 1 ? "" : "s"}
             </span>
           </div>
-          <div className="leaderboard-list">
-            {leaderboard.slice(0, 5).map(leaderboardRow)}
-          </div>
-          {leaderboard.length > 5 ? (
-            <details className="history-expander">
-              <summary>
-                Show {leaderboard.length - 5} more player
-                {leaderboard.length - 5 === 1 ? "" : "s"}
-              </summary>
-              <div className="history-expander-content leaderboard-list">
-                {leaderboard
-                  .slice(5)
-                  .map((entry, index) => leaderboardRow(entry, index + 5))}
-              </div>
-            </details>
-          ) : null}
+          <ExpandingList
+            className="leaderboard-list"
+            items={leaderboard}
+            render={leaderboardRow}
+            more={(count) => `Show ${count} more player${count === 1 ? "" : "s"}`}
+          />
         </section>
       ) : null}
 
@@ -3135,30 +3774,17 @@ function HistoryView({
               {history.length} game{history.length === 1 ? "" : "s"}
             </span>
           </div>
-          {latestSessions.slice(0, 5).map((session) => (
-            <SessionCard
-              key={session.id}
-              session={session}
-              onDiscard={onDiscard}
-            />
-          ))}
-          {latestSessions.length > 5 ? (
-            <details className="history-expander">
-              <summary>
-                Show {latestSessions.length - 5} older game
-                {latestSessions.length - 5 === 1 ? "" : "s"}
-              </summary>
-              <div className="history-expander-content">
-                {latestSessions.slice(5).map((session) => (
-                  <SessionCard
-                    key={session.id}
-                    session={session}
-                    onDiscard={onDiscard}
-                  />
-                ))}
-              </div>
-            </details>
-          ) : null}
+          <ExpandingList
+            items={latestSessions}
+            render={(session) => (
+              <SessionCard
+                key={session.id}
+                session={session}
+                onDiscard={onDiscard}
+              />
+            )}
+            more={(count) => `Show ${count} older game${count === 1 ? "" : "s"}`}
+          />
         </section>
       ) : null}
 
@@ -3207,81 +3833,118 @@ function HistoryView({
   );
 }
 
-function LeaderboardChart({
-  entries,
-  sessions,
-}: {
-  entries: LeaderboardEntry[];
-  sessions: PokerSession[];
-}) {
+type ChartMetric = "return" | "chips";
+
+function LeaderboardChart({ standings }: { standings: Standings }) {
+  const [metric, setMetric] = useState<ChartMetric>("return");
   const chartWidth = 480;
   const chartHeight = 280;
   const plot = { top: 18, right: 14, bottom: 48, left: 58 };
   const plotWidth = chartWidth - plot.left - plot.right;
   const plotHeight = chartHeight - plot.top - plot.bottom;
-  const chronologicalSessions = [...sessions].sort(
-    (a, b) => a.date - b.date,
-  );
-  const keyFor = (playerId: string | undefined, name: string) =>
-    playerId ? `id:${playerId}` : `name:${playerKey(name)}`;
-  const colors = ["#3d9cff", "#41e2a3", "#f7fbff", "#67c7ff", "#19b879", "#a7e8d2"];
-  const sortedKeys = entries
-    .map((entry) => keyFor(entry.playerId, entry.name))
-    .sort();
+  const sessionCount = standings.timeline.length;
+  const colors = [
+    "#e2ad4f",
+    "#72b9e6",
+    "#83c9a6",
+    "#d8735b",
+    "#b99be8",
+    "#e190bd",
+    "#d9dde0",
+    "#a9ad5c",
+  ];
+  const sortedKeys = standings.entries.map((entry) => entry.key).sort();
   const colorByKey = new Map(
     sortedKeys.map((key, index) => [key, colors[index % colors.length]]),
   );
-  const totals = new Map(sortedKeys.map((key) => [key, 0]));
-  const series = entries.map((entry) => {
-    const key = keyFor(entry.playerId, entry.name);
+  const series = standings.entries.map((entry) => {
+    const line = standings.series.get(entry.key);
+    const points =
+      metric === "return"
+        ? (line?.returns ?? []).flatMap((point) =>
+            point
+              ? [
+                  {
+                    index: point.sessionIndex,
+                    value: point.runningAverage,
+                    marked: point.sessionReturn !== null,
+                    label: `${entry.name}, session ${point.sessionIndex}: ${
+                      point.sessionReturn === null
+                        ? "did not play"
+                        : `session return ${formatPercent(point.sessionReturn)}`
+                    } · running average ${formatPercent(point.runningAverage)} over ${
+                      point.sampleCount
+                    } session${point.sampleCount === 1 ? "" : "s"}`,
+                  },
+                ]
+              : [],
+          )
+        : (line?.cumulativeNet ?? []).map((value, index, values) => ({
+            index,
+            value,
+            marked: index > 0 && value !== values[index - 1],
+            label: `${entry.name}, session ${index}: ${formatChipChange(value)} chips`,
+          }));
     return {
-      color: colorByKey.get(key) ?? colors[0],
+      color: colorByKey.get(entry.key) ?? colors[0],
       entry,
-      key,
-      values: [0],
+      points,
     };
-  });
-
-  chronologicalSessions.forEach((session) => {
-    session.results.forEach((result) => {
-      const key = keyFor(result.playerId, result.name);
-      totals.set(key, (totals.get(key) ?? 0) + result.net);
-    });
-    series.forEach((player) => {
-      player.values.push(totals.get(player.key) ?? 0);
-    });
   });
 
   const maxMagnitude = Math.max(
     1,
-    ...series.flatMap((player) => player.values.map(Math.abs)),
+    ...series.flatMap((player) => player.points.map((point) => Math.abs(point.value))),
   );
-  const axisMagnitude = Math.max(5_000, Math.ceil(maxMagnitude / 5_000) * 5_000);
+  const step = metric === "return" ? 25 : 5_000;
+  const axisMagnitude = Math.max(step, Math.ceil(maxMagnitude / step) * step);
   const yTicks = [axisMagnitude, axisMagnitude / 2, 0, -axisMagnitude / 2, -axisMagnitude];
   const xFor = (index: number) =>
-    plot.left +
-    (index / Math.max(1, chronologicalSessions.length)) * plotWidth;
+    plot.left + (index / Math.max(1, sessionCount)) * plotWidth;
   const yFor = (value: number) =>
     plot.top + ((axisMagnitude - value) / (axisMagnitude * 2)) * plotHeight;
-  const xLabelEvery = Math.max(
-    1,
-    Math.ceil(chronologicalSessions.length / 13),
-  );
+  const xLabelEvery = Math.max(1, Math.ceil(sessionCount / 13));
   const tickLabel = (value: number) => {
-    if (value === 0) return "₹0";
+    if (value === 0) return metric === "return" ? "0%" : "0";
     const sign = value > 0 ? "+" : "−";
     const magnitude = Math.abs(value);
-    return `${sign}₹${magnitude >= 1_000 ? `${magnitude / 1_000}k` : magnitude}`;
+    if (metric === "return") return `${sign}${magnitude}%`;
+    return `${sign}${magnitude >= 1_000 ? `${magnitude / 1_000}k` : magnitude}`;
   };
+  const title =
+    metric === "return" ? "Average session return" : "Raw chip results";
+  const description =
+    metric === "return"
+      ? "Each colored line shows one player's running average session return, starting at their first ranked session. Sessions they missed carry the previous average forward."
+      : "Each colored line shows one player's cumulative raw chip result after every session.";
 
   return (
-    <figure
-      className="leaderboard-chart"
-      aria-label="Overall standings by net profit and loss"
-    >
+    <figure className="leaderboard-chart" aria-label={title}>
       <figcaption>
-        <b>Profit and loss over time</b>
-        <span>Cumulative net after each session</span>
+        <div>
+          <b>{title}</b>
+          <span>
+            {metric === "return"
+              ? "Running average after each session"
+              : "Cumulative chips after each session"}
+          </span>
+        </div>
+        <div className="chart-metric-toggle" role="group" aria-label="Graph view">
+          <button
+            type="button"
+            aria-pressed={metric === "return"}
+            onClick={() => setMetric("return")}
+          >
+            Return %
+          </button>
+          <button
+            type="button"
+            aria-pressed={metric === "chips"}
+            onClick={() => setMetric("chips")}
+          >
+            Raw Chips
+          </button>
+        </div>
       </figcaption>
       <svg
         className="leaderboard-line-plot"
@@ -3289,11 +3952,8 @@ function LeaderboardChart({
         role="img"
         aria-labelledby="standings-chart-title standings-chart-description"
       >
-        <title id="standings-chart-title">Cumulative poker profit and loss</title>
-        <desc id="standings-chart-description">
-          Each colored line shows one player&apos;s cumulative net result after
-          every session.
-        </desc>
+        <title id="standings-chart-title">{title}</title>
+        <desc id="standings-chart-description">{description}</desc>
 
         {yTicks.map((tick) => (
           <g key={tick}>
@@ -3323,7 +3983,7 @@ function LeaderboardChart({
           y2={chartHeight - plot.bottom}
         />
 
-        {Array.from({ length: chronologicalSessions.length + 1 }, (_, index) => (
+        {Array.from({ length: sessionCount + 1 }, (_, index) => (
           <g key={index}>
             <line
               className="leaderboard-session-tick"
@@ -3333,7 +3993,7 @@ function LeaderboardChart({
               y2={chartHeight - plot.bottom + 5}
             />
             {index === 0 ||
-            index === chronologicalSessions.length ||
+            index === sessionCount ||
             index % xLabelEvery === 0 ? (
               <text
                 className="leaderboard-axis-value"
@@ -3357,52 +4017,53 @@ function LeaderboardChart({
         </text>
 
         {series.map((player) => {
-          const points = player.values
-            .map((value, index) => `${xFor(index)},${yFor(value)}`)
-            .join(" ");
-
+          const last = player.points.at(-1);
           return (
-            <g key={player.key}>
+            <g key={player.entry.key}>
               <polyline
                 className="leaderboard-player-line"
-                points={points}
+                points={player.points
+                  .map((point) => `${xFor(point.index)},${yFor(point.value)}`)
+                  .join(" ")}
                 stroke={player.color}
               />
-              {player.values.map((value, index) => {
-                if (index === 0 || value === player.values[index - 1]) {
-                  return null;
-                }
-                return (
+              {player.points.map((point) =>
+                point.marked ? (
                   <circle
                     className="leaderboard-player-point"
-                    cx={xFor(index)}
-                    cy={yFor(value)}
+                    cx={xFor(point.index)}
+                    cy={yFor(point.value)}
                     fill={player.color}
-                    key={index}
-                    r={index === player.values.length - 1 ? 4.5 : 3}
+                    key={point.index}
+                    r={point === last ? 4.5 : 3}
                   >
-                    <title>
-                      {player.entry.name}, session {index}: {value >= 0 ? "+" : ""}
-                      {formatRupees(value)}
-                    </title>
+                    <title>{point.label}</title>
                   </circle>
-                );
-              })}
+                ) : null,
+              )}
             </g>
           );
         })}
       </svg>
       <div className="leaderboard-line-legend">
-        {series.map((player) => (
-          <div className="leaderboard-legend-player" key={player.key}>
-            <span style={{ backgroundColor: player.color }} />
-            <b>{player.entry.name}</b>
-            <small className={player.entry.net >= 0 ? "pos" : "neg"}>
-              {player.entry.net >= 0 ? "+" : ""}
-              {formatRupees(player.entry.net)}
-            </small>
-          </div>
-        ))}
+        {series.map(({ color, entry }) => {
+          const value = metric === "return" ? entry.averageReturn : entry.net;
+          return (
+            <div className="leaderboard-legend-player" key={entry.key}>
+              <span style={{ backgroundColor: color }} />
+              <b>{entry.name}</b>
+              <small
+                className={value === null ? "muted" : value >= 0 ? "pos" : "neg"}
+              >
+                {value === null
+                  ? "unranked"
+                  : metric === "return"
+                    ? formatPercent(value)
+                    : formatChipChange(value)}
+              </small>
+            </div>
+          );
+        })}
       </div>
     </figure>
   );
@@ -3410,30 +4071,19 @@ function LeaderboardChart({
 
 function Modal({
   state,
-  handsPinned,
-  onToggleHandsPin,
   onClose,
   onConfirm,
 }: {
   state: ModalState;
-  handsPinned: boolean;
-  onToggleHandsPin: () => void;
   onClose: () => void;
   onConfirm: () => void;
 }) {
-  const [password, setPassword] = useState("");
-
   function confirm() {
     if (state.kind === "rules" || state.kind === "hands") {
       onClose();
       return;
     }
-    if (state.kind === "password") {
-      if (!password) return;
-      state.onConfirm(password);
-    } else {
-      state.onConfirm();
-    }
+    state.onConfirm();
     onConfirm();
   }
 
@@ -3452,10 +4102,7 @@ function Modal({
           aria-modal="true"
           aria-label="Poker Hand Rankings"
         >
-          <PokerHandsChart
-            pinned={handsPinned}
-            onTogglePin={onToggleHandsPin}
-          />
+          <PokerHandsChart />
           <button className="ghost full" type="button" onClick={onClose}>
             Close Chart
           </button>
@@ -3541,9 +4188,8 @@ function Modal({
                   The Current Bet, Raise It, Or Fold. All In Commits The
                   Player&apos;s Entire Remaining Stack, Even If It Cannot Cover
                   A Call. If Only One Player Remains, They Win Automatically.
-                  Between Hands, A Busted Player Can Buy In For Half Their
-                  Previous Buy-In, Rounded Down To A Whole Chip. Buy-Ins Stop
-                  Once Half Would Be Zero.
+                  Between Hands, A Busted Player Can Buy Back In For The Full
+                  Starting Stack, As Many Times As Needed.
                 </p>
               </div>
             </section>
@@ -3551,13 +4197,16 @@ function Modal({
             <section>
               <span className="rule-number">05</span>
               <div>
-                <h3>Raise From Under The Gun</h3>
+                <h3>Minimum Bets And Raises</h3>
                 <p>
-                  The First Player After The Big Blind Is Under The Gun. Their
-                  Minimum Pre-Flop Raise Makes The Total Bet Twice The Big
-                  Blind. After That First Action, Any Raise Only Needs To Be
-                  Higher Than The Current Bet. A Player May Always Go All-In
-                  For Less.
+                  The Smallest Bet Is The Big Blind. A Raise Must Add At Least
+                  As Much As The Last Bet Or Raise On This Street, So Before
+                  The Flop The First Raise Makes The Total Twice The Big
+                  Blind, And After A Raise From ₹100 To ₹400 The Next Raise Is
+                  To At Least ₹700. Each New Street Starts Again At The Big
+                  Blind. A Player May Always Go All-In For Less, But That Short
+                  All-In Doesn&apos;t Let Players Who Already Acted Raise Again:
+                  They May Only Call Or Fold.
                 </p>
               </div>
             </section>
@@ -3583,8 +4232,8 @@ function Modal({
                 <p>
                   Undo Restores A Player&apos;s Latest Action On The Current
                   Street. Cancel Hand Refunds Every Chip From That Hand,
-                  Including Blinds. Undo Last Hand Restores Its Starting
-                  Stacks. Finish And Save Game Session Requires One Completed
+                  Including Blinds. Undo Last Hand Deals It Again Exactly As
+                  Before, With The Same Stacks, Dealer And Blinds. Finish And Save Game Session Requires One Completed
                   Hand; Any Unfinished Hand Is Refunded In The Saved Results.
                 </p>
               </div>
@@ -3615,27 +4264,23 @@ function Modal({
         aria-modal="true"
         aria-label="Confirm action"
       >
-        <div className="msg">{state.message}</div>
-        {state.kind === "password" ? (
-          <>
-            <label htmlFor="delete-password">Deletion password</label>
-            <input
-              id="delete-password"
-              type="password"
-              autoComplete="current-password"
-              autoFocus
-              placeholder="Enter password"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") confirm();
-              }}
-            />
-          </>
-        ) : null}
+        <div className="msg">
+          {state.kind === "recent-sign-in" ? (
+            <>
+              For safety, {state.purpose} needs a sign-in from the last{" "}
+              {RECENT_SIGN_IN_WINDOW_MS / 60_000} minutes. We will email a new
+              sign-in link to{" "}
+              <span className="literal-text">{state.email}</span>. Open it on
+              this device, then try again.
+            </>
+          ) : (
+            state.message
+          )}
+        </div>
         <button
-          className={state.kind === "password" ? "danger" : "primary"}
-          disabled={state.kind === "password" && !password}
+          className={
+            state.kind === "confirm" && state.danger ? "danger" : "primary"
+          }
           onClick={confirm}
         >
           {state.confirmLabel}

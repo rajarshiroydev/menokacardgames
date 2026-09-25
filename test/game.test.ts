@@ -2,25 +2,31 @@ import { strict as assert } from "node:assert";
 import { describe, test } from "node:test";
 
 import {
+  applyRaiseRules,
   bigBlindAtLevel,
   blindStatus,
-  buildLeaderboard,
+  betStops,
   buyInPlayer,
+  completedHandRecord,
   dealNewHand,
   editBlindSchedule,
+  mayRaise,
   minimumRaise,
   nextBuyIn,
   nextPlayerToAct,
   pendingBlindPlan,
   pendingIndexes,
+  raiseSize,
+  resetRaiseRules,
   returnToBetweenHands,
   totalBuyIns,
+  undoLastHand,
+  undoRaiseRules,
 } from "../lib/poker/game.ts";
 import type {
   BlindSchedule,
   GameState,
   Hand,
-  PokerSession,
 } from "../lib/poker/types.ts";
 
 function gameState(blinds: BlindSchedule | null = null): GameState {
@@ -52,80 +58,20 @@ function dealtHand(game: GameState): Hand {
   return game.hand;
 }
 
-describe("leaderboard player identity", () => {
-  test("groups renamed results by stable player id", () => {
-    const sessions: PokerSession[] = [
-      {
-        id: "s1",
-        date: 1,
-        ended: 2,
-        ante: 100,
-        startStack: 1000,
-        hands: 1,
-        results: [
-          { playerId: "player-a", name: "Raj", net: 100, end: 1100 },
-          { playerId: "player-b", name: "Sam", net: -100, end: 900 },
-        ],
-      },
-      {
-        id: "s2",
-        date: 3,
-        ended: 4,
-        ante: 100,
-        startStack: 1000,
-        hands: 1,
-        results: [
-          { playerId: "player-a", name: "Rajarshi", net: 200, end: 1200 },
-          { playerId: "player-b", name: "Sam", net: -200, end: 800 },
-        ],
-      },
-    ];
+/** Puts a player's chips in to reach `total` this street, as the table does. */
+function betTo(game: GameState, playerIndex: number, total: number) {
+  const hand = dealtHand(game);
+  const chips = total - hand.committed[playerIndex];
+  game.players[playerIndex].stack -= chips;
+  hand.committed[playerIndex] += chips;
+  hand.pot += chips;
+  return applyRaiseRules(game, playerIndex);
+}
 
-    const leaderboard = buildLeaderboard(sessions);
-
-    assert.equal(leaderboard.length, 2);
-    assert.equal(leaderboard[0].playerId, "player-a");
-    assert.equal(leaderboard[0].name, "Rajarshi");
-    assert.equal(leaderboard[0].net, 300);
-    assert.equal(leaderboard[0].sessions, 2);
-  });
-
-  test("excludes discarded sessions from every total", () => {
-    const sessions: PokerSession[] = [
-      {
-        id: "active",
-        date: 1,
-        ended: 2,
-        ante: 100,
-        startStack: 1000,
-        hands: 1,
-        results: [
-          { playerId: "player-a", name: "Raj", net: 100, end: 1100 },
-          { playerId: "player-b", name: "Sam", net: -100, end: 900 },
-        ],
-      },
-      {
-        id: "discarded",
-        discardedAt: 5,
-        date: 3,
-        ended: 4,
-        ante: 100,
-        startStack: 1000,
-        hands: 1,
-        results: [
-          { playerId: "player-a", name: "Raj", net: -500, end: 500 },
-          { playerId: "player-b", name: "Sam", net: 500, end: 1500 },
-        ],
-      },
-    ];
-
-    const leaderboard = buildLeaderboard(sessions);
-
-    assert.equal(leaderboard[0].playerId, "player-a");
-    assert.equal(leaderboard[0].net, 100);
-    assert.equal(leaderboard[0].sessions, 1);
-  });
-});
+function fold(game: GameState, playerIndex: number) {
+  dealtHand(game).in[playerIndex] = false;
+  return applyRaiseRules(game, playerIndex);
+}
 
 describe("rising blinds", () => {
   test("edits the plan after the current hand and restarts the hand interval", () => {
@@ -464,18 +410,18 @@ describe("positional betting", () => {
     assert.equal(hand.currentPlayer, 0);
     assert.equal(minimumRaise(game, 0), 200);
 
-    hand.committed[0] = 200;
-    hand.roundHigh = 200;
-    hand.acted[0] = true;
-    assert.equal(minimumRaise(game, 1), 151);
+    betTo(game, 0, 200);
+    assert.equal(minimumRaise(game, 1), 250);
 
     hand.stage = 1;
     hand.committed = [0, 0, 0];
     hand.roundHigh = 0;
     hand.acted = [false, false, false];
+    resetRaiseRules(game);
     assert.equal(minimumRaise(game, 1), 100);
 
     game.ante = 250;
+    resetRaiseRules(game);
     assert.equal(minimumRaise(game, 1), 250);
 
     game.players[1].stack = 80;
@@ -483,34 +429,292 @@ describe("positional betting", () => {
   });
 });
 
+describe("raise sizes", () => {
+  test("keeps the pre-flop minimum at twice the big blind after a fold or call", () => {
+    const game = gameState();
+    dealNewHand(game);
+
+    fold(game, 0);
+    // The small blind has 50 in, so a raise to 200 adds 150.
+    assert.equal(minimumRaise(game, 1), 150);
+
+    betTo(game, 1, 100);
+    assert.equal(minimumRaise(game, 2), 100);
+  });
+
+  test("makes each re-raise at least as big as the last raise", () => {
+    const game = gameState();
+    dealNewHand(game);
+
+    betTo(game, 0, 400);
+    assert.equal(raiseSize(game), 300);
+    assert.equal(minimumRaise(game, 1), 650);
+
+    betTo(game, 1, 1_000);
+    assert.equal(raiseSize(game), 600);
+    assert.equal(minimumRaise(game, 2), 1_500);
+  });
+
+  test("starts each street again at the big blind", () => {
+    const game = gameState();
+    dealNewHand(game);
+    const hand = dealtHand(game);
+    betTo(game, 0, 1_000);
+
+    hand.stage = 1;
+    hand.committed = [0, 0, 0];
+    hand.roundHigh = 0;
+    hand.acted = [false, false, false];
+    resetRaiseRules(game);
+    assert.equal(minimumRaise(game, 1), 100);
+
+    betTo(game, 1, 300);
+    assert.equal(minimumRaise(game, 2), 600);
+  });
+
+  test("lets a short all-in be called but not re-raised by players who acted", () => {
+    const game = gameState();
+    dealNewHand(game);
+    const hand = dealtHand(game);
+
+    betTo(game, 0, 400);
+    game.players[1].stack = 450;
+    const before = betTo(game, 1, 500);
+    assert.equal(before.full, false);
+    assert.equal(hand.roundHigh, 500);
+    assert.equal(raiseSize(game), 300);
+    assert.equal(mayRaise(game, 0), false);
+    assert.equal(mayRaise(game, 2), true);
+    assert.equal(minimumRaise(game, 2), 700);
+
+    betTo(game, 2, 500);
+    assert.deepEqual(pendingIndexes(game), [0]);
+    assert.equal(nextPlayerToAct(game, 2), 0);
+    assert.equal(mayRaise(game, 0), false);
+  });
+
+  test("reopens raising after a full-sized all-in", () => {
+    const game = gameState();
+    dealNewHand(game);
+
+    betTo(game, 0, 400);
+    game.players[1].stack = 750;
+    const before = betTo(game, 1, 800);
+    assert.equal(before.full, true);
+    assert.equal(raiseSize(game), 400);
+    assert.equal(mayRaise(game, 0), true);
+    assert.equal(minimumRaise(game, 0), 800);
+  });
+
+  test("a later full raise reopens raising after a short all-in", () => {
+    const game = gameState();
+    dealNewHand(game);
+
+    betTo(game, 0, 400);
+    game.players[1].stack = 450;
+    betTo(game, 1, 500);
+    assert.equal(mayRaise(game, 0), false);
+
+    betTo(game, 2, 800);
+    assert.equal(mayRaise(game, 0), true);
+    assert.equal(minimumRaise(game, 0), 700);
+  });
+
+  test("undo puts the raise rules back", () => {
+    const game = gameState();
+    dealNewHand(game);
+    const hand = dealtHand(game);
+
+    betTo(game, 0, 400);
+    const full = betTo(game, 1, 1_000);
+    undoRaiseRules(game, 1, full);
+    assert.equal(raiseSize(game), 300);
+    assert.deepEqual(hand.raiseOpen, [false, true, true]);
+
+    game.players[1].stack = 450;
+    const short = betTo(game, 1, 500);
+    undoRaiseRules(game, 1, short);
+    assert.deepEqual(hand.raiseOpen, [false, true, true]);
+  });
+
+  test("treats hands saved before these rules as open at the big blind", () => {
+    const game = gameState();
+    dealNewHand(game);
+    const hand = dealtHand(game);
+    delete hand.raiseSize;
+    delete hand.raiseOpen;
+
+    assert.equal(raiseSize(game), 100);
+    assert.equal(mayRaise(game, 1), true);
+    assert.equal(minimumRaise(game, 0), 200);
+  });
+});
+
 describe("buy-ins", () => {
-  test("halves each busted player's previous buy-in", () => {
+  test("rebuys each busted player for the full starting stack", () => {
     const game = gameState();
     game.startStack = 10_000;
     game.players[0].stack = 0;
 
-    assert.equal(nextBuyIn(game, 0), 5_000);
-    assert.equal(buyInPlayer(game, 0), 5_000);
-    assert.equal(game.players[0].stack, 5_000);
-    assert.deepEqual(game.players[0].buyIns, [10_000, 5_000]);
+    assert.equal(nextBuyIn(game, 0), 10_000);
+    assert.equal(buyInPlayer(game, 0), 10_000);
+    assert.equal(game.players[0].stack, 10_000);
+    assert.deepEqual(game.players[0].buyIns, [10_000, 10_000]);
 
     game.players[0].stack = 0;
-    assert.equal(nextBuyIn(game, 0), 2_500);
-    assert.equal(buyInPlayer(game, 0), 2_500);
-    assert.equal(totalBuyIns(game, 0), 17_500);
-    assert.equal(game.players[0].stack, 2_500);
-    assert.equal(nextBuyIn(game, 0), null);
+    assert.equal(buyInPlayer(game, 0), 10_000);
+    assert.equal(totalBuyIns(game, 0), 30_000);
+    assert.equal(nextBuyIn(game, 0), null, "only busted players rebuy");
   });
 
-  test("offers no buy-in during a hand or after the amount reaches zero", () => {
+  test("continues a game that already had a halved rebuy", () => {
     const game = gameState();
+    game.startStack = 10_000;
     game.players[0].stack = 0;
-    game.players[0].buyIns = [1];
+    game.players[0].buyIns = [10_000, 5_000];
+
+    assert.equal(buyInPlayer(game, 0), 10_000);
+    assert.deepEqual(game.players[0].buyIns, [10_000, 5_000, 10_000]);
+  });
+
+  test("offers no buy-in during a hand or past the buy-in limit", () => {
+    const game = gameState();
+    game.startStack = 1;
+    game.players[0].stack = 0;
+    game.players[0].buyIns = Array(64).fill(1);
     assert.equal(nextBuyIn(game, 0), null);
 
+    game.players[0].buyIns = Array(63).fill(1);
+    assert.equal(nextBuyIn(game, 0), 1);
+
+    game.startStack = 100_000;
     game.players[0].buyIns = [100_000];
     dealNewHand(game);
     assert.equal(nextBuyIn(game, 0), null);
     assert.equal(buyInPlayer(game, 0), null);
   });
 });
+
+describe("bet slider stops", () => {
+  test("runs from the minimum through exact multiples to all in", () => {
+    assert.deepEqual(betStops(100, 10_000), [100, 150, 200, 500, 1_000, 10_000]);
+    assert.deepEqual(betStops(1_000, 6_000), [1_000, 1_500, 2_000, 5_000, 6_000]);
+    assert.deepEqual(betStops(1, 100), [1, 2, 5, 10, 100]);
+  });
+
+  test("leaves only all in for a short stack", () => {
+    assert.deepEqual(betStops(1_000, 1_500), [1_000, 1_500]);
+    assert.deepEqual(betStops(1_000, 800), [800]);
+    assert.deepEqual(betStops(100, 0), []);
+  });
+});
+
+/** Awards the pot the way the table does, leaving the between-hands state. */
+function finishHand(game: GameState, winner: number) {
+  const hand = dealtHand(game);
+  game.players[winner].stack += hand.pot;
+  game.lastHand = completedHandRecord(game);
+  game.hand = null;
+}
+
+describe("undo last hand", () => {
+  const MINUTE_MS = 60_000;
+
+  function playTo(game: GameState, hands: number, start = 1_000) {
+    // Stored games always carry buy-ins (see readStoredGame).
+    game.players.forEach((player) => {
+      player.buyIns ??= [game.startStack];
+    });
+    for (let index = 0; index < hands; index += 1) {
+      dealNewHand(game, start + index * MINUTE_MS);
+      betTo(game, dealtHand(game).currentPlayer!, 300);
+      finishHand(game, index % game.players.length);
+    }
+  }
+
+  function snapshot(game: GameState) {
+    return { ...structuredClone(game), lastHand: null, winnerAnnouncement: null };
+  }
+
+  test("deals the undone hand again with the same dealer and blinds", () => {
+    const game = gameState();
+    playTo(game, 3);
+    dealNewHand(game, 10 * MINUTE_MS);
+    const before = snapshot(game);
+    betTo(game, dealtHand(game).currentPlayer!, 400);
+    finishHand(game, 1);
+
+    assert.ok(undoLastHand(game, 99 * MINUTE_MS));
+    assert.deepEqual(game, before);
+  });
+
+  test("also undoes a next hand that was already dealt", () => {
+    const game = gameState();
+    playTo(game, 2);
+    dealNewHand(game, 10 * MINUTE_MS);
+    const before = snapshot(game);
+    finishHand(game, 2);
+    dealNewHand(game, 11 * MINUTE_MS);
+    betTo(game, dealtHand(game).currentPlayer!, 500);
+
+    assert.ok(undoLastHand(game, 99 * MINUTE_MS));
+    assert.deepEqual(game, before);
+  });
+
+  test("keeps the blind level of the undone hand, by hands or by time", () => {
+    for (const schedule of [
+      { unit: "hands", every: 1, raiseType: "multiply", raiseBy: 2 },
+      { unit: "minutes", every: 2, raiseType: "add", raiseBy: 100 },
+    ] satisfies BlindSchedule[]) {
+      const game = gameState(schedule);
+      game.blindPlans = [
+        { effectiveHand: 1, effectiveAt: 0, baseBigBlind: 100, schedule },
+      ];
+      playTo(game, 3, 0);
+      dealNewHand(game, 5 * MINUTE_MS);
+      const before = snapshot(game);
+      finishHand(game, 0);
+      dealNewHand(game, 9 * MINUTE_MS);
+
+      assert.ok(undoLastHand(game, 60 * MINUTE_MS));
+      assert.deepEqual(game, before, schedule.unit);
+    }
+  });
+
+  test("takes back a rebuy made after the undone hand", () => {
+    const game = gameState();
+    playTo(game, 1);
+    dealNewHand(game, 10 * MINUTE_MS);
+    const before = snapshot(game);
+    const hand = dealtHand(game);
+    const loser = hand.currentPlayer!;
+    betTo(game, loser, game.players[loser].stack + hand.committed[loser]);
+    finishHand(game, (loser + 1) % 3);
+    buyInPlayer(game, loser);
+
+    assert.ok(undoLastHand(game));
+    assert.deepEqual(game, before);
+  });
+
+  test("finds the dealer for games saved before the fuller undo record", () => {
+    const game = gameState();
+    playTo(game, 2);
+    dealNewHand(game, 10 * MINUTE_MS);
+    const before = snapshot(game);
+    finishHand(game, 0);
+    const last = game.lastHand!;
+    game.lastHand = {
+      stacksBefore: last.stacksBefore,
+      buyInsBefore: last.buyInsBefore,
+    };
+
+    assert.ok(undoLastHand(game, 10 * MINUTE_MS));
+    assert.equal(game.dealerIndex, before.dealerIndex);
+    assert.deepEqual(game.players, before.players);
+    assert.equal(
+      dealtHand(game).bigBlindIndex,
+      before.hand!.bigBlindIndex,
+    );
+  });
+});
+

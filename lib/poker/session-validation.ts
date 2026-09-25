@@ -1,5 +1,5 @@
-import { timingSafeEqual } from "node:crypto";
-
+import { deriveSessionAccounting } from "./accounting.ts";
+import { isValidRebuy, MAX_BUY_INS } from "./buy-ins.ts";
 import type {
   BlindHistory,
   BlindSchedule,
@@ -141,7 +141,7 @@ export function validateSession(input: unknown): PokerSession {
   const ended = asSafeInteger(candidate.ended, "ended", { min: date });
   const ante = asSafeInteger(candidate.ante, "ante", { min: 1 });
   const startStack = asSafeInteger(candidate.startStack, "starting stack", {
-    min: 0,
+    min: 1,
   });
   const hands = asSafeInteger(candidate.hands, "hands", { min: 1 });
   const blindHistory =
@@ -185,18 +185,19 @@ export function validateSession(input: unknown): PokerSession {
       if (
         !Array.isArray(result.buyIns) ||
         result.buyIns.length < 1 ||
-        result.buyIns.length > 64
+        result.buyIns.length > MAX_BUY_INS
       ) {
         throw new Error("Invalid buy-in history");
       }
       const parsedBuyIns = result.buyIns.map((amount, index) =>
         asSafeInteger(amount, "buy-in amount", { min: index === 0 ? 0 : 1 }),
       );
-      const validHalves = parsedBuyIns.every(
+      const validRebuys = parsedBuyIns.every(
         (amount, index) =>
-          index === 0 || amount === Math.floor(parsedBuyIns[index - 1] / 2),
+          index === 0 ||
+          isValidRebuy(amount, parsedBuyIns[index - 1], startStack),
       );
-      if (parsedBuyIns[0] !== startStack || !validHalves) {
+      if (parsedBuyIns[0] !== startStack || !validRebuys) {
         throw new Error("Invalid buy-in sequence");
       }
       const invested = parsedBuyIns.reduce(
@@ -217,7 +218,7 @@ export function validateSession(input: unknown): PokerSession {
     };
   });
 
-  return {
+  const session = {
     id,
     ...(name ? { name } : {}),
     date,
@@ -228,13 +229,6 @@ export function validateSession(input: unknown): PokerSession {
     hands,
     results,
   };
-}
-
-export function passwordMatches(candidate?: string | null, expected?: string) {
-  if (!candidate || !expected) return false;
-  const supplied = Buffer.from(candidate);
-  const secret = Buffer.from(expected);
-  return (
-    supplied.length === secret.length && timingSafeEqual(supplied, secret)
-  );
+  deriveSessionAccounting(session);
+  return session;
 }

@@ -1,13 +1,12 @@
+import { MAX_BUY_INS } from "./buy-ins.ts";
 import type {
   BlindPlan,
   BlindSchedule,
+  CompletedHand,
   GameState,
-  LeaderboardEntry,
-  PokerSession,
+  RaiseRecord,
 } from "./types";
 
-export const GAME_STORAGE_KEY = "pokerLedger.v1";
-export const HISTORY_STORAGE_KEY = "pokerLedger.history.v1";
 export const STAGES = ["PREFLOP", "FLOP", "TURN", "RIVER"] as const;
 export const MINUTE = 60_000;
 export const DEFAULT_BLIND_SCHEDULE: BlindSchedule = {
@@ -21,16 +20,29 @@ export function formatRupees(value: number) {
   return `₹${Number(value).toLocaleString("en-IN")}`;
 }
 
+const chipFormat = new Intl.NumberFormat("en-IN", { signDisplay: "exceptZero" });
+const percentFormat = new Intl.NumberFormat("en-IN", {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+  signDisplay: "exceptZero",
+});
+
+/** Signed chip amount for standings, without implying real money. */
+export function formatChipChange(value: number) {
+  return chipFormat.format(value);
+}
+
+/** Signed percentage rounded for display only. */
+export function formatPercent(value: number) {
+  return `${percentFormat.format(value)}%`;
+}
+
 export function formatDate(timestamp: number) {
   return new Date(timestamp).toLocaleDateString("en-IN", {
     day: "numeric",
     month: "short",
     year: "numeric",
   });
-}
-
-export function playerKey(name: string) {
-  return name.trim().toLowerCase().replace(/\s+/g, " ");
 }
 
 export function activeIndexes(game: GameState) {
@@ -55,10 +67,12 @@ export function totalBuyIns(game: GameState, playerIndex: number) {
 export function nextBuyIn(game: GameState, playerIndex: number) {
   const player = game.players[playerIndex];
   if (!player || game.hand || player.stack !== 0) return null;
-  const previous = playerBuyIns(game, playerIndex).at(-1) ?? 0;
-  const amount = Math.floor(previous / 2);
+  // Every rebuy is the full starting stack.
+  const amount = game.startStack;
   return (
-    amount > 0 && Number.isSafeInteger(totalBuyIns(game, playerIndex) + amount)
+    amount > 0 &&
+    playerBuyIns(game, playerIndex).length < MAX_BUY_INS &&
+    Number.isSafeInteger(totalBuyIns(game, playerIndex) + amount)
   )
     ? amount
     : null;
@@ -123,21 +137,43 @@ export function nextPlayerToAct(game: GameState, from: number) {
   return null;
 }
 
+/** Bet slider stops between the minimum and all in, as multiples of the minimum. */
+export const BET_PRESET_MULTIPLES = [1.5, 2, 5, 10] as const;
+
+/**
+ * Exact chip amounts the bet slider snaps to: the minimum, each multiple of
+ * it rounded to a whole chip, then the whole stack (all in). Stops at or
+ * above the stack collapse into all in; a stack no larger than the minimum
+ * leaves only all in.
+ */
+export function betStops(minimum: number, stack: number) {
+  if (stack <= 0) return [];
+  if (minimum >= stack) return [stack];
+  const multiples = BET_PRESET_MULTIPLES.map((multiple) =>
+    Math.round(minimum * multiple),
+  ).filter((amount) => amount > minimum && amount < stack);
+  return [...new Set([minimum, ...multiples, stack])];
+}
+
+/** How much a raise must add this street: the last full bet or raise, or the big blind. */
+export function raiseSize(game: GameState) {
+  return game.hand?.raiseSize ?? game.ante;
+}
+
+/** False after a short all-in: the player already acted, so they may only call or fold. */
+export function mayRaise(game: GameState, playerIndex: number) {
+  return game.hand?.raiseOpen?.[playerIndex] ?? true;
+}
+
+/**
+ * Chips this player must add for the smallest legal bet or raise: the
+ * current bet plus the last full raise (the big blind when nobody has
+ * raised), capped at their stack, which is always allowed as an all in.
+ */
 export function minimumRaise(game: GameState, playerIndex: number) {
   const hand = game.hand;
   if (!hand) return 0;
-
-  const utgIndex = nextEligibleIndex(hand.in, hand.bigBlindIndex);
-  const isUtgOpeningAction =
-    hand.stage === 0 &&
-    playerIndex === utgIndex &&
-    !hand.acted.some(Boolean);
-  const target = isUtgOpeningAction
-    ? game.ante * 2
-    : hand.roundHigh === 0
-      ? game.ante
-      : hand.roundHigh + 1;
-
+  const target = hand.roundHigh + raiseSize(game);
   return Math.max(
     1,
     Math.min(
@@ -145,6 +181,70 @@ export function minimumRaise(game: GameState, playerIndex: number) {
       game.players[playerIndex].stack,
     ),
   );
+}
+
+/**
+ * Updates the betting after a player's chips for this street have been
+ * added to `committed`. Going above the current bet makes everyone else
+ * act again. Only a full raise (adding at least the last raise size) sets
+ * a new raise size and lets players who already acted raise again; a
+ * short all-in doesn't. Returns the rules from before, for undo.
+ */
+export function applyRaiseRules(
+  game: GameState,
+  playerIndex: number,
+): RaiseRecord {
+  const hand = game.hand!;
+  const open = hand.raiseOpen ?? game.players.map(() => true);
+  const before: RaiseRecord = {
+    size: raiseSize(game),
+    open: [...open],
+    full: false,
+  };
+  const total = hand.committed[playerIndex];
+  const increase = total - hand.roundHigh;
+  hand.acted[playerIndex] = true;
+  if (increase > 0) {
+    hand.roundHigh = total;
+    hand.acted = hand.acted.map(
+      (_, index) =>
+        index === playerIndex ||
+        !hand.in[index] ||
+        game.players[index].stack === 0,
+    );
+    if (increase >= before.size) {
+      before.full = true;
+      hand.raiseSize = increase;
+      open.fill(true);
+    }
+  }
+  open[playerIndex] = false;
+  hand.raiseOpen = open;
+  return before;
+}
+
+/** Puts the raise rules back to how they were before an undone action. */
+export function undoRaiseRules(
+  game: GameState,
+  playerIndex: number,
+  before: RaiseRecord | undefined,
+) {
+  const hand = game.hand!;
+  if (before?.full) {
+    hand.raiseSize = before.size;
+    hand.raiseOpen = [...before.open];
+    return;
+  }
+  const open = hand.raiseOpen ?? game.players.map(() => true);
+  open[playerIndex] = before?.open[playerIndex] ?? true;
+  hand.raiseOpen = open;
+}
+
+/** Each street starts with raises of one big blind, open to everyone. */
+export function resetRaiseRules(game: GameState) {
+  const hand = game.hand!;
+  hand.raiseSize = game.ante;
+  hand.raiseOpen = game.players.map(() => true);
 }
 
 export function smallBlindFor(bigBlind: number) {
@@ -350,12 +450,14 @@ export function dealNewHand(game: GameState, now = Date.now()) {
     smallBlindIndex,
     bigBlindIndex,
     currentPlayer: null,
+    dealtAt: now,
     dealerIndexBefore,
     anteBefore,
     blindLevelBefore,
     blindsBefore,
     blindLevelsBefore,
   };
+  resetRaiseRules(game);
   game.hand.currentPlayer = nextPlayerToAct(game, bigBlindIndex);
 }
 
@@ -365,6 +467,83 @@ function previousEligibleIndex(inHand: boolean[], from: number) {
     if (inHand[index]) return index;
   }
   return -1;
+}
+
+export function belongsToHand(line: string, handNo: number) {
+  return (
+    line.startsWith(`Hand ${handNo} `) ||
+    line.startsWith(`Hand ${handNo}:`) ||
+    line.startsWith(`H${handNo} `) ||
+    line.startsWith(`H${handNo}:`)
+  );
+}
+
+/** Recorded when a hand's pot is awarded, before the hand is cleared. */
+export function completedHandRecord(game: GameState): CompletedHand {
+  const hand = game.hand!;
+  return {
+    stacksBefore: [...hand.stacksBeforeHand],
+    buyInsBefore: game.players.map((_, index) => [
+      ...playerBuyIns(game, index),
+    ]),
+    handNo: hand.no,
+    dealtAt: hand.dealtAt,
+    dealerIndexBefore: hand.dealerIndexBefore,
+    anteBefore: hand.anteBefore,
+    blindLevelBefore: hand.blindLevelBefore,
+    blindsBefore: hand.blindsBefore,
+    blindLevelsBefore: hand.blindLevelsBefore
+      ? structuredClone(hand.blindLevelsBefore)
+      : undefined,
+  };
+}
+
+/**
+ * Undoes the last completed hand, and the next hand if it has been dealt,
+ * then deals the undone hand again from the same seat, blinds and time, so
+ * it matches the moment it was first dealt. Only one hand can be undone.
+ */
+export function undoLastHand(game: GameState, now = Date.now()) {
+  const last = game.lastHand;
+  if (!last) return false;
+  const undoneNumber =
+    last.handNo ?? (game.hand ? game.hand.no - 1 : game.handNo);
+  const currentHandNumber = game.hand?.no;
+  // The dealer of the undone hand, for games saved without the record.
+  const undoneDealer =
+    game.hand?.no === undoneNumber + 1
+      ? (game.hand.dealerIndexBefore ?? game.dealerIndex)
+      : game.dealerIndex;
+
+  game.players.forEach((player, index) => {
+    player.stack = last.stacksBefore[index] ?? player.stack;
+    player.buyIns = last.buyInsBefore?.[index] ?? player.buyIns;
+  });
+  game.log = game.log.filter(
+    (line) =>
+      !belongsToHand(line, undoneNumber) &&
+      (!currentHandNumber || !belongsToHand(line, currentHandNumber)),
+  );
+  game.handNo = undoneNumber - 1;
+  if (last.dealerIndexBefore !== undefined) {
+    game.dealerIndex = last.dealerIndexBefore;
+  } else {
+    // Any seat whose next funded player is the undone dealer deals the
+    // same positions again.
+    const funded = last.stacksBefore.map((stack) => stack > 0);
+    game.dealerIndex = previousEligibleIndex(funded, undoneDealer);
+  }
+  if (last.anteBefore !== undefined) {
+    game.ante = last.anteBefore;
+    game.blindLevel = last.blindLevelBefore ?? game.blindLevel;
+    game.blinds = last.blindsBefore ?? null;
+    game.blindLevels = structuredClone(last.blindLevelsBefore ?? []);
+  }
+  game.lastHand = null;
+  game.winnerAnnouncement = null;
+  game.hand = null;
+  dealNewHand(game, last.dealtAt ?? now);
+  return true;
 }
 
 /** Refunds the current hand and restores the state from immediately before it was dealt. */
@@ -399,37 +578,4 @@ export function returnToBetweenHands(game: GameState) {
   game.winnerAnnouncement = null;
   game.hand = null;
   return true;
-}
-
-export function buildLeaderboard(sessions: PokerSession[]) {
-  const entries = new Map<string, LeaderboardEntry>();
-
-  sessions.filter((session) => !session.discardedAt).forEach((session) => {
-    session.results.forEach((result) => {
-      const key = result.playerId
-        ? `id:${result.playerId}`
-        : `name:${playerKey(result.name)}`;
-      const entry = entries.get(key) ?? {
-        playerId: result.playerId,
-        name: result.name,
-        net: 0,
-        sessions: 0,
-        hands: 0,
-        wins: 0,
-        best: result.net,
-        worst: result.net,
-      };
-
-      entry.name = result.name;
-      entry.net += result.net;
-      entry.sessions += 1;
-      entry.hands += session.hands;
-      if (result.net > 0) entry.wins += 1;
-      entry.best = Math.max(entry.best, result.net);
-      entry.worst = Math.min(entry.worst, result.net);
-      entries.set(key, entry);
-    });
-  });
-
-  return [...entries.values()].sort((a, b) => b.net - a.net);
 }
