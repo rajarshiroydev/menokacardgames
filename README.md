@@ -68,6 +68,7 @@ npm run build
 - `lib/auth/`, `lib/accounts/` — sign-in, recent sign-in checks and account lifecycle
 - `migrations/` — versioned database migrations and data backfills
 - `schema.sql` — complete current Postgres schema
+- `scripts/` — operator helpers: `split-migration.mjs` turns a migration into the statement list the Neon MCP `run_sql_transaction` tool takes; `neon-auth.mjs <branchId> get|harden|add-domain|no-localhost` checks or locks down a branch's Neon Auth settings (reads `NEON_API_KEY` from `.env.local`, never prints it)
 - `test/` — Node test runner suites
 
 ## Planning and project context
