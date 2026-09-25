@@ -15,7 +15,7 @@ Updated 2026-09-25 on **`main`**. **Production runs `244611c`**: the multi-user 
 
 ## Next steps
 
-1. **The user sets a name on production** (Players → You). The live account has none yet, and a name is needed before sending or accepting requests. Then the user shares their user code with real friends.
+1. **Name on first sign-in (committed on `main`, not pushed):** an account without a name sees a "What should friends call you?" screen before the app (`components/name-setup.tsx`, gated in `app/page.tsx`). The user checked it on the dev server as roystark24@gmail.com. Pushing `main` releases it (with the user's go-ahead); the live account then gets the screen on its next visit, after which the user shares their user code with friends.
 2. **Friend network follow-ups (ideas, not decided):** a badge or notification for new requests (today they appear only when the Players screen opens or on Refresh); a Home tile for groups.
 3. **Healthchecks.io alerts:** the check pings green but has no notification integration; the user adds email.
 4. **Firewall:** "Limit API writes" is in **Log** mode since 2026-09-25. Around 2026-10-02, check Firewall → Overview, switch it to 429 with the user's OK, then send 31 quick writes and confirm "Too many requests". Friend actions are POSTs, so they count.
