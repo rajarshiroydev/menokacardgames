@@ -1,15 +1,15 @@
 # Feature plan: accounts and normalized standings
 
-Updated: 2026-09-25. Status: the multi-user version is live in production (cutover 2026-09-25); follow-ups are listed in the pending register.
+Updated: 2026-09-25. Status: the multi-user version is live in production (cutover 2026-09-25), and so are the Scoreboard redesign and the live standings link (released 2026-09-25, `13f9838`); follow-ups are listed in the pending register. The user accepted a friend network model on 2026-09-25; it is being built one step at a time (see the 2026-09-25 friend network entry).
 
 This is the canonical living feature-planning document. Add future feature plans here, record decisions and acceptance criteria, and update status as work progresses. Detailed designs may be linked from here; avoid competing roadmaps.
 
 ## Confirmed decisions
 
-- Work from `main`. The Scoreboard redesign resumed on 2026-09-25 on `ui-sporty-glass-refresh`, with `main` merged in; it reaches `main` only after the user reviews it.
+- Work from `main`. The Scoreboard redesign and the live standings link reached `main` and production on 2026-09-25 (`13f9838`), after the user's review and a Vercel preview test.
 - Each signed-in host owns a separate friend list, sessions and leaderboard.
 - Friends are player names/profiles managed by the host. They do not need accounts.
-- No groups, invitations, shared memberships, or friend-account claiming in the initial release. The same person in two hosts' lists has two independent profiles and histories.
+- ~~No groups, invitations, shared memberships, or friend-account claiming in the initial release.~~ Replaced on 2026-09-25 by the user-accepted friend network: people connect by friend request using an app-generated user code, both appear in each other's friend list, a host approves every link between a login and one of their players, and a linked person sees each linked host's standings list. Player profiles stay host-owned; the same person in two hosts' lists still has two separate histories, now linked to one account.
 - Use average session return percentage, including all buy-ins, with the supporting session count shown for context.
 - Implement the transition one reviewed step at a time and report after each step. Push only when requested.
 - Use Neon Managed Better Auth with email magic links only for the initial login flow. Password and social login are out of the initial scope.
@@ -23,7 +23,7 @@ At planning start (2026-09-20) the app had one global, unauthenticated ledger: g
 
 One host signs in, adds friends to their list, creates games from that list, records actions as today, and saves results to their private history. The account itself need not be a participant. The host may add their own player profile if they play. Two hosts can independently have a player called Rajarshi without collisions or access to each other's results.
 
-An account owns exactly one private ledger initially. Do not add unnecessary group switching, invitations, participant login or collaboration. Future sharing is a separate feature with explicit authorization and migration design.
+An account owns exactly one private ledger initially. Do not add unnecessary group switching, invitations, participant login or collaboration. Future sharing is a separate feature with explicit authorization and migration design. *(Superseded 2026-09-25 by the friend network entry: accounts connect to each other, while each still owns one ledger.)*
 
 Keep existing seating, blinds, bets, all-in behavior, rebuys, confirmations, undo and save flows. Account onboarding and explicit handling of old drafts are the necessary new steps. The first release has one recording device per active session; live collaborative editing and cloud draft handoff are deferred.
 
@@ -162,7 +162,7 @@ Official sources checked 2026-09-20; recheck during implementation/release:
 
 | Item | Status / next step |
 | --- | --- |
-| Host-owned accounts, guest friends | Confirmed by user; no invitations or groups in initial scope |
+| Host-owned accounts, guest friends | Confirmed by user for the initial release; extended 2026-09-25 by the accepted friend network (still no groups) |
 | Average session return | Explicitly confirmed by user |
 | Ranking eligibility | Confirmed: rank from the first eligible session, with no provisional label; show session count |
 | Login methods/provider | Confirmed: Neon Managed Better Auth with email magic links only. Enforced on the isolated branch in Step 3N (password sign-up and shared Google disabled); repeat on the production branch at cutover |
@@ -170,7 +170,7 @@ Official sources checked 2026-09-20; recheck during implementation/release:
 | Account deletion/backup retention | Confirmed: immediate lock/hide/sign-out, 30-day recovery, then automated permanent purge. Request, lock and recovery built in Step 3K. The disclosure uses Neon's current 6-hour history retention (free plan, `history_retention_seconds` 21600); recheck if the plan changes. Purge (Step 3L) pending decisions below |
 | Purge job decisions (Step 3L) | Decided 2026-09-24: daily Vercel Cron calling a `CRON_SECRET`-protected endpoint; a Neon project-scoped API key, stored only in Vercel production, calls the documented delete-user endpoint for the branch; Healthchecks.io monitors each run and emails on failure or a missed run. The purge also gets its own database credential, separate from `menoka_app`. Ordering (mark `purging`, delete owned rows, delete the Auth identity, record the outcome) and retries are defined during implementation |
 | Multi-user transition | Live in production since 2026-09-25 (`0a8b814`). Remaining: the firewall rule, the later claims, a pilot with a second host, and the open decisions below |
-| Sporty glass design ("Scoreboard") | Built 2026-09-25 on `ui-sporty-glass-refresh` from `design_handoff_sporty_glass_redesign/` and committed (`ed56525`) with the user's OK; awaiting the user's review, a Vercel preview check, and a decision on merging to `main` |
+| Sporty glass design ("Scoreboard") | Built 2026-09-25 (`ed56525`), tested by the user on a Vercel preview, and released to production on 2026-09-25 (`13f9838`). Not yet checked: sign-in and locked-account pages beyond a glance, the confirmation sheets, rules sheet, blind editor, import review, winner overlay, drag reordering by touch, iOS Safari `backdrop-filter` |
 | Recent sign-in window for permanent deletion | Kept at 10 minutes by user decision (2026-09-24). Revisit if real use shows it is too strict or too loose; longer windows are a one-line change |
 | Magic-link verifier in request logs | Checked and accepted 2026-09-24: Vercel's request log keeps the verifier, but it is spent after one use (`VERIFICATION_NOT_FOUND` on replay) |
 | Rate limiting (security hardening) | Decided 2026-09-24: Vercel Firewall (WAF) rate limiting, no app-side counters. Hobby allows one rate-limit rule per project (fixed window, 10 s to 10 min, keyed by IP), so a single rule covers every non-GET `/api/*` request, including sign-in link requests. Published 2026-09-25 in Log mode; switch to 429 after a week of clean logs (see the auth and firewall checklist). The app already shows a clear message for 429 |
@@ -183,10 +183,10 @@ Official sources checked 2026-09-20; recheck during implementation/release:
 | Post-cutover snapshot | Open (2026-09-25): the free plan keeps one snapshot, and it is the pre-migration `snap-sparkling-sun-aykr4j1y`, which is only useful for a full rollback. Replacing it with a post-cutover snapshot gives up that rollback point |
 | Custom SMTP for sign-in emails | Deferred by user choice: Neon's shared sender is used. Revisit if emails are slow, land in spam, or hit the shared sender's rate limit |
 | Retire superseded files | Kept for now by user decision (2026-09-25). Delete `migrations/data/0003_backfill_rajarshi_reviewed_history.sql` (development-only, replaced by 0008) once nothing depends on it, and shrink `HISTORICAL-OWNERSHIP.md` to a note once the Emon-led and Rahul Basak claims are done. Update the docs that mention them in the same change |
-| Live standings link for players | Built 2026-09-25 on branch `live-view` (see the dated entry); the user tested it on a Vercel preview from a phone and asked for two layout changes, both done. Migration 0009 is applied to production. Release (fast-forward `main` to `live-view`, together with the redesign) was requested and then paused by the user for the invitations idea; confirm before releasing |
-| Host invitations / user network | New idea 2026-09-25, not started. The user wants the app to stay behind sign-in, with hosts inviting people to join (a network of users). The idea of visitors seeing standings without signing in was dropped. This reverses the "no invitations or shared ledgers" decision; the next step is a proposal entry with decisions (see `HANDOFF.md`) |
+| Live standings link for players | Released to production on 2026-09-25 (`13f9838`, with the redesign); migration 0009 was already applied. Not yet checked on production: the iOS share sheet, a locked host screen, and CDN caching of the public GET |
+| Host invitations / friend network | Accepted by the user 2026-09-25 (see the dated entry "friend network (accepted)"): friend requests by app-generated user code, both people in each other's friend list, host approval for every player link, each linked host's standings visible, unfriending unlinks, request limits, self-unlinking, no combined score. Building in three reviewed steps; step 1 (identity basics) in progress |
 | Cloud draft sync / device handoff | Deferred; needs conflict policy |
-| Shared ledgers/invitations | Requested 2026-09-25; see "Host invitations / user network" above |
+| Shared ledgers/invitations | Requested 2026-09-25; see "Host invitations / friend network" above |
 | App Store / Play Store | Future separate plan after web stability |
 
 ## Decision history and planning convention
@@ -304,6 +304,95 @@ Rate limiting: the user chose Vercel Firewall. The Hobby plan allows one rate-li
 - unauthenticated PUT → 401 and cross-site DELETE → 403.
 
 No game was saved. **Not yet checked:** a real phone (iOS Safari share sheet, QR scanning, background tabs), a Vercel preview, and CDN caching behaviour on Vercel. **Production:** unchanged; applying 0009 to `br-small-sea-ayumyssr` needs the user's go-ahead. **Rollback:** `DROP FUNCTION read_live_view(bytea); DROP TABLE live_views;` removes only live links.
+
+2026-09-25 release (redesign + live standings): The user confirmed the paused release at the start of the next session. `main` fast-forwarded from `a057ca2` to `13f9838` (the redesign `ed56525`, the live standings link and its two phone-test fixes) and was pushed; Vercel's production build was Ready in 51 seconds. No database step was needed, because migration 0009 was already on `br-small-sea-ayumyssr`. On the live site, the redesigned sign-in page loaded with no console errors, and `GET /api/live/<made-up token>` returned 404 "This game has ended" with `no-store`.
+
+2026-09-25 friend network (accepted): **Status:** the user accepted the model on 2026-09-25 and asked to proceed with the build steps below. Every open question is answered (two rounds of user decisions below). It replaces the earlier "read-only members first" phasing from `HANDOFF.md`. Decisions are marked **User decided**; everything else is the agent's recommendation.
+
+**Problem.** Today each host keeps a private list of friends who are only names. **User's direction:**
+- the app stays behind sign-in;
+- people find each other by user ID and send a friend request; once accepted, they are connected and in each other's friend list;
+- a host can still add a player who hasn't signed up; that player gets a unique ID;
+- when that person later creates an account, they ask the host who recorded their games to link that history to their account;
+- today's players (such as the 9 in Rajarshi's ledger) join the same way: they sign in with their email and connect their account to their existing player;
+- the goal is a graph of friends, designed as one model now, because the app will later become a mobile app.
+
+The user dropped the earlier ideas of public all-time standings, read-only members as a separate first phase, and host-sent invite links.
+
+**Starting facts.**
+- Every magic-link sign-in already provisions its own account and empty ledger (`lib/accounts/server.ts`). So a new user can already host their own games; what's missing is the connection between people.
+- Accounts hold no display name or user ID, only the Neon Auth identity (email). Player profiles belong to exactly one host (`players.owner_id`).
+- Row security ties every table to `current_app_account_id()` (`migrations/0004_database_enforced_isolation.sql`). Any view of another account's data needs new, narrowly scoped `SECURITY DEFINER` functions, like `read_live_view` in `0009_live_views.sql`.
+- The firewall rule "Limit API writes" counts only non-GET `/api/*` requests.
+
+**One mechanism for everyone (agent's observation).** An existing player and a future host-added player are the same case: a player profile in some host's list with no login. So no special migration is needed for today's players. They sign in, and the host links them through the same request-and-approve step.
+
+**Model.**
+- **People are accounts.** The graph's nodes are accounts. Player profiles stay host-owned, so each host keeps their own names, history and standings exactly as today. Linking never moves or copies history.
+- **User ID. User decided: an app-generated code.**
+  - Each account gets a random code, for example `7KQ4-M2XP`, and a display name the person chooses.
+  - Recommended: 8 characters from an unambiguous alphabet (no 0/O or 1/I/L), unique, and replaceable by its owner if it leaks.
+  - Searching finds only an exact code and shows only the display name. There is no browsing, name search or directory, and emails are never shown to other users. Search is a POST, so the firewall's write limit also slows guessing.
+- **Player ID.**
+  - Every player profile gets its own short code, visible to that player's host, for players who haven't signed up.
+  - The host shares it with the person so their request can say "I'm your player `P-…`".
+  - It is a convenience, not a key: nothing links without the host's approval.
+- **Friend request.**
+  - A sends B a request by B's user code.
+  - A decides A's own side at sending time: B becomes a new player in A's list, or is linked to A's existing player for B.
+  - A may also add "I'm your player `P-…`" to claim a profile in B's list.
+- **Accepting. User decided: the host approves every link.** B sees the request and chooses Accept or Decline. On Accept, B decides B's own side: link A to one of B's existing players (preselected when A gave a valid player code), or add A as a new player. A wrong claim is simply declined or pointed at the right player. Ownership is never inferred from names, stakes or chip history.
+- **After accepting. User decided: both friend lists.**
+  - The two accounts are connected, and each appears as a linked player in the other's friend list, so either can host the other.
+  - Each side's choice of which existing player to link prevents duplicates.
+- **Request limits. User decided:** at most 20 outgoing pending requests per person; after a decline, the same person can't send another request to the same person for 7 days.
+- **Links.**
+  - A profile links to at most one account, and an account to at most one profile per host.
+  - A host can unlink a profile later, for example after a mistake, and link it again through a new request.
+- **Group standings. User decided:** besides their own ledger, a signed-in person sees the standings list of every host whose ledger has them as a linked player: all players ranked, exactly as that host sees it. That shows how they do in each group.
+  - The standings are computed on the server by `lib/poker/standings.ts` from that host's data, using that host's names for the players.
+  - It covers only the standings list, not the host's game history, graph, discarded items or anything editable.
+  - Access ends as soon as the link or the connection ends.
+- **No combined score across hosts. User decided:** it would only create confusion; each group's standings already show how a person does in that group.
+- **Leaving and deletion.**
+  - **User decided:** removing a friend ends the connection and unlinks both sides' profiles; each host keeps their history.
+  - **User decided:** a person sees which hosts have them linked, and can unlink themselves from any of them.
+  - Deleting an account removes its codes, requests, links and connections. Other hosts' history stays, because the profiles are theirs.
+  - The 30-day purge must cover the new tables, and the deletion disclosure must say so.
+- **Legacy claims** (the Emon-led group and Rahul Basak) are unchanged. Those hosts first get their games through `claim_reviewed_history`, then connect with friends like anyone else.
+- **Later phases (named, not designed):** co-hosts recording games for another host; cloud game handoff between devices; push notifications; showing your user code as a QR code for the mobile app.
+- **Mobile-ready.** Every step is an API with typed contracts.
+
+**Non-goals.** A combined score or screen across hosts, public profiles or search by name, groups or clubs, co-hosting, merging two hosts' histories into one ledger, changing the ranking formula, invite links by email or SMS, real-money features.
+
+**Migration impact (to plan, not to do).**
+- Accounts gain a user code and a display name. Existing accounts need codes on first use or in a backfill.
+- Players gain a player code and an optional linked account (unique per owner).
+- New tables: friend requests (pending, accepted, declined or cancelled, with each side's mapping) and connections.
+- All new data gets owner row security and cascades on account deletion. `SECURITY DEFINER` functions cover the cross-account steps: code search, sending, accepting and reading linked results. Each returns only what the viewer may see.
+- Versioned migration 0010+, rehearsal on `multi-user-auth` (`br-little-rain-ay5fufwv`) with at least three accounts (host, friend, stranger), then the user's go-ahead for each production step on `br-small-sea-ayumyssr`. A rollback plan with each migration.
+
+**Acceptance criteria (draft).**
+- A stranger can't see a host's players, games or standings, even with a guessed user code, player code or IDs. Search reveals only a display name for an exact code.
+- A player code alone links nothing. Accepting one request twice, or two requests for the same profile, links exactly one account.
+- Neither side can change the other's players, games or standings. Each side's list changes only by that side's own choice at send or accept time.
+- Unlinking, unfriending or deleting either account immediately removes cross-account access. The purge removes the new rows.
+- Existing two-account isolation tests and every game flow still pass.
+- `FEATURES.md` documents every limit, such as code format, pending-request limits and what a linked person sees.
+
+**User decisions, round 2 (2026-09-25).**
+1. A linked person sees each linked host's standings list, next to their own ledger (see Group standings).
+2. Removing a friend unlinks both sides.
+3. No combined cross-host view or score at all: the user said it would only create confusion.
+4. The request limits (20 outgoing pending, 7 days after a decline) are accepted.
+5. A person sees which hosts have them linked and can unlink themselves.
+
+**Proposed build steps (each one reviewed, rehearsed and released separately).**
+1. **Identity basics.** Migration 0010: account user codes and display names, player codes, and the per-owner optional linked account on players. A profile section to set a display name and see or replace your code, and player codes on the host's player rows. There is no cross-account access yet.
+2. **Friend requests.** Migration 0011: requests and connections, with exact-code search (POST), send, accept or decline with each side's player choice, cancel, the request limits, unfriend (unlinks both sides) and self-unlink.
+3. **Group standings.** A `SECURITY DEFINER` read function returning a linked host's standings data only while the viewer is linked and connected and both accounts are active, plus a screen listing each group's standings.
+
+Each step extends the purge, the deletion disclosure, `FEATURES.md` and the isolation tests (host, friend, stranger), and is applied to production only with the user's go-ahead.
 
 ### Purge go-live checklist (production, requires separate authorization)
 

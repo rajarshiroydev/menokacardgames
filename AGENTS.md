@@ -23,7 +23,7 @@ Start with `docs/HANDOFF.md` (current state and next step), then read `docs/PROJ
 ## Working agreements
 
 - Never push unless explicitly requested. Preserve paused branches and unrelated local work.
-- The Scoreboard UI redesign is in review on `ui-sporty-glass-refresh`. The multi-user version is live (2026-09-25); work continues one reviewed step at a time. Update `docs/HANDOFF.md` at the end of each session.
+- The multi-user version, the Scoreboard redesign and the live standings link are live (2026-09-25); work happens on `main`, one reviewed step at a time. A friend network (friend requests, linking logins to players) was accepted on 2026-09-25 and is being built in reviewed steps. Update `docs/HANDOFF.md` at the end of each session.
 - Production data changes (claims, migrations) need the user's go-ahead in chat for each step. Name Neon branches by ID, never by console name.
 - Keep preview on port 3005 available during UI work; inspect the existing listener before starting another.
 - Preserve betting, blinds, seating, rebuys, undo and session flows unless explicitly changing them.

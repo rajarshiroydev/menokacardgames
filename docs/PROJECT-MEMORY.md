@@ -11,11 +11,11 @@ Updated 2026-09-25. Durable working agreements, decisions and environment facts,
 - Keep [`FEATURES.md`](./FEATURES.md) (plain language, for non-technical readers) updated in the same change as any user-visible behaviour, with exact numbers and limits.
 - Record decisions and status in `FEATURE-PLAN.md`; record rehearsals in `MIGRATION-REHEARSALS.md`.
 - Agents never see or handle secrets. The user adds secret values to `.env.local` and Vercel. Scripts may read `.env.local` but must never print values; check presence with `grep -c "^NAME="`.
-- The Scoreboard UI redesign resumed on 2026-09-25 on `ui-sporty-glass-refresh` (with `main` merged in). It reaches `main` only after the user reviews it. The handoff files live untracked in `design_handoff_sporty_glass_redesign/`.
+- The Scoreboard UI redesign and the live standings link were released to production on 2026-09-25 (`13f9838`). The design handoff files stay untracked in `design_handoff_sporty_glass_redesign/`; the branches `ui-sporty-glass-refresh` and `live-view` are now contained in `main`.
 
 ## Confirmed product decisions
 
-- One signed-in host owns a private friend list, games and standings. Friends are names and need no account. No groups, invitations or shared ledgers in the initial release.
+- One signed-in host owns a private friend list, games and standings. Friends are names and need no account until they sign up and link. No groups or shared ledgers. **Friend network (accepted 2026-09-25):** people connect by friend request using an app-generated user code and appear in each other's friend list; a host approves every link between a login and one of their existing players; a linked person sees each linked host's standings list; no combined score across hosts. Details and build steps are in the plan.
 - Ranking is average session return: the mean of `100 × (ending − invested) / invested` per eligible session, including every rebuy. Players are ranked from their first eligible session, with no provisional label, and the session count is shown. All supporting stats cover eligible sessions only.
 - Sign-in is Neon Managed Better Auth with email magic links only (links expire after 5 minutes). Password sign-up and shared Google are disabled on the development and production branches; any new Neon branch needs the same check, because Neon enables them by default. Emails use Neon's shared sender by user choice.
 - Rate limiting uses one Vercel Firewall rule (the Hobby plan allows one), "Limit API writes", published 2026-09-25 in Log mode; it moves to 429 after a week of clean logs.
