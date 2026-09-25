@@ -1,6 +1,6 @@
 # Menoka card games
 
-A host's record of casual poker sessions, player investments and results. Account terminology describes the planned transition; implementation status lives in the feature plan.
+A host's record of casual poker sessions, player investments and results. Each signed-in host has a private ledger; implementation status lives in the feature plan.
 
 ## Language
 
@@ -23,3 +23,7 @@ A host's record of casual poker sessions, player investments and results. Accoun
 **Average session return**: Arithmetic mean of a player's eligible session returns, with equal weight per session.
 
 **Profitable session**: A session with positive net result; not a count of hands won.
+
+**Legacy game**: A game saved in the old shared ledger before accounts existed (before 25 September 2026). It stays unowned and hidden until it is claimed into the reviewed host's ledger.
+
+**Claim**: Copying reviewed legacy games into one host's ledger, with that host's own friend profiles and new game numbers. The original legacy record is kept.

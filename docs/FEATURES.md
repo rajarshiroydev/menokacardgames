@@ -1,6 +1,6 @@
 # Feature list
 
-Updated: 24 September 2026
+Updated: 25 September 2026
 
 This is a plain-language list of everything Menoka Card Games can do today. It is written for anyone, technical or not. It describes how the app behaves right now; plans and future ideas live in the [feature plan](./FEATURE-PLAN.md).
 
@@ -216,6 +216,7 @@ This is a plain-language list of everything Menoka Card Games can do today. It i
 - **Games saved on a device before accounts existed** stay separate and are never added to anyone's ledger automatically.
 - **Unfinished game:** the host can review it and adopt it into their account, as long as they don't already have a game in progress on that device.
 - **Saved games:** the host sees a list with each game's date, big blind and players, ticks the ones that belong to them, and adds only those. Unticked games stay unassigned on the device.
+- **Games from the old shared ledger** (the 32 games saved before 25 September 2026) were reviewed one by one and copied into the account of the host who ran them, numbered from Game 1 in that host's own ledger. Games whose host hasn't signed in yet stay hidden from everyone until they do.
 
 ## 17. Reference and help
 

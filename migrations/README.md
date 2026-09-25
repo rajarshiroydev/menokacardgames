@@ -2,6 +2,8 @@
 
 Apply these files in numeric order with migration credentials. Application runtime credentials must not perform DDL.
 
+**Status:** production (Neon branch `br-small-sea-ayumyssr`) has 0001, 0002 and 0004–0008, applied on 2026-09-25. `data/0003` ran only on the development branch; production uses the 0008 claim function instead. Always target Neon branches by ID, not by console name.
+
 Migration workflow:
 
 1. Create or reset an isolated Neon branch from the intended parent.
@@ -23,6 +25,8 @@ Migration workflow:
 
 `0007_account_purge.sql` adds the purge job's database side. Create the purge login first with SQL, as for `menoka_app`: `CREATE ROLE menoka_purge LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS`. Neon's console cannot reset the password of a role created without one ("cannot update password for role without password"). First give it a random password that nobody sees: `DO $$ BEGIN EXECUTE format('ALTER ROLE menoka_purge WITH PASSWORD %L', replace(gen_random_uuid()::text || gen_random_uuid()::text, '-', '')); END $$`. Then use **Reset password** in the Neon console to get the real credential. The migration refuses an administrative role. `menoka_purge` gets no table privileges, only `EXECUTE` on five `SECURITY DEFINER` functions. They claim accounts more than 30 days past their request (marking them `purging`), check whether a Neon Auth user still exists, record progress or failures in `account_purges`, and delete a claimed account whose identity is gone, cascading to everything it owns. `account_purges` has no foreign key, so its record outlives the account; the Auth user ID is cleared on completion. Every step can be repeated safely.
 
-Data migrations under `migrations/data/` require a reviewed ownership manifest and an explicit target account ID. Run `0003_backfill_rajarshi_reviewed_history.sql` with `psql -v target_account_id=<internal-account-uuid>`. It clones the approved records, keeps source rows unowned, records provenance and aborts if its reconciliation checks fail.
+`0008_claim_reviewed_history.sql` adds the owner-only function `claim_reviewed_history(account, game numbers, friend names, decision)`. It copies reviewed unowned legacy games into one host's ledger with that host's friend profiles, normalized results, buy-ins and provenance, and aborts unless every total reconciles. Rerunning it returns 0. Who gets which games is in `docs/HISTORICAL-OWNERSHIP.md`.
+
+Data migrations under `migrations/data/` require a reviewed ownership manifest and an explicit target account ID. `0003_backfill_rajarshi_reviewed_history.sql` is the development-branch predecessor of 0008, kept for the record. Run it with `psql -v target_account_id=<internal-account-uuid>`. It clones the approved records, keeps source rows unowned, records provenance and aborts if its reconciliation checks fail.
 
 Rollback during development is branch reset. Production rollback must use the release plan's authenticated read-only mode and reconciled forward migration; do not blindly drop ownership structures after owner-scoped writes exist.

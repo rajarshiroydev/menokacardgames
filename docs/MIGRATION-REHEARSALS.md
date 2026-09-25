@@ -1,6 +1,6 @@
 # Migration rehearsals
 
-This log records database migration evidence. It does not authorize production changes.
+This log records the development-branch rehearsal evidence for each migration. "Production changed: no" below describes each rehearsal at the time. The later rehearsals (0008's claim and the full cutover rehearsal on `cutover-rehearsal`) and the production cutover itself are in the decision history of [`FEATURE-PLAN.md`](./FEATURE-PLAN.md).
 
 ## 0001 owner scope foundation
 
@@ -211,3 +211,11 @@ End-to-end run through `GET /api/cron/purge-accounts`:
 | Healthchecks.io | Start and success pings sent without errors |
 
 Rollback for development is branch reset. The migration adds a table, functions and grants. It deletes data only when the job runs, and only for accounts past their 30-day deadline.
+
+## Production application
+
+- Date: 2026-09-25
+- Branch: `br-small-sea-ayumyssr` (production)
+- Applied: 0001, 0002, 0004, 0005, 0006, 0007 and 0008, one transaction each, no errors. `data/0003` is development only.
+- After: 7 `app_migrations` rows, 32 unowned games, 15 unowned players, 0 accounts; `menoka_app` and `menoka_purge` not superusers, no `BYPASSRLS`, not in `neon_superuser`.
+- Then the claim for Rajarshi returned 27, and standings matched the rehearsal. Details are in the plan's "2026-09-25 multi-user production cutover" entry.

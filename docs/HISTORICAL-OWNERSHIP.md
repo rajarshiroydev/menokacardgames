@@ -1,14 +1,14 @@
 # Historical ownership manifest
 
-Updated: 2026-09-24. Source: read-only inventory of the isolated Neon branch `multi-user-auth` (2026-09-20), extended on 2026-09-24 from `vercel-preview`, a same-day copy of production. Production was not queried or changed.
+Updated: 2026-09-25. Source: inventory of the isolated Neon branch `multi-user-auth` (2026-09-20), extended on 2026-09-24 from `vercel-preview`, a same-day copy of production (32 games, 15 players).
 
-This manifest is the review input for assigning the legacy shared ledger to host accounts. Every cohort is deliberately unassigned. Player names, stakes and overlap are context only and must never determine ownership automatically.
+This manifest records who owns each game from the old shared ledger. Every decision below was made by the user; player names, stakes and overlap were context only and must never decide ownership automatically. **Status:** Rajarshi's 27 games were claimed in production on 2026-09-25. The Emon-led group's and Rahul Basak's games stay unowned and hidden until those hosts sign in.
 
-## Session cohorts awaiting owner confirmation
+## Session cohorts and owners
 
 Times are Asia/Kolkata. A cohort groups adjacent sessions with the same participant set only to make review easier; ownership is still decided per session.
 
-| Cohort | Games | Date/time | Starting stack | Players | Proposed owner |
+| Cohort | Games | Date/time | Starting stack | Players | Owner (decided) |
 | --- | --- | --- | --- | --- | --- |
 | A | 5 | 2026-07-28 20:39 | 5,000 | Rajarshi, Soham | Rajarshi |
 | B | 6–7 | 2026-08-02 18:52–21:15 | 10,000 | Debraj, Rajarshi, Shubhankar, Soham | Rajarshi |
@@ -26,7 +26,7 @@ Times are Asia/Kolkata. A cohort groups adjacent sessions with the same particip
 | N | 34–36 | 2026-09-20 18:39–20:13 | 10,000 then 20,000 | Debraj, Rajarshi, Shubhankar, Utsav (36 only) | Rajarshi |
 | O | 37 | 2026-09-20 23:25 | 10,000 | Abhirup, Ashish, Emon | Emon-led group (claimed when its host signs in) |
 
-## Player directory awaiting review
+## Player directory
 
 The production directory (2026-09-24) contains Abhirup, Aiush, Ashish, Ashit, Debraj, Emon, Pratik, Rahul Basak, Rajarshi, Rana, Ratan, Shubhankar, Soham, Supratik and Utsav. Aiush and Ratan have no saved session.
 
@@ -56,15 +56,14 @@ For each target host ledger, create independent player profiles from the session
 
 | Host | Legacy game numbers | Friend list | When |
 | --- | --- | --- | --- |
-| Rajarshi | 5–23, 26–29, 31, 34–36 | Rajarshi, Debraj, Pratik, Rahul Basak, Ratan, Shubhankar, Soham, Utsav, Abhirup | At cutover, after his first sign-in |
+| Rajarshi | 5–23, 26–29, 31, 34–36 | Rajarshi, Debraj, Pratik, Rahul Basak, Ratan, Shubhankar, Soham, Utsav, Abhirup | Done 2026-09-25: 27 games, account `4db9f3e6-9b4b-445b-8ca3-831773acdb3c` |
 | Emon-led group | 32, 33, 37 | Emon, Abhirup, Supratik, Ashish | After the host signs in; the user supplies the email |
 | Rahul Basak | 24, 25 | Rahul Basak, Ashit, Rana | After Rahul signs in; the user supplies the email |
 
 ## Review status
 
-- Inventory: complete, 28 sessions and 13 player records.
+- Inventory: complete. 28 sessions and 13 players on the development branch (2026-09-20); production had 32 games and 15 players at cutover.
 - Ownership decisions: complete (2026-09-24). Cohorts A–G, J–L and N for Rajarshi; M and O for the Emon-led group; H–I for Rahul Basak.
 - Friend-list decisions: complete. Abhirup has profiles in Rajarshi's and Emon's ledgers, Rahul Basak in Rajarshi's and his own; Aiush is in no list.
-- Isolated database backfill: cohorts A–G and J–L cloned into Rajarshi's private ledger with provenance; 9 friend profiles, 24 sessions and 72 results reconciled. Legacy source rows remain intact. Cohorts H–I and M remain unowned.
-- Production backfill: not started or authorized.
-- Production changes: none.
+- Development branch: cohorts A–G and J–L cloned into Rajarshi's ledger by `data/0003` (9 friend profiles, 24 sessions, 72 results reconciled).
+- Production: Rajarshi's claim done on 2026-09-25 (27 games, 9 friends; standings matched the rehearsal). Waiting: the Emon-led group (32, 33, 37) and Rahul Basak (24, 25), each once the host signs in and the user supplies the email. Aiush stays in the unclaimed archive. Legacy source rows remain intact.

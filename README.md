@@ -23,13 +23,17 @@ configuration in `.claude/launch.json` uses the same port.
 
 ## Environment variables
 
-Copy `.env.example` to `.env.local`:
+Copy `.env.example` to `.env.local`. The app needs these three:
 
 ```text
 DATABASE_URL=<Neon connection string for the restricted menoka_app role>
 NEON_AUTH_BASE_URL=<Neon Auth endpoint for the same branch>
 NEON_AUTH_COOKIE_SECRET=<random secret, at least 32 characters>
 ```
+
+The rest of `.env.example` (`CRON_SECRET`, `PURGE_DATABASE_URL`, `NEON_API_KEY`,
+`NEON_PROJECT_ID`, `NEON_AUTH_BRANCH_ID`, `HEALTHCHECKS_PING_URL`) is only for
+the daily account purge job, which runs in Vercel Production.
 
 Never expose these values through `NEXT_PUBLIC_` variables. Restart the
 development server after changing them. Use an isolated Neon branch for
@@ -51,6 +55,7 @@ rehearsed on an isolated branch first; see `migrations/README.md`.
 
 ```bash
 npm run lint
+npx tsc --noEmit
 npm test
 npm run build
 ```
@@ -71,5 +76,7 @@ npm run build
 - [Feature list](docs/FEATURES.md) — plain-language list of everything the app does today.
 - [Feature plan](docs/FEATURE-PLAN.md) — ongoing roadmap, multi-user transition, ranking decisions and acceptance criteria.
 - [Project memory](docs/PROJECT-MEMORY.md) — durable working agreements and current decisions.
+- [Historical ownership](docs/HISTORICAL-OWNERSHIP.md) — who owns each game from the old shared ledger.
+- [Migration rehearsals](docs/MIGRATION-REHEARSALS.md) — evidence for each database migration.
 - [Domain glossary](CONTEXT.md) — shared terminology.
 - [Agent instructions](AGENTS.md) — repository workflow and verification guidance.
