@@ -148,28 +148,13 @@ export function LiveStandings({ token }: { token: string }) {
         </div>
       </header>
 
-      <section className="glass card live-summary">
-        <div className="card-row">
-          <span className="label">
-            {view.handInProgress
-              ? `Hand ${view.handNo} in progress`
-              : view.handNo > 0
-                ? `After hand ${view.handNo}`
-                : "Before the first hand"}
-          </span>
-          <span className="label">
-            Blinds {formatRupees(smallBlindFor(view.bigBlind))}/
-            {formatRupees(view.bigBlind)}
-          </span>
-        </div>
-        <p className={`small-note live-updated${stale ? " stale" : ""}`} role="status">
-          <span className="live-dot" aria-hidden="true" />
-          {failed
-            ? `Can't reach the app. Last update ${ago(age)}.`
-            : stale
-              ? `Last update ${ago(age)}. The host's phone may be offline or asleep.`
-              : `Updated ${ago(age)}`}
-        </p>
+      <section className="glass card live-blinds" aria-label="Current blinds">
+        <span className="blinds-label">Blinds</span>
+        <span className="live-blinds-value">
+          {formatRupees(smallBlindFor(view.bigBlind))}
+          <span className="blinds-separator"> / </span>
+          {formatRupees(view.bigBlind)}
+        </span>
       </section>
 
       <section className="glass card live-list" aria-label="Standings">
@@ -177,7 +162,7 @@ export function LiveStandings({ token }: { token: string }) {
           <button
             key={row.name}
             type="button"
-            className={`standing-row live-row${me === row.name ? " me" : ""}`}
+            className={`live-row${me === row.name ? " me" : ""}`}
             aria-pressed={me === row.name}
             onClick={() => toggleMe(row.name)}
           >
@@ -186,24 +171,45 @@ export function LiveStandings({ token }: { token: string }) {
             >
               {row.rank}
             </span>
-            <span className="standing-name">
+            <span className="live-player">
               <b>{row.name}</b>
-              <small>
-                Stack {formatRupees(row.stack)}
-                {row.rebuys > 0
-                  ? ` · ${row.rebuys} rebuy${row.rebuys === 1 ? "" : "s"}`
-                  : ""}
-              </small>
+              <span className="live-stack">
+                <small>Stack</small>
+                {formatRupees(row.stack)}
+              </span>
             </span>
-            <span className="standing-values">
+            <span className="live-values">
               <b className={row.net > 0 ? "pos" : row.net < 0 ? "neg" : undefined}>
                 {row.net > 0 ? "▲ " : row.net < 0 ? "▼ " : ""}
                 {formatChipChange(row.net)}
               </b>
-              <small className="muted">in {formatRupees(row.invested)}</small>
+              <small>Buy-In {formatRupees(row.invested)}</small>
+              {row.rebuys > 0 ? (
+                <small>
+                  {row.rebuys} rebuy{row.rebuys === 1 ? "" : "s"}
+                </small>
+              ) : null}
             </span>
           </button>
         ))}
+      </section>
+
+      <section className="glass card live-summary">
+        <span className="label">
+          {view.handInProgress
+            ? `Hand ${view.handNo} in progress`
+            : view.handNo > 0
+              ? `After hand ${view.handNo}`
+              : "Before the first hand"}
+        </span>
+        <p className={`small-note live-updated${stale ? " stale" : ""}`} role="status">
+          <span className="live-dot" aria-hidden="true" />
+          {failed
+            ? `Can't reach the app. Last update ${ago(age)}.`
+            : stale
+              ? `Last update ${ago(age)}. The host's phone may be offline or asleep.`
+              : `Updated ${ago(age)}`}
+        </p>
       </section>
 
       <p className="small-note muted live-footnote">
