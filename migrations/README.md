@@ -2,7 +2,7 @@
 
 Apply these files in numeric order with migration credentials. Application runtime credentials must not perform DDL.
 
-**Status:** production (Neon branch `br-small-sea-ayumyssr`) has 0001, 0002 and 0004–0009, applied on 2026-09-25. 0010–0012 are applied to the development branch `br-little-rain-ay5fufwv` (and 0010–0011 to the preview branch `br-tiny-forest-ayt6f3fe`); they go to production together, before the code that uses them. `data/0003` ran only on the development branch; production uses the 0008 claim function instead. Always target Neon branches by ID, not by console name.
+**Status:** production (Neon branch `br-small-sea-ayumyssr`) has 0001, 0002 and 0004–0012, applied on 2026-09-25. 0010–0012 were applied to production on 2026-09-25 with the user's go-ahead, before the code that uses them, and also to the development branch `br-little-rain-ay5fufwv` and the preview branch `br-tiny-forest-ayt6f3fe`. `data/0003` ran only on the development branch; production uses the 0008 claim function instead. Always target Neon branches by ID, not by console name.
 
 Migration workflow:
 

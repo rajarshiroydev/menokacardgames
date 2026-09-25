@@ -1,6 +1,6 @@
 # Feature plan: accounts and normalized standings
 
-Updated: 2026-09-25. Status: the multi-user version is live in production (cutover 2026-09-25), and so are the Scoreboard redesign and the live standings link (released 2026-09-25, `13f9838`); follow-ups are listed in the pending register. The user accepted a friend network model on 2026-09-25; it is being built one step at a time (see the 2026-09-25 friend network entry).
+Updated: 2026-09-25. Status: the multi-user version is live in production (cutover 2026-09-25), and so are the Scoreboard redesign and the live standings link (released 2026-09-25, `13f9838`); follow-ups are listed in the pending register. The friend network (user codes, friend requests, group standings) was released to production on 2026-09-25 (`244611c`, migrations 0010–0012).
 
 This is the canonical living feature-planning document. Add future feature plans here, record decisions and acceptance criteria, and update status as work progresses. Detailed designs may be linked from here; avoid competing roadmaps.
 
@@ -184,7 +184,7 @@ Official sources checked 2026-09-20; recheck during implementation/release:
 | Custom SMTP for sign-in emails | Deferred by user choice: Neon's shared sender is used. Revisit if emails are slow, land in spam, or hit the shared sender's rate limit |
 | Retire superseded files | Kept for now by user decision (2026-09-25). Delete `migrations/data/0003_backfill_rajarshi_reviewed_history.sql` (development-only, replaced by 0008) once nothing depends on it, and shrink `HISTORICAL-OWNERSHIP.md` to a note once the Emon-led and Rahul Basak claims are done. Update the docs that mention them in the same change |
 | Live standings link for players | Released to production on 2026-09-25 (`13f9838`, with the redesign); migration 0009 was already applied. Not yet checked on production: the iOS share sheet, a locked host screen, and CDN caching of the public GET |
-| Host invitations / friend network | Accepted by the user 2026-09-25 (see the dated entry "friend network (accepted)"): friend requests by app-generated user code, both people in each other's friend list, host approval for every player link, each linked host's standings visible, unfriending unlinks, request limits, self-unlinking, no combined score. Building in three reviewed steps. Step 1 (identity basics, migration 0010, committed `283d0f2`) and step 2 (friend requests, migration 0011) built and rehearsed on the dev branch on 2026-09-25; step 2 passed a two-account preview test. Step 3 (group standings, migration 0012) built and rehearsed the same day. The user asked to release all three together after a preview check. Not on production |
+| Host invitations / friend network | Released to production 2026-09-25 (`244611c`; migrations 0010–0012 on `br-small-sea-ayumyssr`). Accepted model and three build steps are in the dated entries "friend network (accepted)" and "step 1/2/3". The preview test with two real extra accounts (Debraj Test, Saheb) passed for friend requests and group standings. Open follow-ups: notifications for new requests (none today), and the Emon-led and Rahul Basak hosts joining through the network |
 | Cloud draft sync / device handoff | Deferred; needs conflict policy |
 | Shared ledgers/invitations | Requested 2026-09-25; see "Host invitations / friend network" above |
 | App Store / Play Store | Future separate plan after web stability |
@@ -488,6 +488,13 @@ Each step extends the purge, the deletion disclosure, `FEATURES.md` and the isol
   1. apply 0012 to the preview branch `br-tiny-forest-ayt6f3fe`, push to `live-view`, and have the user check "Rajarshi's games" as Debraj Test;
   2. apply 0010, 0011 and 0012 to `br-small-sea-ayumyssr`;
   3. push `main`.
+
+2026-09-25 friend network release: The user checked group standings on the preview as Debraj Test ("Rajarshi's games" with the 27-game standings and Debraj marked You) and asked to release all three steps.
+- **Baseline on production `br-small-sea-ayumyssr`:** migrations 0001, 0002 and 0004–0009; 1 account, 24 players (9 owned), 27 owned games, 82 results, and no open live links.
+- **Migrations:** 0010, 0011 and 0012 applied in that order, one transaction each, without errors. Afterwards: every account and player has its own code; the counts are unchanged; there are no links; row security is on for `friend_requests` and `friend_connections`; `menoka_app` has no table access to them but can run the friend functions; `menoka_purge` can't.
+- **Deploy:** `main` pushed from `13f9838` to `244611c`; the Vercel production build was Ready in 58 seconds.
+- **Signed-out checks:** `/api/friends` and `/api/groups` answer 401 and a made-up live link 404.
+- **Rollback:** Vercel Instant Rollback to the `13f9838` deployment works with the new migrations in place, because they are additive. The migrations' own rollback SQL is in `migrations/README.md`.
 
 ### Purge go-live checklist (production, requires separate authorization)
 

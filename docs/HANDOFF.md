@@ -1,70 +1,50 @@
 # Session handoff
 
-Updated 2026-09-25 on **`main`**. **Production now runs `13f9838`**: the multi-user app plus the Scoreboard redesign and the live standings link, released this session at the user's request. A **friend network** proposal was written in `FEATURE-PLAN.md` and is waiting for the user's answers. Replace this file at the end of each session; don't let it grow.
+Updated 2026-09-25 on **`main`**. **Production runs `244611c`**: the multi-user app, the Scoreboard redesign, live standings links, and the **friend network** (user codes, friend requests and group standings), all released today with the user's go-ahead. Replace this file at the end of each session; don't let it grow.
 
-## Friend network (accepted 2026-09-25, building)
+## What shipped today
 
-- Read the plan entry "2026-09-25 friend network (accepted)". **User decided this session:**
-  - people connect by **friend request using an app-generated user code** (exact match only, shows just a display name);
-  - on accept, **both appear in each other's friend list**;
-  - a host can add players who haven't signed up; each player gets a player code the host can share;
-  - linking a login to an existing player always needs **the host's approval**. Today's players join the same way, so they need no special migration.
-- Host-sent invite links and the "read-only members first" phasing were dropped.
-- **Round 2 answers (same session):**
-  - a linked person sees the standings list of each host they're linked with;
-  - removing a friend unlinks both sides;
-  - request limits: 20 outgoing pending, and 7 days after a decline;
-  - people can see which hosts link them and unlink themselves;
-  - no combined score or screen across hosts (the user: it would only create confusion).
-- **The user accepted the model.** All three steps are built and committed on `main`, and the user asked to **release them together**:
-  - **step 1:** codes and names (0010);
-  - **step 2:** friend requests (0011);
-  - **step 3:** group standings (0012), shown on the Ranks screen.
+- **Redesign + live standings** (`13f9838`). The user's phone test on production passed.
+- **Friend network:**
+  - **Step 1** (`283d0f2`, migration 0010): user codes, display names and player codes.
+  - **Step 2** (`34a66e8`, 0011): friend requests. Links and friendships change only through checked database functions.
+  - **Step 3** (`244611c`, 0012): group standings. The server ranks a linked host's games and sends only the rows; they show on the Ranks screen.
+  - Details are in `FEATURE-PLAN.md` (entries "friend network (accepted)", "step 1/2/3" and "release") and in `FEATURES.md` section 20.
+- **Production database `br-small-sea-ayumyssr`:** migrations 0001, 0002 and 0004–0012. After the release: 1 account, 24 players (9 owned), 27 owned games, 82 results, and no links or friendships yet.
+- **Not yet checked on production while signed in:** the You and Friends cards and the Ranks choice. They were checked on the preview (`br-tiny-forest-ayt6f3fe`, where Debraj Test and Saheb are the host's friends) and on the dev branch. Also unchecked: copying codes on a real phone, the iOS share sheet, a locked host screen, CDN caching of the public live GET, and the redesign's unvisited screens (locked-account page, confirmation sheets, rules sheet, blind editor, import review, winner overlay, drag by touch, iOS Safari `backdrop-filter`).
 
-  The plan entries are "friend network step 1/2/3".
-- **Preview:** `br-tiny-forest-ayt6f3fe` has 0010 and 0011, and the user's two-account test of step 2 passed there: Debraj Test and Saheb are friends of the host. Next on the preview: 0012, a push to `live-view`, and the user checks "Rajarshi's games" as Debraj Test.
-- **Then production, with a go-ahead for each step:** apply 0010, 0011 and 0012 to `br-small-sea-ayumyssr`, push `main`, and watch the build.
-- Each build step: versioned migration (0010, 0011, …), three-account rehearsal on `br-little-rain-ay5fufwv`, go-ahead per production step on `br-small-sea-ayumyssr`.
+## Next steps
 
-## Release done this session
-
-- `main` fast-forwarded `a057ca2` → `13f9838` and pushed. Vercel production build Ready (51 s). The live sign-in page shows the redesign, with no console errors. A made-up live link returns 404 "This game has ended".
-- **Phone test passed:** the user signed in on another device, played a game and scanned the live standings QR code on production. Not yet checked: the iOS share sheet, a locked host screen, CDN caching of the public GET, and the redesign's unvisited screens (locked-account page, confirmation sheets, rules sheet, blind editor, import review, winner overlay, drag by touch, iOS Safari `backdrop-filter`).
-- `live-view` and `ui-sporty-glass-refresh` are fully contained in `main` and can be deleted locally and on GitHub if the user wants.
+1. **The user sets a name on production** (Players → You). The live account has none yet, and a name is needed before sending or accepting requests. Then the user shares their user code with real friends.
+2. **Friend network follow-ups (ideas, not decided):** a badge or notification for new requests (today they appear only when the Players screen opens or on Refresh); a Home tile for groups.
+3. **Healthchecks.io alerts:** the check pings green but has no notification integration; the user adds email.
+4. **Firewall:** "Limit API writes" is in **Log** mode since 2026-09-25. Around 2026-10-02, check Firewall → Overview, switch it to 429 with the user's OK, then send 31 quick writes and confirm "Too many requests". Friend actions are POSTs, so they count.
+5. **Neon tidy-up (with the user's OK):**
+   - make `br-small-sea-ayumyssr` the default branch (the default is still the copy `br-withered-glitter-ay2zbaoe`);
+   - consider deleting `restore-copy-2026-09-24`, `claim-test-throwaway` and `vercel-preview`;
+   - keep `cutover-rehearsal` (`br-tiny-forest-ayt6f3fe`) while the preview uses it. It now holds the test accounts Debraj Test and Saheb.
+6. **Later claims** when those hosts sign in: the Emon-led group gets `ARRAY[32,33,37]` and Rahul Basak `ARRAY[24,25]`. See `HISTORICAL-OWNERSHIP.md`; afterwards they can connect as friends.
+7. **Branches:** `live-view` now matches `main` and served as the preview branch today; `ui-sporty-glass-refresh` is contained in `main`. Deleting either needs the user's OK, and a new preview branch needs its domain trusted in the preview's Neon Auth.
 
 ## Read first
 
 1. This file.
 2. [`PROJECT-MEMORY.md`](./PROJECT-MEMORY.md): working agreements and environment facts (branch IDs matter).
-3. [`FEATURE-PLAN.md`](./FEATURE-PLAN.md): the friend network proposal and the pending register.
+3. [`FEATURE-PLAN.md`](./FEATURE-PLAN.md): the friend network entries and the pending register.
 4. [`HISTORICAL-OWNERSHIP.md`](./HISTORICAL-OWNERSHIP.md) before any further claim.
-
-## Where things stand
-
-- **Live site** (https://menokacardgames.vercel.app): magic-link sign-in only. therajarshiroy@gmail.com (account `4db9f3e6-9b4b-445b-8ca3-831773acdb3c`) has 27 games and 9 players. The app connects as `menoka_app`. Pushing `main` deploys.
-- **Production database: `br-small-sea-ayumyssr`** (pooled host `ep-delicate-pond-ay8ple8b-pooler`), migrations 0001, 0002, 0004–0009. The legacy games 24, 25, 32, 33 and 37 stay unowned and hidden.
-- **Neon's default branch is still the copy** `br-withered-glitter-ay2zbaoe` (`restore-copy-2026-09-24`, pre-cutover data and two unused roles). Ask the user whether to make `br-small-sea-ayumyssr` the default and delete the copy.
-- The dev server on 3005 uses the non-production endpoint (`ep-withered-hill`).
-
-## Other next steps
-
-1. **Healthchecks.io alerts:** the check pings green but has no notification integration; the user adds email.
-2. **Firewall:** "Limit API writes" is in **Log** mode since 2026-09-25. Around 2026-10-02, check Firewall → Overview, switch to 429 with the user's OK, then send 31 quick writes and confirm "Too many requests".
-3. **Neon tidy-up (with the user's OK):** default branch; possibly delete `restore-copy-2026-09-24`, `claim-test-throwaway`, `vercel-preview`; keep `cutover-rehearsal` while Preview uses it. The only snapshot `snap-sparkling-sun-aykr4j1y` is pre-migration.
-4. **Later claims** when those hosts sign in (the user supplies emails): Emon-led group `ARRAY[32,33,37]` with friends `Emon, Abhirup, Supratik, Ashish`; Rahul Basak `ARRAY[24,25]` with friends `Rahul Basak, Ashit, Rana`. Run `public.claim_reviewed_history(...)` on `br-small-sea-ayumyssr` with the decision text from `HISTORICAL-OWNERSHIP.md`. The friend network may change how these hosts join; discuss it with the proposal.
-5. Possibly: pilot with a second, unrelated host (plan's release step 6).
 
 ## Rollback (only with the user's decision)
 
-- **This release** is code only; Vercel Instant Rollback to the `a057ca2` deployment works (0009 is harmless to the old code).
-- **A full multi-user rollback** still means restoring the pre-migration snapshot onto `br-small-sea-ayumyssr`, pointing Production `DATABASE_URL` back to the owner, and rolling back to `519f72c`. It loses everything created since the cutover.
+- **Friend network code:** Vercel Instant Rollback to the `13f9838` deployment works, because 0010–0012 are additive. The migrations' own rollback SQL is in `migrations/README.md`; it loses codes, names, friendships and links, and leaves games untouched.
+- **A full multi-user rollback** still means restoring the pre-migration snapshot onto `br-small-sea-ayumyssr` and pointing `DATABASE_URL` back to the owner. It loses everything since the cutover.
 
 ## Session gotchas
 
-- **Always name Neon branches by ID** and have the user check the branch selector.
-- **Connection strings:** have the user assemble them in TextEdit on one line. Redact logs before quoting them.
-- The agent never handles secret values. The user runs `openssl rand -hex 32 | tr -d '\n' | pbcopy` and pastes.
-- The Vercel connector's env and deployment listings return 403. Read the Vercel pages in the in-app browser instead (Deployments shows status and build time).
-- Next 16 allows one `next dev` per folder. When another chat holds 3005, run a copy of the working tree on another port (see `PROJECT-MEMORY.md`). The in-app browser reports tabs as hidden, which pauses the live viewer's polling; reload the viewer tab.
-- The untracked `design_handoff_sporty_glass_redesign/` fails lint. Lint tracked files with `npx eslint $(git ls-files '*.ts' '*.tsx' '*.mjs')`.
+- **Always name Neon branches by ID.** Migrations go through the Neon MCP as the owner (`run_sql_transaction`, statements from `node scripts/split-migration.mjs`). Today the agent's SQL was allowed on the preview branch too.
+- **Rehearse as `menoka_app`** with a `DO` block that ends in `RAISE EXCEPTION`, run by a Node script that reads `.env.local` (see `MIGRATION-REHEARSALS.md`). To play a second person in the browser, create a fixture account as the owner and call the friend functions after `set_config('app.current_auth_user_id', …, true)`. Delete fixtures afterwards.
+- **Next 16 allows one `next dev` per folder.** When another chat holds 3005, rsync the tree to the scratchpad, add a temporary `dev-copy` entry (port 3007) to `.claude/launch.json`, and revert it afterwards. Live reloads send the page back to Home.
+- **Preview sign-in** trusts only the `live-view` preview domain: `git push origin main:live-view` gives a preview without touching production. Vercel protects preview URLs with a Vercel login.
+- **Secrets:** the agent never handles secret values. Connection strings are assembled by the user in TextEdit on one line.
+- **Vercel:** the connector's env and deployment listings return 403, so read the Vercel pages in the in-app browser.
+- **Lint:** the untracked `design_handoff_sporty_glass_redesign/` fails lint. Lint tracked files with `npx eslint $(git ls-files '*.ts' '*.tsx' '*.mjs')`.
 - Report each step in simple language, and ask before committing.
