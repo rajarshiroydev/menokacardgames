@@ -42,7 +42,8 @@ This is a plain-language list of everything Menoka Card Games can do today. It i
   - they have been discarded first
   - they have never appeared in a saved game (players with saved history can never be permanently deleted, so the records stay complete)
   - you signed in within the last 10 minutes (see section 13)
-- **Player codes.** Every player has their own code, shown under their name as **P-** plus eight characters (for example P-N7QA-2G2P). Tap it to copy it. Codes are made up by the app, use only letters and numbers that can't be confused (no 0, O, 1, I or L), never change, and no two players share one. They are for the friend requests that are coming next (see section 20): you'll give a friend who hasn't signed up yet their code, so they can ask you to connect their account to their history. A code on its own gives nobody access to anything.
+- **Player codes.** Every player has their own code, shown under their name as **P-** plus eight characters (for example P-N7QA-2G2P). Tap it to copy it. Codes are made up by the app, use only letters and numbers that can't be confused (no 0, O, 1, I or L), never change, and no two players share one. Give a friend who hasn't signed up yet their code: once they sign up, they put it in their friend request to you, so you can link their account to their history (see section 20). A code on its own gives nobody access to anything; you always confirm the link.
+- **Friends are marked.** A player linked to a friend's account shows "· friend" after their name. A linked player can be discarded and restored as usual, but can't be permanently deleted until you remove the friend.
 
 ## 4. Starting a game
 
@@ -192,10 +193,11 @@ This is a plain-language list of everything Menoka Card Games can do today. It i
   - you are signed out on **every** device, not just this one
   - the game in progress on this device is cleared
   - the sign-in page confirms the account is locked
+  - your friends no longer see you in their Friends card, and you drop out of their requests (see section 20); the players they linked to you stay in their lists
 - **30 days to change your mind.** Sign in again with the same email within **30 days** to see the "Deletion is scheduled" screen. It shows when you asked and the exact date and time everything will be deleted. Press **Recover my account** and everything comes back exactly as it was.
 - **After 30 days** the account can no longer be recovered. An automatic check runs once a day (around 08:30 India time) and permanently deletes every account whose 30 days are up:
   - first the sign-in identity, so the email can no longer sign in to it
-  - then the account and everything in it: players, games, results, buy-ins and records
+  - then the account and everything in it: players, games, results, buy-ins, records, your code and name, your friend requests and friendships. Friends keep the players and games in their own lists, no longer linked to you
   - if anything goes wrong, nothing is half-deleted: the account stays locked and the check tries again the next day
 - **Deletion can be up to a day late** because the check runs daily. An account is never deleted early.
 - **After deletion,** signing in with the same email starts a brand-new, empty account.
@@ -246,15 +248,38 @@ This is a plain-language list of everything Menoka Card Games can do today. It i
 - **When the link stops working.** It ends when the host saves or discards the game, taps **Stop sharing**, or deletes their account. It also stops 12 hours after the host's last update. Afterwards it shows "This game has ended". Sharing again makes a new link; old links never come back.
 - **Who can see it.** Anyone who has the link can see those names and chip counts until it ends, so share it only with the table. The button reads "Sharing live · show link" while a link is active, and "Live link not updating" if the host's updates keep failing.
 
-## 20. Your profile (friend network, first part)
+## 20. Friends
 
-The app is getting a friend network: people will find each other by code, send friend requests, and see the standings of the groups they play in. This first part gives everyone an identity; nothing is shared with anyone yet.
+Everyone who signs in has their own account and can host their own games. Friends connect two accounts, so each appears as a player in the other's list and can be seated in the other's games. Everything is on the **Players** screen.
 
-- **Your user code.** The **You** card at the top of the **Players** screen shows your own user code, eight characters shown as two groups of four (for example 7KQ4-M2XP). Every account gets one automatically, including existing ones. It uses the same confusion-free letters and numbers as player codes. **Copy** copies it.
-- **Replace your code.** **Replace** gives you a new random code after a confirmation. The old code stops working straight away, so anyone you gave it to will need the new one. There is no limit on how often you can replace it.
-- **Your name.** Type the name your friends know you by and press **Save**. It can be 1 to 40 characters; extra spaces are tidied up. Save stays greyed out until the name changes. You can change it at any time, but not remove it once set.
-- **Who can see them.** For now, nobody but you. Once friend requests arrive, someone who types your exact code will see only your name, never your email. There is no browsing or searching by name.
-- **Deleting your account** deletes your code and your name along with everything else (see section 14).
+**Your profile (the You card)**
+
+- **Your user code.** Eight characters shown as two groups of four (for example 7KQ4-M2XP). Every account gets one automatically, including existing ones. It uses the same confusion-free letters and numbers as player codes. **Copy** copies it. Share it with friends so they can send you a request.
+- **Replace your code.** **Replace** gives you a new random code after a confirmation. The old code stops working straight away. There is no limit on how often you can replace it. Friendships you already have are not affected.
+- **Your name.** Type the name your friends know you by and press **Save**. It can be 1 to 40 characters; extra spaces are tidied up. Save stays greyed out until the name changes. You can change it at any time, but not remove it once set. You need a name before you can send or accept a request.
+- **Who can see them.** Someone who types your exact code sees only your name, never your email. There is no browsing or searching by name. Friends see your name in their Friends card.
+
+**Sending a request (the Friends card)**
+
+- **Find.** Type or paste a friend's user code (capitals, spaces and dashes don't matter) and press **Find**. The app shows their name, or says it's your own code, you're already friends, or a request is already waiting. A player code (P-…) or an unknown code gets a clear message instead.
+- **In your list, they are:** choose **A new player** or one of your players who isn't linked to anyone yet. Pick an existing player when you already record their games, so their history stays with them.
+- **Your player code in their list (optional):** if the friend already records your games, put the P- code they gave you. It tells them which of their players you are; they still confirm it.
+- **Send friend request.** It appears under the card as "Request sent, waiting for an answer", with **Cancel** to withdraw it.
+- **Limits:** at most **20** of your requests can be waiting at once, and only one request can be waiting between two people, in either direction. If someone declines you, you can't ask them again for **7 days**.
+
+**Answering a request**
+
+- A request shows "Name wants to be friends", with **Accept** and **Decline**. When they gave a player code that matches one of your unlinked players, the app says "They say they're your player Debraj" and picks that player for you; otherwise it says the code doesn't match.
+- **In your list, they are:** choose one of your unlinked players, or **A new player** with a name you can change (their name to start with). A new player's name can't match a player you already have.
+- **Accept** makes you friends. You become linked to the player you chose; on their side, the player they chose is linked to you, or, if they chose a new player, one is added under your name (with a number, such as "Rajarshi Roy (2)", if they already have a player of that name).
+- **Decline** ends the request. They can ask again after 7 days.
+
+**Your friends**
+
+- Each friend is listed with the player they are in your list and the name you have in theirs, for example "Your player Debraj · you're Rajarshi Roy in their list". This is how you see which hosts have you as a linked player.
+- **Remove** (with a confirmation) ends the friendship and unlinks the players on both sides. Both of you keep the players and every game. Linking again needs a new friend request. Either person can remove the other.
+- **Refresh** reloads the card and the player list. Requests and new friends don't appear on their own; open the Players screen or press Refresh.
+- **What friends can see:** for now, only each other's name. Seeing each other's group standings comes in a later update.
 
 ---
 
@@ -263,5 +288,6 @@ The app is getting a friend network: people will find each other by code, send f
 These are known limitations, not planned features. Planned work is in the [feature plan](./FEATURE-PLAN.md).
 
 - A game in progress can't be moved to another device before it's saved.
+- Friend requests don't send notifications or emails; people see them when they open the Players screen.
 - The live standings link can't be used to play or change the game; only the host's device records it. If the host's phone is locked or offline, the link stops updating until the host opens the app again.
 - Import handles up to 250 new games per file.

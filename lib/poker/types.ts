@@ -11,6 +11,8 @@ export type PlayerProfile = {
   name: string;
   /** Shareable player code (see lib/accounts/identity-code.ts). */
   code: string;
+  /** Linked to a friend's account by an accepted friend request. */
+  linked: boolean;
   createdAt: number;
   discardedAt?: number;
   hasHistory?: boolean;

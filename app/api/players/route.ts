@@ -16,6 +16,7 @@ type PlayerRow = {
   id: string;
   name: string;
   player_code: string;
+  linked: boolean;
   created_at: Date | string;
   deleted_at: Date | string | null;
   has_history?: boolean;
@@ -33,6 +34,7 @@ function mapPlayer(row: PlayerRow): PlayerProfile {
     id: row.id,
     name: row.name,
     code: row.player_code,
+    linked: Boolean(row.linked),
     createdAt: new Date(row.created_at).getTime(),
     hasHistory: Boolean(row.has_history),
     ...(row.deleted_at
@@ -54,6 +56,7 @@ export async function GET() {
           player.id,
           player.name,
           player.player_code,
+          player.linked_account_id IS NOT NULL AS linked,
           player.created_at,
           player.deleted_at,
           EXISTS (
@@ -114,7 +117,7 @@ export async function POST(request: Request) {
         VALUES (${ownerId}::uuid, ${name}, ${playerNameKey(name)})
         ON CONFLICT (owner_id, name_key) WHERE owner_id IS NOT NULL DO UPDATE
         SET name = EXCLUDED.name, deleted_at = NULL
-        RETURNING id, name, player_code, created_at, deleted_at
+        RETURNING id, name, player_code, linked_account_id IS NOT NULL AS linked, created_at, deleted_at
       `,
     ]);
     const rows = result as PlayerRow[];
@@ -157,7 +160,7 @@ export async function PATCH(request: Request) {
             WHERE id = ${id}
               AND owner_id = ${ownerId}::uuid
               AND deleted_at IS NULL
-            RETURNING id, name, player_code, created_at, deleted_at
+            RETURNING id, name, player_code, linked_account_id IS NOT NULL AS linked, created_at, deleted_at
           `
         : sql`
             UPDATE players
@@ -165,7 +168,7 @@ export async function PATCH(request: Request) {
             WHERE id = ${id}
               AND owner_id = ${ownerId}::uuid
               AND deleted_at IS NOT NULL
-            RETURNING id, name, player_code, created_at, deleted_at
+            RETURNING id, name, player_code, linked_account_id IS NOT NULL AS linked, created_at, deleted_at
           `,
     ]);
     const rows = result as PlayerRow[];
@@ -205,6 +208,7 @@ export async function DELETE(request: Request) {
         SELECT
           player.id,
           player.deleted_at,
+          player.linked_account_id IS NOT NULL AS linked,
           EXISTS (
             SELECT 1
             FROM session_results AS result
@@ -220,12 +224,22 @@ export async function DELETE(request: Request) {
       deleted_at: Date | string | null;
       has_history: boolean;
       id: string;
+      linked: boolean;
     }>;
 
     const player = playerRows[0];
     if (!player) return json({ error: "Player not found" }, 404);
     if (!player.deleted_at) {
       return json({ error: "Discard the player before deleting them" }, 409);
+    }
+    if (player.linked) {
+      return json(
+        {
+          error:
+            "This player is linked to a friend. Remove the friend before deleting the player",
+        },
+        409,
+      );
     }
     if (player.has_history) {
       return json(
@@ -243,6 +257,7 @@ export async function DELETE(request: Request) {
         WHERE player.id = ${id}
           AND player.owner_id = ${ownerId}::uuid
           AND player.deleted_at IS NOT NULL
+          AND player.linked_account_id IS NULL
           AND NOT EXISTS (
             SELECT 1
             FROM session_results AS result

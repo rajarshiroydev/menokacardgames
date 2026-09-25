@@ -1393,6 +1393,67 @@ p {
   gap: 2px;
 }
 
+.friends-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.friend-found,
+.friend-request {
+  display: grid;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.friend-found .label,
+.friend-request .label {
+  margin-top: 4px;
+}
+
+.friend-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.friend-actions button {
+  flex: 1;
+  min-height: 44px;
+}
+
+.friend-list {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--line);
+  list-style: none;
+}
+
+.friend-list li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 0;
+}
+
+.friend-list li + li {
+  border-top: 1px solid var(--line);
+}
+
+.friend-copy {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+  gap: 2px;
+  overflow-wrap: anywhere;
+}
+
+.friend-copy small {
+  color: var(--ink2);
+  font-size: 13px;
+}
+
 .profile-code-actions {
   display: flex;
   gap: 8px;

@@ -4,9 +4,9 @@ import { describe, it } from "node:test";
 import { planImport, sessionsInBackup } from "../lib/poker/import-plan.ts";
 import type { PlayerProfile, PokerSession } from "../lib/poker/types.ts";
 
-const raj: PlayerProfile = { id: "p-raj", name: "Raj", code: "RAJ22222", createdAt: 1 };
-const sam: PlayerProfile = { id: "p-sam", name: "Sam", code: "SAM22222", createdAt: 1 };
-const old: PlayerProfile = { id: "p-old", name: "Old", code: "XYZ22222", createdAt: 1, discardedAt: 2 };
+const raj: PlayerProfile = { id: "p-raj", name: "Raj", code: "RAJ22222", linked: false, createdAt: 1 };
+const sam: PlayerProfile = { id: "p-sam", name: "Sam", code: "SAM22222", linked: false, createdAt: 1 };
+const old: PlayerProfile = { id: "p-old", name: "Old", code: "XYZ22222", linked: false, createdAt: 1, discardedAt: 2 };
 const ledgerPlayers = [raj, sam, old];
 
 function game(id: string, results: PokerSession["results"]): PokerSession {

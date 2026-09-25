@@ -184,7 +184,7 @@ Official sources checked 2026-09-20; recheck during implementation/release:
 | Custom SMTP for sign-in emails | Deferred by user choice: Neon's shared sender is used. Revisit if emails are slow, land in spam, or hit the shared sender's rate limit |
 | Retire superseded files | Kept for now by user decision (2026-09-25). Delete `migrations/data/0003_backfill_rajarshi_reviewed_history.sql` (development-only, replaced by 0008) once nothing depends on it, and shrink `HISTORICAL-OWNERSHIP.md` to a note once the Emon-led and Rahul Basak claims are done. Update the docs that mention them in the same change |
 | Live standings link for players | Released to production on 2026-09-25 (`13f9838`, with the redesign); migration 0009 was already applied. Not yet checked on production: the iOS share sheet, a locked host screen, and CDN caching of the public GET |
-| Host invitations / friend network | Accepted by the user 2026-09-25 (see the dated entry "friend network (accepted)"): friend requests by app-generated user code, both people in each other's friend list, host approval for every player link, each linked host's standings visible, unfriending unlinks, request limits, self-unlinking, no combined score. Building in three reviewed steps. Step 1 (identity basics, migration 0010) built and rehearsed on the dev branch on 2026-09-25, awaiting review; not on production |
+| Host invitations / friend network | Accepted by the user 2026-09-25 (see the dated entry "friend network (accepted)"): friend requests by app-generated user code, both people in each other's friend list, host approval for every player link, each linked host's standings visible, unfriending unlinks, request limits, self-unlinking, no combined score. Building in three reviewed steps. Step 1 (identity basics, migration 0010, committed `283d0f2`) and step 2 (friend requests, migration 0011) built and rehearsed on the dev branch on 2026-09-25; the user asked to release them together. Not on production. Step 3 (group standings) next |
 | Cloud draft sync / device handoff | Deferred; needs conflict policy |
 | Shared ledgers/invitations | Requested 2026-09-25; see "Host invitations / friend network" above |
 | App Store / Play Store | Future separate plan after web stability |
@@ -424,6 +424,47 @@ Each step extends the purge, the deletion disclosure, `FEATURES.md` and the isol
   - The in-app browser blocks the clipboard, so Copy (which silently leaves the code on screen) still needs a real-phone check.
   - The dev account now has the name "Rajarshi Roy" and one code replacement.
 - **Release order:** 0010 is additive, so production gets it before the code (the released code ignores the new columns). The new code needs it, because the players list reads `player_code`. The preview branch `br-tiny-forest-ayt6f3fe` also needs it before a Vercel preview works.
+
+2026-09-25 friend network step 2 (friend requests): Built as the second accepted build step; not released. The user asked to release steps 1 and 2 together.
+
+- **Agent's choices (the user's rule: long-term, easy to debug):**
+  - **One action removes both sides.** Every friendship has exactly one linked player on each side, so "remove a friend" and "unlink myself from a host" are the same action, **Remove**: it ends the friendship and unlinks both sides, and each host keeps their players and games. A host who linked the wrong player removes the friend and accepts a new request.
+  - **Each side chooses its own player.** The sender picks theirs at send time; the recipient picks theirs, or names a new player, at accept time. A player code only preselects; it never links on its own.
+  - **A new player on the sender's side** takes the recipient's display name, numbered ("Name (2)") on a clash, so accepting never fails because of the sender's list.
+  - **Both people need a display name** to send or accept, so requests always show who they're from.
+  - **No notifications.** Requests appear when the Players screen opens or on **Refresh**.
+- **Migration `0011_friend_requests`:**
+  - `players.linked_account_id` (unique per owner, never the owner, set to NULL when that account is deleted);
+  - `friend_requests` and `friend_connections`, with row security on and no grants;
+  - seven `SECURITY DEFINER` functions: `friend_find`, `friend_send`, `friend_overview`, `friend_accept`, `friend_decline`, `friend_cancel` and `friend_remove`. Each derives the caller from the verified session and requires an active account; refusals are `friend:<code>` errors;
+  - the `players_guard_links` trigger, which stops the runtime role from setting or changing links or deleting a linked player.
+  - Limits: 20 pending sent requests, one pending request per pair, and 7 days after a decline.
+  - Locked accounts are hidden from search, requests and friend lists. The purge needs no change, because deletion cascades.
+- **API:**
+  - `GET /api/friends` returns the overview.
+  - `POST /api/friends` takes `find`, `send`, `accept`, `decline`, `cancel` and `remove`. Codes are parsed by the pure `lib/friends/requests.ts`; a player code typed into Find gets its own message.
+  - `/api/players` returns `linked`, and refuses to delete a linked player (409).
+- **UI (Players screen):**
+  - a **Friends** card under **You**: Find by code; "In your list, they are" and an optional player code; the send button; received requests with the claim note, player choice, new-player name, Accept and Decline; friends with "Your player X · you're Y in their list" and Remove (with a confirmation); sent requests with Cancel; and Refresh.
+  - Player rows show "· friend", and linked players have no Delete button.
+- **Checks:**
+  - 5 new unit tests (139 in total), types and lint.
+  - Rehearsal on `br-little-rain-ay5fufwv` as `menoka_app` with host, friend and stranger accounts: 40 of 40 passed, plus an owner-side purge cascade check (see `MIGRATION-REHEARSALS.md`). The first apply failed safely on a check that refused legacy players with no owner; it was fixed and rerun.
+  - Browser round trip on a copy on port 3007 at 375px and 320px, with a temporary "Test Friend" fixture account acting through the same functions:
+    - accept with a claimed player (Debraj preselected);
+    - friend listed, and "· friend" on the row;
+    - Remove with a confirmation, unlinking both sides;
+    - Find answers: friends, self, a player code, unknown and malformed codes;
+    - send with a chosen player and a claimed code;
+    - the fixture accepting, linking Debraj and its own player;
+    - Cancel and Decline, including an unmatched claim note.
+  - Fixes found by testing: Refresh now also reloads the player list, and error bodies no longer repeat the status.
+  - Afterwards the fixture was deleted and the branch is back to 2 accounts, 22 players, no links, requests or friendships.
+  - **Not tested:** two real sign-ins in two browsers; the fixture played the second person through the database. The Vercel preview is the place for that.
+- **Release (with the user's go-ahead for each production step):**
+  1. apply 0010, then 0011, to `br-small-sea-ayumyssr`; both are additive, so the live code keeps working;
+  2. push `main`.
+  - A Vercel preview first needs both migrations on `br-tiny-forest-ayt6f3fe`.
 
 ### Purge go-live checklist (production, requires separate authorization)
 

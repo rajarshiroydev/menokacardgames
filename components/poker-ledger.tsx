@@ -62,6 +62,7 @@ import {
   MAX_DISPLAY_NAME_LENGTH,
 } from "@/lib/accounts/identity-code";
 import { DELETION_GRACE_PERIOD_DAYS } from "@/lib/accounts/lifecycle";
+import type { FoundAccount, FriendOverview } from "@/lib/friends/requests";
 import { authClient } from "@/lib/auth/client";
 import { apiErrorMessage } from "@/lib/security/rate-limit-message";
 import {
@@ -187,6 +188,32 @@ async function accountApi<T>(body?: object): Promise<T> {
   if (!response.ok) {
     throw new ApiError(
       apiErrorMessage(response.status, data.error, "Could not reach your account"),
+      response.status,
+      data.code,
+    );
+  }
+  return data;
+}
+
+/** Reads the friends overview, or runs a friend action (`/api/friends`). */
+async function friendsApi<T>(body?: object): Promise<T> {
+  const response = await fetch(
+    "/api/friends",
+    body
+      ? {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        }
+      : undefined,
+  );
+  const data = (await response.json().catch(() => ({}))) as T & {
+    code?: string;
+    error?: string;
+  };
+  if (!response.ok) {
+    throw new ApiError(
+      apiErrorMessage(response.status, data.error, "Could not reach your friends"),
       response.status,
       data.code,
     );
@@ -1618,7 +1645,14 @@ export function PokerLedger({
           />
         ) : view === "players" ? (
           <PlayersView
-            profileCard={<ProfileCard onToast={showToast} onAsk={ask} />}
+            network={
+              <FriendNetwork
+                players={players}
+                onPlayersChanged={() => void refreshPlayers()}
+                onToast={showToast}
+                onAsk={ask}
+              />
+            }
             players={players}
             discardedPlayers={discardedPlayers}
             loading={playersLoading}
@@ -3035,9 +3069,11 @@ const ANTE_PRESETS = [
  * friends will search for, and the name they will see.
  */
 function ProfileCard({
+  onProfile,
   onToast,
   onAsk,
 }: {
+  onProfile: (profile: AccountProfile) => void;
   onToast: (message: string) => void;
   onAsk: (message: string, confirmLabel: string, onConfirm: () => void) => void;
 }) {
@@ -3057,6 +3093,7 @@ function ProfileCard({
         if (!data.profile) throw new Error("Could not load your profile");
         if (cancelled) return;
         setProfile(data.profile);
+        onProfile(data.profile);
         setName(data.profile.displayName ?? "");
         setLoadError("");
       } catch (error) {
@@ -3069,7 +3106,7 @@ function ProfileCard({
     return () => {
       cancelled = true;
     };
-  }, [attempt]);
+  }, [attempt, onProfile]);
 
   async function saveName(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -3088,6 +3125,7 @@ function ProfileCard({
         displayName,
       });
       setProfile(data.profile);
+      onProfile(data.profile);
       setName(data.profile.displayName ?? "");
       setNameError("");
       onToast("Name Saved");
@@ -3116,6 +3154,7 @@ function ProfileCard({
         action: "replace-code",
       });
       setProfile(data.profile);
+      onProfile(data.profile);
       onToast("New Code Ready");
     } catch (error) {
       onToast(
@@ -3201,8 +3240,8 @@ function ProfileCard({
             </p>
           ) : null}
           <p className="muted small-note">
-            Friends will use your code to send you a friend request (coming
-            soon). It shows them only your name, never your email.
+            Friends use your code to send you a friend request. It shows them
+            only your name, never your email.
           </p>
         </>
       )}
@@ -3210,8 +3249,498 @@ function ProfileCard({
   );
 }
 
+/** The You and Friends cards at the top of the Players screen. */
+function FriendNetwork({
+  players,
+  onPlayersChanged,
+  onToast,
+  onAsk,
+}: {
+  players: PlayerProfile[];
+  onPlayersChanged: () => void;
+  onToast: (message: string) => void;
+  onAsk: (message: string, confirmLabel: string, onConfirm: () => void) => void;
+}) {
+  const [hasName, setHasName] = useState(false);
+  const onProfile = useCallback((profile: AccountProfile) => {
+    setHasName(Boolean(profile.displayName));
+  }, []);
+
+  return (
+    <>
+      <ProfileCard onProfile={onProfile} onToast={onToast} onAsk={onAsk} />
+      <FriendsCard
+        hasName={hasName}
+        players={players}
+        onPlayersChanged={onPlayersChanged}
+        onToast={onToast}
+        onAsk={onAsk}
+      />
+    </>
+  );
+}
+
+/** Value of the "In your list, they are" choice for a new player. */
+const NEW_PLAYER = "";
+
+function FriendsCard({
+  hasName,
+  players,
+  onPlayersChanged,
+  onToast,
+  onAsk,
+}: {
+  hasName: boolean;
+  players: PlayerProfile[];
+  onPlayersChanged: () => void;
+  onToast: (message: string) => void;
+  onAsk: (message: string, confirmLabel: string, onConfirm: () => void) => void;
+}) {
+  const [overview, setOverview] = useState<FriendOverview | null>(null);
+  const [loadError, setLoadError] = useState("");
+  const [attempt, setAttempt] = useState(0);
+  const [busy, setBusy] = useState("");
+  const [code, setCode] = useState("");
+  const [found, setFound] = useState<(FoundAccount & { code: string }) | null>(
+    null,
+  );
+  const [findError, setFindError] = useState("");
+  const [sendPlayerId, setSendPlayerId] = useState(NEW_PLAYER);
+  const [claimCode, setClaimCode] = useState("");
+  const [choices, setChoices] = useState<
+    Record<string, { playerId: string; newName: string }>
+  >({});
+  const [requestError, setRequestError] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const data = await friendsApi<{ overview: FriendOverview }>();
+        if (cancelled) return;
+        setOverview(data.overview);
+        setLoadError("");
+      } catch (error) {
+        if (cancelled) return;
+        setLoadError(
+          error instanceof Error ? error.message : "Could not load your friends",
+        );
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [attempt]);
+
+  const reload = () => setAttempt((count) => count + 1);
+  const freePlayers = players.filter((player) => !player.linked);
+
+  async function run(key: string, action: () => Promise<void>) {
+    if (busy) return;
+    setBusy(key);
+    try {
+      await action();
+    } finally {
+      setBusy("");
+    }
+  }
+
+  function find(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    void run("find", async () => {
+      setFound(null);
+      setFindError("");
+      try {
+        const data = await friendsApi<{ found: FoundAccount }>({
+          action: "find",
+          code,
+        });
+        setFound({ ...data.found, code });
+        setSendPlayerId(NEW_PLAYER);
+        setClaimCode("");
+      } catch (error) {
+        setFindError(
+          error instanceof Error ? error.message : "Could not look up that code",
+        );
+      }
+    });
+  }
+
+  function send() {
+    if (!found) return;
+    void run("send", async () => {
+      setFindError("");
+      try {
+        await friendsApi({
+          action: "send",
+          code: found.code,
+          myPlayerId: sendPlayerId || null,
+          claimedPlayerCode: claimCode.trim() || null,
+        });
+        onToast("Request Sent");
+        setFound(null);
+        setCode("");
+        reload();
+      } catch (error) {
+        setFindError(
+          error instanceof Error ? error.message : "The request was not sent",
+        );
+      }
+    });
+  }
+
+  function choiceFor(request: FriendOverview["received"][number]) {
+    return (
+      choices[request.requestId] ?? {
+        playerId: request.claimedPlayer?.id ?? NEW_PLAYER,
+        newName: request.displayName ?? "",
+      }
+    );
+  }
+
+  function answer(
+    request: FriendOverview["received"][number],
+    action: "accept" | "decline",
+  ) {
+    const choice = choiceFor(request);
+    void run(request.requestId, async () => {
+      setRequestError((current) => ({ ...current, [request.requestId]: "" }));
+      try {
+        await friendsApi(
+          action === "accept"
+            ? {
+                action,
+                requestId: request.requestId,
+                myPlayerId: choice.playerId || null,
+                newPlayerName: choice.playerId ? null : choice.newName,
+              }
+            : { action, requestId: request.requestId },
+        );
+        onToast(action === "accept" ? "Friend Added" : "Request Declined");
+        reload();
+        if (action === "accept") onPlayersChanged();
+      } catch (error) {
+        setRequestError((current) => ({
+          ...current,
+          [request.requestId]:
+            error instanceof Error ? error.message : "Could not answer the request",
+        }));
+      }
+    });
+  }
+
+  function cancel(requestId: string) {
+    void run(requestId, async () => {
+      try {
+        await friendsApi({ action: "cancel", requestId });
+        onToast("Request Cancelled");
+        reload();
+      } catch (error) {
+        onToast(
+          error instanceof Error ? error.message : "Could not cancel the request",
+        );
+      }
+    });
+  }
+
+  function remove(friend: FriendOverview["friends"][number]) {
+    const name = friend.displayName ?? "this friend";
+    onAsk(
+      `Remove ${name} as a friend? Your players and games stay in both lists, but they're no longer linked, and ${name} stops being your friend. Linking again needs a new friend request.`,
+      "Remove Friend",
+      () =>
+        void run(friend.accountId, async () => {
+          try {
+            await friendsApi({ action: "remove", accountId: friend.accountId });
+            onToast("Friend Removed");
+            reload();
+            onPlayersChanged();
+          } catch (error) {
+            onToast(
+              error instanceof Error ? error.message : "Could not remove the friend",
+            );
+          }
+        }),
+    );
+  }
+
+  const relationNote: Record<FoundAccount["relation"], string> = {
+    self: "That's your own code.",
+    friends: "You're already friends.",
+    "request-sent": "You've already sent them a request.",
+    "request-received": "They've sent you a request. Answer it below.",
+    none: "",
+  };
+
+  return (
+    <section className="glass card friends-card">
+      <div className="friends-heading">
+        <span className="eyebrow">Friends</span>
+        <button
+          className="text-button"
+          type="button"
+          onClick={() => {
+            reload();
+            onPlayersChanged();
+          }}
+        >
+          Refresh
+        </button>
+      </div>
+
+      <form className="add-player-row" onSubmit={find}>
+        <input
+          className="field"
+          aria-label="Friend's user code"
+          autoCapitalize="characters"
+          autoComplete="off"
+          maxLength={12}
+          placeholder="Friend's user code"
+          value={code}
+          onChange={(event) => {
+            setCode(event.target.value);
+            setFound(null);
+            if (findError) setFindError("");
+          }}
+        />
+        <button
+          className="accent-button"
+          type="submit"
+          disabled={busy !== "" || !code.trim()}
+        >
+          {busy === "find" ? "Finding…" : "Find"}
+        </button>
+      </form>
+      {findError ? (
+        <p className="field-error" role="alert">
+          {findError}
+        </p>
+      ) : null}
+
+      {found ? (
+        <div className="friend-found">
+          <p>
+            <strong>{found.displayName ?? "Someone without a name yet"}</strong>
+          </p>
+          {found.relation !== "none" ? (
+            <p className="muted">{relationNote[found.relation]}</p>
+          ) : (
+            <>
+              <label className="label" htmlFor="friend-send-player">
+                In your list, they are
+              </label>
+              <select
+                className="select-control"
+                id="friend-send-player"
+                value={sendPlayerId}
+                onChange={(event) => setSendPlayerId(event.target.value)}
+              >
+                <option value={NEW_PLAYER}>A new player</option>
+                {freePlayers.map((player) => (
+                  <option key={player.id} value={player.id}>
+                    {player.name}
+                  </option>
+                ))}
+              </select>
+              <label className="label" htmlFor="friend-claim-code">
+                Your player code in their list <span className="label-note">(optional)</span>
+              </label>
+              <input
+                className="field"
+                id="friend-claim-code"
+                autoCapitalize="characters"
+                autoComplete="off"
+                maxLength={14}
+                placeholder="P-XXXX-XXXX"
+                value={claimCode}
+                onChange={(event) => setClaimCode(event.target.value)}
+              />
+              <p className="muted small-note">
+                If they already record your games, ask them for your player
+                code so your history is linked to you. They confirm it.
+              </p>
+              {hasName ? null : (
+                <p className="field-error">Save your name above first.</p>
+              )}
+              <button
+                className="accent-button full"
+                type="button"
+                disabled={busy !== "" || !hasName}
+                onClick={send}
+              >
+                {busy === "send" ? "Sending…" : "Send friend request"}
+              </button>
+            </>
+          )}
+        </div>
+      ) : null}
+
+      {loadError ? (
+        <div className="directory-state">
+          <p className="muted">{loadError}</p>
+          <button className="ghost full" type="button" onClick={reload}>
+            Try again
+          </button>
+        </div>
+      ) : !overview ? (
+        <p className="muted">Loading your friends…</p>
+      ) : (
+        <>
+          {overview.received.map((request) => {
+            const choice = choiceFor(request);
+            const setChoice = (next: Partial<typeof choice>) =>
+              setChoices((current) => ({
+                ...current,
+                [request.requestId]: { ...choice, ...next },
+              }));
+            const selectId = `friend-accept-${request.requestId}`;
+            return (
+              <div className="friend-request" key={request.requestId}>
+                <p>
+                  <strong>{request.displayName ?? "Someone"}</strong> wants to
+                  be friends.
+                </p>
+                {request.claimedPlayerCode ? (
+                  <p className="muted small-note">
+                    {request.claimedPlayer ? (
+                      <>
+                        They say they&apos;re your player{" "}
+                        <strong>{request.claimedPlayer.name}</strong>.
+                      </>
+                    ) : (
+                      <>
+                        Their player code{" "}
+                        {formatPlayerCode(request.claimedPlayerCode)} doesn&apos;t
+                        match a player you can link.
+                      </>
+                    )}
+                  </p>
+                ) : null}
+                <label className="label" htmlFor={selectId}>
+                  In your list, they are
+                </label>
+                <select
+                  className="select-control"
+                  id={selectId}
+                  value={choice.playerId}
+                  onChange={(event) => setChoice({ playerId: event.target.value })}
+                >
+                  <option value={NEW_PLAYER}>A new player</option>
+                  {freePlayers.map((player) => (
+                    <option key={player.id} value={player.id}>
+                      {player.name}
+                    </option>
+                  ))}
+                </select>
+                {choice.playerId === NEW_PLAYER ? (
+                  <input
+                    className="field"
+                    aria-label="New player's name"
+                    maxLength={80}
+                    value={choice.newName}
+                    onChange={(event) => setChoice({ newName: event.target.value })}
+                  />
+                ) : null}
+                {requestError[request.requestId] ? (
+                  <p className="field-error" role="alert">
+                    {requestError[request.requestId]}
+                  </p>
+                ) : null}
+                {hasName ? null : (
+                  <p className="field-error">Save your name above first.</p>
+                )}
+                <div className="friend-actions">
+                  <button
+                    className="accent-button"
+                    type="button"
+                    disabled={busy !== "" || !hasName}
+                    onClick={() => answer(request, "accept")}
+                  >
+                    {busy === request.requestId ? "Saving…" : "Accept"}
+                  </button>
+                  <button
+                    className="ghost"
+                    type="button"
+                    disabled={busy !== ""}
+                    onClick={() => answer(request, "decline")}
+                  >
+                    Decline
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+
+          {overview.friends.length ? (
+            <ul className="friend-list">
+              {overview.friends.map((friend) => (
+                <li key={friend.accountId}>
+                  <div className="friend-copy">
+                    <strong>{friend.displayName ?? "Friend"}</strong>
+                    <small>
+                      {friend.myPlayer
+                        ? `Your player ${friend.myPlayer.name}`
+                        : "No player linked"}
+                      {friend.theirNameForMe
+                        ? ` · you're ${friend.theirNameForMe} in their list`
+                        : ""}
+                    </small>
+                  </div>
+                  <button
+                    className="pill-button"
+                    type="button"
+                    disabled={busy !== ""}
+                    onClick={() => remove(friend)}
+                  >
+                    Remove
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+
+          {overview.sent.length ? (
+            <ul className="friend-list">
+              {overview.sent.map((request) => (
+                <li key={request.requestId}>
+                  <div className="friend-copy">
+                    <strong>{request.displayName ?? "Someone"}</strong>
+                    <small>
+                      Request sent, waiting for an answer
+                      {request.myPlayerName
+                        ? ` · your player ${request.myPlayerName}`
+                        : ""}
+                    </small>
+                  </div>
+                  <button
+                    className="pill-button"
+                    type="button"
+                    disabled={busy !== ""}
+                    onClick={() => cancel(request.requestId)}
+                  >
+                    Cancel
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+
+          {!overview.friends.length &&
+          !overview.received.length &&
+          !overview.sent.length ? (
+            <p className="muted small-note">
+              No friends yet. Enter a friend&apos;s user code to send them a
+              request. Friends appear in each other&apos;s player lists.
+            </p>
+          ) : null}
+        </>
+      )}
+    </section>
+  );
+}
+
 function PlayersView({
-  profileCard,
+  network,
   players,
   discardedPlayers,
   loading,
@@ -3222,7 +3751,7 @@ function PlayersView({
   onRestore,
   onDeletePermanently,
 }: {
-  profileCard: React.ReactNode;
+  network: React.ReactNode;
   players: PlayerProfile[];
   discardedPlayers: PlayerProfile[];
   loading: boolean;
@@ -3271,7 +3800,7 @@ function PlayersView({
 
   return (
     <div className="stack-list">
-      {profileCard}
+      {network}
       <section className="glass card">
         <div className="count-hero">
           <strong className="gradient-text-vertical">{players.length}</strong>
@@ -3326,6 +3855,7 @@ function PlayersView({
                 </span>
                 <span className="directory-name">
                   {player.name}
+                  {player.linked ? <small> · friend</small> : null}
                   <button
                     className="directory-code"
                     type="button"
@@ -3361,7 +3891,7 @@ function PlayersView({
                   >
                     Restore
                   </button>
-                  {player.hasHistory ? null : (
+                  {player.hasHistory || player.linked ? null : (
                     <button
                       className="pill-button danger-text"
                       type="button"

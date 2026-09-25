@@ -267,6 +267,36 @@ Afterwards: 2 accounts, 22 players, no replacement audit events, as before. A br
 
 Rollback: see `migrations/README.md`.
 
+## 0011 friend requests
+
+- Date: 2026-09-25
+- Isolated branch: `multi-user-auth` (`br-little-rain-ay5fufwv`)
+- Production changed: no
+- Migration: `migrations/0011_friend_requests.sql`, applied as the owner in one transaction. The first attempt failed and rolled back: the check `linked_account_id IS DISTINCT FROM owner_id` rejected legacy players with no owner (both NULL). It became `linked_account_id IS NULL OR (owner_id IS NOT NULL AND linked_account_id <> owner_id)`, and the second attempt succeeded.
+
+Run as `menoka_app` from `.env.local` with three fixture accounts (host A, friend B, stranger C, plus 20 extra accounts for the limit) inside one `DO` block that ends by raising an exception, so everything was rolled back (40 of 40 passed):
+
+| Area | Checks |
+| --- | --- |
+| No direct access | Reading `friend_requests` or `friend_connections`, inserting a connection, and calling the internal helpers `friend_caller` and `friend_audit`: permission denied each |
+| Links only through requests | Inserting a player with a link, or changing a link: refused by the trigger |
+| Find | Returns only name and relation (`none`, `self`, `friends`) |
+| Send | Needs a name; refuses own code, unknown code, another host's player, a duplicate, and a reverse request while one waits |
+| Only the recipient answers | Stranger can't accept, decline or cancel, and sees an empty overview; the sender can't accept their own request |
+| Accept | Recipient sees the claimed player; can't link another host's player or reuse a taken name; accepting links the chosen players on both sides; both overviews show the friend, the linked player and the other side's name; a new request then says "already friends" |
+| Protection | A linked player can't be deleted but can be discarded and restored; the stranger still sees no players and can't remove the friendship |
+| Remove | Unlinks both sides and keeps every player |
+| Name clash | A new player on the sender's side becomes "Host A (2)" |
+| Decline and cancel | Asking again within 7 days after a decline is refused; cancel then resend works |
+| Limits | The 21st pending request is refused |
+| Locked accounts | A locked caller is refused; a locked account can't be found and its requests are hidden; no signed-in user is refused |
+
+As the owner, also rolled back: deleting an account the way the purge does left the friend's player in place and unlinked, and removed the deleted account's players, friendship and requests.
+
+Browser round trip on the same branch (see the plan entry), with a temporary "Test Friend" fixture account created as the owner, which acted through the same functions: accept with a claimed player, remove, send with a chosen player and a claimed code, the fixture accepting it, cancel, and decline. Afterwards the fixture account was deleted: 2 accounts, 22 players, 0 links, 0 requests, 0 friendships, 24 owned games and 72 results, as before. The dev account keeps audit events from the round trip.
+
+Rollback: see `migrations/README.md`.
+
 ## Production application
 
 - Date: 2026-09-25
