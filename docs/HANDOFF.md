@@ -1,6 +1,6 @@
 # Session handoff
 
-Updated 2026-09-25 on `feature/multi-user-transition`. **The multi-user version is live.** Production runs `0a8b814`; the user signed in and has their 27 legacy games. What's left is small: Healthchecks email alerts, switching the firewall rule from Log to 429 after a week, two later claims, and some tidying. Replace this file at the end of each session; don't let it grow.
+Updated 2026-09-25 on `main`. **The multi-user version is live.** Production runs `0a8b814`; the user signed in and has their 27 legacy games. What's left is small: Healthchecks email alerts, switching the firewall rule from Log to 429 after a week, two later claims, and some tidying. Replace this file at the end of each session; don't let it grow.
 
 ## Read first
 
@@ -11,11 +11,11 @@ Updated 2026-09-25 on `feature/multi-user-transition`. **The multi-user version 
 
 ## Where things stand
 
-- **Live site** (https://menokacardgames.vercel.app): `main` = `0a8b814` = this branch. Magic-link sign-in only. therajarshiroy@gmail.com (account `4db9f3e6-9b4b-445b-8ca3-831773acdb3c`) sees 27 games, 9 players, and standings matching the rehearsal (Debraj +18.56%, Rajarshi +17.08%, …). The app connects as `menoka_app`.
+- **Live site** (https://menokacardgames.vercel.app): production runs `0a8b814`. Local `main` is ahead of GitHub with doc commits and a small clean-up (unused CSS and starter images), not yet pushed; pushing deploys. Magic-link sign-in only. therajarshiroy@gmail.com (account `4db9f3e6-9b4b-445b-8ca3-831773acdb3c`) sees 27 games, 9 players, and standings matching the rehearsal (Debraj +18.56%, Rajarshi +17.08%, …). The app connects as `menoka_app`.
 - **Production database: `br-small-sea-ayumyssr`**, now named "production" again, pooled host `ep-delicate-pond-ay8ple8b-pooler`. It has migrations 0001, 0002 and 0004–0008. The legacy games 24, 25, 32, 33 and 37 stay unowned and hidden.
 - **Neon's default branch is still the copy** `br-withered-glitter-ay2zbaoe` (renamed `restore-copy-2026-09-24`). A snapshot restore yesterday swapped the names, which misled the user's console work today. It holds pre-cutover data (32 games) and two unused roles, `menoka_app` and `menoka_purge`, created on it by mistake. **Ask the user** whether to make `br-small-sea` the default and delete the copy.
 - **Vercel Production variables:** all nine are set, and `DELETION_PASSWORD` is gone. The purge cron ran twice by hand, both 200 with nothing due.
-- **Uncommitted:** a post-launch doc review (2026-09-25) touching `README.md`, `AGENTS.md`, `CONTEXT.md`, `migrations/README.md` and every file in `docs/`, plus the untracked `scripts/`. Ask before committing. The docs don't need to be deployed.
+- **Uncommitted:** only the untracked `scripts/` (migration and Neon Auth helpers) and the redesign's `design_handoff_sporty_glass_redesign/`.
 
 ## Next steps
 
@@ -27,7 +27,7 @@ Updated 2026-09-25 on `feature/multi-user-transition`. **The multi-user version 
 
 ## Open decisions
 
-Saved in the plan's pending register (rows dated 2026-09-25): which git branch new work starts from, Healthchecks alerts, committing the docs and `scripts/`, the Neon default branch, Neon branch clean-up, a post-cutover snapshot, and custom SMTP (deferred). Ask the user before acting on any of them.
+Saved in the plan's pending register (rows dated 2026-09-25): Healthchecks alerts, committing the docs and `scripts/`, the Neon default branch, Neon branch clean-up, a post-cutover snapshot, and custom SMTP (deferred). Ask the user before acting on any of them.
 
 ## Rollback (only with the user's decision)
 

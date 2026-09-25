@@ -4,7 +4,7 @@ Updated 2026-09-25. Durable working agreements, decisions and environment facts,
 
 ## Working agreements
 
-- Work one reviewed step at a time. Stop and report after each step, then commit when the user approves. Never push unless asked. Since the 2026-09-25 cutover, `main` and `feature/multi-user-transition` point at the same commit; which branch new work starts from is an open decision in the plan's register.
+- Work one reviewed step at a time. Stop and report after each step, then commit when the user approves. Never push unless asked. Work happens on `main`; the merged feature and release branches were deleted on 2026-09-25. A push to `main` deploys to production.
 - The multi-user version went live on 2026-09-25 (see the plan's decision history). Any further production data change, including the remaining ownership claims, needs the user's go-ahead in chat for that step. Development database work stays on the isolated Neon branch. Game-only changes (no database or auth change) may be released separately: backport them onto a branch from `main`, test on a Vercel preview, then push to `main` one commit at a time, with the user's go-ahead (first done 2026-09-24).
 - Preserve existing game rules and flows unless a requested feature changes them.
 - When the user delegates a trade-off, choose the long-term, easy-to-debug option and explain why. Ask when the choice changes behaviour the user will notice.

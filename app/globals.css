@@ -252,40 +252,6 @@ hr {
   white-space: nowrap;
 }
 
-.brand {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-}
-
-.brand-button {
-  min-height: 42px;
-  padding: 5px 0;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  text-align: left;
-}
-
-.brand .spade {
-  color: var(--gold);
-  font-family: var(--serif);
-  font-size: 22px;
-  line-height: 1;
-}
-
-.brand .word {
-  overflow: hidden;
-  color: var(--fg);
-  font-family: var(--serif);
-  font-size: 19px;
-  letter-spacing: 0.15px;
-  line-height: 1;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .rules-trigger {
   flex: none;
   justify-self: end;
@@ -931,32 +897,6 @@ hr {
 
 .hand-back-button {
   margin-bottom: 16px;
-}
-
-.tabs {
-  display: flex;
-  gap: 24px;
-  margin: 0 -18px 18px;
-  padding: 0 18px;
-  border-bottom: 1px solid var(--hair);
-}
-
-.tabs button {
-  flex: none;
-  padding: 0 0 11px;
-  border: 0;
-  border-bottom: 2px solid transparent;
-  border-radius: 0;
-  background: transparent;
-  color: var(--dim2);
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.8px;
-}
-
-.tabs button.on {
-  border-bottom-color: var(--gold);
-  color: var(--gold);
 }
 
 .segs {
@@ -1829,10 +1769,6 @@ hr {
 .rank.gold {
   background: var(--gold);
   color: var(--on-gold);
-}
-
-.best {
-  font-size: 12px;
 }
 
 .retry {
