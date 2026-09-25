@@ -184,7 +184,7 @@ Official sources checked 2026-09-20; recheck during implementation/release:
 | Custom SMTP for sign-in emails | Deferred by user choice: Neon's shared sender is used. Revisit if emails are slow, land in spam, or hit the shared sender's rate limit |
 | Retire superseded files | Kept for now by user decision (2026-09-25). Delete `migrations/data/0003_backfill_rajarshi_reviewed_history.sql` (development-only, replaced by 0008) once nothing depends on it, and shrink `HISTORICAL-OWNERSHIP.md` to a note once the Emon-led and Rahul Basak claims are done. Update the docs that mention them in the same change |
 | Live standings link for players | Released to production on 2026-09-25 (`13f9838`, with the redesign); migration 0009 was already applied. Not yet checked on production: the iOS share sheet, a locked host screen, and CDN caching of the public GET |
-| Host invitations / friend network | Accepted by the user 2026-09-25 (see the dated entry "friend network (accepted)"): friend requests by app-generated user code, both people in each other's friend list, host approval for every player link, each linked host's standings visible, unfriending unlinks, request limits, self-unlinking, no combined score. Building in three reviewed steps. Step 1 (identity basics, migration 0010, committed `283d0f2`) and step 2 (friend requests, migration 0011) built and rehearsed on the dev branch on 2026-09-25; the user asked to release them together. Not on production. Step 3 (group standings) next |
+| Host invitations / friend network | Accepted by the user 2026-09-25 (see the dated entry "friend network (accepted)"): friend requests by app-generated user code, both people in each other's friend list, host approval for every player link, each linked host's standings visible, unfriending unlinks, request limits, self-unlinking, no combined score. Building in three reviewed steps. Step 1 (identity basics, migration 0010, committed `283d0f2`) and step 2 (friend requests, migration 0011) built and rehearsed on the dev branch on 2026-09-25; step 2 passed a two-account preview test. Step 3 (group standings, migration 0012) built and rehearsed the same day. The user asked to release all three together after a preview check. Not on production |
 | Cloud draft sync / device handoff | Deferred; needs conflict policy |
 | Shared ledgers/invitations | Requested 2026-09-25; see "Host invitations / friend network" above |
 | App Store / Play Store | Future separate plan after web stability |
@@ -465,6 +465,29 @@ Each step extends the purge, the deletion disclosure, `FEATURES.md` and the isol
   1. apply 0010, then 0011, to `br-small-sea-ayumyssr`; both are additive, so the live code keeps working;
   2. push `main`.
   - A Vercel preview first needs both migrations on `br-tiny-forest-ayt6f3fe`.
+
+2026-09-25 friend network step 3 (group standings): Built as the last of the three accepted build steps; not released. The user asked to release all three together, after a preview test. **Preview test of steps 1–2 (before this step):** the user signed in on the preview with two more emails ("Debraj Test" and "Saheb") and sent requests to the host account. The host accepted both. The preview database showed "Debraj", who has history, linked to Debraj Test; a new "Saheb" player; and "Rajarshi" linked in both friends' lists. That gave 2 friendships, and the 27 games were untouched. The user then noticed that the friend can't see the host's rankings yet, which is this step.
+
+- **Accepted behaviour (user decision, round 2):** a linked person sees each linked host's standings list next to their own. There is no combined score or screen.
+- **Agent's choices:**
+  - The friend's phone gets **only the ranked rows**: rank, name, score, the five stats, and which row is theirs. The server ranks the host's games with the same `buildStandings` and sends no game, session or player IDs. The graph and the names of excluded games are left out.
+  - The choice sits at the top of the existing **Ranks** screen ("Your games" plus one button per host) instead of a new tab.
+  - The list updates when the screen opens.
+- **Migration `0012_group_standings`:** `friend_group_sessions()` (`SECURITY DEFINER`, runtime role only). It returns hosts whose ledger links the caller, while both are friends and the host is active, with their saved, non-discarded games and verified results.
+- **Code:**
+  - the pure `lib/friends/group-standings.ts` (`buildGroupStandings`);
+  - `GET /api/groups`;
+  - in the ledger, `RanksView` (the choice, and the header follows it), `GroupStandingsView`, and `StandingCard`, taken out of `StandingsView` so both views share it. Your own standings are unchanged.
+- **Checks:**
+  - 5 new unit tests (144 in total), including "same ranks as the host's own standings" and "no IDs sent";
+  - the rehearsal passed 10 of 10 as `menoka_app` (see `MIGRATION-REHEARSALS.md`);
+  - browser check on a copy on port 3007 at 375px and 320px, dark and light, with a temporary two-game fixture host: +25.00% and 0.00% match a hand calculation, the **You** tag shows, a row opens, the header follows the choice and resets when you leave the screen, and there's no sideways scroll.
+  - Testing shortened the header to "Name · N games" so it fits at 320px.
+  - The fixture was deleted afterwards.
+- **Release plan (each production step with the user's go-ahead):**
+  1. apply 0012 to the preview branch `br-tiny-forest-ayt6f3fe`, push to `live-view`, and have the user check "Rajarshi's games" as Debraj Test;
+  2. apply 0010, 0011 and 0012 to `br-small-sea-ayumyssr`;
+  3. push `main`.
 
 ### Purge go-live checklist (production, requires separate authorization)
 

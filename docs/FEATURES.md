@@ -279,7 +279,15 @@ Everyone who signs in has their own account and can host their own games. Friend
 - Each friend is listed with the player they are in your list and the name you have in theirs, for example "Your player Debraj · you're Rajarshi Roy in their list". This is how you see which hosts have you as a linked player.
 - **Remove** (with a confirmation) ends the friendship and unlinks the players on both sides. Both of you keep the players and every game. Linking again needs a new friend request. Either person can remove the other.
 - **Refresh** reloads the card and the player list. Requests and new friends don't appear on their own; open the Players screen or press Refresh.
-- **What friends can see:** for now, only each other's name. Seeing each other's group standings comes in a later update.
+- **What friends can see:** each other's name, and the standings of any host who has you as a linked player (see "Group standings" below). They never see your email, your saved games one by one, your graph or anything they could change.
+
+**Group standings (the Ranks screen)**
+
+- **Your games and your groups.** When at least one host has you as a linked friend, the top of the **Ranks** screen shows a choice: **Your games** (your own standings, exactly as before) and one "Name's games" button per host, in alphabetical order. The choice scrolls sideways when there are many.
+- **What a group shows:** that host's standings list, ranked exactly as the host sees it (same average session return, same ties): every player's rank, name, score and, when opened, Sessions, Profitable, Hands, Invested and Net chips. Your own row is outlined in green and marked **You**. Above the list: how many games the host has saved, which of their players you are, and the date of their last game. The screen header shows the host's name and game count.
+- **What a group doesn't show:** the host's game-by-game history, the running-average graph, the names of games left out of the ranking, discarded games, or anything you could change. The app works the standings out on the server and sends your phone only the list.
+- **When it updates:** each time you open the Ranks screen.
+- **When a group disappears:** as soon as either of you removes the friendship, or while the host's account is locked for deletion. There is no combined score across groups.
 
 ---
 

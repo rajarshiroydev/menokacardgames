@@ -16,13 +16,14 @@ Updated 2026-09-25 on **`main`**. **Production now runs `13f9838`**: the multi-u
   - request limits: 20 outgoing pending, and 7 days after a decline;
   - people can see which hosts link them and unlink themselves;
   - no combined score or screen across hosts (the user: it would only create confusion).
-- **The user accepted the model.** Steps 1 and 2 are built; the user asked to **release them together**.
-  - **Step 1 (identity basics):** migration 0010, committed `283d0f2`.
-  - **Step 2 (friend requests):** migration 0011, plus the Friends card on the Players screen.
+- **The user accepted the model.** All three steps are built and committed on `main`, and the user asked to **release them together**:
+  - **step 1:** codes and names (0010);
+  - **step 2:** friend requests (0011);
+  - **step 3:** group standings (0012), shown on the Ranks screen.
 
-  Both are rehearsed on `br-little-rain-ay5fufwv` only; see the plan entries "friend network step 1" and "step 2".
-- **To release:** with the user's go-ahead for each step, apply 0010 and then 0011 to production `br-small-sea-ayumyssr` (additive; the live code ignores them), then push `main` and watch the Vercel build. Recommended first: a Vercel preview test with two real sign-ins (the user plus a second email), which needs both migrations on the preview branch `br-tiny-forest-ayt6f3fe`. The agent's SQL there was blocked last time, so the user may need to run it in the Neon editor.
-- **Next build step:** step 3, group standings: a `SECURITY DEFINER` read returning a linked host's standings only while both are friends and active, plus a screen listing each group's standings.
+  The plan entries are "friend network step 1/2/3".
+- **Preview:** `br-tiny-forest-ayt6f3fe` has 0010 and 0011, and the user's two-account test of step 2 passed there: Debraj Test and Saheb are friends of the host. Next on the preview: 0012, a push to `live-view`, and the user checks "Rajarshi's games" as Debraj Test.
+- **Then production, with a go-ahead for each step:** apply 0010, 0011 and 0012 to `br-small-sea-ayumyssr`, push `main`, and watch the build.
 - Each build step: versioned migration (0010, 0011, …), three-account rehearsal on `br-little-rain-ay5fufwv`, go-ahead per production step on `br-small-sea-ayumyssr`.
 
 ## Release done this session

@@ -62,6 +62,7 @@ import {
   MAX_DISPLAY_NAME_LENGTH,
 } from "@/lib/accounts/identity-code";
 import { DELETION_GRACE_PERIOD_DAYS } from "@/lib/accounts/lifecycle";
+import type { GroupStandings } from "@/lib/friends/group-standings";
 import type { FoundAccount, FriendOverview } from "@/lib/friends/requests";
 import { authClient } from "@/lib/auth/client";
 import { apiErrorMessage } from "@/lib/security/rate-limit-message";
@@ -438,6 +439,8 @@ export function PokerLedger({
   const [historyLoading, setHistoryLoading] = useState(true);
   const [historyError, setHistoryError] = useState("");
   const [players, setPlayers] = useState<PlayerProfile[]>([]);
+  /** The Ranks header while a friend's group is shown instead of your own games. */
+  const [ranksEyebrow, setRanksEyebrow] = useState<string | null>(null);
   const [discardedPlayers, setDiscardedPlayers] = useState<PlayerProfile[]>(
     [],
   );
@@ -1553,9 +1556,11 @@ export function PokerLedger({
           ? { eyebrow: "New game", title: "Table Setup" }
           : view === "history"
             ? {
-                eyebrow: `All-time · ${history.length} session${
-                  history.length === 1 ? "" : "s"
-                }`,
+                eyebrow:
+                  ranksEyebrow ??
+                  `All-time · ${history.length} session${
+                    history.length === 1 ? "" : "s"
+                  }`,
                 title: "Standings",
               }
             : view === "sessions"
@@ -1624,7 +1629,8 @@ export function PokerLedger({
         {view === "home" ? (
           homeView
         ) : view === "history" ? (
-          <StandingsView
+          <RanksView
+            onGroupShown={setRanksEyebrow}
             history={history}
             loading={historyLoading}
             error={historyError}
@@ -5251,6 +5257,264 @@ const INELIGIBLE_REASON_TEXT: Record<IneligibleReason, string> = {
 
 const STANDINGS_START = 4;
 
+/** What a standings row shows; shared by your own and a group's standings. */
+type StandingCardEntry = {
+  rank: number | null;
+  name: string;
+  averageReturn: number | null;
+  eligibleSessions: number;
+  totalSessions: number;
+  invested: number;
+  net: number;
+  hands: number;
+  profitableSessions: number;
+  isMe?: boolean;
+};
+
+function StandingCard({
+  entry,
+  open,
+  onToggle,
+  excluded,
+}: {
+  entry: StandingCardEntry;
+  open: boolean;
+  onToggle: () => void;
+  excluded?: React.ReactNode;
+}) {
+  const profitableRate = Math.round(
+    (entry.profitableSessions / entry.totalSessions) * 100,
+  );
+  const stats: Array<[string, string, number | null]> = [
+    [
+      "Sessions",
+      entry.eligibleSessions === entry.totalSessions
+        ? String(entry.totalSessions)
+        : `${entry.totalSessions} (${entry.eligibleSessions} ranked)`,
+      null,
+    ],
+    ["Profitable", `${entry.profitableSessions} (${profitableRate}%)`, null],
+    ["Hands", entry.hands.toLocaleString("en-IN"), null],
+    ["Invested", formatRupees(entry.invested), null],
+    ["Net chips", formatSignedRupees(entry.net), entry.net],
+  ];
+  return (
+    <section className={`glass standing-card${entry.isMe ? " is-me" : ""}`}>
+      <button
+        className="standing-toggle"
+        type="button"
+        aria-expanded={open}
+        onClick={onToggle}
+      >
+        <span
+          className={`medal ${
+            entry.rank === 1
+              ? "first"
+              : entry.rank === 2 || entry.rank === 3
+                ? "podium"
+                : ""
+          }`}
+        >
+          {entry.rank ?? "–"}
+        </span>
+        <span className="standing-name">
+          <b>
+            {entry.name}
+            {entry.isMe ? <span className="you-tag">You</span> : null}
+          </b>
+          {entry.averageReturn === null ? (
+            <small>Unranked · no verified buy-ins</small>
+          ) : null}
+        </span>
+        <span className={`standing-return ${toneClass(entry.averageReturn)}`}>
+          {entry.averageReturn === null ? "—" : formatPercent(entry.averageReturn)}
+        </span>
+        <span className="chevron" aria-hidden="true">
+          {open ? "▲" : "▼"}
+        </span>
+      </button>
+      {open ? (
+        <div className="standing-details">
+          <dl>
+            {stats.map(([label, value, tone]) => (
+              <div key={label}>
+                <dt>{label}</dt>
+                <dd className={toneClass(tone)}>{value}</dd>
+              </div>
+            ))}
+          </dl>
+          {excluded}
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+/**
+ * The Ranks screen: your own standings, plus the standings of every group
+ * whose host has you as a linked friend.
+ */
+function RanksView({
+  onGroupShown,
+  ...props
+}: Parameters<typeof StandingsView>[0] & {
+  onGroupShown: (eyebrow: string | null) => void;
+}) {
+  const [groups, setGroups] = useState<GroupStandings[]>([]);
+  const [groupsError, setGroupsError] = useState("");
+  const [selected, setSelected] = useState("mine");
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const response = await fetch("/api/groups");
+        const data = (await response.json().catch(() => ({}))) as {
+          groups?: GroupStandings[];
+          error?: string;
+        };
+        if (!response.ok) {
+          throw new Error(
+            apiErrorMessage(response.status, data.error, "Could not load your groups"),
+          );
+        }
+        if (cancelled) return;
+        setGroups(data.groups ?? []);
+        setGroupsError("");
+      } catch (error) {
+        if (cancelled) return;
+        setGroupsError(
+          error instanceof Error ? error.message : "Could not load your groups",
+        );
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const group = groups.find((item) => item.hostAccountId === selected);
+  const groupEyebrow = group
+    ? `${group.hostName ?? "Friend"} · ${group.games} game${
+        group.games === 1 ? "" : "s"
+      }`
+    : null;
+
+  useEffect(() => {
+    onGroupShown(groupEyebrow);
+  }, [groupEyebrow, onGroupShown]);
+  useEffect(() => () => onGroupShown(null), [onGroupShown]);
+
+  return (
+    <div className="stack-list">
+      {groups.length ? (
+        <div
+          className="segmented scrolling"
+          role="radiogroup"
+          aria-label="Whose standings"
+        >
+          {[
+            { id: "mine", label: "Your games" },
+            ...groups.map((item) => ({
+              id: item.hostAccountId,
+              label: `${item.hostName ?? "Friend"}'s games`,
+            })),
+          ].map((option) => (
+            <button
+              key={option.id}
+              className={selected === option.id ? "selected" : ""}
+              type="button"
+              role="radio"
+              aria-checked={selected === option.id}
+              onClick={() => setSelected(option.id)}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+      ) : null}
+      {groupsError ? <p className="muted small-note">{groupsError}</p> : null}
+      {group ? <GroupStandingsView group={group} /> : <StandingsView {...props} />}
+    </div>
+  );
+}
+
+function GroupStandingsView({ group }: { group: GroupStandings }) {
+  const [expanded, setExpanded] = useState<Set<number>>(new Set());
+  const [showAll, setShowAll] = useState(false);
+  const [showRankingHelp, setShowRankingHelp] = useState(false);
+  const rows = group.rows;
+  const visible = showAll ? rows : rows.slice(0, STANDINGS_START);
+  const hostName = group.hostName ?? "Your friend";
+
+  function toggle(index: number) {
+    setExpanded((current) => {
+      const next = new Set(current);
+      if (next.has(index)) next.delete(index);
+      else next.add(index);
+      return next;
+    });
+  }
+
+  return (
+    <div className="stack-list">
+      <div className="section-heading">
+        <div className="heading-with-info">
+          <h2>{hostName}&apos;s games</h2>
+          <button
+            className="info-button"
+            type="button"
+            aria-label="How players are ranked"
+            onClick={() => setShowRankingHelp(true)}
+          >
+            i
+          </button>
+        </div>
+        <span className="card-note">
+          {group.games} game{group.games === 1 ? "" : "s"}
+        </span>
+      </div>
+      <p className="muted small-note">
+        {hostName} records these games. You&apos;re {group.myPlayerName} in their
+        list.
+        {group.lastPlayed
+          ? ` Last game ${new Date(group.lastPlayed).toLocaleDateString("en-IN", {
+              day: "numeric",
+              month: "short",
+              year: "numeric",
+            })}.`
+          : ""}
+      </p>
+      {rows.length ? (
+        visible.map((row, index) => (
+          <StandingCard
+            key={`${row.name}-${index}`}
+            entry={row}
+            open={expanded.has(index)}
+            onToggle={() => toggle(index)}
+          />
+        ))
+      ) : (
+        <section className="glass card">
+          <p className="muted">{hostName} hasn&apos;t saved any games yet.</p>
+        </section>
+      )}
+      {rows.length > STANDINGS_START ? (
+        <button
+          className="glass-button full accent-text"
+          type="button"
+          onClick={() => setShowAll((shown) => !shown)}
+        >
+          {showAll ? "Show fewer" : `Show all ${rows.length} players`}
+        </button>
+      ) : null}
+      {showRankingHelp ? (
+        <RankingHelp onClose={() => setShowRankingHelp(false)} />
+      ) : null}
+    </div>
+  );
+}
+
 function StandingsView({
   history,
   loading,
@@ -5336,87 +5600,26 @@ function StandingsView({
           {leaderboard.length} player{leaderboard.length === 1 ? "" : "s"}
         </span>
       </div>
-      {visible.map((entry) => {
-        const open = expanded.has(entry.key);
-        const profitableRate = Math.round(
-          (entry.profitableSessions / entry.totalSessions) * 100,
-        );
-        const stats: Array<[string, string, number | null]> = [
-          [
-            "Sessions",
-            entry.eligibleSessions === entry.totalSessions
-              ? String(entry.totalSessions)
-              : `${entry.totalSessions} (${entry.eligibleSessions} ranked)`,
-            null,
-          ],
-          [
-            "Profitable",
-            `${entry.profitableSessions} (${profitableRate}%)`,
-            null,
-          ],
-          ["Hands", entry.hands.toLocaleString("en-IN"), null],
-          ["Invested", formatRupees(entry.invested), null],
-          ["Net chips", formatSignedRupees(entry.net), entry.net],
-        ];
-        return (
-          <section className="glass standing-card" key={entry.key}>
-            <button
-              className="standing-toggle"
-              type="button"
-              aria-expanded={open}
-              onClick={() => toggle(entry.key)}
-            >
-              <span
-                className={`medal ${
-                  entry.rank === 1
-                    ? "first"
-                    : entry.rank === 2 || entry.rank === 3
-                      ? "podium"
-                      : ""
-                }`}
-              >
-                {entry.rank ?? "–"}
-              </span>
-              <span className="standing-name">
-                <b>{entry.name}</b>
-                {entry.averageReturn === null ? (
-                  <small>Unranked · no verified buy-ins</small>
-                ) : null}
-              </span>
-              <span className={`standing-return ${toneClass(entry.averageReturn)}`}>
-                {entry.averageReturn === null
-                  ? "—"
-                  : formatPercent(entry.averageReturn)}
-              </span>
-              <span className="chevron" aria-hidden="true">
-                {open ? "▲" : "▼"}
-              </span>
-            </button>
-            {open ? (
-              <div className="standing-details">
-                <dl>
-                  {stats.map(([label, value, tone]) => (
-                    <div key={label}>
-                      <dt>{label}</dt>
-                      <dd className={toneClass(tone)}>{value}</dd>
-                    </div>
-                  ))}
-                </dl>
-                {entry.ineligible.length ? (
-                  <ul className="leaderboard-excluded">
-                    {entry.ineligible.map(({ sessionId, reason }) => (
-                      <li key={sessionId}>
-                        Not ranked: {sessionTitles.get(sessionId) ?? sessionId}{" "}
-                        — {INELIGIBLE_REASON_TEXT[reason]}
-                      </li>
-                    ))}
-                  </ul>
-                ) : null}
-              </div>
-            ) : null}
-          </section>
-        );
-      })}
+      {visible.map((entry) => (
+        <StandingCard
+          key={entry.key}
+          entry={entry}
+          open={expanded.has(entry.key)}
+          onToggle={() => toggle(entry.key)}
+          excluded={
+            entry.ineligible.length ? (
+              <ul className="leaderboard-excluded">
+                {entry.ineligible.map(({ sessionId, reason }) => (
+                  <li key={sessionId}>
+                    Not ranked: {sessionTitles.get(sessionId) ?? sessionId}{" "}
+                    — {INELIGIBLE_REASON_TEXT[reason]}
+                  </li>
+                ))}
+              </ul>
+            ) : null
+          }
+        />
+      ))}
       {leaderboard.length > STANDINGS_START ? (
         <button
           className="glass-button full accent-text"

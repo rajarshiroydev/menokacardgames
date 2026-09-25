@@ -569,6 +569,17 @@ p {
   color: var(--onacc);
 }
 
+/* Many options (the Ranks screen's groups): scroll sideways instead of squeezing. */
+.segmented.scrolling {
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.segmented.scrolling button {
+  flex: 1 0 auto;
+  padding: 0 14px;
+}
+
 /* Avatars */
 
 .avatar {
@@ -2204,6 +2215,22 @@ p {
 
 .standing-card {
   overflow: hidden;
+}
+
+.standing-card.is-me {
+  border-color: var(--g);
+}
+
+.you-tag {
+  margin-left: 8px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--g);
+  color: var(--onacc);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  vertical-align: 2px;
 }
 
 .heading-with-info {

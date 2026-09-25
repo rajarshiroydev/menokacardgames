@@ -297,6 +297,30 @@ Browser round trip on the same branch (see the plan entry), with a temporary "Te
 
 Rollback: see `migrations/README.md`.
 
+## 0012 group standings
+
+- Date: 2026-09-25
+- Isolated branch: `multi-user-auth` (`br-little-rain-ay5fufwv`)
+- Production changed: no
+- Migration: `migrations/0012_group_standings.sql`, applied as the owner in one transaction, no errors
+
+Run as `menoka_app` inside one `DO` block that ends by raising an exception, so everything was rolled back (10 of 10 passed). A fixture friend sent a request claiming Debraj in the real dev ledger, and the dev host accepted it through `friend_accept`:
+
+| Check | Result |
+| --- | --- |
+| Before linking, and while the request waits | No groups |
+| After accepting | One group: host "Rajarshi Roy", your player "Debraj", 24 saved games, 72 verified results |
+| Friend reads the host's `poker_sessions` or `session_results` directly | 0 rows (row security unchanged) |
+| Stranger | No groups |
+| Host discards a game | 23 games |
+| Host locked for deletion | No groups; visible again after recovery |
+| Friend removes the host | No groups |
+| Locked caller | Refused (`friend:locked`) |
+
+Browser round trip on the same branch (see the plan entry) with a temporary "Test Host" fixture (two games, linked to the dev account) created as the owner. Afterwards the fixture and the player it added to the dev list were deleted: 2 accounts, 22 players, no links or friendships, 24 owned games and 72 results.
+
+Rollback: see `migrations/README.md`.
+
 ## Production application
 
 - Date: 2026-09-25
