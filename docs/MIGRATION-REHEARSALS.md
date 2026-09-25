@@ -246,3 +246,4 @@ Rollback: `DROP FUNCTION public.read_live_view(bytea); DROP TABLE live_views; DE
 - Applied: 0001, 0002, 0004, 0005, 0006, 0007 and 0008, one transaction each, no errors. `data/0003` is development only.
 - After: 7 `app_migrations` rows, 32 unowned games, 15 unowned players, 0 accounts; `menoka_app` and `menoka_purge` not superusers, no `BYPASSRLS`, not in `neon_superuser`.
 - Then the claim for Rajarshi returned 27, and standings matched the rehearsal. Details are in the plan's "2026-09-25 multi-user production cutover" entry.
+- Later the same day, with the user's go-ahead: 0009 applied in one transaction, no errors. Before: 0001–0008 except 0003, no `live_views`, 1 account, 27 owned games. After: `0009_live_views` recorded, row security on, 0 rows, 27 owned games. The preview branch `br-tiny-forest-ayt6f3fe` got 0009 earlier from the user in the Neon editor.

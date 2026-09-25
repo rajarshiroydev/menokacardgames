@@ -183,9 +183,10 @@ Official sources checked 2026-09-20; recheck during implementation/release:
 | Post-cutover snapshot | Open (2026-09-25): the free plan keeps one snapshot, and it is the pre-migration `snap-sparkling-sun-aykr4j1y`, which is only useful for a full rollback. Replacing it with a post-cutover snapshot gives up that rollback point |
 | Custom SMTP for sign-in emails | Deferred by user choice: Neon's shared sender is used. Revisit if emails are slow, land in spam, or hit the shared sender's rate limit |
 | Retire superseded files | Kept for now by user decision (2026-09-25). Delete `migrations/data/0003_backfill_rajarshi_reviewed_history.sql` (development-only, replaced by 0008) once nothing depends on it, and shrink `HISTORICAL-OWNERSHIP.md` to a note once the Emon-led and Rahul Basak claims are done. Update the docs that mention them in the same change |
-| Live standings link for players | Built 2026-09-25 on branch `live-view` (see the dated entry). Migration 0009 is on the development branch only. Next: user review, then a Vercel preview, then production 0009 with the user's go-ahead |
+| Live standings link for players | Built 2026-09-25 on branch `live-view` (see the dated entry); the user tested it on a Vercel preview from a phone and asked for two layout changes, both done. Migration 0009 is applied to production. Release (fast-forward `main` to `live-view`, together with the redesign) was requested and then paused by the user for the invitations idea; confirm before releasing |
+| Host invitations / user network | New idea 2026-09-25, not started. The user wants the app to stay behind sign-in, with hosts inviting people to join (a network of users). The idea of visitors seeing standings without signing in was dropped. This reverses the "no invitations or shared ledgers" decision; the next step is a proposal entry with decisions (see `HANDOFF.md`) |
 | Cloud draft sync / device handoff | Deferred; needs conflict policy |
-| Shared ledgers/invitations | Out of initial scope; add only if requested |
+| Shared ledgers/invitations | Requested 2026-09-25; see "Host invitations / user network" above |
 | App Store / Play Store | Future separate plan after web stability |
 
 ## Decision history and planning convention
