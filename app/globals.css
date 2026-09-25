@@ -2985,24 +2985,24 @@ p {
 }
 
 .live-stack {
-  display: flex;
-  align-items: baseline;
-  gap: 6px;
+  display: block;
+  margin-top: 2px;
   font-family: var(--fd);
   font-size: min(28px, 7.5vw);
   font-weight: 900;
   font-variation-settings: "opsz" 72;
-  line-height: 1.1;
+  line-height: 1.05;
   white-space: nowrap;
 }
 
+/* Same style as the Buy-In line, so both labels read as one family. */
 .live-stack small {
-  color: var(--ink3);
+  display: block;
+  color: var(--ink2);
   font-family: var(--fb);
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.4;
 }
 
 .live-values {
