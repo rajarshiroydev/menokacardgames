@@ -24,19 +24,18 @@ import {
   dealNewHand,
   DEFAULT_BLIND_SCHEDULE,
   editBlindSchedule,
-  formatChipChange,
   formatDate,
   formatPercent,
   formatRupees,
   applyRaiseRules,
   mayRaise,
   minimumRaise,
-  resetRaiseRules,
   undoRaiseRules,
   nextBuyIn,
   nextPlayerToAct,
   pendingIndexes,
   pendingBlindPlan,
+  resetRaiseRules,
   returnToBetweenHands,
   smallBlindFor,
   STAGES,
@@ -52,6 +51,7 @@ import {
 } from "@/lib/poker/storage";
 import { useRouter } from "next/navigation";
 
+import { signOut } from "@/app/auth/sign-in/actions";
 import { DELETION_GRACE_PERIOD_DAYS } from "@/lib/accounts/lifecycle";
 import { authClient } from "@/lib/auth/client";
 import { apiErrorMessage } from "@/lib/security/rate-limit-message";
@@ -63,7 +63,6 @@ import {
   buildStandings,
   type IneligibleReason,
   type Standings,
-  type StandingsEntry,
 } from "@/lib/poker/standings";
 import {
   planImport,
@@ -79,14 +78,28 @@ import type {
   PokerSession,
   WinnerAnnouncement,
 } from "@/lib/poker/types";
+import { applyTheme, currentTheme, type Theme } from "@/lib/theme";
 
-type View = "home" | "setup" | "game" | "history" | "players";
+type View =
+  | "home"
+  | "setup"
+  | "game"
+  | "history"
+  | "sessions"
+  | "players"
+  | "hands";
+const VIEWS: readonly View[] = [
+  "home",
+  "setup",
+  "game",
+  "history",
+  "sessions",
+  "players",
+  "hands",
+];
 type ModalState =
   | {
       kind: "rules";
-    }
-  | {
-      kind: "hands";
     }
   | {
       kind: "confirm";
@@ -102,19 +115,6 @@ type ModalState =
       confirmLabel: string;
       onConfirm: () => void;
     };
-
-const POKER_HANDS = [
-  { name: "Royal Flush", cards: "A K Q J 10", note: "Same Suit" },
-  { name: "Straight Flush", cards: "9 8 7 6 5", note: "Same Suit" },
-  { name: "Four Of A Kind", cards: "A A A A K", note: "" },
-  { name: "Full House", cards: "K K K 7 7", note: "" },
-  { name: "Flush", cards: "A J 8 4 2", note: "Same Suit" },
-  { name: "Straight", cards: "9 8 7 6 5", note: "" },
-  { name: "Three Of A Kind", cards: "Q Q Q 8 3", note: "" },
-  { name: "Two Pair", cards: "J J 4 4 9", note: "" },
-  { name: "One Pair", cards: "10 10 A 7 3", note: "" },
-  { name: "High Card", cards: "A J 8 6 2", note: "" },
-] as const;
 
 class ApiError extends Error {
   constructor(
@@ -351,7 +351,7 @@ export function PokerLedger({
   const showToast = useCallback((message: string) => {
     setToast(message);
     if (toastTimer.current) clearTimeout(toastTimer.current);
-    toastTimer.current = setTimeout(() => setToast(""), 1800);
+    toastTimer.current = setTimeout(() => setToast(""), 2600);
   }, []);
 
   const navigate = useCallback(
@@ -449,22 +449,8 @@ export function PokerLedger({
   useEffect(() => {
     function handleBrowserBack(event: PopStateEvent) {
       const nextView = event.state?.menokaView;
-      if (event.state?.menokaModal === "hands") {
-        setModal({ kind: "hands" });
-      } else {
-        setModal(null);
-      }
-      if (
-        nextView === "home" ||
-        nextView === "setup" ||
-        nextView === "game" ||
-        nextView === "history" ||
-        nextView === "players"
-      ) {
-        setView(nextView);
-      } else {
-        setView("home");
-      }
+      setModal(null);
+      setView(VIEWS.includes(nextView) ? nextView : "home");
       window.scrollTo(0, 0);
     }
 
@@ -1325,81 +1311,110 @@ export function PokerLedger({
   }
 
   function openHands() {
-    window.history.pushState(
-      {
-        ...window.history.state,
-        menokaView: view,
-        menokaModal: "hands",
-      },
-      "",
-    );
-    setModal({ kind: "hands" });
+    navigate("hands");
   }
 
   function closeModal() {
-    if (
-      modal?.kind === "hands" &&
-      window.history.state?.menokaModal === "hands"
-    ) {
-      window.history.back();
-      return;
-    }
     setModal(null);
   }
 
-  const screenTitle =
-    view === "game"
-      ? game?.sessionLabel || game?.gameName || "Game"
-      : view === "setup"
-        ? "New Game"
-        : view === "history"
-          ? "Standings"
-          : "Players";
+  const gameName = game?.sessionLabel || game?.gameName || "Game";
+  const header: { eyebrow: string; title: string } | null =
+    view === "home"
+      ? null
+      : view === "game" && game
+        ? {
+            eyebrow: gameName,
+            title: game.hand
+              ? game.hand.stage === STAGES.length - 1 &&
+                !pendingIndexes(game).length
+                ? "Showdown"
+                : `Hand ${game.hand.no}`
+              : "Between Hands",
+          }
+        : view === "setup"
+          ? { eyebrow: "New game", title: "Table Setup" }
+          : view === "history"
+            ? {
+                eyebrow: `All-time · ${history.length} session${
+                  history.length === 1 ? "" : "s"
+                }`,
+                title: "Standings",
+              }
+            : view === "sessions"
+              ? {
+                  eyebrow: `${history.length} game${
+                    history.length === 1 ? "" : "s"
+                  }`,
+                  title: "Game Sessions",
+                }
+              : view === "players"
+                ? { eyebrow: "Directory", title: "Players" }
+                : view === "hands"
+                  ? { eyebrow: "Strongest to weakest", title: "Hand Rankings" }
+                  : null;
+  const homeView = (
+    <HomeView
+      game={game}
+      accountEmail={accountEmail}
+      historyCount={history.length}
+      legacyGame={legacyGame}
+      legacySessionCount={legacySessions.length}
+      playerCount={players.length}
+      onAdoptLegacyGame={offerLegacyGameAdoption}
+      onGame={() => navigate(game ? "game" : "setup")}
+      onSetup={() => navigate("setup")}
+      onHistory={() => navigate("history")}
+      onPlayers={openPlayers}
+      onOpenHands={openHands}
+      onReviewLegacySessions={() => setReviewingLegacySessions(true)}
+      onRules={() => setModal({ kind: "rules" })}
+      onDeleteAccount={deleteAccount}
+    />
+  );
 
   return (
-    <main
-      className={`ledger-shell view-${view} ${view === "home" ? "home-shell" : ""}`}
-    >
-      {view !== "home" ? (
-        <header className="topbar">
+    <main className={`ledger-shell view-${view}`}>
+      <div className={`toast ${toast ? "show" : ""}`} role="status">
+        {toast}
+      </div>
+
+      {header ? (
+        <header className="screen-header">
           <button
-            className="back-button"
+            className="round-button"
             type="button"
-            aria-label="Go Back"
+            aria-label="Go back"
             onClick={goBack}
           >
-            <span>Back</span>
+            ←
           </button>
-          <span className="topbar-title">{screenTitle}</span>
-          <button
-            className="rules-trigger"
-            type="button"
-            onClick={() => setModal({ kind: "rules" })}
-          >
-            Rules
-          </button>
+          <div className="screen-heading">
+            <span className="eyebrow">{header.eyebrow}</span>
+            <h1
+              style={
+                { "--chars": header.title.length } as React.CSSProperties
+              }
+            >
+              {header.title}
+            </h1>
+          </div>
+          <ThemeToggle />
         </header>
       ) : null}
 
-      <div className={`app ${view === "home" ? "home-app" : ""}`}>
+      <div className="app">
         {view === "home" ? (
-          <HomeView
-            hasGame={Boolean(game)}
-            historyCount={history.length}
-            legacyGame={legacyGame}
-            legacySessionCount={legacySessions.length}
-            playerCount={players.length}
-            onAdoptLegacyGame={offerLegacyGameAdoption}
-            onGame={() => navigate(game ? "game" : "setup")}
-            onHistory={() => navigate("history")}
-            onPlayers={openPlayers}
-            onOpenHands={openHands}
-            onReviewLegacySessions={() => setReviewingLegacySessions(true)}
-            onRules={() => setModal({ kind: "rules" })}
-            onDeleteAccount={deleteAccount}
-          />
+          homeView
         ) : view === "history" ? (
-          <HistoryView
+          <StandingsView
+            history={history}
+            loading={historyLoading}
+            error={historyError}
+            onRetry={() => void refreshHistory()}
+          />
+        ) : view === "sessions" ? (
+          <SessionsView
             discardedSessions={discardedSessions}
             history={history}
             loading={historyLoading}
@@ -1423,6 +1438,8 @@ export function PokerLedger({
             onRestore={(player) => void updatePlayerState(player, "restore")}
             onDeletePermanently={deletePlayerPermanently}
           />
+        ) : view === "hands" ? (
+          <PokerHandsChart />
         ) : view === "setup" ? (
           <SetupView
             players={players}
@@ -1454,27 +1471,21 @@ export function PokerLedger({
             onEditBlinds={() => setEditingBlinds(true)}
           />
         ) : (
-          <HomeView
-            hasGame={false}
-            historyCount={history.length}
-            legacyGame={legacyGame}
-            legacySessionCount={legacySessions.length}
-            playerCount={players.length}
-            onAdoptLegacyGame={offerLegacyGameAdoption}
-            onGame={() => navigate("setup")}
-            onHistory={() => navigate("history")}
-            onPlayers={openPlayers}
-            onOpenHands={openHands}
-            onReviewLegacySessions={() => setReviewingLegacySessions(true)}
-            onRules={() => setModal({ kind: "rules" })}
-            onDeleteAccount={deleteAccount}
-          />
+          homeView
         )}
       </div>
 
-      <div className={`toast ${toast ? "show" : ""}`} role="status">
-        {toast}
-      </div>
+      <TabBar
+        view={view}
+        onSelect={(target) => {
+          if (target === "play") {
+            navigate(game ? "game" : "setup");
+          } else if (target !== view) {
+            navigate(target);
+          }
+        }}
+      />
+
       {modal ? (
         <Modal
           state={modal}
@@ -1513,14 +1524,180 @@ export function PokerLedger({
   );
 }
 
+type TabTarget = "home" | "play" | "history" | "sessions" | "players";
+
+const TABS: ReadonlyArray<{ target: TabTarget; icon: string; label: string }> = [
+  { target: "home", icon: "♠", label: "Home" },
+  { target: "play", icon: "♦", label: "Play" },
+  { target: "history", icon: "♣", label: "Ranks" },
+  { target: "sessions", icon: "♥", label: "Games" },
+  { target: "players", icon: "●", label: "Players" },
+];
+
+function tabForView(view: View): TabTarget {
+  if (view === "setup" || view === "game") return "play";
+  if (view === "hands") return "home";
+  return view;
+}
+
+function TabBar({
+  view,
+  onSelect,
+}: {
+  view: View;
+  onSelect: (target: TabTarget) => void;
+}) {
+  const active = tabForView(view);
+  return (
+    <nav className="tab-bar" aria-label="Main">
+      {TABS.map((tab) => (
+        <button
+          key={tab.target}
+          type="button"
+          className={tab.target === active ? "active" : ""}
+          aria-current={tab.target === active ? "page" : undefined}
+          onClick={() => onSelect(tab.target)}
+        >
+          <span className="tab-icon" aria-hidden="true">
+            {tab.icon}
+          </span>
+          <span className="tab-label">{tab.label}</span>
+          <span className="tab-indicator" aria-hidden="true" />
+        </button>
+      ))}
+    </nav>
+  );
+}
+
+function useTheme() {
+  const [theme, setTheme] = useState<Theme>("dark");
+  useEffect(() => {
+    // The pre-paint script in the layout may have picked the saved theme.
+    const syncTimer = setTimeout(() => setTheme(currentTheme()), 0);
+    return () => clearTimeout(syncTimer);
+  }, []);
+  function toggle() {
+    const next = theme === "dark" ? "light" : "dark";
+    applyTheme(next);
+    setTheme(next);
+  }
+  return { theme, toggle };
+}
+
+function ThemeToggle({ pill = false }: { pill?: boolean }) {
+  const { theme, toggle } = useTheme();
+  const label = `Switch to ${theme === "dark" ? "light" : "dark"} theme`;
+  return (
+    <button
+      className={pill ? "theme-pill" : "round-button"}
+      type="button"
+      aria-label={label}
+      title={label}
+      onClick={toggle}
+    >
+      <span className="theme-dot" aria-hidden="true" />
+      {pill ? <span>{theme}</span> : null}
+    </button>
+  );
+}
+
+// Named hues from the design; anyone else gets a stable hue from their name.
+const PLAYER_HUES: Record<string, number> = {
+  rajarshi: 150,
+  debraj: 248,
+  shubhankar: 195,
+  abhirup: 300,
+  pratik: 85,
+  soham: 345,
+  "rahul basak": 40,
+  utsav: 170,
+  ratan: 270,
+};
+
+function playerColor(name: string) {
+  const key = name.trim().toLowerCase();
+  let hue = PLAYER_HUES[key];
+  if (hue === undefined) {
+    hue = 0;
+    for (const char of key) hue = (hue * 31 + char.charCodeAt(0)) % 360;
+  }
+  return `oklch(0.78 0.15 ${hue})`;
+}
+
+/** "+₹8,000", "−₹2,000" or "₹0". */
+function formatSignedRupees(value: number) {
+  const sign = value > 0 ? "+" : value < 0 ? "−" : "";
+  return `${sign}${formatRupees(Math.abs(value))}`;
+}
+
+function toneClass(value: number | null) {
+  return value === null || value === 0 ? "" : value > 0 ? "pos" : "neg";
+}
+
+function Avatar({
+  name,
+  role,
+  size = "large",
+}: {
+  name: string;
+  role?: string;
+  size?: "large" | "small";
+}) {
+  return (
+    <span
+      className={`avatar avatar-${size}`}
+      style={{ color: playerColor(name) }}
+      aria-hidden="true"
+    >
+      {name.trim().charAt(0).toUpperCase() || "?"}
+      {role ? (
+        <span className={`role-badge ${role === "D" ? "dealer" : ""}`}>
+          {role}
+        </span>
+      ) : null}
+    </span>
+  );
+}
+
+function Segmented<T extends string | number>({
+  label,
+  options,
+  value,
+  onChange,
+}: {
+  label: string;
+  options: ReadonlyArray<{ value: T; label: string }>;
+  value: T;
+  onChange: (value: T) => void;
+}) {
+  return (
+    <div className="segmented" role="radiogroup" aria-label={label}>
+      {options.map((option) => (
+        <button
+          key={String(option.value)}
+          type="button"
+          role="radio"
+          aria-checked={option.value === value}
+          className={option.value === value ? "selected" : ""}
+          onClick={() => onChange(option.value)}
+        >
+          {option.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function HomeView({
-  hasGame,
+  game,
+  accountEmail,
   historyCount,
   legacyGame,
   legacySessionCount,
   playerCount,
   onAdoptLegacyGame,
   onGame,
+  onSetup,
   onHistory,
   onPlayers,
   onOpenHands,
@@ -1528,13 +1705,15 @@ function HomeView({
   onRules,
   onDeleteAccount,
 }: {
-  hasGame: boolean;
+  game: GameState | null;
+  accountEmail: string;
   historyCount: number;
   legacyGame: GameState | null;
   legacySessionCount: number;
   playerCount: number;
   onAdoptLegacyGame: () => void;
   onGame: () => void;
+  onSetup: () => void;
   onHistory: () => void;
   onPlayers: () => void;
   onOpenHands: () => void;
@@ -1542,27 +1721,68 @@ function HomeView({
   onRules: () => void;
   onDeleteAccount: () => void;
 }) {
+  const hand = game?.hand ?? null;
+  const tiles = [
+    {
+      suit: "♣",
+      tone: "green",
+      title: "All Time Standings",
+      sub: `${historyCount} saved game session${historyCount === 1 ? "" : "s"}`,
+      onClick: onHistory,
+    },
+    {
+      suit: "♥",
+      tone: "blue",
+      title: "Existing Players",
+      sub: `${playerCount} player${playerCount === 1 ? "" : "s"} ready to play`,
+      onClick: onPlayers,
+    },
+    {
+      suit: "♠",
+      tone: "blue",
+      title: "Hand Rankings",
+      sub: "All ten hands, strongest to weakest",
+      onClick: onOpenHands,
+    },
+    {
+      suit: "♦",
+      tone: "green",
+      title: "New Game",
+      sub: game
+        ? "Finish the current game first"
+        : "Seat players, set stacks and blinds",
+      onClick: game ? onGame : onSetup,
+    },
+  ];
+
   return (
     <section className="home-view">
-      <div className="home-hero">
-        <div className="home-emblem" aria-hidden="true">
-          <span>♠</span>
+      <div className="home-top">
+        <div className="brand">
+          <span className="brand-chip" aria-hidden="true">
+            <span>♠</span>
+          </span>
+          <span className="brand-name">Menoka</span>
         </div>
-        <div className="home-kicker">House Poker, Kept Properly</div>
+        <ThemeToggle pill />
+      </div>
+
+      <div className="home-hero">
+        <span className="eyebrow">House Poker, Kept Properly</span>
         <h1>
           Menoka
-          <span>Card Games</span>
+          <span className="gradient-text">Card Games</span>
         </h1>
         <p>
-          Choose A Table, Keep Every Stack Straight, And Let The House Ledger
-          Remember The Rest.
+          Choose a table, keep every stack straight, and let the house ledger
+          remember the rest.
         </p>
       </div>
 
       {legacyGame || legacySessionCount ? (
-        <section className="legacy-data-card" aria-labelledby="legacy-data-title">
+        <section className="glass legacy-data-card" aria-labelledby="legacy-data-title">
           <div>
-            <span className="legacy-data-kicker">Unassigned Device Data</span>
+            <span className="eyebrow">Unassigned device data</span>
             <h2 id="legacy-data-title">Review Before Adding It</h2>
             <p>
               Data saved before accounts stays separate until you choose which
@@ -1574,10 +1794,10 @@ function HomeView({
               <button
                 className="ghost"
                 type="button"
-                disabled={hasGame}
+                disabled={Boolean(game)}
                 onClick={onAdoptLegacyGame}
               >
-                {hasGame ? "Finish Current Game First" : "Review Legacy Game"}
+                {game ? "Finish current game first" : "Review legacy game"}
               </button>
             ) : null}
             {legacySessionCount ? (
@@ -1586,7 +1806,7 @@ function HomeView({
                 type="button"
                 onClick={onReviewLegacySessions}
               >
-                Review {legacySessionCount} Saved Session
+                Review {legacySessionCount} saved session
                 {legacySessionCount === 1 ? "" : "s"}
               </button>
             ) : null}
@@ -1594,74 +1814,90 @@ function HomeView({
         </section>
       ) : null}
 
-      <div className="home-menu">
-        <button className="home-action featured" type="button" onClick={onGame}>
-          <span className="home-suit" aria-hidden="true">
-            ♦
+      {game ? (
+        <button className="glass live-card" type="button" onClick={onGame}>
+          <span className="live-card-glow" aria-hidden="true" />
+          <span className="live-card-top">
+            <span className="live-pill">
+              <span aria-hidden="true" />
+              Live
+            </span>
+            <span className="live-meta">
+              {hand
+                ? `Hand ${hand.no} · ${STAGES[hand.stage]}`
+                : `Between hands · ${game.handNo} dealt`}
+            </span>
           </span>
-          <span className="home-action-copy">
-            <strong>
-              {hasGame ? "Continue Game Session" : "Start A New Game"}
-            </strong>
+          <span className="live-card-copy">
+            <strong>Continue Game Session</strong>
             <small>
-              {hasGame
-                ? "Return To The Hand In Progress"
-                : "Choose The Players And Blinds"}
+              {hand ? "Return to the hand in progress" : "Deal the next hand"}
             </small>
           </span>
+          <span className="live-card-bottom">
+            <span>
+              <span className="label">{hand ? "Pot" : "Game"}</span>
+              <span className="live-pot">
+                {hand ? formatRupees(hand.pot) : game.sessionLabel || game.gameName}
+              </span>
+            </span>
+            <span className="arrow-circle" aria-hidden="true">
+              →
+            </span>
+          </span>
         </button>
+      ) : (
+        <button className="start-card" type="button" onClick={onSetup}>
+          <span>
+            <strong>Start A Game</strong>
+            <small>Seat players, set stacks, deal</small>
+          </span>
+          <span className="start-arrow" aria-hidden="true">
+            →
+          </span>
+        </button>
+      )}
 
-        <button className="home-action" type="button" onClick={onHistory}>
-          <span className="home-suit" aria-hidden="true">
-            ♣
-          </span>
-          <span className="home-action-copy">
-            <strong>All Time Standings</strong>
-            <small>
-              {historyCount} Saved Game Session
-              {historyCount === 1 ? "" : "s"}
-            </small>
-          </span>
-        </button>
-
-        <button className="home-action" type="button" onClick={onPlayers}>
-          <span className="home-suit red-suit" aria-hidden="true">
-            ♥
-          </span>
-          <span className="home-action-copy">
-            <strong>Existing Players</strong>
-            <small>
-              {playerCount} Player{playerCount === 1 ? "" : "s"} Ready To Play
-            </small>
-          </span>
-        </button>
+      <div className="home-tiles">
+        {tiles.map((tile) => (
+          <button
+            className={`glass home-tile tone-${tile.tone}`}
+            key={tile.title}
+            type="button"
+            onClick={tile.onClick}
+          >
+            <span className="tile-watermark" aria-hidden="true">
+              {tile.suit}
+            </span>
+            <span className="tile-suit" aria-hidden="true">
+              {tile.suit}
+            </span>
+            <span className="tile-copy">
+              <strong>{tile.title}</strong>
+              <small>{tile.sub}</small>
+            </span>
+          </button>
+        ))}
       </div>
 
-      <div className="home-hands">
-        <button
-          className="home-action home-hands-action"
-          type="button"
-          onClick={onOpenHands}
-        >
-          <span className="home-suit" aria-hidden="true">♠</span>
-          <span className="home-action-copy">
-            <strong>Poker Hand Rankings</strong>
-            <small>View all ten hands, strongest to weakest</small>
+      <footer className="home-footer">
+        <div className="account-pill">
+          <span>
+            Signed in as <strong>{accountEmail}</strong>
           </span>
-        </button>
-      </div>
-
-      <button className="home-rules" type="button" onClick={onRules}>
-        Read The Poker Rules
-      </button>
-
-      <button
-        className="home-delete-account"
-        type="button"
-        onClick={onDeleteAccount}
-      >
-        Delete My Account
-      </button>
+          <form action={signOut}>
+            <button type="submit">Sign out</button>
+          </form>
+        </div>
+        <div className="home-links">
+          <button type="button" onClick={onRules}>
+            Read the poker rules
+          </button>
+          <button className="danger-link" type="button" onClick={onDeleteAccount}>
+            Delete my account
+          </button>
+        </div>
+      </footer>
     </section>
   );
 }
@@ -1939,8 +2175,11 @@ function SetupView({
   const [blindRaiseBy, setBlindRaiseBy] = useState(
     DEFAULT_BLIND_SCHEDULE.raiseBy,
   );
-  const [playerCount, setPlayerCount] = useState(3);
-  const [selectedIds, setSelectedIds] = useState(["", "", ""]);
+  const [customStack, setCustomStack] = useState(false);
+  const [customAnte, setCustomAnte] = useState(false);
+  // Tapping players seats them in tap order; the list below reorders them.
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const playerCount = selectedIds.length;
   const seatListRef = useRef<HTMLDivElement>(null);
   const seatDragRef = useRef<{
     pointerId: number;
@@ -2014,12 +2253,26 @@ function SetupView({
       )
     : [];
 
-  function updatePlayerCount(value: number) {
-    const count = Math.max(2, Math.min(10, value || 2));
-    setPlayerCount(count);
+  function toggleSeat(playerId: string) {
     setSelectedIds((current) =>
-      Array.from({ length: count }, (_, index) => current[index] || ""),
+      current.includes(playerId)
+        ? current.filter((id) => id !== playerId)
+        : current.length >= MAX_SEATS
+          ? current
+          : [...current, playerId],
     );
+  }
+
+  function chooseBlindLevels(choice: "fixed" | BlindSchedule["unit"]) {
+    if (choice === "fixed") {
+      setRisingBlinds(false);
+      return;
+    }
+    if (!risingBlinds || blindUnit !== choice) {
+      setBlindEvery(choice === "hands" ? 10 : 20);
+    }
+    setRisingBlinds(true);
+    setBlindUnit(choice);
   }
 
   function moveSeat(from: number, to: number) {
@@ -2210,6 +2463,7 @@ function SetupView({
       .map((id) => players.find((player) => player.id === id))
       .filter((player): player is PlayerProfile => Boolean(player));
     if (
+      playerCount < 2 ||
       selectedPlayers.length !== playerCount ||
       new Set(selectedPlayers.map((player) => player.id)).size !== playerCount
     ) {
@@ -2225,313 +2479,351 @@ function SetupView({
   }
 
   const selectionComplete =
-    selectedIds.length === playerCount &&
-    selectedIds.every(Boolean) &&
+    playerCount >= 2 &&
+    playerCount <= MAX_SEATS &&
     new Set(selectedIds).size === playerCount;
+  const nameFor = (playerId: string) =>
+    players.find((player) => player.id === playerId)?.name ?? "";
+  const stackPreset = STACK_PRESETS.some((option) => option.value === stack);
+  const antePreset = ANTE_PRESETS.some((option) => option.value === ante);
+  const blindLevelNote = !risingBlinds
+    ? "Blinds stay fixed"
+    : !scheduleValid
+      ? "Check the blind plan"
+      : blindRaiseType === "multiply" && blindRaiseBy === 2
+        ? "Big blind doubles each level"
+        : blindRaiseType === "multiply"
+          ? `Big blind ×${blindRaiseBy} each level`
+          : `Big blind +${formatRupees(blindRaiseBy)} each level`;
 
   return (
-    <form className="card setup-card" onSubmit={submit}>
-      <div className="hdr">
-        <b>Start A New Game</b>
-      </div>
-      <label htmlFor="game-name">
-        Game Name <span className="label-optional">(Optional)</span>
-      </label>
-      <input
-        className="game-name-input"
-        id="game-name"
-        maxLength={80}
-        placeholder={suggestedName}
-        value={name}
-        onChange={(event) => setName(event.target.value)}
-      />
-      <div className="row setup-row">
-        <div>
-          <label htmlFor="stack">Starting Stack / First Buy-In</label>
+    <form className="stack-list setup-view" onSubmit={submit}>
+      <section className="glass card">
+        <label className="label" htmlFor="game-name">
+          Game name <span className="label-note">(optional)</span>
+        </label>
+        <input
+          className="field"
+          id="game-name"
+          maxLength={80}
+          placeholder={suggestedName}
+          value={name}
+          onChange={(event) => setName(event.target.value)}
+        />
+      </section>
+
+      <section className="glass card">
+        <div className="card-row">
+          <span className="label">Seat players</span>
+          <span className="card-note">
+            {playerCount
+              ? `${playerCount} seated${playerCount < 2 ? " · need 2+" : ""}`
+              : "Need 2+"}
+          </span>
+        </div>
+        {error ? (
+          <div className="inline-state">
+            <span>{error}</span>
+            <button type="button" className="text-button" onClick={onRetry}>
+              Try again
+            </button>
+          </div>
+        ) : loading ? (
+          <p className="muted">Loading players…</p>
+        ) : players.length ? (
+          <div className="seat-chips">
+            {players.map((player) => {
+              const seat = selectedIds.indexOf(player.id);
+              const full = seat < 0 && playerCount >= MAX_SEATS;
+              return (
+                <button
+                  key={player.id}
+                  type="button"
+                  className={`seat-chip ${seat >= 0 ? "seated" : ""}`}
+                  aria-pressed={seat >= 0}
+                  disabled={full}
+                  onClick={() => toggleSeat(player.id)}
+                >
+                  <span className="seat-chip-dot" aria-hidden="true">
+                    {seat >= 0 ? seat + 1 : "+"}
+                  </span>
+                  {player.name}
+                </button>
+              );
+            })}
+          </div>
+        ) : null}
+        {!loading && !error && players.length < 2 ? (
+          <p className="muted">Add at least two players before starting a game.</p>
+        ) : null}
+        {playerCount > 1 ? (
+          <>
+            <p className="muted small-note">
+              Seat 1 deals first; the dealer moves to the next active player
+              each hand. Drag a grip to change seats.
+            </p>
+            <div className="seat-order-list" ref={seatListRef}>
+              {selectedIds.map((selectedId, index) => {
+                let shift = 0;
+                if (draggingSeat !== null && dropSeat !== null) {
+                  if (
+                    draggingSeat < dropSeat &&
+                    index > draggingSeat &&
+                    index <= dropSeat
+                  ) {
+                    shift = -seatDragStep;
+                  } else if (
+                    draggingSeat > dropSeat &&
+                    index >= dropSeat &&
+                    index < draggingSeat
+                  ) {
+                    shift = seatDragStep;
+                  }
+                }
+                const seatName = nameFor(selectedId);
+                return (
+                  <div
+                    className={`seat-row${draggingSeat === index ? " is-dragging" : ""}${
+                      draggingSeat !== null &&
+                      dropSeat === index &&
+                      draggingSeat !== index
+                        ? " is-drop-target"
+                        : ""
+                    }`}
+                    data-seat-index={index}
+                    key={selectedId}
+                    style={
+                      shift
+                        ? { transform: `translate3d(0, ${shift}px, 0)` }
+                        : undefined
+                    }
+                  >
+                    <span className="seat-number" aria-hidden="true">
+                      {index + 1}
+                    </span>
+                    <Avatar name={seatName} size="small" />
+                    <span className="seat-name">{seatName}</span>
+                    <button
+                      className="seat-drag-handle"
+                      type="button"
+                      disabled={loading || Boolean(error)}
+                      aria-label={`Move seat ${index + 1}, ${seatName}. Drag or use arrow keys.`}
+                      onPointerDown={(event) => startSeatDrag(event, index)}
+                      onPointerMove={moveSeatDrag}
+                      onPointerUp={endSeatDrag}
+                      onPointerCancel={cancelSeatDrag}
+                      onLostPointerCapture={cancelSeatDrag}
+                      onKeyDown={(event) => {
+                        if (event.key === "ArrowUp" && index > 0) {
+                          event.preventDefault();
+                          moveSeat(index, index - 1);
+                        } else if (
+                          event.key === "ArrowDown" &&
+                          index < playerCount - 1
+                        ) {
+                          event.preventDefault();
+                          moveSeat(index, index + 1);
+                        }
+                      }}
+                    >
+                      <span aria-hidden="true">⠿</span>
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        ) : null}
+        <button type="button" className="text-button" onClick={onManagePlayers}>
+          Manage players
+        </button>
+      </section>
+
+      <section className="glass card">
+        <div className="card-row">
+          <span className="label">Starting stack</span>
+          <span className="card-note">First buy-in {formatRupees(stack)}</span>
+        </div>
+        <Segmented
+          label="Starting stack"
+          options={[...STACK_PRESETS, { value: "other", label: "Other" }]}
+          value={customStack || !stackPreset ? "other" : stack}
+          onChange={(value) => {
+            if (value === "other") {
+              setCustomStack(true);
+            } else {
+              setCustomStack(false);
+              setStack(value);
+            }
+          }}
+        />
+        {customStack || !stackPreset ? (
           <input
+            className="field"
             id="stack"
+            aria-label="Starting stack amount"
             type="number"
             inputMode="numeric"
             min="1"
             value={stack}
             onChange={(event) => setStack(Number(event.target.value))}
           />
+        ) : null}
+      </section>
+
+      <section className="glass card">
+        <div className="card-row">
+          <span className="label">Big blind</span>
+          <span className="card-note">
+            Small blind {formatRupees(smallBlindFor(Math.max(1, ante)))}
+          </span>
         </div>
-        <div>
-          <label htmlFor="ante">Big blind</label>
+        <Segmented
+          label="Big blind"
+          options={[...ANTE_PRESETS, { value: "other", label: "Other" }]}
+          value={customAnte || !antePreset ? "other" : ante}
+          onChange={(value) => {
+            if (value === "other") {
+              setCustomAnte(true);
+            } else {
+              setCustomAnte(false);
+              setAnte(value);
+            }
+          }}
+        />
+        {customAnte || !antePreset ? (
           <input
+            className="field"
             id="ante"
+            aria-label="Big blind amount"
             type="number"
             inputMode="numeric"
             min="1"
             value={ante}
             onChange={(event) => setAnte(Number(event.target.value))}
           />
-        </div>
-      </div>
-      <p className="muted rule-note">
-        Small blind {formatRupees(smallBlindFor(Math.max(1, ante)))} · first
-        pre-flop raise to {formatRupees(Math.max(1, ante) * 2)} · each raise
-        must add at least as much as the last one.
-      </p>
-
-      <div className="blind-toggle">
-        <label htmlFor="rising-blinds">Blinds Go Up During The Game</label>
-        <input
-          id="rising-blinds"
-          type="checkbox"
-          checked={risingBlinds}
-          onChange={(event) => setRisingBlinds(event.target.checked)}
-        />
-      </div>
-      {risingBlinds ? (
-        <>
-          <div className="row setup-row">
-            <div>
-              <label htmlFor="blind-every">Raise Blinds Every</label>
-              <input
-                id="blind-every"
-                type="number"
-                inputMode="numeric"
-                min="1"
-                value={blindEvery}
-                onChange={(event) =>
-                  setBlindEvery(Number(event.target.value))
-                }
-              />
-            </div>
-            <div>
-              <label htmlFor="blind-unit">Counted In</label>
-              <select
-                className="select-control"
-                id="blind-unit"
-                value={blindUnit}
-                onChange={(event) =>
-                  setBlindUnit(event.target.value as BlindSchedule["unit"])
-                }
-              >
-                <option value="hands">Hands</option>
-                <option value="minutes">Minutes</option>
-              </select>
-            </div>
-          </div>
-          <div className="row setup-row">
-            <div>
-              <label htmlFor="blind-raise-type">Increase By</label>
-              <select
-                className="select-control"
-                id="blind-raise-type"
-                value={blindRaiseType}
-                onChange={(event) => {
-                  const nextType = event.target
-                    .value as BlindSchedule["raiseType"];
-                  setBlindRaiseType(nextType);
-                  setBlindRaiseBy(
-                    nextType === "multiply" ? 2 : Math.max(1, ante),
-                  );
-                }}
-              >
-                <option value="multiply">Multiplying The Big Blind</option>
-                <option value="add">Adding A Fixed Amount</option>
-              </select>
-            </div>
-            <div>
-              <label htmlFor="blind-raise-by">
-                {blindRaiseType === "multiply" ? "Multiplier" : "Amount"}
-              </label>
-              <input
-                id="blind-raise-by"
-                type="number"
-                inputMode="decimal"
-                min={blindRaiseType === "multiply" ? "1.1" : "1"}
-                step={blindRaiseType === "multiply" ? "0.1" : "1"}
-                value={blindRaiseBy}
-                onChange={(event) =>
-                  setBlindRaiseBy(Number(event.target.value))
-                }
-              />
-            </div>
-          </div>
-          <p className="muted rule-note">
-            {scheduleValid ? (
-              <>
-                Every {blindEvery}{" "}
-                {blindUnit === "hands"
-                  ? blindEvery === 1
-                    ? "hand"
-                    : "hands"
-                  : blindEvery === 1
-                    ? "minute"
-                    : "minutes"}
-                , the big blind steps up:{" "}
-                {ladder
-                  .map((bigBlind) => formatRupees(bigBlind))
-                  .join(" → ")}{" "}
-                → …
-                {blindUnit === "minutes"
-                  ? " Timed levels apply when the next hand is dealt."
-                  : ""}
-              </>
-            ) : (
-              <>
-                Set an interval of at least 1 and an increase that makes the
-                blinds bigger.
-              </>
-            )}
-          </p>
-        </>
-      ) : null}
-
-      <label htmlFor="player-count">Number Of Players</label>
-      <select
-        className="select-control"
-        id="player-count"
-        value={playerCount}
-        onChange={(event) => updatePlayerCount(Number(event.target.value))}
-      >
-        {Array.from({ length: 9 }, (_, index) => index + 2).map((count) => (
-          <option key={count} value={count}>
-            {count} Players
-          </option>
-        ))}
-      </select>
-
-      <div className="names player-selects">
-        <div className="player-select-heading">
-          <label>Select Players &amp; Seating Order</label>
-          <button
-            type="button"
-            className="text-button"
-            onClick={onManagePlayers}
-          >
-            Manage Players
-          </button>
-        </div>
-        {error ? (
-          <div className="inline-state">
-            <span>{error}</span>
-            <button type="button" className="text-button" onClick={onRetry}>
-              Try Again
-            </button>
-          </div>
         ) : null}
-        <p className="muted seat-order-help">
-          Drag a player by the grip to change seats. Seat 1 deals first; the
-          dealer moves to the next active player each hand.
+        <p className="muted small-note">
+          First pre-flop raise to {formatRupees(Math.max(1, ante) * 2)}; each
+          raise must add at least as much as the last one.
         </p>
-        <div className="seat-order-list" ref={seatListRef}>
-          {selectedIds.map((selectedId, index) => {
-            let shift = 0;
-            if (draggingSeat !== null && dropSeat !== null) {
-              if (
-                draggingSeat < dropSeat &&
-                index > draggingSeat &&
-                index <= dropSeat
-              ) {
-                shift = -seatDragStep;
-              } else if (
-                draggingSeat > dropSeat &&
-                index >= dropSeat &&
-                index < draggingSeat
-              ) {
-                shift = seatDragStep;
-              }
-            }
-            return (
-              <div
-                className={`seat-row${draggingSeat === index ? " is-dragging" : ""}${
-                  draggingSeat !== null &&
-                  dropSeat === index &&
-                  draggingSeat !== index
-                    ? " is-drop-target"
-                    : ""
-                }`}
-                data-seat-index={index}
-                key={selectedId || `empty-seat-${index}`}
-                style={
-                  shift
-                    ? { transform: `translate3d(0, ${shift}px, 0)` }
-                    : undefined
-                }
-              >
-                <span className="seat-number" aria-hidden="true">
-                  {index + 1}
-                </span>
-                <select
-                  className="select-control"
-                  aria-label={`Seat ${index + 1} player`}
-                  disabled={loading || Boolean(error)}
-                  value={selectedId}
-                  onChange={(event) =>
-                    setSelectedIds((current) =>
-                      current.map((item, itemIndex) =>
-                        itemIndex === index ? event.target.value : item,
-                      ),
-                    )
-                  }
-                >
-                  <option value="">
-                    {loading ? "Loading Players…" : `Choose Player ${index + 1}`}
-                  </option>
-                  {players.map((player) => (
-                    <option
-                      key={player.id}
-                      value={player.id}
-                      disabled={
-                        player.id !== selectedId && selectedIds.includes(player.id)
-                      }
-                    >
-                      {player.name}
-                    </option>
-                  ))}
-                </select>
-                <button
-                  className="seat-drag-handle"
-                  type="button"
-                  disabled={!selectedId || loading || Boolean(error)}
-                  aria-label={`Move seat ${index + 1} player. Drag or use arrow keys.`}
-                  onPointerDown={(event) => startSeatDrag(event, index)}
-                  onPointerMove={moveSeatDrag}
-                  onPointerUp={endSeatDrag}
-                  onPointerCancel={cancelSeatDrag}
-                  onLostPointerCapture={cancelSeatDrag}
-                  onKeyDown={(event) => {
-                    if (event.key === "ArrowUp" && index > 0) {
-                      event.preventDefault();
-                      moveSeat(index, index - 1);
-                    } else if (
-                      event.key === "ArrowDown" &&
-                      index < playerCount - 1
-                    ) {
-                      event.preventDefault();
-                      moveSeat(index, index + 1);
-                    }
-                  }}
-                >
-                  <span aria-hidden="true">⠿</span>
-                </button>
-              </div>
-            );
-          })}
+      </section>
+
+      <section className="glass card">
+        <div className="card-row">
+          <span className="label">Blind levels</span>
+          <span className="card-note">{blindLevelNote}</span>
         </div>
-        {!loading && !error && players.length < 2 ? (
-          <p className="muted player-help">
-            Add At Least Two Players Before Starting A Game.
-          </p>
+        <Segmented
+          label="Blind levels"
+          options={[
+            { value: "fixed", label: "Fixed" },
+            { value: "hands", label: "By hands" },
+            { value: "minutes", label: "By minutes" },
+          ]}
+          value={risingBlinds ? blindUnit : "fixed"}
+          onChange={chooseBlindLevels}
+        />
+        {risingBlinds ? (
+          <>
+            <div className="field-grid">
+              <div>
+                <label className="label" htmlFor="blind-every">
+                  Every ({blindUnit})
+                </label>
+                <input
+                  className="field"
+                  id="blind-every"
+                  type="number"
+                  inputMode="numeric"
+                  min="1"
+                  value={blindEvery}
+                  onChange={(event) =>
+                    setBlindEvery(Number(event.target.value))
+                  }
+                />
+              </div>
+              <div>
+                <label className="label" htmlFor="blind-raise-by">
+                  {blindRaiseType === "multiply" ? "Multiply by" : "Add ₹"}
+                </label>
+                <input
+                  className="field"
+                  id="blind-raise-by"
+                  type="number"
+                  inputMode="decimal"
+                  min={blindRaiseType === "multiply" ? "1.1" : "1"}
+                  step={blindRaiseType === "multiply" ? "0.1" : "1"}
+                  value={blindRaiseBy}
+                  onChange={(event) =>
+                    setBlindRaiseBy(Number(event.target.value))
+                  }
+                />
+              </div>
+            </div>
+            <Segmented
+              label="How the big blind rises"
+              options={[
+                { value: "multiply", label: "Multiply" },
+                { value: "add", label: "Add fixed amount" },
+              ]}
+              value={blindRaiseType}
+              onChange={(nextType) => {
+                setBlindRaiseType(nextType);
+                setBlindRaiseBy(
+                  nextType === "multiply" ? 2 : Math.max(1, ante),
+                );
+              }}
+            />
+            <p className="muted small-note">
+              {scheduleValid ? (
+                <>
+                  Big blind: {ladder
+                    .map((bigBlind) => formatRupees(bigBlind))
+                    .join(" → ")}{" "}
+                  → …
+                  {blindUnit === "minutes"
+                    ? " Timed levels apply when the next hand is dealt."
+                    : ""}
+                </>
+              ) : (
+                <>
+                  Set an interval of at least 1 and an increase that makes the
+                  blinds bigger.
+                </>
+              )}
+            </p>
+          </>
         ) : null}
-      </div>
+      </section>
+
       <button
-        className="primary full start-game"
+        className="cta"
         type="submit"
         disabled={
           !selectionComplete || stack < 1 || ante < 1 || !scheduleValid
         }
       >
-        Start Game
+        Deal First Hand →
       </button>
     </form>
   );
 }
+
+const MAX_SEATS = 10;
+const STACK_PRESETS = [
+  { value: 5_000, label: "5K" },
+  { value: 10_000, label: "10K" },
+  { value: 20_000, label: "20K" },
+  { value: 50_000, label: "50K" },
+] as const;
+const ANTE_PRESETS = [
+  { value: 50, label: "₹50" },
+  { value: 100, label: "₹100" },
+  { value: 200, label: "₹200" },
+  { value: 500, label: "₹500" },
+  { value: 1_000, label: "₹1K" },
+] as const;
 
 function PlayersView({
   players,
@@ -2556,68 +2848,79 @@ function PlayersView({
 }) {
   const [name, setName] = useState("");
   const [adding, setAdding] = useState(false);
+  const [nameError, setNameError] = useState("");
 
   async function add(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!name.trim() || adding) return;
+    if (adding) return;
+    const trimmed = name.trim();
+    if (!trimmed) {
+      setNameError("Enter a name first.");
+      return;
+    }
+    const existing = players.find(
+      (player) => player.name.trim().toLowerCase() === trimmed.toLowerCase(),
+    );
+    if (existing) {
+      setNameError(`${existing.name} is already in the directory.`);
+      return;
+    }
+    setNameError("");
     setAdding(true);
-    const player = await onAdd(name);
+    const player = await onAdd(trimmed);
     if (player) setName("");
     setAdding(false);
   }
 
   return (
-    <>
-      <section className="card player-directory-intro">
-        <div className="player-directory-header">
+    <div className="stack-list">
+      <section className="glass card">
+        <div className="count-hero">
+          <strong className="gradient-text-vertical">{players.length}</strong>
           <div>
-            <b>Existing Players</b>
-            <p className="muted card-note">
-              One Saved Name Keeps Every Future Session And Standing Together.
+            <span className="eyebrow">Active players</span>
+            <p className="muted">
+              One saved name keeps every future session and standing together.
             </p>
           </div>
-          <div className="player-tally" aria-label={`${players.length} Active Players`}>
-            <strong>{players.length}</strong>
-            <span>Active Players</span>
-          </div>
         </div>
 
-        <form className="add-player-form" onSubmit={add}>
-          <label htmlFor="new-player-name">Add A New Player</label>
-          <div className="add-player-row">
-            <input
-              id="new-player-name"
-              maxLength={80}
-              placeholder="Enter Their Name"
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-            />
-            <button
-              className="primary"
-              type="submit"
-              disabled={!name.trim() || adding}
-            >
-              {adding ? "Adding…" : "Add Player"}
-            </button>
-          </div>
+        <form className="add-player-row" onSubmit={add}>
+          <input
+            className="field"
+            id="new-player-name"
+            aria-label="New player name"
+            maxLength={80}
+            placeholder="Enter their name"
+            value={name}
+            onChange={(event) => {
+              setName(event.target.value);
+              if (nameError) setNameError("");
+            }}
+          />
+          <button className="accent-button" type="submit" disabled={adding}>
+            {adding ? "Adding…" : "Add"}
+          </button>
         </form>
+        {nameError ? (
+          <p className="field-error" role="alert">
+            {nameError}
+          </p>
+        ) : null}
       </section>
 
-      <section className="card">
-        <div className="hdr">
-          <b>Player List</b>
-        </div>
+      <section className="glass card list-card">
         {error ? (
           <div className="directory-state">
             <p className="muted">{error}</p>
             <button className="ghost full" type="button" onClick={onRetry}>
-              Try Again
+              Try again
             </button>
           </div>
         ) : loading ? (
-          <p className="muted">Loading Players…</p>
-        ) : players.length ? (
-          <div className="player-directory-list">
+          <p className="muted">Loading players…</p>
+        ) : players.length || discardedPlayers.length ? (
+          <>
             {players.map((player, index) => (
               <div className="directory-player" key={player.id}>
                 <span className="directory-index">
@@ -2625,7 +2928,7 @@ function PlayersView({
                 </span>
                 <span className="directory-name">{player.name}</span>
                 <button
-                  className="directory-discard"
+                  className="pill-button"
                   type="button"
                   onClick={() => onDiscard(player)}
                 >
@@ -2633,59 +2936,49 @@ function PlayersView({
                 </button>
               </div>
             ))}
-          </div>
-        ) : (
-          <p className="muted">
-            No Players Yet. Add The First Name Above, Then Return To New Game.
-          </p>
-        )}
-      </section>
-
-      {discardedPlayers.length ? (
-        <section className="card discarded-players">
-          <div className="hdr">
-            <div>
-              <b>Discarded Players</b>
-              <p className="muted card-note">
-                Restore A Player Anytime. Permanent Deletion Is Owner-Protected
-                And Unavailable When Saved History Exists.
-              </p>
-            </div>
-            <span className="discarded-count">{discardedPlayers.length}</span>
-          </div>
-          <div className="player-directory-list">
-            {discardedPlayers.map((player) => (
+            {discardedPlayers.map((player, index) => (
               <div className="directory-player discarded" key={player.id}>
-                <span className="directory-index">ID</span>
-                <span className="directory-name">{player.name}</span>
+                <span className="directory-index">
+                  {String(players.length + index + 1).padStart(2, "0")}
+                </span>
+                <span className="directory-name">
+                  {player.name} <small>· discarded</small>
+                </span>
                 <div className="directory-actions">
                   <button
-                    className="restore-player"
+                    className="pill-button"
                     type="button"
                     onClick={() => onRestore(player)}
                   >
                     Restore
                   </button>
-                  <button
-                    className="directory-delete"
-                    type="button"
-                    disabled={player.hasHistory}
-                    title={
-                      player.hasHistory
-                        ? "Saved Session History Must Be Preserved"
-                        : "Delete This Player Permanently"
-                    }
-                    onClick={() => onDeletePermanently(player)}
-                  >
-                    Delete Permanently
-                  </button>
+                  {player.hasHistory ? null : (
+                    <button
+                      className="pill-button danger-text"
+                      type="button"
+                      title="Delete this player permanently"
+                      onClick={() => onDeletePermanently(player)}
+                    >
+                      Delete
+                    </button>
+                  )}
                 </div>
               </div>
             ))}
-          </div>
-        </section>
+          </>
+        ) : (
+          <p className="muted">
+            No players yet. Add the first name above, then return to New Game.
+          </p>
+        )}
+      </section>
+      {discardedPlayers.length ? (
+        <p className="muted small-note list-footnote">
+          Discarded players are hidden from new games. Players with saved
+          history can be restored but not permanently deleted.
+        </p>
       ) : null}
-    </>
+    </div>
   );
 }
 
@@ -2737,16 +3030,16 @@ function GameView(props: GameViewProps) {
         : `${nextBlinds} in ${formatCountdown(blinds.msLeft)}`;
   const blindsDisplay = (
     <div className="blinds-display" aria-label="Current blinds">
-      <div className="blinds-label">
-        <span>Blinds</span>
+      <div className="blinds-pill">
+        <span className="blinds-label">Blinds</span>
+        <span className="blinds-value">
+          {formatRupees(blinds.smallBlind)}
+          <span className="blinds-separator"> / </span>
+          {formatRupees(blinds.bigBlind)}
+        </span>
         {blinds.schedule ? (
-          <span className="blinds-level">Level {blinds.level + 1}</span>
+          <span className="blinds-level">L{blinds.level + 1}</span>
         ) : null}
-      </div>
-      <div className="blinds-value">
-        <span>{formatRupees(blinds.smallBlind)}</span>
-        <span className="blinds-separator">/</span>
-        <span>{formatRupees(blinds.bigBlind)}</span>
       </div>
       {blinds.schedule && !pendingPlan ? (
         <div
@@ -2765,73 +3058,91 @@ function GameView(props: GameViewProps) {
     </div>
   );
 
+  const [showFullLog, setShowFullLog] = useState(false);
+  const lastStage = STAGES.length - 1;
+  const pending = hand ? pendingIndexes(game).length > 0 : false;
+  const standings = game.players
+    .map((player, index) => ({ player, index }))
+    .sort((a, b) => b.player.stack - a.player.stack);
+  const logLines = showFullLog ? game.log : game.log.slice(0, 6);
+  // When a round has just closed, the player whose action closed it keeps an
+  // open (locked) card until the next street is dealt, so nothing above the
+  // Deal button changes height and the button stays under the same finger.
+  const closer =
+    hand && !hand.splitSel && hand.stage < lastStage && !pending
+      ? hand.last.findIndex((action) => action?.line === game.log[0])
+      : -1;
+
   return (
-    <>
+    <div className="stack-list game-view">
       {!hand ? (
-        <section className="card next-hand-card">
-          <b>{enoughPlayers ? "Ready for the next hand" : "Game over"}</b>
-          <p className="muted card-note">
+        <section className="glass card between-card">
+          <span className="eyebrow">
+            {enoughPlayers ? `${game.handNo} hands dealt` : "Game over"}
+          </span>
+          <h2 className="card-title">
+            {enoughPlayers ? "Ready For The Next Hand" : "Not Enough Chips"}
+          </h2>
+          <p className="muted">
             {enoughPlayers
               ? "The table has enough players with chips to deal again."
               : "Fewer than two players have chips remaining. A busted player can buy in to continue."}
           </p>
           {blindsDisplay}
           {!game.winnerAnnouncement ? (
-            <div className="between-hands-actions">
+            <>
+              {enoughPlayers ? (
+                <button className="cta" type="button" onClick={props.onNextHand}>
+                  Deal The Next Hand →
+                </button>
+              ) : null}
+              <BuyInOptions game={game} onBuyIn={props.onBuyIn} />
               <button
-                className="ghost full"
+                className="glass-button full"
                 type="button"
                 onClick={props.onEditBlinds}
               >
-                Edit Blind Plan
+                Edit blind plan
               </button>
-              <BuyInOptions
-                embedded
-                game={game}
-                onBuyIn={props.onBuyIn}
-              />
-              {enoughPlayers ? (
-                <button
-                  className="primary full"
-                  type="button"
-                  onClick={props.onNextHand}
-                >
-                  Deal The Next Hand
-                </button>
-              ) : null}
-            </div>
+            </>
           ) : null}
         </section>
       ) : (
-        <section className="card">
-          <button
-            className="ghost full hand-back-button"
-            type="button"
-            onClick={props.onBackToBetweenHands}
-          >
-            Back To Between Hands
-          </button>
-          <div className="segs">
-            {STAGES.map((stage, index) => (
-              <div className={index <= hand.stage ? "on" : ""} key={stage}>
-                <div className="bar" />
-                <div className="lbl">{stage}</div>
-              </div>
-            ))}
-          </div>
-          <div className="pot-panel">
-            <div className="stage">Pot</div>
-            <div className="pot">{formatRupees(hand.pot)}</div>
-            <div className="muted pot-meta">hand {hand.no}</div>
-            {blindsDisplay}
-            <div className="table-positions" aria-label="Table positions">
-              <span>Dealer · {game.players[hand.dealerIndex].name}</span>
-              <span>
-                Small Blind · {game.players[hand.smallBlindIndex].name}
-              </span>
-              <span>Big Blind · {game.players[hand.bigBlindIndex].name}</span>
+        <>
+          <section className="glass card scoreboard">
+            <div className="street-bar">
+              {STAGES.map((stage, index) => (
+                <div
+                  className={
+                    index < hand.stage
+                      ? "past"
+                      : index === hand.stage
+                        ? "current"
+                        : ""
+                  }
+                  key={stage}
+                >
+                  <span className="street-line" />
+                  <span className="street-label">{stage}</span>
+                </div>
+              ))}
             </div>
-          </div>
+            <div className="pot-block">
+              <span className="label">Pot · Hand {hand.no}</span>
+              <span
+                className="pot gradient-text"
+                style={
+                  {
+                    "--chars": formatRupees(hand.pot).length,
+                  } as React.CSSProperties
+                }
+              >
+                {formatRupees(hand.pot)}
+              </span>
+            </div>
+            {blindsDisplay}
+          </section>
+
           {hand.splitSel ? (
             <SplitView
               game={game}
@@ -2841,145 +3152,204 @@ function GameView(props: GameViewProps) {
             />
           ) : (
             <>
-              <div className="plist">
-                {[
-                  ...activeIndexes(game),
-                  ...game.players
-                    .map((_, index) => index)
-                    .filter((index) => !hand.in[index]),
-                ].map((playerIndex) => (
-                  <PlayerRow
-                    key={`${hand.no}-${hand.stage}-${playerIndex}-${hand.acted[playerIndex]}`}
-                    game={game}
-                    playerIndex={playerIndex}
-                    onAct={props.onAct}
-                    onUndo={props.onUndoAction}
-                  />
-                ))}
-              </div>
-              <hr />
-              {hand.stage < STAGES.length - 1 ? (
+              {[
+                // A closing fold keeps its place until the next street.
+                ...game.players
+                  .map((_, index) => index)
+                  .filter((index) => hand.in[index] || index === closer),
+                ...game.players
+                  .map((_, index) => index)
+                  .filter((index) => !hand.in[index] && index !== closer),
+              ].map((playerIndex) => (
+                <PlayerRow
+                  key={`${hand.no}-${hand.stage}-${playerIndex}-${hand.acted[playerIndex]}`}
+                  game={game}
+                  playerIndex={playerIndex}
+                  roundClosed={playerIndex === closer}
+                  onAct={props.onAct}
+                  onUndo={props.onUndoAction}
+                />
+              ))}
+              {hand.stage < lastStage ? (
                 <button
-                  className="blue full"
-                  disabled={pendingIndexes(game).length > 0}
+                  className="blue-button full tall"
+                  type="button"
+                  disabled={pending}
                   onClick={props.onNextStage}
                 >
-                  Deal {STAGES[hand.stage + 1]}
+                  Deal {STAGES[hand.stage + 1]} →
                 </button>
               ) : (
-                <>
-                  <div className="showdown">
-                    Showdown<small>Pick the winner</small>
+                <section className="glass card winner-picker">
+                  <div className="card-row">
+                    <span className="label">Pick the winner</span>
+                    <span className="accent-amount">{formatRupees(hand.pot)}</span>
                   </div>
+                  {pending ? (
+                    <p className="muted small-note">
+                      Finish the river betting before picking a winner.
+                    </p>
+                  ) : null}
                   {activeIndexes(game).map((playerIndex) => (
                     <button
-                      className="primary win"
-                      disabled={pendingIndexes(game).length > 0}
+                      className="contender"
+                      type="button"
+                      disabled={pending}
                       key={playerIndex}
                       onClick={() => props.onPickWinner(playerIndex)}
                     >
-                      <span>{game.players[playerIndex].name} wins</span>
-                      <span>{formatRupees(hand.pot)}</span>
+                      <Avatar name={game.players[playerIndex].name} size="small" />
+                      <span className="contender-name">
+                        {game.players[playerIndex].name} wins
+                      </span>
+                      <span className="contender-amount">
+                        {formatRupees(hand.pot)}
+                      </span>
                     </button>
                   ))}
                   {activeIndexes(game).length > 1 ? (
                     <button
-                      className="ghost full"
-                      disabled={pendingIndexes(game).length > 0}
+                      className="dashed-button"
+                      type="button"
+                      disabled={pending}
                       onClick={props.onBeginSplit}
                     >
-                      Split Between Two Or More
+                      Split between two or more
                     </button>
                   ) : null}
-                </>
+                </section>
               )}
             </>
           )}
-          <button
-            className="ghost danger full cancel-hand"
-            onClick={props.onCancelHand}
-          >
-            Cancel hand
-          </button>
-        </section>
+          <div className="button-pair">
+            <button
+              className="glass-button"
+              type="button"
+              onClick={props.onBackToBetweenHands}
+            >
+              Between hands
+            </button>
+            <button
+              className="glass-button danger-text"
+              type="button"
+              onClick={props.onCancelHand}
+            >
+              Cancel hand
+            </button>
+          </div>
+        </>
       )}
 
-      <section className="card">
-        <div className="hdr">
-          <b>Standings</b>
-          <span className="muted">start {formatRupees(game.startStack)}</span>
+      <section className="glass card">
+        <div className="card-row">
+          <h2 className="card-title">Session Standings</h2>
+          <span className="card-note">Start {formatRupees(game.startStack)}</span>
         </div>
-        {game.players
-          .map((player, index) => ({ player, index }))
-          .sort((a, b) => b.player.stack - a.player.stack)
-          .map(({ player, index }) => (
-            <div className="prow standing" key={index}>
-              <div className="nm">
+        <div className="rows">
+          {standings.map(({ player, index }, rank) => (
+            <div className="standing-row" key={index}>
+              <span className="standing-rank">{rank + 1}</span>
+              <div className="standing-name">
                 <b>{player.name}</b>
-                <small className="stack-value">
-                  Invested {formatRupees(totalBuyIns(game, index))}
-                </small>
+                <small>Invested {formatRupees(totalBuyIns(game, index))}</small>
               </div>
-              <div className="align-right">
+              <div className="standing-values">
                 <b>{formatRupees(player.stack)}</b>
-                <div className={net(index) >= 0 ? "pos result" : "neg result"}>
-                  {net(index) >= 0 ? "+" : ""}
-                  {formatRupees(net(index))}
-                </div>
+                <small className={toneClass(net(index))}>
+                  {formatSignedRupees(net(index))}
+                </small>
               </div>
             </div>
           ))}
+        </div>
       </section>
 
-      <section className="card">
-        <button className="blue full finish" onClick={props.onEndSession}>
-          Finish And Save Game Session
+      <button className="cta" type="button" onClick={props.onEndSession}>
+        Finish And Save Session
+      </button>
+      <div className="button-pair">
+        <button className="glass-button" type="button" onClick={props.onUndoHand}>
+          Undo last hand
         </button>
-        <div className="grid2">
-          <button onClick={props.onUndoHand}>Undo last hand</button>
-          <button className="ghost danger" onClick={props.onDiscard}>
-            Discard game
-          </button>
-        </div>
-        {game.log.length ? (
-          <>
-            <hr />
-            <div className="log">
-              {game.log.map((line, index) => (
-                <div key={`${line}-${index}`}>{line}</div>
-              ))}
-            </div>
-          </>
-        ) : null}
-      </section>
-    </>
+        <button
+          className="glass-button danger-text"
+          type="button"
+          onClick={props.onDiscard}
+        >
+          Discard game
+        </button>
+      </div>
+
+      {game.log.length ? (
+        <section className="glass card">
+          <span className="label">Action log</span>
+          <div className="rows log">
+            {logLines.map((line, index) => (
+              <div key={`${line}-${index}`}>{line}</div>
+            ))}
+          </div>
+          {game.log.length > 6 ? (
+            <button
+              className="text-button"
+              type="button"
+              onClick={() => setShowFullLog((shown) => !shown)}
+            >
+              {showFullLog ? "Show fewer" : `Show all ${game.log.length} lines`}
+            </button>
+          ) : null}
+        </section>
+      ) : null}
+    </div>
   );
 }
 
+const HAND_RANKINGS = [
+  ["Royal Flush", "A, K, Q, J, 10, all one suit", "A♠ K♠ Q♠ J♠ 10♠", 5],
+  ["Straight Flush", "Five in a row, same suit", "9♥ 8♥ 7♥ 6♥ 5♥", 5],
+  ["Four of a Kind", "Four cards of one rank", "Q♣ Q♦ Q♥ Q♠ 7♦", 4],
+  ["Full House", "Three of a kind plus a pair", "K♠ K♥ K♦ 4♣ 4♠", 5],
+  ["Flush", "Any five cards of one suit", "A♦ J♦ 8♦ 6♦ 2♦", 5],
+  ["Straight", "Five in a row, mixed suits", "10♣ 9♦ 8♠ 7♥ 6♣", 5],
+  ["Three of a Kind", "Three cards of one rank", "7♠ 7♥ 7♦ K♣ 3♠", 3],
+  ["Two Pair", "Two different pairs", "J♥ J♣ 5♠ 5♦ A♥", 4],
+  ["One Pair", "Two cards of one rank", "10♦ 10♠ K♥ 6♣ 2♠", 2],
+  ["High Card", "Nothing made; the highest card plays", "A♣ Q♦ 9♠ 5♥ 3♣", 1],
+] as const;
+
 function PokerHandsChart() {
   return (
-    <section className="poker-hands-chart">
-      <div className="poker-hands-heading">
-        <div>
-          <span className="hands-kicker">Strongest To Weakest</span>
-          <h2>Poker Hand Rankings</h2>
-        </div>
-      </div>
-      <div className="hand-rank-grid">
-        {POKER_HANDS.map((hand, index) => (
-          <div className="hand-rank" key={hand.name}>
-            <span className="hand-rank-number">{index + 1}</span>
+    <div className="stack-list hand-rankings">
+      {HAND_RANKINGS.map(([name, description, cards, used], index) => (
+        <section className="glass card hand-rank" key={name}>
+          <div className="hand-rank-head">
+            <span className={`hand-rank-number ${index < 3 ? "top" : ""}`}>
+              {String(index + 1).padStart(2, "0")}
+            </span>
             <div>
-              <strong>{hand.name}</strong>
-              <span>
-                {hand.cards}
-                {hand.note ? ` · ${hand.note}` : ""}
-              </span>
+              <h2 className="card-title">{name}</h2>
+              <p className="muted">{description}</p>
             </div>
           </div>
-        ))}
-      </div>
-    </section>
+          <div className="mini-cards" aria-label={cards}>
+            {cards.split(" ").map((card, cardIndex) => {
+              const suit = card.slice(-1);
+              return (
+                <span
+                  className={`mini-card ${suit === "♥" || suit === "♦" ? "red" : ""} ${
+                    cardIndex < used ? "" : "unused"
+                  }`}
+                  key={card}
+                  aria-hidden="true"
+                >
+                  <span>{card.slice(0, -1)}</span>
+                  <span className="mini-card-suit">{suit}</span>
+                </span>
+              );
+            })}
+          </div>
+        </section>
+      ))}
+    </div>
   );
 }
 
@@ -3138,11 +3508,9 @@ function BlindEditor({
 function BuyInOptions({
   game,
   onBuyIn,
-  embedded = false,
 }: {
   game: GameState;
   onBuyIn: (playerIndex: number) => void;
-  embedded?: boolean;
 }) {
   const offers = game.players.flatMap((player, index) => {
     const amount = nextBuyIn(game, index);
@@ -3151,23 +3519,24 @@ function BuyInOptions({
   if (!offers.length) return null;
 
   return (
-    <section
-      className={embedded ? "buy-in-options embedded" : "card buy-in-options"}
-    >
-      <b>Buy In</b>
-      <p className="muted">A busted player can buy back in for the starting stack.</p>
+    <div className="buy-in-options">
+      <span className="label">Buy in</span>
+      <p className="muted small-note">
+        A busted player can buy back in for the starting stack.
+      </p>
       {offers.map(({ player, index, amount }) => (
         <button
-          className="buy-in-button"
+          className="contender"
           key={player.id || index}
           type="button"
           onClick={() => onBuyIn(index)}
         >
-          <span>{player.name}</span>
-          <strong>Buy In · {formatRupees(amount)}</strong>
+          <Avatar name={player.name} size="small" />
+          <span className="contender-name">{player.name}</span>
+          <span className="contender-amount">Buy in · {formatRupees(amount)}</span>
         </button>
       ))}
-    </section>
+    </div>
   );
 }
 
@@ -3195,20 +3564,59 @@ function WinnerCard({
             <span key={index} />
           ))}
         </div>
-        <span className="winner-suit" aria-hidden="true">
-          ♠
-        </span>
-        <span className="winner-kicker">
-          Hand {announcement.handNo} Complete
-        </span>
+        <span className="eyebrow">Pot won · Hand {announcement.handNo}</span>
         <h2 id="winner-title">{winnerText}</h2>
-        <p>{formatRupees(announcement.pot)} Pot Awarded</p>
-        <button className="primary full" type="button" onClick={onNext}>
-          Next
+        <p className="gradient-text winner-pot">
+          {formatRupees(announcement.pot)}
+        </p>
+        <button className="cta" type="button" onClick={onNext}>
+          Next →
         </button>
       </section>
     </div>
   );
+}
+
+function seatStatus(game: GameState, playerIndex: number) {
+  const hand = game.hand!;
+  const player = game.players[playerIndex];
+  const committed = hand.committed[playerIndex];
+  if (!hand.in[playerIndex]) return "Folded";
+  if (player.stack === 0) return `All in ${formatRupees(committed)}`;
+  const last = hand.last[playerIndex];
+  if (last) {
+    if (last.type === "check") return "Checked";
+    if (last.type === "call") return `Called ${formatRupees(committed)}`;
+    if (last.type === "bet") {
+      // The log line already says whether the chips opened, raised or called.
+      return last.line.includes(" raises to ")
+        ? `Raised to ${formatRupees(committed)}`
+        : last.line.includes(" bets ")
+          ? `Bet ${formatRupees(committed)}`
+          : `Called ${formatRupees(committed)}`;
+    }
+    if (last.type === "all-in") return `All in ${formatRupees(committed)}`;
+  }
+  if (hand.stage === 0 && committed > 0) {
+    if (playerIndex === hand.bigBlindIndex) {
+      return `Big blind ${formatRupees(committed)}`;
+    }
+    if (playerIndex === hand.smallBlindIndex) {
+      return `Small blind ${formatRupees(committed)}`;
+    }
+  }
+  return "Waiting";
+}
+
+function seatRole(game: GameState, playerIndex: number) {
+  const hand = game.hand!;
+  return [
+    playerIndex === hand.dealerIndex ? "D" : "",
+    playerIndex === hand.smallBlindIndex ? "SB" : "",
+    playerIndex === hand.bigBlindIndex ? "BB" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
 }
 
 function PlayerRow({
@@ -3216,11 +3624,14 @@ function PlayerRow({
   playerIndex,
   onAct,
   onUndo,
+  roundClosed = false,
 }: {
   game: GameState;
   playerIndex: number;
   onAct: GameViewProps["onAct"];
   onUndo: (playerIndex: number) => void;
+  /** This player's action closed the round; keep the card open but locked. */
+  roundClosed?: boolean;
 }) {
   const [amount, setAmount] = useState("");
   const hand = game.hand;
@@ -3238,14 +3649,6 @@ function PlayerRow({
   // Raises are shown as the total they reach, like "raise to ₹1,300",
   // while the box and slider stay as chips to put in now.
   const raising = hand.roundHigh > 0;
-  const minimumLabel =
-    minimum >= player.stack
-      ? ` · all in ${formatRupees(player.stack)}`
-      : raising
-        ? ` · min raise to ${formatRupees(committed + minimum)}${
-            committed > 0 ? ` (${formatRupees(minimum)} more)` : ""
-          }`
-        : ` · min bet ${formatRupees(minimum)}`;
   const canUndo = hand.last[playerIndex] && !hand.splitSel;
   const hasAmount = amount.trim() !== "";
   const stops = betStops(minimum, player.stack);
@@ -3258,103 +3661,223 @@ function PlayerRow({
     0,
     stops.findLastIndex((stop) => stop <= betAmount),
   );
+  const role = seatRole(game, playerIndex);
+  const stackLine = `${formatRupees(player.stack)} · in ${formatRupees(committed)}`;
 
-  if (folded || done || !isTurn) {
+  if (roundClosed) {
     return (
-      <div className={`prow ${folded ? "folded" : done ? "done" : "waiting"}`}>
-        <div className="nm">
-          <b>{player.name}</b>
-          <small className="stack-value">{formatRupees(player.stack)}</small>
+      <div className="glass seat-card round-closed">
+        <div className="seat-main">
+          <Avatar name={player.name} role={role} />
+          <div className="seat-copy">
+            <b>{player.name}</b>
+            <small>{stackLine}</small>
+          </div>
+          <span className="status-pill">{seatStatus(game, playerIndex)}</span>
+          {canUndo ? (
+            <button
+              className="pill-button"
+              type="button"
+              onClick={() => onUndo(playerIndex)}
+            >
+              Undo
+            </button>
+          ) : null}
         </div>
-        <span className="tag">
-          {folded
-            ? "folded"
-            : player.stack === 0
-              ? "all-in"
-              : !isTurn
-                ? "waiting"
-                : `in ${formatRupees(hand.committed[playerIndex])}`}
-        </span>
-        {canUndo ? (
-          <button className="undo" onClick={() => onUndo(playerIndex)}>
-            Undo
-          </button>
-        ) : null}
+        <div className="bet-panel" aria-hidden="true" inert>
+          <div className="bet-summary">
+            <p>
+              Betting round complete
+              <br />
+              Deal <b>{STAGES[hand.stage + 1]}</b> next
+            </p>
+            <label className="bet-input">
+              <span>₹</span>
+              <input type="number" disabled placeholder="—" />
+            </label>
+          </div>
+          <input className="bet-range" type="range" disabled defaultValue={0} />
+          <div className="quick-sizes">
+            {["Min", "½ Pot", "Pot", "All in"].map((label) => (
+              <button key={label} type="button" disabled>
+                {label}
+              </button>
+            ))}
+          </div>
+          <div className="action-row">
+            <button className="glass-button" type="button" disabled>
+              Fold
+            </button>
+            <button className="blue-button" type="button" disabled>
+              Check
+            </button>
+            <button className="accent-button" type="button" disabled>
+              Bet
+            </button>
+          </div>
+          <span className="clear-amount-slot" />
+        </div>
       </div>
     );
   }
 
-  return (
-    <div className="prow act current-turn">
-      <div className="nm">
-        <b>{player.name} <span className="turn-chip">Your turn</span></b>
-        <small className="stack-value">
-          Stack {formatRupees(player.stack)}
-          {owed > 0 ? ` · to call ${formatRupees(owed)}` : ""}
-          {raiseClosed ? "" : minimumLabel}
-        </small>
+  if (folded || done || !isTurn) {
+    return (
+      <div className={`glass seat-card ${folded ? "folded" : ""}`}>
+        <div className="seat-main">
+          <Avatar name={player.name} role={role} />
+          <div className="seat-copy">
+            <b>{player.name}</b>
+            <small>{stackLine}</small>
+          </div>
+          <span className="status-pill">{seatStatus(game, playerIndex)}</span>
+          {canUndo ? (
+            <button
+              className="pill-button"
+              type="button"
+              onClick={() => onUndo(playerIndex)}
+            >
+              Undo
+            </button>
+          ) : null}
+        </div>
       </div>
-      <div className={raiseClosed ? "ctl call-or-fold" : "ctl"}>
+    );
+  }
+
+  // Quick sizes are chips to put in now, clamped to what the rules allow.
+  const quickAmount = (target: number) =>
+    Math.max(minimum, Math.min(player.stack, Math.round(target)));
+  const quickSizes = [
+    { label: "Min", value: null },
+    { label: "½ Pot", value: quickAmount(hand.pot / 2) },
+    { label: "Pot", value: quickAmount(hand.pot) },
+    { label: "All in", value: player.stack },
+  ];
+  const raiseLabel = !(betAmount > 0)
+    ? raising
+      ? "Raise"
+      : "Bet"
+    : allIn
+      ? "All in"
+      : raising
+        ? `Raise ${formatRupees(committed + betAmount)}`
+        : `Bet ${formatRupees(betAmount)}`;
+
+  return (
+    <div className="glass seat-card active">
+      <div className="seat-main">
+        <Avatar name={player.name} role={role} />
+        <div className="seat-copy">
+          <b>{player.name}</b>
+          <small>{stackLine}</small>
+        </div>
+        <span className="turn-pill">Your turn</span>
+      </div>
+      <div className="bet-panel">
+        <div className="bet-summary">
+          <p>
+            To call <b>{formatRupees(Math.min(owed, player.stack))}</b>
+            <br />
+            {raiseClosed ? (
+              "Call or fold only"
+            ) : minimum >= player.stack ? (
+              <>
+                All in <b>{formatRupees(player.stack)}</b>
+              </>
+            ) : raising ? (
+              <>
+                Min raise <b>{formatRupees(committed + minimum)}</b>
+              </>
+            ) : (
+              <>
+                Min bet <b>{formatRupees(minimum)}</b>
+              </>
+            )}
+          </p>
+          {raiseClosed ? null : (
+            <label className="bet-input">
+              <span>₹</span>
+              <input
+                type="number"
+                inputMode="numeric"
+                min={minimum}
+                placeholder={String(stops[0] ?? "")}
+                aria-label={
+                  raising ? "Chips to put in for the raise" : "Bet amount"
+                }
+                value={amount}
+                onChange={(event) => setAmount(event.target.value)}
+              />
+            </label>
+          )}
+        </div>
         {raiseClosed ? (
           <p className="raise-closed">
             Short all-in: call or fold. It was less than a full raise, so
             betting isn&apos;t reopened for you.
           </p>
-        ) : (
+        ) : stops.length > 1 ? (
           <>
-            <div className="amtwrap">
-              <span>₹</span>
-              <input
-                className="amt"
-                type="number"
-                inputMode="numeric"
-                min={minimum}
-                aria-label={raising ? "Chips to put in for the raise" : "Bet amount"}
-                value={amount}
-                onChange={(event) => setAmount(event.target.value)}
-              />
-            </div>
-            {stops.length > 1 ? (
-              <div className="bet-slider">
-                <input
-                  type="range"
-                  min={0}
-                  max={stops.length - 1}
-                  step={1}
-                  value={stopIndex}
-                  aria-label={raising ? "Raise size" : "Bet size"}
-                  aria-valuetext={
-                    allIn
+            <input
+              className="bet-range"
+              type="range"
+              min={0}
+              max={stops.length - 1}
+              step={1}
+              value={stopIndex}
+              aria-label={raising ? "Raise size" : "Bet size"}
+              aria-valuetext={
+                allIn
                   ? `All in ${formatRupees(betAmount)}`
                   : raising
                     ? `Raise to ${formatRupees(committed + betAmount)}`
                     : formatRupees(betAmount)
+              }
+              onChange={(event) => {
+                const index = Number(event.target.value);
+                // The first stop is the default, so it leaves Call and Fold on.
+                setAmount(index === 0 ? "" : String(stops[index]));
+              }}
+            />
+            <div className="quick-sizes">
+              {quickSizes.map((size) => (
+                <button
+                  key={size.label}
+                  type="button"
+                  onClick={() =>
+                    setAmount(size.value === null ? "" : String(size.value))
                   }
-                  onChange={(event) => {
-                    const index = Number(event.target.value);
-                    // The first stop is the default, so it leaves Call and Fold on.
-                    setAmount(index === 0 ? "" : String(stops[index]));
-                  }}
-                />
-                <div className="bet-slider-ends" aria-hidden="true">
-                  <span>{formatRupees(stops[0])}</span>
-                  <span>All In {formatRupees(player.stack)}</span>
-                </div>
-              </div>
-            ) : null}
+                >
+                  {size.label}
+                </button>
+              ))}
+            </div>
           </>
-        )}
-        <div className="acts">
+        ) : null}
+        <div className={`action-row ${raiseClosed ? "two" : ""}`}>
           <button
-            className="action-call"
+            className="glass-button"
+            type="button"
+            disabled={hasAmount}
+            onClick={() => onAct(playerIndex, "fold")}
+          >
+            Fold
+          </button>
+          <button
+            className="blue-button"
+            type="button"
             disabled={hasAmount}
             onClick={() => onAct(playerIndex, owed > 0 ? "call" : "check")}
           >
-            {owed > 0 ? "Call" : "Check"}
+            {owed > 0
+              ? `Call ${formatRupees(Math.min(owed, player.stack))}`
+              : "Check"}
           </button>
           {raiseClosed ? null : (
             <button
-              className={`action-raise ${allIn ? "all-in" : ""}`}
+              className="accent-button"
+              type="button"
               disabled={!(betAmount > 0)}
               onClick={() =>
                 allIn
@@ -3362,25 +3885,20 @@ function PlayerRow({
                   : onAct(playerIndex, "bet", betAmount)
               }
             >
-              {!(betAmount > 0)
-                ? raising
-                  ? "Raise"
-                  : "Bet"
-                : allIn
-                  ? `All In ${formatRupees(player.stack)}`
-                  : raising
-                    ? `Raise to ${formatRupees(committed + betAmount)}`
-                    : `Bet ${formatRupees(betAmount)}`}
+              {raiseLabel}
             </button>
           )}
-          <button
-            className="danger"
-            disabled={hasAmount}
-            onClick={() => onAct(playerIndex, "fold")}
-          >
-            Fold
-          </button>
         </div>
+        {/* Always takes its space, so the card keeps one height. */}
+        <button
+          className="text-button clear-amount"
+          type="button"
+          hidden={!hasAmount}
+          onClick={() => setAmount("")}
+        >
+          Clear amount to call or fold
+        </button>
+        {hasAmount ? null : <span className="clear-amount-slot" />}
       </div>
     </div>
   );
@@ -3404,9 +3922,10 @@ function SplitView({
   const remainder = selected.length ? hand.pot - each * selected.length : 0;
 
   return (
-    <>
-      <div className="showdown">
-        Split pot<small>Tap everyone who ties</small>
+    <section className="glass card winner-picker">
+      <div className="card-row">
+        <span className="label">Split the pot</span>
+        <span className="accent-amount">{formatRupees(hand.pot)}</span>
       </div>
       {activeIndexes(game).map((playerIndex) => {
         const isSelected = hand.splitSel?.includes(playerIndex) ?? false;
@@ -3414,30 +3933,33 @@ function SplitView({
         const share = isSelected ? each + (rank < remainder ? 1 : 0) : 0;
         return (
           <button
-            className={`win ${isSelected ? "primary" : ""}`}
+            className={`contender ${isSelected ? "selected" : ""}`}
+            type="button"
+            aria-pressed={isSelected}
             key={playerIndex}
             onClick={() => onToggle(playerIndex)}
           >
-            <span>
-              {isSelected ? "✓" : "○"} {game.players[playerIndex].name}
+            <Avatar name={game.players[playerIndex].name} size="small" />
+            <span className="contender-name">
+              {game.players[playerIndex].name}
             </span>
-            <span>{isSelected ? formatRupees(share) : "—"}</span>
+            <span className={`contender-amount ${isSelected ? "" : "muted"}`}>
+              {isSelected ? formatRupees(share) : "Tap to include"}
+            </span>
           </button>
         );
       })}
-      <button
-        className="blue full split-submit"
-        disabled={selected.length < 2}
-        onClick={onSplit}
-      >
-        {selected.length > 1
-          ? `Split ${formatRupees(hand.pot)} ${selected.length} ways`
-          : "Select at least 2 players"}
+      {selected.length > 1 ? (
+        <button className="blue-button full tall" type="button" onClick={onSplit}>
+          Split {formatRupees(hand.pot)} {selected.length} ways
+        </button>
+      ) : (
+        <p className="muted small-note">Select at least 2 players.</p>
+      )}
+      <button className="dashed-button" type="button" onClick={onBack}>
+        Back to one winner
       </button>
-      <button className="ghost full split-back" onClick={onBack}>
-        Back
-      </button>
-    </>
+    </section>
   );
 }
 
@@ -3518,40 +4040,42 @@ function SessionCard({
   const sortedResults = [...session.results].sort((a, b) => b.net - a.net);
 
   return (
-    <article className={`sess ${discarded ? "discarded" : ""}`}>
-      <div className="hdr session-hdr">
+    <article className={`glass card session-card ${discarded ? "discarded" : ""}`}>
+      <div className="session-head">
         <div>
-          <b>{session.name || `Game ${session.sessionNumber || ""}`}</b>
-          <div className="muted session-meta">
-            {formatDate(session.date)} · {session.hands} hands · big blind{" "}
+          <h2 className="card-title">
+            {session.name || `Game ${session.sessionNumber || ""}`}
+          </h2>
+          <p className="muted session-meta">
+            {formatDate(session.date)} · {session.hands} hands · Big blind{" "}
             {formatRupees(session.ante)} · {session.results.length} players
-          </div>
+          </p>
         </div>
         <div className="session-actions">
           {discarded ? (
             <>
               <button
-                className="restore-session"
+                className="pill-button"
                 type="button"
                 onClick={() => onRestore?.(session.id)}
               >
                 Restore
               </button>
               <button
-                className="delete-session"
+                className="pill-button danger-text"
                 type="button"
                 onClick={() => onDeletePermanently?.(session.id)}
               >
-                Delete Permanently
+                Delete
               </button>
             </>
           ) : (
             <button
-              className="discard-session"
+              className="pill-button"
               type="button"
               onClick={() => onDiscard?.(session.id)}
             >
-              Discard Session
+              Discard
             </button>
           )}
         </div>
@@ -3587,23 +4111,32 @@ function SessionCard({
           </div>
         </details>
       ) : null}
-      {sortedResults.map((result, index) => (
-        <div className="sline" key={`${result.playerId || result.name}-${index}`}>
-          <span className="session-result-player">
-            {index === 0 ? "🏆 " : ""}
-            {result.name}
-            {result.buyIns && result.buyIns.length > 1 ? (
-              <small>
-                Buy-ins {formatRupees(result.buyIns.reduce((sum, amount) => sum + amount, 0))}
-              </small>
+      <div className="rows">
+        {sortedResults.map((result, index) => (
+          <div
+            className="result-row"
+            key={`${result.playerId || result.name}-${index}`}
+          >
+            {index === 0 && result.net > 0 ? (
+              <span className="win-tag">Win</span>
             ) : null}
-          </span>
-          <span className={result.net >= 0 ? "pos" : "neg"}>
-            {result.net >= 0 ? "+" : ""}
-            {formatRupees(result.net)}
-          </span>
-        </div>
-      ))}
+            <span className="result-name">
+              {result.name}
+              {result.buyIns && result.buyIns.length > 1 ? (
+                <small>
+                  Buy-ins{" "}
+                  {formatRupees(
+                    result.buyIns.reduce((sum, amount) => sum + amount, 0),
+                  )}
+                </small>
+              ) : null}
+            </span>
+            <span className={`result-amount ${toneClass(result.net)}`}>
+              {formatSignedRupees(result.net)}
+            </span>
+          </div>
+        ))}
+      </div>
     </article>
   );
 }
@@ -3613,7 +4146,227 @@ const INELIGIBLE_REASON_TEXT: Record<IneligibleReason, string> = {
   "unverified-accounting": "the saved chip totals do not add up",
 };
 
-function HistoryView({
+const STANDINGS_START = 4;
+
+function StandingsView({
+  history,
+  loading,
+  error,
+  onRetry,
+}: {
+  history: PokerSession[];
+  loading: boolean;
+  error: string;
+  onRetry: () => void;
+}) {
+  const standings = useMemo(() => buildStandings(history), [history]);
+  const leaderboard = standings.entries;
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [showAll, setShowAll] = useState(false);
+  const [showRankingHelp, setShowRankingHelp] = useState(false);
+  const sessionTitles = useMemo(
+    () =>
+      new Map(
+        history.map((session) => [
+          session.id,
+          session.name || `Game ${session.sessionNumber || ""}`,
+        ]),
+      ),
+    [history],
+  );
+  const visible = showAll ? leaderboard : leaderboard.slice(0, STANDINGS_START);
+
+  function toggle(key: string) {
+    setExpanded((current) => {
+      const next = new Set(current);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
+
+  if (error) {
+    return (
+      <section className="glass card">
+        <p className="muted">{error}</p>
+        <button className="glass-button full" type="button" onClick={onRetry}>
+          Try again
+        </button>
+      </section>
+    );
+  }
+  if (loading) {
+    return (
+      <section className="glass card">
+        <p className="muted">Loading the shared ledger…</p>
+      </section>
+    );
+  }
+  if (!leaderboard.length) {
+    return (
+      <section className="glass card">
+        <p className="muted">
+          No saved sessions yet. Finish a game with “Finish And Save Session”
+          and it will show up here.
+        </p>
+      </section>
+    );
+  }
+
+  return (
+    <div className="stack-list">
+      <LeaderboardChart standings={standings} />
+
+      <div className="section-heading">
+        <div className="heading-with-info">
+          <h2>Player Standings</h2>
+          <button
+            className="info-button"
+            type="button"
+            aria-label="How players are ranked"
+            onClick={() => setShowRankingHelp(true)}
+          >
+            i
+          </button>
+        </div>
+        <span className="card-note">
+          {leaderboard.length} player{leaderboard.length === 1 ? "" : "s"}
+        </span>
+      </div>
+      {visible.map((entry) => {
+        const open = expanded.has(entry.key);
+        const profitableRate = Math.round(
+          (entry.profitableSessions / entry.totalSessions) * 100,
+        );
+        const stats: Array<[string, string, number | null]> = [
+          [
+            "Sessions",
+            entry.eligibleSessions === entry.totalSessions
+              ? String(entry.totalSessions)
+              : `${entry.totalSessions} (${entry.eligibleSessions} ranked)`,
+            null,
+          ],
+          [
+            "Profitable",
+            `${entry.profitableSessions} (${profitableRate}%)`,
+            null,
+          ],
+          ["Hands", entry.hands.toLocaleString("en-IN"), null],
+          ["Invested", formatRupees(entry.invested), null],
+          ["Net chips", formatSignedRupees(entry.net), entry.net],
+        ];
+        return (
+          <section className="glass standing-card" key={entry.key}>
+            <button
+              className="standing-toggle"
+              type="button"
+              aria-expanded={open}
+              onClick={() => toggle(entry.key)}
+            >
+              <span
+                className={`medal ${
+                  entry.rank === 1
+                    ? "first"
+                    : entry.rank === 2 || entry.rank === 3
+                      ? "podium"
+                      : ""
+                }`}
+              >
+                {entry.rank ?? "–"}
+              </span>
+              <span className="standing-name">
+                <b>{entry.name}</b>
+                {entry.averageReturn === null ? (
+                  <small>Unranked · no verified buy-ins</small>
+                ) : null}
+              </span>
+              <span className={`standing-return ${toneClass(entry.averageReturn)}`}>
+                {entry.averageReturn === null
+                  ? "—"
+                  : formatPercent(entry.averageReturn)}
+              </span>
+              <span className="chevron" aria-hidden="true">
+                {open ? "▲" : "▼"}
+              </span>
+            </button>
+            {open ? (
+              <div className="standing-details">
+                <dl>
+                  {stats.map(([label, value, tone]) => (
+                    <div key={label}>
+                      <dt>{label}</dt>
+                      <dd className={toneClass(tone)}>{value}</dd>
+                    </div>
+                  ))}
+                </dl>
+                {entry.ineligible.length ? (
+                  <ul className="leaderboard-excluded">
+                    {entry.ineligible.map(({ sessionId, reason }) => (
+                      <li key={sessionId}>
+                        Not ranked: {sessionTitles.get(sessionId) ?? sessionId}{" "}
+                        — {INELIGIBLE_REASON_TEXT[reason]}
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+              </div>
+            ) : null}
+          </section>
+        );
+      })}
+      {leaderboard.length > STANDINGS_START ? (
+        <button
+          className="glass-button full accent-text"
+          type="button"
+          onClick={() => setShowAll((shown) => !shown)}
+        >
+          {showAll ? "Show fewer" : `Show all ${leaderboard.length} players`}
+        </button>
+      ) : null}
+      {showRankingHelp ? (
+        <RankingHelp onClose={() => setShowRankingHelp(false)} />
+      ) : null}
+    </div>
+  );
+}
+
+function RankingHelp({ onClose }: { onClose: () => void }) {
+  useEffect(() => {
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") onClose();
+    }
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [onClose]);
+
+  return (
+    <div
+      className="modal show"
+      role="presentation"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <div
+        className="sheet ranking-help"
+        role="dialog"
+        aria-modal="true"
+        aria-label="How players are ranked"
+      >
+        <p>
+          Players are ranked by their <b>average session return</b>: how much
+          they won or lost in each game as a percentage of the chips they put
+          in, averaged over their games.
+        </p>
+        <button className="primary" type="button" onClick={onClose}>
+          Got it
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function SessionsView({
   history,
   discardedSessions,
   loading,
@@ -3636,187 +4389,48 @@ function HistoryView({
   onExport: () => void;
   onImport: (event: ChangeEvent<HTMLInputElement>) => void;
 }) {
-  const standings = useMemo(() => buildStandings(history), [history]);
-  const leaderboard = standings.entries;
-  const sessionTitles = useMemo(
-    () =>
-      new Map(
-        history.map((session) => [
-          session.id,
-          session.name || `Game ${session.sessionNumber || ""}`,
-        ]),
-      ),
-    [history],
-  );
   const latestSessions = useMemo(
     () => [...history].sort((a, b) => b.date - a.date),
     [history],
   );
   const importInput = useRef<HTMLInputElement>(null);
 
-  function leaderboardRow(entry: StandingsEntry) {
-    const profitableRate = Math.round(
-      (entry.profitableSessions / entry.totalSessions) * 100,
-    );
-    const stats = [
-      ["Ranked", `${entry.eligibleSessions}/${entry.totalSessions}`],
-      ["Hands", entry.hands.toLocaleString("en-IN")],
-      ["Profitable", `${entry.profitableSessions} (${profitableRate}%)`],
-      ["Invested", entry.invested.toLocaleString("en-IN")],
-      ["Net chips", formatChipChange(entry.net)],
-    ];
-    return (
-      <div className="prow leaderboard-row" key={entry.key}>
-        <div className="leaderboard-head">
-          <span className={`rank ${entry.rank === 1 ? "gold" : ""}`}>
-            {entry.rank ?? "–"}
-          </span>
-          <b className="leaderboard-name">{entry.name}</b>
-          <div className="leaderboard-score">
-            {entry.averageReturn === null ? (
-              <>
-                <b className="muted">Unranked</b>
-                <small>no verified buy-ins</small>
-              </>
-            ) : (
-              <>
-                <b className={entry.averageReturn >= 0 ? "pos" : "neg"}>
-                  {formatPercent(entry.averageReturn)}
-                </b>
-                <small>
-                  {entry.eligibleSessions} session
-                  {entry.eligibleSessions === 1 ? "" : "s"}
-                </small>
-              </>
-            )}
-          </div>
-        </div>
-        <dl className="leaderboard-stats">
-          {stats.map(([label, value]) => (
-            <div key={label}>
-              <dt>{label}</dt>
-              <dd
-                className={
-                  label === "Net chips" ? (entry.net >= 0 ? "pos" : "neg") : ""
-                }
-              >
-                {value}
-              </dd>
-            </div>
-          ))}
-        </dl>
-        {entry.ineligible.length ? (
-          <ul className="leaderboard-excluded">
-            {entry.ineligible.map(({ sessionId, reason }) => (
-              <li key={sessionId}>
-                Not ranked: {sessionTitles.get(sessionId) ?? sessionId} —{" "}
-                {INELIGIBLE_REASON_TEXT[reason]}
-              </li>
-            ))}
-          </ul>
-        ) : null}
-      </div>
-    );
-  }
-
   return (
-    <div className="history-layout">
-      <section className="card history-graph-card">
-        <div className="hdr">
-          <b>All-time leaderboard</b>
-          <span className="muted">
-            {loading
-              ? "syncing…"
-              : `${history.length} session${history.length === 1 ? "" : "s"}`}
-          </span>
-        </div>
-        {error ? (
-          <>
-            <p className="muted">{error}</p>
-            <button className="ghost full retry" onClick={onRetry}>
-              Try again
-            </button>
-          </>
-        ) : loading ? (
+    <div className="stack-list">
+      {error ? (
+        <section className="glass card">
+          <p className="muted">{error}</p>
+          <button className="glass-button full" type="button" onClick={onRetry}>
+            Try again
+          </button>
+        </section>
+      ) : loading ? (
+        <section className="glass card">
           <p className="muted">Loading the shared ledger…</p>
-        ) : leaderboard.length ? (
-          <LeaderboardChart standings={standings} />
-        ) : (
-          <p className="muted">
-            No Saved Sessions Yet. Finish A Game With “Finish And Save Game
-            Session” And It Will Show Up Here.
-          </p>
-        )}
-      </section>
-
-      {!error && !loading && leaderboard.length ? (
-        <section className="card player-standings-card">
-          <div className="hdr">
-            <b>Player Standings</b>
-            <span className="muted">
-              {leaderboard.length} player{leaderboard.length === 1 ? "" : "s"}
-            </span>
-          </div>
-          <ExpandingList
-            className="leaderboard-list"
-            items={leaderboard}
-            render={leaderboardRow}
-            more={(count) => `Show ${count} more player${count === 1 ? "" : "s"}`}
-          />
         </section>
-      ) : null}
-
-      {!error && history.length ? (
-        <section className="card sessions-card">
-          <div className="hdr">
-            <b>Game Sessions</b>
-            <span className="muted">
-              {history.length} game{history.length === 1 ? "" : "s"}
-            </span>
-          </div>
-          <ExpandingList
-            items={latestSessions}
-            render={(session) => (
-              <SessionCard
-                key={session.id}
-                session={session}
-                onDiscard={onDiscard}
-              />
-            )}
-            more={(count) => `Show ${count} older game${count === 1 ? "" : "s"}`}
-          />
-        </section>
-      ) : null}
-
-      <section className="card backup-card">
-        <div className="grid2">
-          <button onClick={onExport}>Export Backup</button>
-          <button onClick={() => importInput.current?.click()}>Import</button>
-        </div>
-        <input
-          ref={importInput}
-          type="file"
-          accept="application/json,.json"
-          hidden
-          onChange={onImport}
+      ) : history.length ? (
+        <ExpandingList
+          items={latestSessions}
+          render={(session) => (
+            <SessionCard key={session.id} session={session} onDiscard={onDiscard} />
+          )}
+          more={(count) => `Show ${count} older game${count === 1 ? "" : "s"}`}
         />
-        <p className="muted backup-note">
-          History is shared from Neon across every device. Export gives you an
-          extra offline backup; importing never overwrites and only adds
-          sessions that are not already in the ledger.
-        </p>
-      </section>
+      ) : (
+        <section className="glass card">
+          <p className="muted">
+            No saved games yet. Finished games appear here, newest first.
+          </p>
+        </section>
+      )}
 
       {!error && discardedSessions.length ? (
-        <section className="card discarded-sessions">
-          <div className="hdr">
-            <div>
-              <b>Discarded Sessions</b>
-              <p className="muted card-note">
-                These Sessions Do Not Count Towards The Leaderboard.
-              </p>
-            </div>
-            <span className="discarded-count">{discardedSessions.length}</span>
+        <>
+          <div className="section-heading">
+            <h2>Discarded</h2>
+            <span className="card-note">
+              Not counted in the standings · {discardedSessions.length}
+            </span>
           </div>
           {discardedSessions.map((session) => (
             <SessionCard
@@ -3827,66 +4441,69 @@ function HistoryView({
               onDeletePermanently={onDeletePermanently}
             />
           ))}
-        </section>
+        </>
       ) : null}
+
+      <section className="glass card">
+        <div className="button-pair">
+          <button className="glass-button raised" type="button" onClick={onExport}>
+            Export backup
+          </button>
+          <button
+            className="glass-button raised"
+            type="button"
+            onClick={() => importInput.current?.click()}
+          >
+            Import
+          </button>
+        </div>
+        <input
+          ref={importInput}
+          type="file"
+          accept="application/json,.json"
+          hidden
+          onChange={onImport}
+        />
+        <p className="muted small-note">
+          History is shared from Neon across every device. Export gives you an
+          extra offline backup; importing never overwrites and only adds
+          sessions that are not already in the ledger.
+        </p>
+      </section>
     </div>
   );
 }
 
-type ChartMetric = "return" | "chips";
-
 function LeaderboardChart({ standings }: { standings: Standings }) {
-  const [metric, setMetric] = useState<ChartMetric>("return");
-  const chartWidth = 480;
-  const chartHeight = 280;
-  const plot = { top: 18, right: 14, bottom: 48, left: 58 };
+  const [highlight, setHighlight] = useState<string | null>(null);
+  const chartWidth = 320;
+  const chartHeight = 200;
+  const plot = { top: 8, right: 6, bottom: 24, left: 40 };
   const plotWidth = chartWidth - plot.left - plot.right;
   const plotHeight = chartHeight - plot.top - plot.bottom;
   const sessionCount = standings.timeline.length;
-  const colors = [
-    "#e2ad4f",
-    "#72b9e6",
-    "#83c9a6",
-    "#d8735b",
-    "#b99be8",
-    "#e190bd",
-    "#d9dde0",
-    "#a9ad5c",
-  ];
-  const sortedKeys = standings.entries.map((entry) => entry.key).sort();
-  const colorByKey = new Map(
-    sortedKeys.map((key, index) => [key, colors[index % colors.length]]),
-  );
   const series = standings.entries.map((entry) => {
     const line = standings.series.get(entry.key);
-    const points =
-      metric === "return"
-        ? (line?.returns ?? []).flatMap((point) =>
-            point
-              ? [
-                  {
-                    index: point.sessionIndex,
-                    value: point.runningAverage,
-                    marked: point.sessionReturn !== null,
-                    label: `${entry.name}, session ${point.sessionIndex}: ${
-                      point.sessionReturn === null
-                        ? "did not play"
-                        : `session return ${formatPercent(point.sessionReturn)}`
-                    } · running average ${formatPercent(point.runningAverage)} over ${
-                      point.sampleCount
-                    } session${point.sampleCount === 1 ? "" : "s"}`,
-                  },
-                ]
-              : [],
-          )
-        : (line?.cumulativeNet ?? []).map((value, index, values) => ({
-            index,
-            value,
-            marked: index > 0 && value !== values[index - 1],
-            label: `${entry.name}, session ${index}: ${formatChipChange(value)} chips`,
-          }));
+    const points = (line?.returns ?? []).flatMap((point) =>
+      point
+        ? [
+            {
+              index: point.sessionIndex,
+              value: point.runningAverage,
+              marked: point.sessionReturn !== null,
+              label: `${entry.name}, session ${point.sessionIndex}: ${
+                point.sessionReturn === null
+                  ? "did not play"
+                  : `session return ${formatPercent(point.sessionReturn)}`
+              } · running average ${formatPercent(point.runningAverage)} over ${
+                point.sampleCount
+              } session${point.sampleCount === 1 ? "" : "s"}`,
+            },
+          ]
+        : [],
+    );
     return {
-      color: colorByKey.get(entry.key) ?? colors[0],
+      color: playerColor(entry.name),
       entry,
       points,
     };
@@ -3896,58 +4513,37 @@ function LeaderboardChart({ standings }: { standings: Standings }) {
     1,
     ...series.flatMap((player) => player.points.map((point) => Math.abs(point.value))),
   );
-  const step = metric === "return" ? 25 : 5_000;
+  const step = 25;
   const axisMagnitude = Math.max(step, Math.ceil(maxMagnitude / step) * step);
   const yTicks = [axisMagnitude, axisMagnitude / 2, 0, -axisMagnitude / 2, -axisMagnitude];
   const xFor = (index: number) =>
     plot.left + (index / Math.max(1, sessionCount)) * plotWidth;
   const yFor = (value: number) =>
     plot.top + ((axisMagnitude - value) / (axisMagnitude * 2)) * plotHeight;
-  const xLabelEvery = Math.max(1, Math.ceil(sessionCount / 13));
+  const xLabelEvery = Math.max(1, Math.ceil(sessionCount / 4));
   const tickLabel = (value: number) => {
-    if (value === 0) return metric === "return" ? "0%" : "0";
-    const sign = value > 0 ? "+" : "−";
-    const magnitude = Math.abs(value);
-    if (metric === "return") return `${sign}${magnitude}%`;
-    return `${sign}${magnitude >= 1_000 ? `${magnitude / 1_000}k` : magnitude}`;
+    if (value === 0) return "0%";
+    return `${value > 0 ? "+" : "−"}${Math.abs(value)}%`;
   };
-  const title =
-    metric === "return" ? "Average session return" : "Raw chip results";
+  const title = "Average Return";
   const description =
-    metric === "return"
-      ? "Each colored line shows one player's running average session return, starting at their first ranked session. Sessions they missed carry the previous average forward."
-      : "Each colored line shows one player's cumulative raw chip result after every session.";
+    "Each colored line shows one player's running average session return, starting at their first ranked session. Sessions they missed carry the previous average forward.";
+  // Draw the highlighted line last so it sits on top.
+  const drawOrder = [...series].sort(
+    (a, b) =>
+      Number(a.entry.key === highlight) - Number(b.entry.key === highlight),
+  );
 
   return (
-    <figure className="leaderboard-chart" aria-label={title}>
+    <figure className="glass card leaderboard-chart" aria-label={title}>
       <figcaption>
         <div>
-          <b>{title}</b>
-          <span>
-            {metric === "return"
-              ? "Running average after each session"
-              : "Cumulative chips after each session"}
-          </span>
-        </div>
-        <div className="chart-metric-toggle" role="group" aria-label="Graph view">
-          <button
-            type="button"
-            aria-pressed={metric === "return"}
-            onClick={() => setMetric("return")}
-          >
-            Return %
-          </button>
-          <button
-            type="button"
-            aria-pressed={metric === "chips"}
-            onClick={() => setMetric("chips")}
-          >
-            Raw Chips
-          </button>
+          <h2 className="card-title">{title}</h2>
+          <span className="card-note">Running average after each session</span>
         </div>
       </figcaption>
       <svg
-        className="leaderboard-line-plot"
+        className="chart-plot"
         viewBox={`0 0 ${chartWidth} ${chartHeight}`}
         role="img"
         aria-labelledby="standings-chart-title standings-chart-description"
@@ -3958,16 +4554,16 @@ function LeaderboardChart({ standings }: { standings: Standings }) {
         {yTicks.map((tick) => (
           <g key={tick}>
             <line
-              className={tick === 0 ? "leaderboard-zero-axis" : "leaderboard-grid-line"}
+              className={tick === 0 ? "chart-zero" : "chart-grid"}
               x1={plot.left}
               x2={chartWidth - plot.right}
               y1={yFor(tick)}
               y2={yFor(tick)}
             />
             <text
-              className="leaderboard-axis-value"
-              x={plot.left - 10}
-              y={yFor(tick) + 4}
+              className="chart-label"
+              x={plot.left - 6}
+              y={yFor(tick) + 3}
               textAnchor="end"
             >
               {tickLabel(tick)}
@@ -3975,67 +4571,48 @@ function LeaderboardChart({ standings }: { standings: Standings }) {
           </g>
         ))}
 
-        <line
-          className="leaderboard-axis-line"
-          x1={plot.left}
-          x2={plot.left}
-          y1={plot.top}
-          y2={chartHeight - plot.bottom}
-        />
+        {Array.from({ length: sessionCount + 1 }, (_, index) =>
+          index === 0 ||
+          index === sessionCount ||
+          (index % xLabelEvery === 0 && sessionCount - index >= xLabelEvery / 2) ? (
+            <text
+              className="chart-label"
+              key={index}
+              x={xFor(index)}
+              y={chartHeight - 6}
+              textAnchor={index === 0 ? "start" : index === sessionCount ? "end" : "middle"}
+            >
+              {index === 0 ? "Start" : index}
+            </text>
+          ) : null,
+        )}
 
-        {Array.from({ length: sessionCount + 1 }, (_, index) => (
-          <g key={index}>
-            <line
-              className="leaderboard-session-tick"
-              x1={xFor(index)}
-              x2={xFor(index)}
-              y1={chartHeight - plot.bottom}
-              y2={chartHeight - plot.bottom + 5}
-            />
-            {index === 0 ||
-            index === sessionCount ||
-            index % xLabelEvery === 0 ? (
-              <text
-                className="leaderboard-axis-value"
-                x={index === 0 ? xFor(index) - 6 : xFor(index)}
-                y={chartHeight - plot.bottom + 19}
-                textAnchor={index === 0 ? "end" : "middle"}
-              >
-                {index === 0 ? "Start" : index}
-              </text>
-            ) : null}
-          </g>
-        ))}
-
-        <text
-          className="leaderboard-axis-title"
-          x={plot.left + plotWidth / 2}
-          y={chartHeight - 7}
-          textAnchor="middle"
-        >
-          Sessions played
-        </text>
-
-        {series.map((player) => {
+        {drawOrder.map((player) => {
           const last = player.points.at(-1);
+          const dimmed = highlight !== null && highlight !== player.entry.key;
+          const focused = highlight === player.entry.key;
           return (
-            <g key={player.entry.key}>
+            <g
+              key={player.entry.key}
+              className="chart-series"
+              opacity={dimmed ? 0.12 : 1}
+            >
               <polyline
-                className="leaderboard-player-line"
+                className="chart-line"
                 points={player.points
                   .map((point) => `${xFor(point.index)},${yFor(point.value)}`)
                   .join(" ")}
                 stroke={player.color}
+                strokeWidth={focused ? 3 : 1.8}
               />
               {player.points.map((point) =>
-                point.marked ? (
+                point.marked || point === last ? (
                   <circle
-                    className="leaderboard-player-point"
                     cx={xFor(point.index)}
                     cy={yFor(point.value)}
                     fill={player.color}
                     key={point.index}
-                    r={point === last ? 4.5 : 3}
+                    r={point === last ? 3.2 : 1.4}
                   >
                     <title>{point.label}</title>
                   </circle>
@@ -4045,23 +4622,29 @@ function LeaderboardChart({ standings }: { standings: Standings }) {
           );
         })}
       </svg>
-      <div className="leaderboard-line-legend">
+      <div className="chart-legend">
         {series.map(({ color, entry }) => {
-          const value = metric === "return" ? entry.averageReturn : entry.net;
+          const value = entry.averageReturn;
+          const dimmed = highlight !== null && highlight !== entry.key;
           return (
-            <div className="leaderboard-legend-player" key={entry.key}>
-              <span style={{ backgroundColor: color }} />
-              <b>{entry.name}</b>
-              <small
-                className={value === null ? "muted" : value >= 0 ? "pos" : "neg"}
-              >
-                {value === null
-                  ? "unranked"
-                  : metric === "return"
-                    ? formatPercent(value)
-                    : formatChipChange(value)}
-              </small>
-            </div>
+            <button
+              className="legend-item"
+              key={entry.key}
+              type="button"
+              aria-pressed={highlight === entry.key}
+              style={{ opacity: dimmed ? 0.4 : 1 }}
+              onClick={() =>
+                setHighlight((current) =>
+                  current === entry.key ? null : entry.key,
+                )
+              }
+            >
+              <span className="legend-dot" style={{ backgroundColor: color }} />
+              <span className="legend-name">{entry.name}</span>
+              <span className={`legend-value ${toneClass(value)}`}>
+                {value === null ? "unranked" : formatPercent(value)}
+              </span>
+            </button>
           );
         })}
       </div>
@@ -4079,36 +4662,12 @@ function Modal({
   onConfirm: () => void;
 }) {
   function confirm() {
-    if (state.kind === "rules" || state.kind === "hands") {
+    if (state.kind === "rules") {
       onClose();
       return;
     }
     state.onConfirm();
     onConfirm();
-  }
-
-  if (state.kind === "hands") {
-    return (
-      <div
-        className="modal hands-modal show"
-        role="presentation"
-        onMouseDown={(event) => {
-          if (event.target === event.currentTarget) onClose();
-        }}
-      >
-        <div
-          className="sheet hands-sheet"
-          role="dialog"
-          aria-modal="true"
-          aria-label="Poker Hand Rankings"
-        >
-          <PokerHandsChart />
-          <button className="ghost full" type="button" onClick={onClose}>
-            Close Chart
-          </button>
-        </div>
-      </div>
-    );
   }
 
   if (state.kind === "rules") {

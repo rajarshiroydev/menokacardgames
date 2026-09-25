@@ -1,28 +1,30 @@
 import type { Metadata, Viewport } from "next";
-import {
-  DM_Serif_Display,
-  IBM_Plex_Mono,
-  Manrope,
-} from "next/font/google";
+import { Barlow, Big_Shoulders } from "next/font/google";
+
+import { THEME_STORAGE_KEY } from "@/lib/theme";
 
 import "./globals.css";
 
-const manrope = Manrope({
-  variable: "--font-manrope",
+const barlow = Barlow({
+  variable: "--font-barlow",
   subsets: ["latin"],
+  weight: ["400", "500", "600", "700", "800"],
 });
 
-const displaySerif = DM_Serif_Display({
-  variable: "--font-display-serif",
+// Big Shoulders is one variable family now; opsz 72 is the Display cut.
+const bigShoulders = Big_Shoulders({
+  variable: "--font-big-shoulders",
   subsets: ["latin"],
-  weight: "400",
+  axes: ["opsz"],
+  // Next has no metrics for this family, so name the fallback ourselves.
+  adjustFontFallback: false,
+  fallback: ["Arial Narrow", "sans-serif"],
 });
 
-const plexMono = IBM_Plex_Mono({
-  variable: "--font-plex-mono",
-  subsets: ["latin"],
-  weight: ["400", "500", "600"],
-});
+// Runs before first paint so a saved light theme never flashes dark.
+const themeScript = `try{var t=localStorage.getItem(${JSON.stringify(
+  THEME_STORAGE_KEY,
+)});if(t==="light"||t==="dark")document.documentElement.dataset.theme=t}catch(e){}`;
 
 export const metadata: Metadata = {
   title: "Menoka Card Games",
@@ -40,7 +42,7 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
-  themeColor: "#0B120F",
+  themeColor: "#05080a",
 };
 
 export default function RootLayout({
@@ -51,9 +53,22 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${manrope.variable} ${displaySerif.variable} ${plexMono.variable} antialiased`}
+      data-theme="dark"
+      suppressHydrationWarning
+      className={`${barlow.variable} ${bigShoulders.variable} antialiased`}
     >
-      <body>{children}</body>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeScript }} />
+      </head>
+      <body>
+        <div className="backdrop" aria-hidden="true">
+          <span className="orb orb-green" />
+          <span className="orb orb-blue" />
+          <span className="orb orb-low" />
+          <span className="pitch-lines" />
+        </div>
+        {children}
+      </body>
     </html>
   );
 }

@@ -11,7 +11,7 @@ Updated 2026-09-25. Durable working agreements, decisions and environment facts,
 - Keep [`FEATURES.md`](./FEATURES.md) (plain language, for non-technical readers) updated in the same change as any user-visible behaviour, with exact numbers and limits.
 - Record decisions and status in `FEATURE-PLAN.md`; record rehearsals in `MIGRATION-REHEARSALS.md`.
 - Agents never see or handle secrets. The user adds secret values to `.env.local` and Vercel. Scripts may read `.env.local` but must never print values; check presence with `grep -c "^NAME="`.
-- The UI redesign is paused on `ui-sporty-glass-refresh` at `826142f`. Leave it alone.
+- The Scoreboard UI redesign resumed on 2026-09-25 on `ui-sporty-glass-refresh` (with `main` merged in). It reaches `main` only after the user reviews it. The handoff files live untracked in `design_handoff_sporty_glass_redesign/`.
 
 ## Confirmed product decisions
 

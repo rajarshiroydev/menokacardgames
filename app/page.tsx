@@ -15,6 +15,12 @@ export default async function Home() {
   if (!session) redirect("/auth/sign-in");
   const account = await provisionHostAccount(session.user.id);
 
+  if (account.lifecycleState === "active") {
+    return (
+      <PokerLedger accountId={account.id} accountEmail={session.user.email} />
+    );
+  }
+
   return (
     <>
       <header className="account-bar">
@@ -25,20 +31,16 @@ export default async function Home() {
           <button type="submit">Sign out</button>
         </form>
       </header>
-      {account.lifecycleState === "active" ? (
-        <PokerLedger accountId={account.id} accountEmail={session.user.email} />
-      ) : (
-        <AccountLocked
-          email={session.user.email}
-          deletionRequestedAt={account.deletionRequestedAt}
-          deletionDeadline={
-            account.deletionRequestedAt === null
-              ? null
-              : deletionDeadline(account.deletionRequestedAt)
-          }
-          recoverable={canRecoverAccount(account)}
-        />
-      )}
+      <AccountLocked
+        email={session.user.email}
+        deletionRequestedAt={account.deletionRequestedAt}
+        deletionDeadline={
+          account.deletionRequestedAt === null
+            ? null
+            : deletionDeadline(account.deletionRequestedAt)
+        }
+        recoverable={canRecoverAccount(account)}
+      />
     </>
   );
 }
