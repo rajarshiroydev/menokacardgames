@@ -1367,6 +1367,52 @@ p {
   gap: 6px;
 }
 
+.directory-code {
+  display: block;
+  margin-top: 2px;
+  padding: 2px 0;
+  border: 0;
+  background: none;
+  color: var(--ink2);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+  text-align: left;
+}
+
+.profile-code {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.profile-code-copy {
+  display: grid;
+  flex: 1 0 auto;
+  gap: 2px;
+}
+
+.profile-code-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.profile-code-copy small {
+  color: var(--ink2);
+  font-size: 12px;
+}
+
+.profile-code-copy strong {
+  font-family: var(--fd);
+  font-size: 30px;
+  font-weight: 900;
+  font-variation-settings: "opsz" 72;
+  letter-spacing: 0.06em;
+  line-height: 1;
+  white-space: nowrap;
+}
+
 .directory-state {
   display: grid;
   gap: 10px;

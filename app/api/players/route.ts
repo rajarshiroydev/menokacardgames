@@ -15,6 +15,7 @@ export const dynamic = "force-dynamic";
 type PlayerRow = {
   id: string;
   name: string;
+  player_code: string;
   created_at: Date | string;
   deleted_at: Date | string | null;
   has_history?: boolean;
@@ -31,6 +32,7 @@ function mapPlayer(row: PlayerRow): PlayerProfile {
   return {
     id: row.id,
     name: row.name,
+    code: row.player_code,
     createdAt: new Date(row.created_at).getTime(),
     hasHistory: Boolean(row.has_history),
     ...(row.deleted_at
@@ -51,6 +53,7 @@ export async function GET() {
         SELECT
           player.id,
           player.name,
+          player.player_code,
           player.created_at,
           player.deleted_at,
           EXISTS (
@@ -111,7 +114,7 @@ export async function POST(request: Request) {
         VALUES (${ownerId}::uuid, ${name}, ${playerNameKey(name)})
         ON CONFLICT (owner_id, name_key) WHERE owner_id IS NOT NULL DO UPDATE
         SET name = EXCLUDED.name, deleted_at = NULL
-        RETURNING id, name, created_at, deleted_at
+        RETURNING id, name, player_code, created_at, deleted_at
       `,
     ]);
     const rows = result as PlayerRow[];
@@ -154,7 +157,7 @@ export async function PATCH(request: Request) {
             WHERE id = ${id}
               AND owner_id = ${ownerId}::uuid
               AND deleted_at IS NULL
-            RETURNING id, name, created_at, deleted_at
+            RETURNING id, name, player_code, created_at, deleted_at
           `
         : sql`
             UPDATE players
@@ -162,7 +165,7 @@ export async function PATCH(request: Request) {
             WHERE id = ${id}
               AND owner_id = ${ownerId}::uuid
               AND deleted_at IS NOT NULL
-            RETURNING id, name, created_at, deleted_at
+            RETURNING id, name, player_code, created_at, deleted_at
           `,
     ]);
     const rows = result as PlayerRow[];

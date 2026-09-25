@@ -54,6 +54,13 @@ import { useRouter } from "next/navigation";
 import qrcode from "qrcode-generator";
 
 import { signOut } from "@/app/auth/sign-in/actions";
+import {
+  type AccountProfile,
+  cleanDisplayName,
+  formatPlayerCode,
+  formatUserCode,
+  MAX_DISPLAY_NAME_LENGTH,
+} from "@/lib/accounts/identity-code";
 import { DELETION_GRACE_PERIOD_DAYS } from "@/lib/accounts/lifecycle";
 import { authClient } from "@/lib/auth/client";
 import { apiErrorMessage } from "@/lib/security/rate-limit-message";
@@ -154,6 +161,32 @@ async function sessionsApi<T>(
   if (!response.ok) {
     throw new ApiError(
       apiErrorMessage(response.status, data.error, "Could not reach the ledger"),
+      response.status,
+      data.code,
+    );
+  }
+  return data;
+}
+
+/** Reads the signed-in person's profile, or runs a profile action. */
+async function accountApi<T>(body?: object): Promise<T> {
+  const response = await fetch(
+    "/api/account",
+    body
+      ? {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        }
+      : undefined,
+  );
+  const data = (await response.json().catch(() => ({}))) as T & {
+    code?: string;
+    error?: string;
+  };
+  if (!response.ok) {
+    throw new ApiError(
+      apiErrorMessage(response.status, data.error, "Could not reach your account"),
       response.status,
       data.code,
     );
@@ -1585,6 +1618,7 @@ export function PokerLedger({
           />
         ) : view === "players" ? (
           <PlayersView
+            profileCard={<ProfileCard onToast={showToast} onAsk={ask} />}
             players={players}
             discardedPlayers={discardedPlayers}
             loading={playersLoading}
@@ -2996,7 +3030,188 @@ const ANTE_PRESETS = [
   { value: 1_000, label: "₹1K" },
 ] as const;
 
+/**
+ * The signed-in person's own identity in the friend network: the user code
+ * friends will search for, and the name they will see.
+ */
+function ProfileCard({
+  onToast,
+  onAsk,
+}: {
+  onToast: (message: string) => void;
+  onAsk: (message: string, confirmLabel: string, onConfirm: () => void) => void;
+}) {
+  const [profile, setProfile] = useState<AccountProfile | null>(null);
+  const [loadError, setLoadError] = useState("");
+  const [attempt, setAttempt] = useState(0);
+  const [name, setName] = useState("");
+  const [nameError, setNameError] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [replacing, setReplacing] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const data = await accountApi<{ profile?: AccountProfile }>();
+        if (!data.profile) throw new Error("Could not load your profile");
+        if (cancelled) return;
+        setProfile(data.profile);
+        setName(data.profile.displayName ?? "");
+        setLoadError("");
+      } catch (error) {
+        if (cancelled) return;
+        setLoadError(
+          error instanceof Error ? error.message : "Could not load your profile",
+        );
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [attempt]);
+
+  async function saveName(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (saving) return;
+    let displayName: string;
+    try {
+      displayName = cleanDisplayName(name);
+    } catch (error) {
+      setNameError(error instanceof Error ? error.message : "Enter your name");
+      return;
+    }
+    setSaving(true);
+    try {
+      const data = await accountApi<{ profile: AccountProfile }>({
+        action: "update-profile",
+        displayName,
+      });
+      setProfile(data.profile);
+      setName(data.profile.displayName ?? "");
+      setNameError("");
+      onToast("Name Saved");
+    } catch (error) {
+      setNameError(
+        error instanceof Error ? error.message : "Could not save your name",
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function copyCode(code: string) {
+    try {
+      await navigator.clipboard.writeText(formatUserCode(code));
+      onToast("Code Copied");
+    } catch {
+      // Clipboard blocked: the code is on screen to copy by hand.
+    }
+  }
+
+  async function replaceCode() {
+    setReplacing(true);
+    try {
+      const data = await accountApi<{ profile: AccountProfile }>({
+        action: "replace-code",
+      });
+      setProfile(data.profile);
+      onToast("New Code Ready");
+    } catch (error) {
+      onToast(
+        error instanceof Error ? error.message : "Could not replace your code",
+      );
+    } finally {
+      setReplacing(false);
+    }
+  }
+
+  const savedName = profile?.displayName ?? "";
+
+  return (
+    <section className="glass card profile-card">
+      <span className="eyebrow">You</span>
+      {loadError ? (
+        <div className="directory-state">
+          <p className="muted">{loadError}</p>
+          <button
+            className="ghost full"
+            type="button"
+            onClick={() => setAttempt((count) => count + 1)}
+          >
+            Try again
+          </button>
+        </div>
+      ) : !profile ? (
+        <p className="muted">Loading your profile…</p>
+      ) : (
+        <>
+          <div className="profile-code">
+            <div className="profile-code-copy">
+              <small>Your user code</small>
+              <strong>{formatUserCode(profile.userCode)}</strong>
+            </div>
+            <div className="profile-code-actions">
+              <button
+                className="pill-button"
+                type="button"
+                onClick={() => void copyCode(profile.userCode)}
+              >
+                Copy
+              </button>
+              <button
+                className="pill-button"
+                type="button"
+                disabled={replacing}
+                onClick={() =>
+                  onAsk(
+                    "Replace your user code? Your current code stops working straight away, so anyone you gave it to will need the new one.",
+                    "Replace Code",
+                    () => void replaceCode(),
+                  )
+                }
+              >
+                Replace
+              </button>
+            </div>
+          </div>
+          <form className="add-player-row" onSubmit={saveName}>
+            <input
+              className="field"
+              aria-label="Your name"
+              maxLength={MAX_DISPLAY_NAME_LENGTH}
+              placeholder="Your name for friends"
+              value={name}
+              onChange={(event) => {
+                setName(event.target.value);
+                if (nameError) setNameError("");
+              }}
+            />
+            <button
+              className="accent-button"
+              type="submit"
+              disabled={saving || name.trim() === savedName}
+            >
+              {saving ? "Saving…" : "Save"}
+            </button>
+          </form>
+          {nameError ? (
+            <p className="field-error" role="alert">
+              {nameError}
+            </p>
+          ) : null}
+          <p className="muted small-note">
+            Friends will use your code to send you a friend request (coming
+            soon). It shows them only your name, never your email.
+          </p>
+        </>
+      )}
+    </section>
+  );
+}
+
 function PlayersView({
+  profileCard,
   players,
   discardedPlayers,
   loading,
@@ -3007,6 +3222,7 @@ function PlayersView({
   onRestore,
   onDeletePermanently,
 }: {
+  profileCard: React.ReactNode;
   players: PlayerProfile[];
   discardedPlayers: PlayerProfile[];
   loading: boolean;
@@ -3020,6 +3236,7 @@ function PlayersView({
   const [name, setName] = useState("");
   const [adding, setAdding] = useState(false);
   const [nameError, setNameError] = useState("");
+  const [copiedId, setCopiedId] = useState("");
 
   async function add(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -3043,8 +3260,18 @@ function PlayersView({
     setAdding(false);
   }
 
+  async function copyPlayerCode(player: PlayerProfile) {
+    try {
+      await navigator.clipboard.writeText(formatPlayerCode(player.code));
+      setCopiedId(player.id);
+    } catch {
+      // Clipboard blocked: the code is on screen to copy by hand.
+    }
+  }
+
   return (
     <div className="stack-list">
+      {profileCard}
       <section className="glass card">
         <div className="count-hero">
           <strong className="gradient-text-vertical">{players.length}</strong>
@@ -3097,7 +3324,18 @@ function PlayersView({
                 <span className="directory-index">
                   {String(index + 1).padStart(2, "0")}
                 </span>
-                <span className="directory-name">{player.name}</span>
+                <span className="directory-name">
+                  {player.name}
+                  <button
+                    className="directory-code"
+                    type="button"
+                    aria-label={`Copy ${player.name}'s player code, ${formatPlayerCode(player.code)}`}
+                    onClick={() => void copyPlayerCode(player)}
+                  >
+                    {formatPlayerCode(player.code)}
+                    {copiedId === player.id ? " · copied" : ""}
+                  </button>
+                </span>
                 <button
                   className="pill-button"
                   type="button"

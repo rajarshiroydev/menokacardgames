@@ -239,6 +239,34 @@ Afterwards: 2 accounts and 0 `live_views` rows, as before. A browser round trip 
 
 Rollback: `DROP FUNCTION public.read_live_view(bytea); DROP TABLE live_views; DELETE FROM app_migrations WHERE version = '0009_live_views';`. Only live links are lost.
 
+## 0010 identity codes
+
+- Date: 2026-09-25
+- Isolated branch: `multi-user-auth` (`br-little-rain-ay5fufwv`)
+- Production changed: no
+- Migration: `migrations/0010_identity_codes.sql`, applied as the owner in one transaction, no errors
+- Before: 2 accounts, 22 players (9 owned), 24 owned games, 72 results. After: the same counts, 2 distinct user codes and 22 distinct player codes, all matching the format.
+- Generator: 20,000 sample codes were all valid and all different, and all 31 characters appeared in the first position. `menoka_app` can execute it; `menoka_purge` can't.
+
+Run as `menoka_app` from `.env.local` inside one `DO` block that ends by raising an exception, so every fixture was rolled back (12 of 12 passed):
+
+| Check | Result |
+| --- | --- |
+| New account gets a valid code by default | Yes |
+| New player gets a valid code by default | Yes |
+| Host saves its own display name | 1 row |
+| Untrimmed name, 41-character name, malformed code | Refused (check constraint) each |
+| Host replaces its code and writes the audit event | New code, differs from the old one |
+| Second host looks up the first by old code, new code or ID | 0 rows |
+| Second host renames or re-codes the first | 0 rows each |
+| Second host looks up the first host's player by code | 0 rows |
+| No signed-in user lists accounts | 0 rows |
+| Locked account (deletion requested) saves a name through the app's `lifecycle_state = 'active'` condition | 0 rows |
+
+Afterwards: 2 accounts, 22 players, no replacement audit events, as before. A browser round trip on the same branch (see the plan entry) then set the real dev account's name to "Rajarshi Roy" and replaced its code once, leaving one `account.user_code_replaced` audit event.
+
+Rollback: see `migrations/README.md`.
+
 ## Production application
 
 - Date: 2026-09-25

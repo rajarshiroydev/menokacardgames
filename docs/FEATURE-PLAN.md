@@ -184,7 +184,7 @@ Official sources checked 2026-09-20; recheck during implementation/release:
 | Custom SMTP for sign-in emails | Deferred by user choice: Neon's shared sender is used. Revisit if emails are slow, land in spam, or hit the shared sender's rate limit |
 | Retire superseded files | Kept for now by user decision (2026-09-25). Delete `migrations/data/0003_backfill_rajarshi_reviewed_history.sql` (development-only, replaced by 0008) once nothing depends on it, and shrink `HISTORICAL-OWNERSHIP.md` to a note once the Emon-led and Rahul Basak claims are done. Update the docs that mention them in the same change |
 | Live standings link for players | Released to production on 2026-09-25 (`13f9838`, with the redesign); migration 0009 was already applied. Not yet checked on production: the iOS share sheet, a locked host screen, and CDN caching of the public GET |
-| Host invitations / friend network | Accepted by the user 2026-09-25 (see the dated entry "friend network (accepted)"): friend requests by app-generated user code, both people in each other's friend list, host approval for every player link, each linked host's standings visible, unfriending unlinks, request limits, self-unlinking, no combined score. Building in three reviewed steps; step 1 (identity basics) in progress |
+| Host invitations / friend network | Accepted by the user 2026-09-25 (see the dated entry "friend network (accepted)"): friend requests by app-generated user code, both people in each other's friend list, host approval for every player link, each linked host's standings visible, unfriending unlinks, request limits, self-unlinking, no combined score. Building in three reviewed steps. Step 1 (identity basics, migration 0010) built and rehearsed on the dev branch on 2026-09-25, awaiting review; not on production |
 | Cloud draft sync / device handoff | Deferred; needs conflict policy |
 | Shared ledgers/invitations | Requested 2026-09-25; see "Host invitations / friend network" above |
 | App Store / Play Store | Future separate plan after web stability |
@@ -393,6 +393,37 @@ The user dropped the earlier ideas of public all-time standings, read-only membe
 3. **Group standings.** A `SECURITY DEFINER` read function returning a linked host's standings data only while the viewer is linked and connected and both accounts are active, plus a screen listing each group's standings.
 
 Each step extends the purge, the deletion disclosure, `FEATURES.md` and the isolation tests (host, friend, stranger), and is applied to production only with the user's go-ahead.
+
+2026-09-25 friend network step 1 (identity basics): Built as the first of the three accepted build steps; not released. **Change from the step list:** the players' optional linked-account column moves to step 2, where friend requests first use it, so this migration adds nothing unused.
+
+- **Migration `0010_identity_codes`:**
+  - `public.new_identity_code()` makes eight characters from `23456789ABCDEFGHJKMNPQRSTUVWXYZ` using fully random `gen_random_uuid()` bytes (modulo 31, a negligible bias), executable only by `menoka_app`.
+  - Accounts gain a unique `user_code` (format check) and an optional `display_name` (1–40 characters, trimmed). Players gain a unique `player_code`.
+  - Existing rows get their own codes when the columns are added. Row security is unchanged, so nobody can see another account's code or name yet.
+  - Deleting an account removes its codes and name with the row, so the purge needs no change.
+- **API:**
+  - `GET /api/account` now also returns `profile` (`userCode`, `displayName`) for an active account.
+  - `POST /api/account` accepts `update-profile` (validated by the pure `cleanDisplayName`, which accepts only text) and `replace-code` (writes an `account.user_code_replaced` audit event). Locked accounts get 423, as on other routes.
+  - `GET/POST/PATCH /api/players` return each player's `code`.
+- **UI (Players screen):**
+  - a **You** card with the user code shown as `XXXX-XXXX`, **Copy**, **Replace** (with a confirmation) and a name field with **Save**;
+  - each active player's code as `P-XXXX-XXXX` under their name, tap to copy.
+  - At 320px the Copy and Replace buttons move under the code together.
+  - The pure helpers live in `lib/accounts/identity-code.ts`.
+- **Checks:**
+  - 5 new unit tests (134 in total), types, lint and a production build (run in a copy).
+  - The rehearsal on `br-little-rain-ay5fufwv` passed 12 of 12 checks as `menoka_app` (see `MIGRATION-REHEARSALS.md`).
+  - Browser check on a copy of the working tree on port 3007 (another chat held 3005), at 375px and 320px in dark and light:
+    - profile load;
+    - name save with spaces tidied;
+    - replace with confirmation;
+    - invalid names refused with 400;
+    - player codes on all 9 rows;
+    - no horizontal scroll.
+  - Testing caught a bug, since fixed: a name sent as an object was saved as "[object Object]"; `cleanDisplayName` now accepts only text.
+  - The in-app browser blocks the clipboard, so Copy (which silently leaves the code on screen) still needs a real-phone check.
+  - The dev account now has the name "Rajarshi Roy" and one code replacement.
+- **Release order:** 0010 is additive, so production gets it before the code (the released code ignores the new columns). The new code needs it, because the players list reads `player_code`. The preview branch `br-tiny-forest-ayt6f3fe` also needs it before a Vercel preview works.
 
 ### Purge go-live checklist (production, requires separate authorization)
 

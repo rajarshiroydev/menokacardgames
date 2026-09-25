@@ -16,7 +16,12 @@ Updated 2026-09-25 on **`main`**. **Production now runs `13f9838`**: the multi-u
   - request limits: 20 outgoing pending, and 7 days after a decline;
   - people can see which hosts link them and unlink themselves;
   - no combined score or screen across hosts (the user: it would only create confusion).
-- **The user accepted the model** and asked to proceed. Step 1 (identity basics: user codes, display names, player codes; no cross-account access) is in progress; see the entry's "Proposed build steps".
+- **The user accepted the model** and asked to proceed. **Step 1 (identity basics) is built, uncommitted and awaiting the user's review:**
+  - migration `0010_identity_codes` (user codes, display names, player codes) is applied and rehearsed on `br-little-rain-ay5fufwv` only;
+  - the **You** card and player codes are on the Players screen.
+
+  See the plan entry "friend network step 1". To release it: apply 0010 to production `br-small-sea-ayumyssr` (and the preview branch `br-tiny-forest-ayt6f3fe`) with the user's go-ahead **before** pushing the code, because the new players list reads `player_code`.
+- **Next build step:** step 2, friend requests (migration 0011: requests, connections, the players' linked-account column, exact-code search by POST, accept/decline with each side's player choice, the request limits, unfriend, self-unlink).
 - Each build step: versioned migration (0010, 0011, …), three-account rehearsal on `br-little-rain-ay5fufwv`, go-ahead per production step on `br-small-sea-ayumyssr`.
 
 ## Release done this session

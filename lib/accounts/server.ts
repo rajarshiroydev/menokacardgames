@@ -2,6 +2,8 @@ import "server-only";
 
 import { runAsAuthenticatedUser } from "@/lib/poker/database";
 
+import type { AccountProfile } from "./identity-code";
+
 import {
   DELETION_GRACE_PERIOD_DAYS,
   type AccountLifecycleState,
@@ -102,4 +104,66 @@ export async function recoverAccount(authUserId: string) {
   ]);
   const rows = updated as AccountRow[];
   return rows[0] ? mapAccount(rows[0]) : null;
+}
+
+type ProfileRow = {
+  user_code: string;
+  display_name: string | null;
+};
+
+function mapProfile(row: ProfileRow): AccountProfile {
+  return { userCode: row.user_code, displayName: row.display_name };
+}
+
+export async function readAccountProfile(authUserId: string) {
+  const [result] = await runAsAuthenticatedUser(authUserId, (sql) => [
+    sql`
+      SELECT user_code, display_name
+      FROM accounts
+      WHERE auth_user_id = ${authUserId}::uuid
+    `,
+  ]);
+  const rows = result as ProfileRow[];
+  return rows[0] ? mapProfile(rows[0]) : null;
+}
+
+/** Sets the name others see; `displayName` must come from cleanDisplayName. */
+export async function updateDisplayName(authUserId: string, displayName: string) {
+  const [result] = await runAsAuthenticatedUser(authUserId, (sql) => [
+    sql`
+      UPDATE accounts
+      SET display_name = ${displayName}, updated_at = now()
+      WHERE auth_user_id = ${authUserId}::uuid
+        AND lifecycle_state = 'active'
+      RETURNING user_code, display_name
+    `,
+  ]);
+  const rows = result as ProfileRow[];
+  return rows[0] ? mapProfile(rows[0]) : null;
+}
+
+/**
+ * Gives the account a new random user code, for example after the old one
+ * was shared too widely. The old code stops finding this account at once.
+ */
+export async function replaceUserCode(authUserId: string) {
+  const [result] = await runAsAuthenticatedUser(authUserId, (sql) => [
+    sql`
+      WITH replaced AS (
+        UPDATE accounts
+        SET user_code = public.new_identity_code(), updated_at = now()
+        WHERE auth_user_id = ${authUserId}::uuid
+          AND lifecycle_state = 'active'
+        RETURNING id, user_code, display_name
+      ),
+      audit AS (
+        INSERT INTO audit_events (owner_id, actor_auth_user_id, action, target_kind, target_id)
+        SELECT id, ${authUserId}::uuid, 'account.user_code_replaced', 'account', id::text
+        FROM replaced
+      )
+      SELECT user_code, display_name FROM replaced
+    `,
+  ]);
+  const rows = result as ProfileRow[];
+  return rows[0] ? mapProfile(rows[0]) : null;
 }

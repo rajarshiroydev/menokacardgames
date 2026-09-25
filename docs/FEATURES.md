@@ -42,6 +42,7 @@ This is a plain-language list of everything Menoka Card Games can do today. It i
   - they have been discarded first
   - they have never appeared in a saved game (players with saved history can never be permanently deleted, so the records stay complete)
   - you signed in within the last 10 minutes (see section 13)
+- **Player codes.** Every player has their own code, shown under their name as **P-** plus eight characters (for example P-N7QA-2G2P). Tap it to copy it. Codes are made up by the app, use only letters and numbers that can't be confused (no 0, O, 1, I or L), never change, and no two players share one. They are for the friend requests that are coming next (see section 20): you'll give a friend who hasn't signed up yet their code, so they can ask you to connect their account to their history. A code on its own gives nobody access to anything.
 
 ## 4. Starting a game
 
@@ -244,6 +245,16 @@ This is a plain-language list of everything Menoka Card Games can do today. It i
 - **What the link does not show:** other games, saved history, all-time standings, the action log, or anything else in the host's account.
 - **When the link stops working.** It ends when the host saves or discards the game, taps **Stop sharing**, or deletes their account. It also stops 12 hours after the host's last update. Afterwards it shows "This game has ended". Sharing again makes a new link; old links never come back.
 - **Who can see it.** Anyone who has the link can see those names and chip counts until it ends, so share it only with the table. The button reads "Sharing live · show link" while a link is active, and "Live link not updating" if the host's updates keep failing.
+
+## 20. Your profile (friend network, first part)
+
+The app is getting a friend network: people will find each other by code, send friend requests, and see the standings of the groups they play in. This first part gives everyone an identity; nothing is shared with anyone yet.
+
+- **Your user code.** The **You** card at the top of the **Players** screen shows your own user code, eight characters shown as two groups of four (for example 7KQ4-M2XP). Every account gets one automatically, including existing ones. It uses the same confusion-free letters and numbers as player codes. **Copy** copies it.
+- **Replace your code.** **Replace** gives you a new random code after a confirmation. The old code stops working straight away, so anyone you gave it to will need the new one. There is no limit on how often you can replace it.
+- **Your name.** Type the name your friends know you by and press **Save**. It can be 1 to 40 characters; extra spaces are tidied up. Save stays greyed out until the name changes. You can change it at any time, but not remove it once set.
+- **Who can see them.** For now, nobody but you. Once friend requests arrive, someone who types your exact code will see only your name, never your email. There is no browsing or searching by name.
+- **Deleting your account** deletes your code and your name along with everything else (see section 14).
 
 ---
 

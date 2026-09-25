@@ -1,9 +1,17 @@
 import {
+  accountAccessError,
   canRecoverAccount,
   deletionDeadline,
   type HostAccount,
 } from "@/lib/accounts/lifecycle";
-import { recoverAccount, requestAccountDeletion } from "@/lib/accounts/server";
+import { cleanDisplayName } from "@/lib/accounts/identity-code";
+import {
+  readAccountProfile,
+  recoverAccount,
+  replaceUserCode,
+  requestAccountDeletion,
+  updateDisplayName,
+} from "@/lib/accounts/server";
 import {
   auth,
   hasRecentSignIn,
@@ -36,7 +44,18 @@ function accountSummary(account: HostAccount) {
 export async function GET() {
   const result = await requireAccountSession();
   if ("response" in result) return result.response;
-  return json({ account: accountSummary(result.account) });
+  const { account, session } = result;
+  if (account.lifecycleState !== "active") {
+    return json({ account: accountSummary(account) });
+  }
+
+  try {
+    const profile = await readAccountProfile(session.user.id);
+    return json({ account: accountSummary(account), profile });
+  } catch (error) {
+    console.error("account profile read error", error);
+    return json({ error: "Could not load your profile" }, 500);
+  }
 }
 
 export async function POST(request: Request) {
@@ -47,6 +66,47 @@ export async function POST(request: Request) {
   const read = await readJsonBody(request, SMALL_JSON_BODY_LIMIT);
   if (!read.ok) return json({ error: read.error }, read.status);
   const action = (read.body as { action?: unknown } | null)?.action;
+
+  if (action === "update-profile" || action === "replace-code") {
+    const accessError = accountAccessError(account);
+    if (accessError) return json({ error: accessError }, 423);
+
+    let displayName = "";
+    if (action === "update-profile") {
+      try {
+        displayName = cleanDisplayName(
+          (read.body as { displayName?: unknown }).displayName,
+        );
+      } catch (error) {
+        return json(
+          { error: error instanceof Error ? error.message : "Invalid name" },
+          400,
+        );
+      }
+    }
+
+    try {
+      const profile =
+        action === "update-profile"
+          ? await updateDisplayName(session.user.id, displayName)
+          : await replaceUserCode(session.user.id);
+      if (!profile) {
+        return json({ error: "This account is locked while deletion is pending" }, 423);
+      }
+      return json({ profile });
+    } catch (error) {
+      console.error(`account ${action} error`, error);
+      return json(
+        {
+          error:
+            action === "update-profile"
+              ? "Could not save your name"
+              : "Could not replace your code",
+        },
+        500,
+      );
+    }
+  }
 
   if (action === "request-deletion") {
     if (account.lifecycleState !== "active") {

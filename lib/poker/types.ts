@@ -9,6 +9,8 @@ export type Player = {
 export type PlayerProfile = {
   id: string;
   name: string;
+  /** Shareable player code (see lib/accounts/identity-code.ts). */
+  code: string;
   createdAt: number;
   discardedAt?: number;
   hasHistory?: boolean;
