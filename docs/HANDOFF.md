@@ -11,11 +11,11 @@ Updated 2026-09-25 on `main`. **The multi-user version is live.** Production run
 
 ## Where things stand
 
-- **Live site** (https://menokacardgames.vercel.app): production runs `0a8b814`. Local `main` is ahead of GitHub with doc commits and a small clean-up (unused CSS and starter images), not yet pushed; pushing deploys. Magic-link sign-in only. therajarshiroy@gmail.com (account `4db9f3e6-9b4b-445b-8ca3-831773acdb3c`) sees 27 games, 9 players, and standings matching the rehearsal (Debraj +18.56%, Rajarshi +17.08%, …). The app connects as `menoka_app`.
+- **Live site** (https://menokacardgames.vercel.app): production runs `0a8b814`. `main` is pushed and deployed (the latest commits are docs, a small clean-up and the `scripts/` helpers); pushing `main` deploys. Magic-link sign-in only. therajarshiroy@gmail.com (account `4db9f3e6-9b4b-445b-8ca3-831773acdb3c`) sees 27 games, 9 players, and standings matching the rehearsal (Debraj +18.56%, Rajarshi +17.08%, …). The app connects as `menoka_app`.
 - **Production database: `br-small-sea-ayumyssr`**, now named "production" again, pooled host `ep-delicate-pond-ay8ple8b-pooler`. It has migrations 0001, 0002 and 0004–0008. The legacy games 24, 25, 32, 33 and 37 stay unowned and hidden.
 - **Neon's default branch is still the copy** `br-withered-glitter-ay2zbaoe` (renamed `restore-copy-2026-09-24`). A snapshot restore yesterday swapped the names, which misled the user's console work today. It holds pre-cutover data (32 games) and two unused roles, `menoka_app` and `menoka_purge`, created on it by mistake. **Ask the user** whether to make `br-small-sea` the default and delete the copy.
 - **Vercel Production variables:** all nine are set, and `DELETION_PASSWORD` is gone. The purge cron ran twice by hand, both 200 with nothing due.
-- **Uncommitted:** only the untracked `scripts/` (migration and Neon Auth helpers) and the redesign's `design_handoff_sporty_glass_redesign/`.
+- **Uncommitted:** only the redesign's untracked `design_handoff_sporty_glass_redesign/`. `main` matches GitHub.
 
 ## Next steps
 
