@@ -182,6 +182,7 @@ Official sources checked 2026-09-20; recheck during implementation/release:
 | Neon branch clean-up | Open (2026-09-25): candidates to delete are `restore-copy-2026-09-24` (pre-cutover data plus two unused roles), `claim-test-throwaway` and `vercel-preview`. Keep `cutover-rehearsal` while the branch preview uses it. Deleting is permanent; ask first |
 | Post-cutover snapshot | Open (2026-09-25): the free plan keeps one snapshot, and it is the pre-migration `snap-sparkling-sun-aykr4j1y`, which is only useful for a full rollback. Replacing it with a post-cutover snapshot gives up that rollback point |
 | Custom SMTP for sign-in emails | Deferred by user choice: Neon's shared sender is used. Revisit if emails are slow, land in spam, or hit the shared sender's rate limit |
+| Retire superseded files | Kept for now by user decision (2026-09-25). Delete `migrations/data/0003_backfill_rajarshi_reviewed_history.sql` (development-only, replaced by 0008) once nothing depends on it, and shrink `HISTORICAL-OWNERSHIP.md` to a note once the Emon-led and Rahul Basak claims are done. Update the docs that mention them in the same change |
 | Cloud draft sync / device handoff | Deferred; needs conflict policy |
 | Shared ledgers/invitations | Out of initial scope; add only if requested |
 | App Store / Play Store | Future separate plan after web stability |
