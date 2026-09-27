@@ -5339,48 +5339,35 @@ function RanksView(props: Parameters<typeof StandingsView>[0]) {
   }, []);
 
   const group = groups.find((item) => item.hostAccountId === selected);
+  const gameCount = (count: number) => `${count} game${count === 1 ? "" : "s"}`;
   const options = [
-    { id: "mine", label: "Your games", detail: "" },
+    {
+      id: "mine",
+      label: "My Hosted Games",
+      detail: gameCount(props.history.length),
+    },
     ...groups.map((item) => ({
       id: item.hostAccountId,
-      label: `${item.hostName ?? "Friend"}'s games`,
-      detail: `${item.games} game${item.games === 1 ? "" : "s"}`,
+      label: hostedGamesTitle(item.hostName),
+      detail: gameCount(item.games),
     })),
   ];
 
   return (
     <div className="stack-list">
-      {groups.length === 1 ? (
-        <div className="segmented" role="radiogroup" aria-label="Whose standings">
-          {options.map((option) => (
-            <button
-              key={option.id}
-              className={selected === option.id ? "selected" : ""}
-              type="button"
-              role="radio"
-              aria-checked={selected === option.id}
-              onClick={() => setSelected(option.id)}
-            >
-              {option.label}
-            </button>
-          ))}
-        </div>
-      ) : groups.length > 1 ? (
-        // Two or more hosts don't fit side by side on a phone, and the list
-        // keeps growing, so the choice becomes the phone's own picker.
+      {groups.length ? (
+        // One picker for any number of hosts: the phone's own list scales
+        // where side-by-side buttons run out of room.
         <div className="standings-picker">
-          <label className="label" htmlFor="standings-picker">
-            Whose standings
-          </label>
           <select
             className="select-control"
-            id="standings-picker"
+            aria-label="Whose standings"
             value={selected}
             onChange={(event) => setSelected(event.target.value)}
           >
             {options.map((option) => (
               <option key={option.id} value={option.id}>
-                {option.detail ? `${option.label} · ${option.detail}` : option.label}
+                {`${option.label} · ${option.detail}`}
               </option>
             ))}
           </select>
@@ -5392,10 +5379,14 @@ function RanksView(props: Parameters<typeof StandingsView>[0]) {
   );
 }
 
+/** "Asha's Hosted Games": the name of another host's group on Ranks. */
+function hostedGamesTitle(hostName: string | null) {
+  return `${hostName ?? "Friend"}'s Hosted Games`;
+}
+
 function GroupStandingsView({ group }: { group: GroupStandings }) {
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
   const [showAll, setShowAll] = useState(false);
-  const [showRankingHelp, setShowRankingHelp] = useState(false);
   const rows = group.rows;
   const visible = showAll ? rows : rows.slice(0, STANDINGS_START);
   const hostName = group.hostName ?? "Your friend";
@@ -5411,29 +5402,21 @@ function GroupStandingsView({ group }: { group: GroupStandings }) {
 
   return (
     <div className="stack-list">
-      <div className="section-heading">
-        <div className="heading-with-info">
-          <h2>{hostName}&apos;s games</h2>
-          <button
-            className="info-button"
-            type="button"
-            aria-label={`About ${hostName}'s games`}
-            onClick={() => setShowRankingHelp(true)}
-          >
-            i
-          </button>
-        </div>
-      </div>
-      <p className="muted small-note">
-        {group.games} game{group.games === 1 ? "" : "s"}
-        {group.lastPlayed
-          ? ` · Last game ${new Date(group.lastPlayed).toLocaleDateString("en-IN", {
-              day: "numeric",
-              month: "short",
-              year: "numeric",
-            })}`
-          : ""}
+      {/* The picker above already names the host, so no heading here. */}
+      <p className="group-standings-intro">
+        This is your overall ranking among everyone who has played in sessions
+        hosted by {hostName}
       </p>
+      {group.lastPlayed ? (
+        <p className="muted small-note">
+          Last game{" "}
+          {new Date(group.lastPlayed).toLocaleDateString("en-IN", {
+            day: "numeric",
+            month: "short",
+            year: "numeric",
+          })}
+        </p>
+      ) : null}
       {rows.length ? (
         visible.map((row, index) => (
           <StandingCard
@@ -5456,20 +5439,6 @@ function GroupStandingsView({ group }: { group: GroupStandings }) {
         >
           {showAll ? "Show fewer" : `Show all ${rows.length} players`}
         </button>
-      ) : null}
-      {showRankingHelp ? (
-        <RankingHelp
-          label={`About ${hostName}'s games`}
-          onClose={() => setShowRankingHelp(false)}
-        >
-          <p>
-            This is your overall ranking across every game {hostName} has
-            recorded, among everyone who played in them. {hostName} keeps
-            these games; you appear as <b>{group.myPlayerName}</b> in their
-            list. Each host you play with has their own standings, and
-            they&apos;re never combined.
-          </p>
-        </RankingHelp>
       ) : null}
     </div>
   );
@@ -5596,15 +5565,7 @@ function StandingsView({
   );
 }
 
-function RankingHelp({
-  label = "How players are ranked",
-  children,
-  onClose,
-}: {
-  label?: string;
-  children?: React.ReactNode;
-  onClose: () => void;
-}) {
+function RankingHelp({ onClose }: { onClose: () => void }) {
   useEffect(() => {
     function closeOnEscape(event: KeyboardEvent) {
       if (event.key === "Escape") onClose();
@@ -5625,9 +5586,8 @@ function RankingHelp({
         className="sheet ranking-help"
         role="dialog"
         aria-modal="true"
-        aria-label={label}
+        aria-label="How players are ranked"
       >
-        {children}
         <p>
           Players are ranked by their <b>average session return</b>: how much
           they won or lost in each game as a percentage of the chips they put

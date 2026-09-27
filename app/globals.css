@@ -574,10 +574,23 @@ p {
   text-overflow: ellipsis;
 }
 
-/* The Ranks screen's choice once there are two or more friends' groups. */
-.standings-picker {
-  display: grid;
-  gap: 6px;
+/* The Ranks screen's choice of whose standings, in the selected-button green. */
+.standings-picker .select-control {
+  border-color: var(--g);
+  background-color: var(--g);
+  color: var(--onacc);
+  font-weight: 700;
+}
+
+.group-standings-intro {
+  color: var(--ink2);
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.standings-picker option {
+  background: var(--bg);
+  color: var(--ink);
 }
 
 /* Avatars */
