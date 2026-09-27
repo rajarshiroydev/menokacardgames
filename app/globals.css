@@ -569,15 +569,15 @@ p {
   color: var(--onacc);
 }
 
-/* Many options (the Ranks screen's groups): scroll sideways instead of squeezing. */
-.segmented.scrolling {
-  overflow-x: auto;
-  scrollbar-width: none;
+.segmented button {
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.segmented.scrolling button {
-  flex: 1 0 auto;
-  padding: 0 14px;
+/* The Ranks screen's choice once there are two or more friends' groups. */
+.standings-picker {
+  display: grid;
+  gap: 6px;
 }
 
 /* Avatars */
@@ -675,12 +675,6 @@ p {
   line-height: 0.95;
   text-overflow: ellipsis;
   text-transform: uppercase;
-  white-space: nowrap;
-}
-
-.screen-heading .eyebrow {
-  overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
@@ -826,11 +820,6 @@ p {
   flex-direction: column;
   gap: 12px;
   padding-top: 6px;
-}
-
-.home-hero .eyebrow {
-  font-size: 11px;
-  letter-spacing: 0.22em;
 }
 
 .home-hero h1 {

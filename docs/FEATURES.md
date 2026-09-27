@@ -29,7 +29,7 @@ This is a plain-language list of everything Menoka Card Games can do today. It i
 - **Delete my account**: a small link at the bottom (see section 14).
 - **Unassigned device data**: appears only if this device has games saved before accounts existed (see section 16).
 - **Tab bar.** A bar at the bottom of every screen has five tabs: **Home**, **Play** (the game in progress, or table setup when there isn't one), **Ranks** (standings), **Games** (saved game sessions) and **Players**. The current tab is highlighted in green.
-- **Every other screen** has a back button (←) at the top left and a theme button at the top right.
+- **Every other screen** has a back button (←) at the top left, its title (for example **Players** or **Hand 12**) with no line above it, and a theme button at the top right.
 - **Dark and light themes.** The theme button (a small green-blue dot, labelled "Dark" or "Light" on the home screen) switches the whole app between a dark and a light look. The choice is remembered on that device. Dark is the default.
 
 ## 3. Players (your friend list)
@@ -284,8 +284,10 @@ Everyone who signs in has their own account and can host their own games. Friend
 
 **Group standings (the Ranks screen)**
 
-- **Your games and your groups.** When at least one host has you as a linked friend, the top of the **Ranks** screen shows a choice: **Your games** (your own standings, exactly as before) and one "Name's games" button per host, in alphabetical order. The choice scrolls sideways when there are many.
-- **What a group shows:** that host's standings list, ranked exactly as the host sees it (same average session return, same ties): every player's rank, name, score and, when opened, Sessions, Profitable, Hands, Invested and Net chips. Your own row is outlined in green and marked **You**. Above the list: how many games the host has saved, which of their players you are, and the date of their last game. The screen header shows the host's name and game count.
+- **Your games and your groups.** When at least one host has you as a linked friend, the top of the **Ranks** screen shows a choice between **Your games** (your own standings, exactly as before) and each host's "Name's games", in alphabetical order:
+  - **one host:** two buttons side by side;
+  - **two or more hosts:** a **Whose standings** dropdown (the phone's own picker), where each host's entry also shows how many games they have recorded, for example "Meera's games · 8 games".
+- **What a group shows:** that host's standings list, ranked exactly as the host sees it (same average session return, same ties): every player's rank, name, score and, when opened, Sessions, Profitable, Hands, Invested and Net chips. Your own row is outlined in green and marked **You**. Above the list: how many games the host has saved and the date of their last game, for example "25 games · Last game 8 Sept 2026". The **i** next to "Name's games" explains that this is your overall ranking across every game that host has recorded, which of their players you are, that each host's standings are kept separate, and how players are ranked. The screen title is just **Standings**, for your own games and for every group.
 - **What a group doesn't show:** the host's game-by-game history, the running-average graph, the names of games left out of the ranking, discarded games, or anything you could change. The app works the standings out on the server and sends your phone only the list.
 - **When it updates:** each time you open the Ranks screen.
 - **When a group disappears:** as soon as either of you removes the friendship, or while the host's account is locked for deletion. There is no combined score across groups.

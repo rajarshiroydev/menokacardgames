@@ -445,7 +445,6 @@ export function PokerLedger({
   const [historyError, setHistoryError] = useState("");
   const [players, setPlayers] = useState<PlayerProfile[]>([]);
   /** The Ranks header while a friend's group is shown instead of your own games. */
-  const [ranksEyebrow, setRanksEyebrow] = useState<string | null>(null);
   const [discardedPlayers, setDiscardedPlayers] = useState<PlayerProfile[]>(
     [],
   );
@@ -1543,13 +1542,11 @@ export function PokerLedger({
     setModal(null);
   }
 
-  const gameName = game?.sessionLabel || game?.gameName || "Game";
-  const header: { eyebrow: string; title: string } | null =
+  const header: { title: string } | null =
     view === "home"
       ? null
       : view === "game" && game
         ? {
-            eyebrow: gameName,
             title: game.hand
               ? game.hand.stage === STAGES.length - 1 &&
                 !pendingIndexes(game).length
@@ -1558,27 +1555,15 @@ export function PokerLedger({
               : "Between Hands",
           }
         : view === "setup"
-          ? { eyebrow: "New game", title: "Table Setup" }
+          ? { title: "Table Setup" }
           : view === "history"
-            ? {
-                eyebrow:
-                  ranksEyebrow ??
-                  `All-time · ${history.length} session${
-                    history.length === 1 ? "" : "s"
-                  }`,
-                title: "Standings",
-              }
+            ? { title: "Standings" }
             : view === "sessions"
-              ? {
-                  eyebrow: `${history.length} game${
-                    history.length === 1 ? "" : "s"
-                  }`,
-                  title: "Game Sessions",
-                }
+              ? { title: "Game Sessions" }
               : view === "players"
-                ? { eyebrow: "Directory", title: "Players" }
+                ? { title: "Players" }
                 : view === "hands"
-                  ? { eyebrow: "Strongest to weakest", title: "Hand Rankings" }
+                  ? { title: "Hand Rankings" }
                   : null;
   const homeView = (
     <HomeView
@@ -1617,7 +1602,6 @@ export function PokerLedger({
             ←
           </button>
           <div className="screen-heading">
-            <span className="eyebrow">{header.eyebrow}</span>
             <h1
               style={
                 { "--chars": header.title.length } as React.CSSProperties
@@ -1635,7 +1619,6 @@ export function PokerLedger({
           homeView
         ) : view === "history" ? (
           <RanksView
-            onGroupShown={setRanksEyebrow}
             history={history}
             loading={historyLoading}
             error={historyError}
@@ -2020,7 +2003,6 @@ function HomeView({
       </div>
 
       <div className="home-hero">
-        <span className="eyebrow">House Poker, Kept Properly</span>
         <h1>
           Menoka
           <span className="gradient-text">Card Games</span>
@@ -5322,12 +5304,7 @@ function StandingCard({
  * The Ranks screen: your own standings, plus the standings of every group
  * whose host has you as a linked friend.
  */
-function RanksView({
-  onGroupShown,
-  ...props
-}: Parameters<typeof StandingsView>[0] & {
-  onGroupShown: (eyebrow: string | null) => void;
-}) {
+function RanksView(props: Parameters<typeof StandingsView>[0]) {
   const [groups, setGroups] = useState<GroupStandings[]>([]);
   const [groupsError, setGroupsError] = useState("");
   const [selected, setSelected] = useState("mine");
@@ -5362,32 +5339,20 @@ function RanksView({
   }, []);
 
   const group = groups.find((item) => item.hostAccountId === selected);
-  const groupEyebrow = group
-    ? `${group.hostName ?? "Friend"} · ${group.games} game${
-        group.games === 1 ? "" : "s"
-      }`
-    : null;
-
-  useEffect(() => {
-    onGroupShown(groupEyebrow);
-  }, [groupEyebrow, onGroupShown]);
-  useEffect(() => () => onGroupShown(null), [onGroupShown]);
+  const options = [
+    { id: "mine", label: "Your games", detail: "" },
+    ...groups.map((item) => ({
+      id: item.hostAccountId,
+      label: `${item.hostName ?? "Friend"}'s games`,
+      detail: `${item.games} game${item.games === 1 ? "" : "s"}`,
+    })),
+  ];
 
   return (
     <div className="stack-list">
-      {groups.length ? (
-        <div
-          className="segmented scrolling"
-          role="radiogroup"
-          aria-label="Whose standings"
-        >
-          {[
-            { id: "mine", label: "Your games" },
-            ...groups.map((item) => ({
-              id: item.hostAccountId,
-              label: `${item.hostName ?? "Friend"}'s games`,
-            })),
-          ].map((option) => (
+      {groups.length === 1 ? (
+        <div className="segmented" role="radiogroup" aria-label="Whose standings">
+          {options.map((option) => (
             <button
               key={option.id}
               className={selected === option.id ? "selected" : ""}
@@ -5399,6 +5364,26 @@ function RanksView({
               {option.label}
             </button>
           ))}
+        </div>
+      ) : groups.length > 1 ? (
+        // Two or more hosts don't fit side by side on a phone, and the list
+        // keeps growing, so the choice becomes the phone's own picker.
+        <div className="standings-picker">
+          <label className="label" htmlFor="standings-picker">
+            Whose standings
+          </label>
+          <select
+            className="select-control"
+            id="standings-picker"
+            value={selected}
+            onChange={(event) => setSelected(event.target.value)}
+          >
+            {options.map((option) => (
+              <option key={option.id} value={option.id}>
+                {option.detail ? `${option.label} · ${option.detail}` : option.label}
+              </option>
+            ))}
+          </select>
         </div>
       ) : null}
       {groupsError ? <p className="muted small-note">{groupsError}</p> : null}
@@ -5432,25 +5417,21 @@ function GroupStandingsView({ group }: { group: GroupStandings }) {
           <button
             className="info-button"
             type="button"
-            aria-label="How players are ranked"
+            aria-label={`About ${hostName}'s games`}
             onClick={() => setShowRankingHelp(true)}
           >
             i
           </button>
         </div>
-        <span className="card-note">
-          {group.games} game{group.games === 1 ? "" : "s"}
-        </span>
       </div>
       <p className="muted small-note">
-        {hostName} records these games. You&apos;re {group.myPlayerName} in their
-        list.
+        {group.games} game{group.games === 1 ? "" : "s"}
         {group.lastPlayed
-          ? ` Last game ${new Date(group.lastPlayed).toLocaleDateString("en-IN", {
+          ? ` · Last game ${new Date(group.lastPlayed).toLocaleDateString("en-IN", {
               day: "numeric",
               month: "short",
               year: "numeric",
-            })}.`
+            })}`
           : ""}
       </p>
       {rows.length ? (
@@ -5477,7 +5458,18 @@ function GroupStandingsView({ group }: { group: GroupStandings }) {
         </button>
       ) : null}
       {showRankingHelp ? (
-        <RankingHelp onClose={() => setShowRankingHelp(false)} />
+        <RankingHelp
+          label={`About ${hostName}'s games`}
+          onClose={() => setShowRankingHelp(false)}
+        >
+          <p>
+            This is your overall ranking across every game {hostName} has
+            recorded, among everyone who played in them. {hostName} keeps
+            these games; you appear as <b>{group.myPlayerName}</b> in their
+            list. Each host you play with has their own standings, and
+            they&apos;re never combined.
+          </p>
+        </RankingHelp>
       ) : null}
     </div>
   );
@@ -5604,7 +5596,15 @@ function StandingsView({
   );
 }
 
-function RankingHelp({ onClose }: { onClose: () => void }) {
+function RankingHelp({
+  label = "How players are ranked",
+  children,
+  onClose,
+}: {
+  label?: string;
+  children?: React.ReactNode;
+  onClose: () => void;
+}) {
   useEffect(() => {
     function closeOnEscape(event: KeyboardEvent) {
       if (event.key === "Escape") onClose();
@@ -5625,8 +5625,9 @@ function RankingHelp({ onClose }: { onClose: () => void }) {
         className="sheet ranking-help"
         role="dialog"
         aria-modal="true"
-        aria-label="How players are ranked"
+        aria-label={label}
       >
+        {children}
         <p>
           Players are ranked by their <b>average session return</b>: how much
           they won or lost in each game as a percentage of the chips they put
