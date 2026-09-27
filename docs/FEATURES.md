@@ -29,8 +29,8 @@ This is a plain-language list of everything Menoka Card Games can do today. It i
 - **Delete my account**: a small link at the bottom (see section 14).
 - **Unassigned device data**: appears only if this device has games saved before accounts existed (see section 16).
 - **Tab bar.** A bar at the bottom of every screen has five tabs: **Home**, **Play** (the game in progress, or table setup when there isn't one), **Ranks** (standings), **Games** (saved game sessions) and **Players**. The current tab is highlighted in green.
-- **Every other screen** has a back button (←) at the top left, its title (for example **Players** or **Hand 12**) with no line above it, and a theme button at the top right.
-- **Dark and light themes.** The theme button (a small green-blue dot, labelled "Dark" or "Light" on the home screen) switches the whole app between a dark and a light look. The choice is remembered on that device. Dark is the default.
+- **Every other screen** shows its title at the top left (for example **Players** or **Hand 12**) with no line above it, and the theme button at the top right. There is no on-screen back button; use the phone's back gesture or the browser's back button.
+- **Dark and light themes.** A round theme button shows a **sun** in dark mode (tap for light) and a **moon** in light mode (tap for dark). It's on every page: the app's screens, the sign-in page, the name screen, the locked-account page and the live standings link. The choice is remembered on that device. Dark is the default.
 
 ## 3. Players (your friend list)
 
@@ -49,18 +49,18 @@ This is a plain-language list of everything Menoka Card Games can do today. It i
 ## 4. Starting a game
 
 - **Game name (optional).** If left empty, the game is called "Game" plus the next number in your ledger, for example "Game 25". Numbers count up separately for each host.
-- **Seat players.** Every player on your friend list appears as a button. Tap players to seat them; the order you tap is the seating order, and each seated player shows their seat number. Tap a seated player again to take them off the table. The screen says how many are seated and asks for at least 2. Up to 10 players can be seated; once 10 are seated, the others can't be tapped. There is a **Manage players** shortcut if someone is missing.
-- **Seating order.** Once two or more are seated, a list shows the seats in order. Drag a player by the grip (⠿) to change seats, or use the arrow keys on the grip. Seat 1 deals first, and the dealer moves round the table in seat order.
+- **Select players.** Every player on your friend list appears as a button. Tap players to seat them; the order you tap is the seating order, and each seated player shows their seat number. Tap a seated player again to take them off the table. There's no seated count or "need 2" note: **Deal First Hand** stays unavailable until two are seated. Up to 10 players can be seated; once 10 are seated, the others can't be tapped. There is a **Manage players** shortcut if someone is missing.
+- **Seating Order.** Once two or more are seated, a **Seating Order** list shows the seats in order. Its **i** button opens a sheet explaining that seat 1 deals first, the dealer moves to the next active player each hand, and a grip changes seats. The sheet closes with **Got it**, a tap outside it or Escape, like the other **i** sheets. Drag a player by the grip (⠿) to change seats, or use the arrow keys on the grip. Seat 1 deals first, and the dealer moves round the table in seat order.
 - **Starting stack / first buy-in.** Quick choices of 5K, 10K (the default), 20K and 50K chips, or **Other** to type any amount of at least 1.
 - **Big blind.** Quick choices of ₹50, ₹100 (the default), ₹200, ₹500 and ₹1K, or **Other** to type any amount of at least 1. The small blind is always half the big blind, rounded down. The screen shows the small blind and the first raise size.
-- **Blind levels.** **Fixed**, **By hands** or **By minutes**. See section 5.
+- **Blind levels.** **Fixed**, **By Hands** or **By Minutes**. See section 5.
 - **Deal First Hand** only becomes available when at least two different players are seated and the numbers are valid. It starts the game and deals hand 1.
 
 ## 5. Blinds
 
 - **Fixed blinds** stay the same all game unless you change them.
 - **Rising blinds** go up automatically. You choose:
-  - how often: every so many **hands** or every so many **minutes** (at least 1). Choosing By hands starts at every 10 hands; By minutes starts at every 20 minutes
+  - how often: every so many **hands** or every so many **minutes** (at least 1). Choosing By Hands starts at every 10 hands; By Minutes starts at every 20 minutes
   - how: **multiply** the big blind (for example ×2, minimum ×1.1) or **add** a fixed amount (at least 1)
   - the setup screen previews the next few big blind levels, for example 100 → 200 → 400 → 800
 - **Blinds never change mid-hand.** A new level always starts when the next hand is dealt. For timed blinds, if the time runs out during a hand, the increase waits for the next deal.
@@ -131,7 +131,7 @@ This is a plain-language list of everything Menoka Card Games can do today. It i
 - **Games in progress survive a refresh.** The current game is kept on the device, so closing or reloading the page doesn't lose it.
 - **Tied to your account.** A game in progress is saved on the device for the signed-in host only. Another host signing in on the same device doesn't see it.
 - **One device per game.** A game in progress lives on the device where it was started. It isn't synced to other devices until it's saved. Players can still follow it on their own phones through a live standings link (see section 19).
-- **Back button works.** The phone or browser back button, and the ← button at the top of each screen, move back through the app's screens.
+- **Back button works.** The phone's back gesture or the browser's back button moves back through the app's screens.
 
 ## 11. Saving a game and game history
 

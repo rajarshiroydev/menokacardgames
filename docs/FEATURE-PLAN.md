@@ -186,6 +186,7 @@ Official sources checked 2026-09-20; recheck during implementation/release:
 | Live standings link for players | Released to production on 2026-09-25 (`13f9838`, with the redesign); migration 0009 was already applied. Not yet checked on production: the iOS share sheet, a locked host screen, and CDN caching of the public GET |
 | Host invitations / friend network | Released to production 2026-09-25 (`244611c`; migrations 0010–0012 on `br-small-sea-ayumyssr`). Accepted model and three build steps are in the dated entries "friend network (accepted)" and "step 1/2/3". The preview test with two real extra accounts (Debraj Test, Saheb) passed for friend requests and group standings. Open follow-ups: notifications for new requests (none today), and the Emon-led and Rahul Basak hosts joining through the network |
 | App speed and hosting | Open (2026-09-27): see the dated entry "speed investigation". Step 1 (timing headers, a single-trip account check, the user code from the page) was committed 2026-09-27. **User decision (2026-09-27):** stay on Neon Free for now because of budget; cold starts stay. Vercel functions run in `iad1` (Washington), confirmed by the user. Open: a longer sign-in cookie cache. A small testbed runs locally against the separate project `menoka-testbed` (see the dated entry "testbed" and `testbed/README.md`) |
+| Trying the app without an account | Decided 2026-09-27 by the user: **not** planned. Everything except the public live standings link needs sign-in, as it does today |
 | Cloud draft sync / device handoff | Deferred; needs conflict policy |
 | Shared ledgers/invitations | Requested 2026-09-25; see "Host invitations / friend network" above |
 | App Store / Play Store | Future separate plan after web stability |
@@ -577,4 +578,13 @@ Status 2026-09-25: items 1–2 done except custom SMTP (the user chose Neon's sh
   - a new unit test covers per-row lines, a missed game and a player who joins late (149 tests pass);
   - on the testbed, Asha's own graph and Bikram's view of it drew identical lines (12 of 12, compared to 0.1 px);
   - Asha's view of Bikram's 300 games draws 60 lines at 375 px with no sideways scroll.
+
+2026-09-27 interface tidy-up (user requests):
+- **No signed-out tour:** the user dropped the idea of letting people see the app without signing up (recorded in the register).
+- **Theme toggle:** a round sun/moon button (`components/theme-toggle.tsx`) replaces the dot and the "Dark" pill. It appears on every page, including sign-in, the name screen, the locked account and the live link.
+- **Other removals and fixes:**
+  - no on-screen back button, because the phone's back gesture already walks the screen history;
+  - no "Need 2+" note (Deal First Hand stays disabled until two are seated);
+  - "By Hands" and "By Minutes" are capitalised.
+- **Seat-drag jump:** a slow, frame-by-frame replay of a drag on the testbed measured neighbouring rows overshooting their new seat by 46–49 px on drop before sliding back, because their slide transition replayed the removed drag shift from the new position. The fix switches transitions off for the reordering frame. It also turns the dragged row's transition off from the first move, and measures the landing animation from centres, since the lifted row is scaled to 103%. After the fix the same replay measured 0 px overshoot in both directions.
 

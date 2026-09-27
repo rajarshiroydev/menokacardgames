@@ -9,6 +9,7 @@ import {
   RECENT_SIGN_IN_WINDOW_MS,
 } from "@/lib/auth/recent-sign-in";
 import { apiErrorMessage } from "@/lib/security/rate-limit-message";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 function formatDeadline(timestamp: number) {
   return new Date(timestamp).toLocaleString("en-IN", {
@@ -90,6 +91,7 @@ export function AccountLocked({
 
   return (
     <main className="auth-page">
+      <ThemeToggle className="page-theme-toggle" />
       <section className="auth-card" aria-labelledby="locked-title">
         <div className="auth-mark" aria-hidden="true">
           ♠

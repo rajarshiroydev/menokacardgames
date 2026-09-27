@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 
+import { ThemeToggle } from "@/components/theme-toggle";
 import { DELETION_GRACE_PERIOD_DAYS } from "@/lib/accounts/lifecycle";
 import { getHostSession } from "@/lib/auth/server";
 import { testbedMode } from "@/lib/testbed/server";
@@ -22,6 +23,7 @@ export default async function SignInPage({
 
   return (
     <main className="auth-page">
+      <ThemeToggle className="page-theme-toggle" />
       <section className="auth-card" aria-labelledby="sign-in-title">
         <div className="auth-mark" aria-hidden="true">
           ♠

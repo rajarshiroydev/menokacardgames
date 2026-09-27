@@ -498,8 +498,7 @@ p {
   font-weight: 700;
 }
 
-.round-button,
-.theme-pill {
+.round-button {
   display: grid;
   flex: none;
   place-items: center;
@@ -514,29 +513,19 @@ p {
   backdrop-filter: blur(20px);
 }
 
-.theme-pill {
-  display: inline-flex;
-  gap: 7px;
-  width: auto;
-  height: 34px;
-  padding: 0 13px;
-  border-radius: 999px;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
+/* Pages without the app header (sign-in, name, locked, live link loading
+   and ended): the theme toggle sits in the top-right corner. */
+.page-theme-toggle {
+  position: absolute;
+  top: max(14px, env(safe-area-inset-top));
+  right: var(--gutter);
+  z-index: 3;
 }
 
-.theme-dot {
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, var(--g), var(--b));
-}
-
-.theme-pill .theme-dot {
-  width: 10px;
-  height: 10px;
+/* The live link's pages are a column, so the toggle takes its own row. */
+.live-shell .page-theme-toggle {
+  position: static;
+  align-self: flex-end;
 }
 
 /* Segmented control */
@@ -2240,13 +2229,13 @@ p {
   line-height: 1;
 }
 
-.ranking-help p {
+.info-sheet p {
   color: var(--ink2);
   font-size: 15px;
   line-height: 1.55;
 }
 
-.ranking-help b {
+.info-sheet b {
   color: var(--ink);
 }
 

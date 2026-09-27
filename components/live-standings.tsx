@@ -8,6 +8,7 @@ import {
   LIVE_VIEW_STALE_MS,
   type LiveView,
 } from "@/lib/poker/live-view";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 type LiveResponse = LiveView & { updatedAt: number };
 
@@ -113,6 +114,7 @@ export function LiveStandings({ token }: { token: string }) {
   if (state.kind === "loading") {
     return (
       <main className="ledger-shell live-shell">
+        <ThemeToggle className="page-theme-toggle" />
         <p className="muted live-status">Loading live standings…</p>
       </main>
     );
@@ -121,6 +123,7 @@ export function LiveStandings({ token }: { token: string }) {
   if (state.kind === "ended") {
     return (
       <main className="ledger-shell live-shell">
+        <ThemeToggle className="page-theme-toggle" />
         <section className="glass card live-ended">
           <span className="eyebrow">Live standings</span>
           <h1 className="card-title">This game has ended</h1>
@@ -146,6 +149,7 @@ export function LiveStandings({ token }: { token: string }) {
             {view.gameName}
           </h1>
         </div>
+        <ThemeToggle />
       </header>
 
       <section className="glass card live-blinds" aria-label="Current blinds">

@@ -54,6 +54,7 @@ import { useRouter } from "next/navigation";
 import qrcode from "qrcode-generator";
 
 import { signOut } from "@/app/auth/sign-in/actions";
+import { ThemeToggle } from "@/components/theme-toggle";
 import {
   type AccountProfile,
   cleanDisplayName,
@@ -93,7 +94,6 @@ import type {
   PokerSession,
   WinnerAnnouncement,
 } from "@/lib/poker/types";
-import { applyTheme, currentTheme, type Theme } from "@/lib/theme";
 
 type View =
   | "home"
@@ -1530,10 +1530,6 @@ export function PokerLedger({
     navigate("players");
   }
 
-  function goBack() {
-    window.history.back();
-  }
-
   function openHands() {
     navigate("hands");
   }
@@ -1593,14 +1589,7 @@ export function PokerLedger({
 
       {header ? (
         <header className="screen-header">
-          <button
-            className="round-button"
-            type="button"
-            aria-label="Go back"
-            onClick={goBack}
-          >
-            ←
-          </button>
+          {/* No back button: the phone's back gesture walks the screen history. */}
           <div className="screen-heading">
             <h1
               style={
@@ -1804,38 +1793,6 @@ function TabBar({
   );
 }
 
-function useTheme() {
-  const [theme, setTheme] = useState<Theme>("dark");
-  useEffect(() => {
-    // The pre-paint script in the layout may have picked the saved theme.
-    const syncTimer = setTimeout(() => setTheme(currentTheme()), 0);
-    return () => clearTimeout(syncTimer);
-  }, []);
-  function toggle() {
-    const next = theme === "dark" ? "light" : "dark";
-    applyTheme(next);
-    setTheme(next);
-  }
-  return { theme, toggle };
-}
-
-function ThemeToggle({ pill = false }: { pill?: boolean }) {
-  const { theme, toggle } = useTheme();
-  const label = `Switch to ${theme === "dark" ? "light" : "dark"} theme`;
-  return (
-    <button
-      className={pill ? "theme-pill" : "round-button"}
-      type="button"
-      aria-label={label}
-      title={label}
-      onClick={toggle}
-    >
-      <span className="theme-dot" aria-hidden="true" />
-      {pill ? <span>{theme}</span> : null}
-    </button>
-  );
-}
-
 // Named hues from the design; anyone else gets a stable hue from their name.
 const PLAYER_HUES: Record<string, number> = {
   rajarshi: 150,
@@ -1999,7 +1956,7 @@ function HomeView({
           </span>
           <span className="brand-name">Menoka</span>
         </div>
-        <ThemeToggle pill />
+        <ThemeToggle />
       </div>
 
       <div className="home-hero">
@@ -2437,6 +2394,7 @@ function SetupView({
   const [draggingSeat, setDraggingSeat] = useState<number | null>(null);
   const [dropSeat, setDropSeat] = useState<number | null>(null);
   const [seatDragStep, setSeatDragStep] = useState(0);
+  const [showSeatingHelp, setShowSeatingHelp] = useState(false);
 
   useEffect(() => () => {
     if (seatScrollFrameRef.current !== null) {
@@ -2448,21 +2406,35 @@ function SetupView({
     const landing = seatDropAnimationRef.current;
     if (!landing) return;
     seatDropAnimationRef.current = null;
-    landing.row.style.transition = "none";
+    // The rows that stepped aside during the drag lose that shift in the
+    // same render that moves them to their new places, so the two cancel
+    // out. Without this their slide transition would replay the removed
+    // shift from the new place: a jump of one seat, then a slide back.
+    const rows = [
+      ...(seatListRef.current?.querySelectorAll<HTMLElement>(".seat-row") ?? []),
+    ];
+    for (const row of rows) row.style.transition = "none";
     landing.row.style.removeProperty("transform");
     const toRect = landing.row.getBoundingClientRect();
-    landing.row.style.removeProperty("transition");
+    requestAnimationFrame(() => {
+      for (const row of rows) row.style.removeProperty("transition");
+    });
     if (
       typeof landing.row.animate !== "function" ||
       window.matchMedia("(prefers-reduced-motion: reduce)").matches
     ) {
       return;
     }
+    // Compare centres: the lifted row was scaled up, so its corner is off.
+    const dx =
+      landing.fromRect.left + landing.fromRect.width / 2 -
+      (toRect.left + toRect.width / 2);
+    const dy =
+      landing.fromRect.top + landing.fromRect.height / 2 -
+      (toRect.top + toRect.height / 2);
     landing.row.animate(
       [
-        {
-          transform: `translate3d(${landing.fromRect.left - toRect.left}px, ${landing.fromRect.top - toRect.top}px, 0) scale(1.03)`,
-        },
+        { transform: `translate3d(${dx}px, ${dy}px, 0) scale(1.03)` },
         { transform: "translate3d(0, 0, 0) scale(1)" },
       ],
       { duration: 190, easing: "cubic-bezier(.2, .8, .2, 1)" },
@@ -2647,6 +2619,9 @@ function SetupView({
       return;
     }
     if (!drag.moved) {
+      // Follow the finger from the first move: the "is-dragging" class that
+      // also turns the slide off only arrives with the next render.
+      drag.row.style.transition = "none";
       setDraggingSeat(drag.from);
       setDropSeat(drag.from);
       setSeatDragStep(drag.rowStep);
@@ -2671,6 +2646,7 @@ function SetupView({
       moveSeat(drag.from, drag.over);
     } else {
       drag.row.style.removeProperty("transform");
+      drag.row.style.removeProperty("transition");
     }
     seatDragRef.current = null;
     setDraggingSeat(null);
@@ -2685,6 +2661,7 @@ function SetupView({
     if (seatDragRef.current?.pointerId !== event.pointerId) return;
     stopSeatScroll();
     seatDragRef.current.row.style.removeProperty("transform");
+    seatDragRef.current.row.style.removeProperty("transition");
     seatDragRef.current = null;
     setDraggingSeat(null);
     setDropSeat(null);
@@ -2748,12 +2725,7 @@ function SetupView({
 
       <section className="glass card">
         <div className="card-row">
-          <span className="label">Seat players</span>
-          <span className="card-note">
-            {playerCount
-              ? `${playerCount} seated${playerCount < 2 ? " · need 2+" : ""}`
-              : "Need 2+"}
-          </span>
+          <span className="label">Select players</span>
         </div>
         {error ? (
           <div className="inline-state">
@@ -2792,10 +2764,28 @@ function SetupView({
         ) : null}
         {playerCount > 1 ? (
           <>
-            <p className="muted small-note">
-              Seat 1 deals first; the dealer moves to the next active player
-              each hand. Drag a grip to change seats.
-            </p>
+            <div className="heading-with-info">
+              <span className="label">Seating Order</span>
+              <button
+                className="info-button"
+                type="button"
+                aria-label="About the seating order"
+                onClick={() => setShowSeatingHelp(true)}
+              >
+                i
+              </button>
+            </div>
+            {showSeatingHelp ? (
+              <InfoSheet
+                label="About the seating order"
+                onClose={() => setShowSeatingHelp(false)}
+              >
+                <p>
+                  Seat 1 deals first; the dealer moves to the next active
+                  player each hand. Drag a grip to change seats.
+                </p>
+              </InfoSheet>
+            ) : null}
             <div className="seat-order-list" ref={seatListRef}>
               {selectedIds.map((selectedId, index) => {
                 let shift = 0;
@@ -2952,8 +2942,8 @@ function SetupView({
           label="Blind levels"
           options={[
             { value: "fixed", label: "Fixed" },
-            { value: "hands", label: "By hands" },
-            { value: "minutes", label: "By minutes" },
+            { value: "hands", label: "By Hands" },
+            { value: "minutes", label: "By Minutes" },
           ]}
           value={risingBlinds ? blindUnit : "fixed"}
           onChange={chooseBlindLevels}
@@ -5583,6 +5573,31 @@ function RankingHelp({
   intro: string;
   onClose: () => void;
 }) {
+  return (
+    <InfoSheet label="About these standings" onClose={onClose}>
+      <p>{intro}</p>
+      <p>
+        Players are ranked by their <b>average session return</b>: how much
+        they won or lost in each game as a percentage of the chips they put
+        in, averaged over their games.
+      </p>
+    </InfoSheet>
+  );
+}
+
+/**
+ * The sheet an "i" button opens: closes with Got it, a tap outside it or the
+ * Escape key.
+ */
+function InfoSheet({
+  label,
+  onClose,
+  children,
+}: {
+  label: string;
+  onClose: () => void;
+  children: React.ReactNode;
+}) {
   useEffect(() => {
     function closeOnEscape(event: KeyboardEvent) {
       if (event.key === "Escape") onClose();
@@ -5600,17 +5615,12 @@ function RankingHelp({
       }}
     >
       <div
-        className="sheet ranking-help"
+        className="sheet info-sheet"
         role="dialog"
         aria-modal="true"
-        aria-label="About these standings"
+        aria-label={label}
       >
-        <p>{intro}</p>
-        <p>
-          Players are ranked by their <b>average session return</b>: how much
-          they won or lost in each game as a percentage of the chips they put
-          in, averaged over their games.
-        </p>
+        {children}
         <button className="primary" type="button" onClick={onClose}>
           Got it
         </button>

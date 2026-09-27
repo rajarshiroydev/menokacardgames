@@ -8,6 +8,7 @@ import {
   MAX_DISPLAY_NAME_LENGTH,
 } from "@/lib/accounts/identity-code";
 import { apiErrorMessage } from "@/lib/security/rate-limit-message";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 /**
  * The first step after signing in: an account without a name sees only this
@@ -59,6 +60,7 @@ export function NameSetup() {
 
   return (
     <main className="auth-page">
+      <ThemeToggle className="page-theme-toggle" />
       <section className="auth-card" aria-labelledby="name-setup-title">
         <div className="auth-mark" aria-hidden="true">
           ♠
