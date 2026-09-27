@@ -17,10 +17,11 @@ const SESSIONS_PER_REQUEST = 250;
 
 type Plan = { players: number; games: number; requiredPlayers: string[] };
 const PLANS: Record<string, Plan> = {
-  "big-host": { players: 60, games: 300, requiredPlayers: ["Asha"] },
-  asha: { players: 12, games: 25, requiredPlayers: ["Bikram"] },
-  meera: { players: 5, games: 8, requiredPlayers: ["Bikram"] },
-  farhan: { players: 3, games: 0, requiredPlayers: [] },
+  // A game needs at least 3 players, so the small lists stay at 3.
+  "big-host": { players: 15, games: 75, requiredPlayers: ["Asha"] },
+  asha: { players: 3, games: 6, requiredPlayers: ["Bikram"] },
+  meera: { players: 3, games: 2, requiredPlayers: ["Bikram"] },
+  farhan: { players: 1, games: 0, requiredPlayers: [] },
 };
 
 const password = testbedEnv().TESTBED_PERSONA_PASSWORD;

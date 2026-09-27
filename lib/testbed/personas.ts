@@ -17,14 +17,14 @@ export const TESTBED_PERSONAS: readonly TestbedPersona[] = [
     email: "big.host@menoka.test",
     displayName: "Bikram Big Host",
     setup:
-      "60 players and 300 games. Friends with Asha (linked both ways); a request from Meera waits for him",
+      "15 players and 75 games. Friends with Asha (linked both ways); a request from Meera waits for him",
   },
   {
     key: "asha",
     email: "asha@menoka.test",
     displayName: "Asha Host",
     setup:
-      "12 players and 25 games. Friends with Bikram, so Ranks shows his group; her request to Ravi is pending",
+      "3 players and 6 games. Friends with Bikram, so Ranks shows his group; her request to Ravi is pending",
   },
   {
     key: "ravi",
@@ -36,7 +36,7 @@ export const TESTBED_PERSONAS: readonly TestbedPersona[] = [
     key: "meera",
     email: "meera@menoka.test",
     displayName: "Meera",
-    setup: "5 players and 8 games. Sent Bikram a friend request (pending)",
+    setup: "3 players and 2 games. Sent Bikram a friend request (pending)",
   },
   {
     key: "karan",
@@ -48,7 +48,7 @@ export const TESTBED_PERSONAS: readonly TestbedPersona[] = [
     key: "farhan",
     email: "farhan@menoka.test",
     displayName: "Farhan Solo",
-    setup: "A named account with 3 players, no games and no friends",
+    setup: "A named account with 1 player, no games and no friends",
   },
   {
     key: "new",
