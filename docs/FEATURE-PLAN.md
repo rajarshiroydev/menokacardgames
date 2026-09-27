@@ -185,6 +185,7 @@ Official sources checked 2026-09-20; recheck during implementation/release:
 | Retire superseded files | Kept for now by user decision (2026-09-25). Delete `migrations/data/0003_backfill_rajarshi_reviewed_history.sql` (development-only, replaced by 0008) once nothing depends on it, and shrink `HISTORICAL-OWNERSHIP.md` to a note once the Emon-led and Rahul Basak claims are done. Update the docs that mention them in the same change |
 | Live standings link for players | Released to production on 2026-09-25 (`13f9838`, with the redesign); migration 0009 was already applied. Not yet checked on production: the iOS share sheet, a locked host screen, and CDN caching of the public GET |
 | Host invitations / friend network | Released to production 2026-09-25 (`244611c`; migrations 0010–0012 on `br-small-sea-ayumyssr`). Accepted model and three build steps are in the dated entries "friend network (accepted)" and "step 1/2/3". The preview test with two real extra accounts (Debraj Test, Saheb) passed for friend requests and group standings. Open follow-ups: notifications for new requests (none today), and the Emon-led and Rahul Basak hosts joining through the network |
+| App speed and hosting | Open (2026-09-27): see the dated entry "speed investigation". Step 1 (timing headers, a single-trip account check, the user code from the page) was committed 2026-09-27. **User decision (2026-09-27):** stay on Neon Free for now because of budget; cold starts stay. Vercel functions run in `iad1` (Washington), confirmed by the user. Open: a longer sign-in cookie cache, and a general-purpose testbed (see "testbed") |
 | Cloud draft sync / device handoff | Deferred; needs conflict policy |
 | Shared ledgers/invitations | Requested 2026-09-25; see "Host invitations / friend network" above |
 | App Store / Play Store | Future separate plan after web stability |
@@ -515,3 +516,29 @@ Status 2026-09-25: items 1–2 done except custom SMTP (the user chose Neon's sh
 2. Neon's production checklist: add the production domain as a trusted domain, configure custom SMTP, set the application name, and disable "Allow Localhost".
 3. Vercel Firewall → Configure → New Rule, named "Limit API writes": **If** Request Path starts with `/api/` **and** Method is any of POST, PUT, PATCH, DELETE; **Then** Rate Limit, Fixed Window, 60 s, 30 requests, key IP, action Default (429). Publish it with the Log action first for about a week, check the Firewall overview for false positives, then switch to 429.
 4. Afterwards, send 31 quick writes from one IP (for example, repeated discard/restore of a throwaway player) and confirm the app shows the "Too many requests" message.
+
+2026-09-27 speed investigation: **Problem:** the user saw occasional multi-second waits: about 10 s once to show the user code, 5 s to find a friend by code and a few more to send the request. **Findings:**
+- **Infrastructure (the main cause):** the production compute (`ep-delicate-pond-ay8ple8b` on `br-small-sea-ayumyssr`, `aws-us-east-2`) suspends 5 minutes after the last query. On the Free plan this can't be turned off. Measured from the user's Mac: a first query to a suspended dev compute took 1.6 s and warm round trips about 270 ms (the distance from India to Ohio). The first request after a quiet spell can pay for a Vercel cold start, a Neon Auth `get-session` call (the signed session cookie cache lasts 5 minutes, the library default), and waking the compute, one after the other.
+- **Code:** every API request wrote to `accounts` (an upsert) just to confirm the account exists, and then ran its own query as a second trip. The page already read the profile, but the Players screen fetched it again from `/api/account`. Queries themselves are not slow at today's size (about 100 rows).
+- **Vercel functions region:** `iad1` (Washington), next to Neon's `us-east-2`; confirmed by the user on 2026-09-27.
+
+**Provider comparison (checked 2026-09-27 on each pricing page):**
+- Neon Launch: pay as you go, no minimum, $0.106 per CU-hour, and scale-to-zero can be turned off. Always on at 0.25 CU is about 182 CU-hours, about $19 a month.
+- Supabase: the free plan never sleeps, but a project pauses after 1 week without activity; Pro is $25 a month.
+- PlanetScale Postgres: always on from $5 a month (single node, no free tier).
+- Prisma Postgres: free for 200,000 operations a month.
+- **Recommendation: stay on Neon.** Neon Auth (sign-in, identity IDs, purge via the Neon API), row-security set-up and branch-based rehearsals all depend on it, so moving would mean rebuilding sign-in and account deletion. Paying for Neon Launch removes the cold starts at a cost similar to the alternatives.
+
+**Step 1, committed 2026-09-27:**
+- `lib/server-timing.ts` adds a `Server-Timing` header (`auth`, `account`, `db`, `total`) to every `/api/*` response and logs one `[timing]` line per request and per home-page render;
+- `provisionHostAccount` is a single read that writes only when the account is missing, and it returns the profile too;
+- `readAccountProfile` is gone. The page passes the profile into `PokerLedger`, so the You card needs no request and no "Loading your profile…" state;
+- the auth helpers have explicit result types. The old inferred type made `authResult.response` possibly `undefined`.
+- **Checks:** types, lint and 144 tests pass. On the dev server the Players screen showed the code at once and made no `/api/account` request; the timing headers read, for example, `auth=4 account=267 db=355` (from the Mac).
+
+**Next options (each needs the user's go-ahead):**
+- merge the account check into the route's own transaction, so a request makes one database trip;
+- a longer sign-in cookie cache (`sessionDataTtl`). The trade-off: a revoked session keeps working on other devices for up to that long, though the account lock still applies at once;
+- the Neon plan change;
+- the testbed: a seeded Neon branch plus a benchmark script reporting typical and worst-case (p95) times per endpoint, warm and cold.
+

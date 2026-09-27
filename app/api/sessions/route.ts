@@ -21,6 +21,7 @@ import {
   SMALL_JSON_BODY_LIMIT,
 } from "@/lib/security/json-body";
 import type { NeonQueryFunctionInTransaction } from "@neondatabase/serverless";
+import { withServerTiming } from "@/lib/server-timing";
 
 export const dynamic = "force-dynamic";
 
@@ -124,7 +125,7 @@ function selectSessions(
   `;
 }
 
-export async function GET() {
+async function handleGet() {
   const authResult = await requireHostAccount();
   if ("response" in authResult) return authResult.response;
   const ownerId = authResult.account.id;
@@ -253,7 +254,7 @@ async function loadSavedSessions(
   return savedSessionMap(result as SessionRow[]);
 }
 
-export async function POST(request: Request) {
+async function handlePost(request: Request) {
   const authResult = await requireHostAccount();
   if ("response" in authResult) return authResult.response;
   const ownerId = authResult.account.id;
@@ -498,7 +499,7 @@ export async function POST(request: Request) {
   }
 }
 
-export async function PATCH(request: Request) {
+async function handlePatch(request: Request) {
   const authResult = await requireHostAccount();
   if ("response" in authResult) return authResult.response;
   const ownerId = authResult.account.id;
@@ -559,7 +560,7 @@ export async function PATCH(request: Request) {
   }
 }
 
-export async function DELETE(request: Request) {
+async function handleDelete(request: Request) {
   const authResult = await requireRecentHostAccount();
   if ("response" in authResult) return authResult.response;
   const ownerId = authResult.account.id;
@@ -590,3 +591,8 @@ export async function DELETE(request: Request) {
     return json({ error: "Could not reach the ledger database" }, 500);
   }
 }
+
+export const GET = withServerTiming("GET /api/sessions", handleGet);
+export const POST = withServerTiming("POST /api/sessions", handlePost);
+export const PATCH = withServerTiming("PATCH /api/sessions", handlePatch);
+export const DELETE = withServerTiming("DELETE /api/sessions", handleDelete);

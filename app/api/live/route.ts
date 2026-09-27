@@ -8,6 +8,7 @@ import {
 } from "@/lib/poker/live-view";
 import { createLiveToken, liveTokenHashHex } from "@/lib/poker/live-token";
 import { readJsonBody, SMALL_JSON_BODY_LIMIT } from "@/lib/security/json-body";
+import { withServerTiming } from "@/lib/server-timing";
 
 export const dynamic = "force-dynamic";
 
@@ -41,7 +42,7 @@ async function readLiveView(
 }
 
 /** Starts sharing, or replaces the current link with a new one. */
-export async function POST(request: Request) {
+async function handlePost(request: Request) {
   const authResult = await requireHostAccount();
   if ("response" in authResult) return authResult.response;
   const ownerId = authResult.account.id;
@@ -84,7 +85,7 @@ export async function POST(request: Request) {
 }
 
 /** Updates the standings behind the current link. */
-export async function PUT(request: Request) {
+async function handlePut(request: Request) {
   const authResult = await requireHostAccount();
   if ("response" in authResult) return authResult.response;
   const ownerId = authResult.account.id;
@@ -115,7 +116,7 @@ export async function PUT(request: Request) {
 }
 
 /** Stops sharing; the link shows that the game has ended. */
-export async function DELETE() {
+async function handleDelete() {
   const authResult = await requireHostAccount();
   if ("response" in authResult) return authResult.response;
   const ownerId = authResult.account.id;
@@ -140,3 +141,7 @@ export async function DELETE() {
     return json({ error: "Could not stop sharing live standings" }, 500);
   }
 }
+
+export const POST = withServerTiming("POST /api/live", handlePost);
+export const PUT = withServerTiming("PUT /api/live", handlePut);
+export const DELETE = withServerTiming("DELETE /api/live", handleDelete);

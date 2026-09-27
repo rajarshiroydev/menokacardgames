@@ -3,13 +3,15 @@ import "server-only";
 import { createNeonAuth } from "@neondatabase/auth/next/server";
 import { handleAuthProxyRequest } from "@neondatabase/auth/server";
 
-import { accountAccessError } from "@/lib/accounts/lifecycle";
+import type { AccountProfile } from "@/lib/accounts/identity-code";
+import { accountAccessError, type HostAccount } from "@/lib/accounts/lifecycle";
 import { provisionHostAccount } from "@/lib/accounts/server";
 import {
   RECENT_SIGN_IN_REQUIRED,
   signedInRecently,
 } from "@/lib/auth/recent-sign-in";
 import { withoutSessionCookies } from "@/lib/auth/session-cookies";
+import { timed } from "@/lib/server-timing";
 
 function requiredEnvironmentVariable(name: string) {
   const value = process.env[name];
@@ -41,7 +43,7 @@ export function exchangeMagicLinkVerifier(request: Request) {
 export type HostSession = NonNullable<Awaited<ReturnType<typeof getHostSession>>>;
 
 export async function getHostSession() {
-  const { data, error } = await auth.getSession();
+  const { data, error } = await timed("auth", () => auth.getSession());
   if (error || !data?.user) return null;
   return data;
 }
@@ -67,17 +69,25 @@ export function recentSignInRequiredResponse(action: string) {
   );
 }
 
+type AccountAccess =
+  | { readonly response: Response }
+  | {
+      readonly session: HostSession;
+      readonly account: HostAccount;
+      readonly profile: AccountProfile;
+    };
+
 /**
  * Verified session and account in any lifecycle state. Only account
  * management may use this; ledger data must go through requireHostAccount.
  */
-export async function requireAccountSession() {
+export async function requireAccountSession(): Promise<AccountAccess> {
   const session = await getHostSession();
   if (!session) return { response: signInRequiredResponse() } as const;
 
   try {
-    const account = await provisionHostAccount(session.user.id);
-    return { session, account } as const;
+    const { account, profile } = await provisionHostAccount(session.user.id);
+    return { session, account, profile } as const;
   } catch (error) {
     console.error("host account provisioning error", error);
     return {
@@ -87,7 +97,7 @@ export async function requireAccountSession() {
 }
 
 /** Ledger access: a verified session for an active, unlocked account. */
-export async function requireHostAccount() {
+export async function requireHostAccount(): Promise<AccountAccess> {
   const result = await requireAccountSession();
   if ("response" in result) return result;
 
@@ -107,7 +117,7 @@ export function hasRecentSignIn(session: HostSession) {
  * Permanent deletion requires an active account whose verified session was
  * created by a recent sign-in link, in place of a shared deletion password.
  */
-export async function requireRecentHostAccount() {
+export async function requireRecentHostAccount(): Promise<AccountAccess> {
   const result = await requireHostAccount();
   if ("response" in result) return result;
 

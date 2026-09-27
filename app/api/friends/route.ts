@@ -7,6 +7,7 @@ import {
 } from "@/lib/friends/requests";
 import { runAsAuthenticatedUser } from "@/lib/poker/database";
 import { readJsonBody, SMALL_JSON_BODY_LIMIT } from "@/lib/security/json-body";
+import { withServerTiming } from "@/lib/server-timing";
 
 export const dynamic = "force-dynamic";
 
@@ -37,7 +38,7 @@ function optionalPlayerId(value: unknown) {
     : undefined;
 }
 
-export async function GET() {
+async function handleGet() {
   const authResult = await requireHostAccount();
   if ("response" in authResult) return authResult.response;
   const authUserId = authResult.session.user.id;
@@ -58,7 +59,7 @@ export async function GET() {
   }
 }
 
-export async function POST(request: Request) {
+async function handlePost(request: Request) {
   const authResult = await requireHostAccount();
   if ("response" in authResult) return authResult.response;
   const authUserId = authResult.session.user.id;
@@ -183,3 +184,6 @@ export async function POST(request: Request) {
     return json({ error: "Could not update your friends" }, 500);
   }
 }
+
+export const GET = withServerTiming("GET /api/friends", handleGet);
+export const POST = withServerTiming("POST /api/friends", handlePost);

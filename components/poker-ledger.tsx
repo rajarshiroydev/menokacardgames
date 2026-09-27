@@ -423,11 +423,16 @@ function awardPot(game: GameState, playerIndex: number, automatic = false) {
 export function PokerLedger({
   accountId,
   accountEmail,
+  initialProfile,
 }: {
   accountId: string;
   accountEmail: string;
+  initialProfile: AccountProfile;
 }) {
   const router = useRouter();
+  // The page read the profile while rendering, so the user code shows without
+  // another request; profile actions keep it current from here.
+  const [profile, setProfile] = useState(initialProfile);
   const gameStorageKey = accountGameStorageKey(accountId);
   const liveTokenStorageKey = accountLiveTokenStorageKey(accountId);
   const [game, setGame] = useState<GameState | null>(null);
@@ -1653,6 +1658,8 @@ export function PokerLedger({
           <PlayersView
             network={
               <FriendNetwork
+                profile={profile}
+                onProfile={setProfile}
                 players={players}
                 onPlayersChanged={() => void refreshPlayers()}
                 onToast={showToast}
@@ -3075,44 +3082,20 @@ const ANTE_PRESETS = [
  * friends will search for, and the name they will see.
  */
 function ProfileCard({
+  profile,
   onProfile,
   onToast,
   onAsk,
 }: {
+  profile: AccountProfile;
   onProfile: (profile: AccountProfile) => void;
   onToast: (message: string) => void;
   onAsk: (message: string, confirmLabel: string, onConfirm: () => void) => void;
 }) {
-  const [profile, setProfile] = useState<AccountProfile | null>(null);
-  const [loadError, setLoadError] = useState("");
-  const [attempt, setAttempt] = useState(0);
-  const [name, setName] = useState("");
+  const [name, setName] = useState(profile.displayName ?? "");
   const [nameError, setNameError] = useState("");
   const [saving, setSaving] = useState(false);
   const [replacing, setReplacing] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      try {
-        const data = await accountApi<{ profile?: AccountProfile }>();
-        if (!data.profile) throw new Error("Could not load your profile");
-        if (cancelled) return;
-        setProfile(data.profile);
-        onProfile(data.profile);
-        setName(data.profile.displayName ?? "");
-        setLoadError("");
-      } catch (error) {
-        if (cancelled) return;
-        setLoadError(
-          error instanceof Error ? error.message : "Could not load your profile",
-        );
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [attempt, onProfile]);
 
   async function saveName(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -3130,7 +3113,6 @@ function ProfileCard({
         action: "update-profile",
         displayName,
       });
-      setProfile(data.profile);
       onProfile(data.profile);
       setName(data.profile.displayName ?? "");
       setNameError("");
@@ -3159,7 +3141,6 @@ function ProfileCard({
       const data = await accountApi<{ profile: AccountProfile }>({
         action: "replace-code",
       });
-      setProfile(data.profile);
       onProfile(data.profile);
       onToast("New Code Ready");
     } catch (error) {
@@ -3171,112 +3152,99 @@ function ProfileCard({
     }
   }
 
-  const savedName = profile?.displayName ?? "";
+  const savedName = profile.displayName ?? "";
 
   return (
     <section className="glass card profile-card">
       <span className="eyebrow">You</span>
-      {loadError ? (
-        <div className="directory-state">
-          <p className="muted">{loadError}</p>
+      <div className="profile-code">
+        <div className="profile-code-copy">
+          <small>Your user code</small>
+          <strong>{formatUserCode(profile.userCode)}</strong>
+        </div>
+        <div className="profile-code-actions">
           <button
-            className="ghost full"
+            className="pill-button"
             type="button"
-            onClick={() => setAttempt((count) => count + 1)}
+            onClick={() => void copyCode(profile.userCode)}
           >
-            Try again
+            Copy
+          </button>
+          <button
+            className="pill-button"
+            type="button"
+            disabled={replacing}
+            onClick={() =>
+              onAsk(
+                "Replace your user code? Your current code stops working straight away, so anyone you gave it to will need the new one.",
+                "Replace Code",
+                () => void replaceCode(),
+              )
+            }
+          >
+            Replace
           </button>
         </div>
-      ) : !profile ? (
-        <p className="muted">Loading your profile…</p>
-      ) : (
-        <>
-          <div className="profile-code">
-            <div className="profile-code-copy">
-              <small>Your user code</small>
-              <strong>{formatUserCode(profile.userCode)}</strong>
-            </div>
-            <div className="profile-code-actions">
-              <button
-                className="pill-button"
-                type="button"
-                onClick={() => void copyCode(profile.userCode)}
-              >
-                Copy
-              </button>
-              <button
-                className="pill-button"
-                type="button"
-                disabled={replacing}
-                onClick={() =>
-                  onAsk(
-                    "Replace your user code? Your current code stops working straight away, so anyone you gave it to will need the new one.",
-                    "Replace Code",
-                    () => void replaceCode(),
-                  )
-                }
-              >
-                Replace
-              </button>
-            </div>
-          </div>
-          <form className="add-player-row" onSubmit={saveName}>
-            <input
-              className="field"
-              aria-label="Your name"
-              maxLength={MAX_DISPLAY_NAME_LENGTH}
-              placeholder="Your name for friends"
-              value={name}
-              onChange={(event) => {
-                setName(event.target.value);
-                if (nameError) setNameError("");
-              }}
-            />
-            <button
-              className="accent-button"
-              type="submit"
-              disabled={saving || name.trim() === savedName}
-            >
-              {saving ? "Saving…" : "Save"}
-            </button>
-          </form>
-          {nameError ? (
-            <p className="field-error" role="alert">
-              {nameError}
-            </p>
-          ) : null}
-          <p className="muted small-note">
-            Friends use your code to send you a friend request. It shows them
-            only your name, never your email.
-          </p>
-        </>
-      )}
+      </div>
+      <form className="add-player-row" onSubmit={saveName}>
+        <input
+          className="field"
+          aria-label="Your name"
+          maxLength={MAX_DISPLAY_NAME_LENGTH}
+          placeholder="Your name for friends"
+          value={name}
+          onChange={(event) => {
+            setName(event.target.value);
+            if (nameError) setNameError("");
+          }}
+        />
+        <button
+          className="accent-button"
+          type="submit"
+          disabled={saving || name.trim() === savedName}
+        >
+          {saving ? "Saving…" : "Save"}
+        </button>
+      </form>
+      {nameError ? (
+        <p className="field-error" role="alert">
+          {nameError}
+        </p>
+      ) : null}
+      <p className="muted small-note">
+        Friends use your code to send you a friend request. It shows them
+        only your name, never your email.
+      </p>
     </section>
   );
 }
 
 /** The You and Friends cards at the top of the Players screen. */
 function FriendNetwork({
+  profile,
+  onProfile,
   players,
   onPlayersChanged,
   onToast,
   onAsk,
 }: {
+  profile: AccountProfile;
+  onProfile: (profile: AccountProfile) => void;
   players: PlayerProfile[];
   onPlayersChanged: () => void;
   onToast: (message: string) => void;
   onAsk: (message: string, confirmLabel: string, onConfirm: () => void) => void;
 }) {
-  const [hasName, setHasName] = useState(false);
-  const onProfile = useCallback((profile: AccountProfile) => {
-    setHasName(Boolean(profile.displayName));
-  }, []);
-
   return (
     <>
-      <ProfileCard onProfile={onProfile} onToast={onToast} onAsk={onAsk} />
+      <ProfileCard
+        profile={profile}
+        onProfile={onProfile}
+        onToast={onToast}
+        onAsk={onAsk}
+      />
       <FriendsCard
-        hasName={hasName}
+        hasName={Boolean(profile.displayName)}
         players={players}
         onPlayersChanged={onPlayersChanged}
         onToast={onToast}

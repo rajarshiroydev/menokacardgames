@@ -4,26 +4,25 @@ import { AccountLocked } from "@/components/account-locked";
 import { NameSetup } from "@/components/name-setup";
 import { PokerLedger } from "@/components/poker-ledger";
 import { canRecoverAccount, deletionDeadline } from "@/lib/accounts/lifecycle";
-import {
-  provisionHostAccount,
-  readAccountProfile,
-} from "@/lib/accounts/server";
+import { provisionHostAccount } from "@/lib/accounts/server";
 import { getHostSession } from "@/lib/auth/server";
+import { logServerTiming } from "@/lib/server-timing";
 
 import { signOut } from "./auth/sign-in/actions";
 
 export const dynamic = "force-dynamic";
 
 export default async function Home() {
-  const session = await getHostSession();
-  if (!session) redirect("/auth/sign-in");
-  const account = await provisionHostAccount(session.user.id);
+  const { session, account, profile } = await logServerTiming("page /", async () => {
+    const session = await getHostSession();
+    if (!session) redirect("/auth/sign-in");
+    return { session, ...(await provisionHostAccount(session.user.id)) };
+  });
 
   if (account.lifecycleState === "active") {
     // Saving a name is the first step after signing in, not an option for
     // later: the ledger opens only once the account has one.
-    const profile = await readAccountProfile(session.user.id);
-    if (!profile?.displayName) {
+    if (!profile.displayName) {
       return (
         <>
           <header className="account-bar">
@@ -40,7 +39,11 @@ export default async function Home() {
     }
 
     return (
-      <PokerLedger accountId={account.id} accountEmail={session.user.email} />
+      <PokerLedger
+        accountId={account.id}
+        accountEmail={session.user.email}
+        initialProfile={profile}
+      />
     );
   }
 

@@ -1,6 +1,7 @@
 import { getDatabase } from "@/lib/poker/database";
 import { isLiveToken, type LiveView } from "@/lib/poker/live-view";
 import { liveTokenHashHex } from "@/lib/poker/live-token";
+import { timed, withServerTiming } from "@/lib/server-timing";
 
 export const dynamic = "force-dynamic";
 
@@ -21,7 +22,7 @@ function ended() {
  * the only credential, and the database returns nothing once the link has
  * been stopped or has expired, or the host's account is locked.
  */
-export async function GET(
+async function handleGet(
   _request: Request,
   context: RouteContext<"/api/live/[token]">,
 ) {
@@ -30,10 +31,13 @@ export async function GET(
 
   try {
     const sql = getDatabase();
-    const rows = (await sql`
-      SELECT snapshot, updated_at
-      FROM public.read_live_view(decode(${liveTokenHashHex(token)}, 'hex'))
-    `) as LiveViewRow[];
+    const rows = (await timed(
+      "db",
+      () => sql`
+        SELECT snapshot, updated_at
+        FROM public.read_live_view(decode(${liveTokenHashHex(token)}, 'hex'))
+      `,
+    )) as LiveViewRow[];
     if (!rows.length) return ended();
 
     return Response.json(
@@ -58,3 +62,5 @@ export async function GET(
     );
   }
 }
+
+export const GET = withServerTiming("GET /api/live/[token]", handleGet);

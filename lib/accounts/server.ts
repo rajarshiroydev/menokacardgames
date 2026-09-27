@@ -18,6 +18,8 @@ type AccountRow = {
   deletion_requested_at: Date | string | null;
 };
 
+type ProvisionedAccountRow = AccountRow & ProfileRow;
+
 function mapAccount(row: AccountRow): HostAccount {
   return {
     id: row.id,
@@ -29,28 +31,56 @@ function mapAccount(row: AccountRow): HostAccount {
   };
 }
 
+/**
+ * Returns the signed-in person's account and profile, creating the account on
+ * first use. Runs on every request, so it is one round trip that only writes
+ * when the account is missing; the upsert covers two first requests racing.
+ */
 export async function provisionHostAccount(authUserId: unknown) {
   if (!isAuthUserId(authUserId)) {
     throw new Error("The authenticated user has an invalid identifier");
   }
 
-  const [result] = await runAsAuthenticatedUser(authUserId, (sql) => [
-    sql`
-      INSERT INTO accounts (auth_user_id)
-      VALUES (${authUserId}::uuid)
-      ON CONFLICT (auth_user_id) DO UPDATE
-        SET auth_user_id = EXCLUDED.auth_user_id
-      RETURNING
-        id,
-        auth_user_id,
-        lifecycle_state,
-        deletion_requested_at
-    `,
-  ]);
-  const rows = result as AccountRow[];
+  const [result] = await runAsAuthenticatedUser(
+    authUserId,
+    (sql) => [
+      sql`
+        WITH existing AS (
+          SELECT
+            id,
+            auth_user_id,
+            lifecycle_state,
+            deletion_requested_at,
+            user_code,
+            display_name
+          FROM accounts
+          WHERE auth_user_id = ${authUserId}::uuid
+        ),
+        created AS (
+          INSERT INTO accounts (auth_user_id)
+          SELECT ${authUserId}::uuid
+          WHERE NOT EXISTS (SELECT 1 FROM existing)
+          ON CONFLICT (auth_user_id) DO UPDATE
+            SET auth_user_id = EXCLUDED.auth_user_id
+          RETURNING
+            id,
+            auth_user_id,
+            lifecycle_state,
+            deletion_requested_at,
+            user_code,
+            display_name
+        )
+        SELECT * FROM existing
+        UNION ALL
+        SELECT * FROM created
+      `,
+    ],
+    "account",
+  );
+  const rows = result as ProvisionedAccountRow[];
 
   if (!rows[0]) throw new Error("Could not provision the host account");
-  return mapAccount(rows[0]);
+  return { account: mapAccount(rows[0]), profile: mapProfile(rows[0]) };
 }
 
 /**
@@ -113,18 +143,6 @@ type ProfileRow = {
 
 function mapProfile(row: ProfileRow): AccountProfile {
   return { userCode: row.user_code, displayName: row.display_name };
-}
-
-export async function readAccountProfile(authUserId: string) {
-  const [result] = await runAsAuthenticatedUser(authUserId, (sql) => [
-    sql`
-      SELECT user_code, display_name
-      FROM accounts
-      WHERE auth_user_id = ${authUserId}::uuid
-    `,
-  ]);
-  const rows = result as ProfileRow[];
-  return rows[0] ? mapProfile(rows[0]) : null;
 }
 
 /** Sets the name others see; `displayName` must come from cleanDisplayName. */

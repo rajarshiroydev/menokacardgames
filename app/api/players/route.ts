@@ -9,6 +9,7 @@ import {
 } from "@/lib/poker/player-validation";
 import type { PlayerProfile } from "@/lib/poker/types";
 import { readJsonBody, SMALL_JSON_BODY_LIMIT } from "@/lib/security/json-body";
+import { withServerTiming } from "@/lib/server-timing";
 
 export const dynamic = "force-dynamic";
 
@@ -43,7 +44,7 @@ function mapPlayer(row: PlayerRow): PlayerProfile {
   };
 }
 
-export async function GET() {
+async function handleGet() {
   const authResult = await requireHostAccount();
   if ("response" in authResult) return authResult.response;
   const ownerId = authResult.account.id;
@@ -87,7 +88,7 @@ export async function GET() {
   }
 }
 
-export async function POST(request: Request) {
+async function handlePost(request: Request) {
   const authResult = await requireHostAccount();
   if ("response" in authResult) return authResult.response;
   const ownerId = authResult.account.id;
@@ -129,7 +130,7 @@ export async function POST(request: Request) {
   }
 }
 
-export async function PATCH(request: Request) {
+async function handlePatch(request: Request) {
   const authResult = await requireHostAccount();
   if ("response" in authResult) return authResult.response;
   const ownerId = authResult.account.id;
@@ -191,7 +192,7 @@ export async function PATCH(request: Request) {
   }
 }
 
-export async function DELETE(request: Request) {
+async function handleDelete(request: Request) {
   const authResult = await requireRecentHostAccount();
   if ("response" in authResult) return authResult.response;
   const ownerId = authResult.account.id;
@@ -280,3 +281,8 @@ export async function DELETE(request: Request) {
     return json({ error: "Could not permanently delete the player" }, 500);
   }
 }
+
+export const GET = withServerTiming("GET /api/players", handleGet);
+export const POST = withServerTiming("POST /api/players", handlePost);
+export const PATCH = withServerTiming("PATCH /api/players", handlePatch);
+export const DELETE = withServerTiming("DELETE /api/players", handleDelete);

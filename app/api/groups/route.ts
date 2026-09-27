@@ -5,6 +5,7 @@ import {
 } from "@/lib/friends/group-standings";
 import { friendErrorFromDatabase } from "@/lib/friends/requests";
 import { runAsAuthenticatedUser } from "@/lib/poker/database";
+import { withServerTiming } from "@/lib/server-timing";
 
 export const dynamic = "force-dynamic";
 
@@ -19,7 +20,7 @@ function json(body: object, status = 200) {
  * The standings of every host who has the signed-in person as a linked
  * friend. The server ranks each host's games and returns only the rows.
  */
-export async function GET() {
+async function handleGet() {
   const authResult = await requireHostAccount();
   if ("response" in authResult) return authResult.response;
   const authUserId = authResult.session.user.id;
@@ -40,3 +41,5 @@ export async function GET() {
     return json({ error: "Could not load your groups" }, 500);
   }
 }
+
+export const GET = withServerTiming("GET /api/groups", handleGet);

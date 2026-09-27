@@ -6,7 +6,6 @@ import {
 } from "@/lib/accounts/lifecycle";
 import { cleanDisplayName } from "@/lib/accounts/identity-code";
 import {
-  readAccountProfile,
   recoverAccount,
   replaceUserCode,
   requestAccountDeletion,
@@ -19,6 +18,7 @@ import {
   requireAccountSession,
 } from "@/lib/auth/server";
 import { readJsonBody, SMALL_JSON_BODY_LIMIT } from "@/lib/security/json-body";
+import { withServerTiming } from "@/lib/server-timing";
 
 export const dynamic = "force-dynamic";
 
@@ -41,24 +41,17 @@ function accountSummary(account: HostAccount) {
   };
 }
 
-export async function GET() {
+async function handleGet() {
   const result = await requireAccountSession();
   if ("response" in result) return result.response;
-  const { account, session } = result;
+  const { account, profile } = result;
   if (account.lifecycleState !== "active") {
     return json({ account: accountSummary(account) });
   }
-
-  try {
-    const profile = await readAccountProfile(session.user.id);
-    return json({ account: accountSummary(account), profile });
-  } catch (error) {
-    console.error("account profile read error", error);
-    return json({ error: "Could not load your profile" }, 500);
-  }
+  return json({ account: accountSummary(account), profile });
 }
 
-export async function POST(request: Request) {
+async function handlePost(request: Request) {
   const result = await requireAccountSession();
   if ("response" in result) return result.response;
   const { account, session } = result;
@@ -172,3 +165,6 @@ export async function POST(request: Request) {
 
   return json({ error: "Unknown account action" }, 400);
 }
+
+export const GET = withServerTiming("GET /api/account", handleGet);
+export const POST = withServerTiming("POST /api/account", handlePost);
