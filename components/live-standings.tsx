@@ -167,7 +167,15 @@ export function LiveStandings({ token }: { token: string }) {
             onClick={() => toggleMe(row.name)}
           >
             <span
-              className={`medal${row.rank === 1 ? " first" : row.rank <= 3 ? " podium" : ""}`}
+              className={`medal${
+                row.rank === 1
+                  ? " gold"
+                  : row.rank === 2
+                    ? " silver"
+                    : row.rank === 3
+                      ? " bronze"
+                      : ""
+              }`}
             >
               {row.rank}
             </span>

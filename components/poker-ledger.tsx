@@ -5259,10 +5259,12 @@ function StandingCard({
         <span
           className={`medal ${
             entry.rank === 1
-              ? "first"
-              : entry.rank === 2 || entry.rank === 3
-                ? "podium"
-                : ""
+              ? "gold"
+              : entry.rank === 2
+                ? "silver"
+                : entry.rank === 3
+                  ? "bronze"
+                  : ""
           }`}
         >
           {entry.rank ?? "–"}
@@ -5379,6 +5381,35 @@ function RanksView(props: Parameters<typeof StandingsView>[0]) {
   );
 }
 
+/**
+ * The heading between the graph and the ranked list, shared by My Hosted
+ * Games and every friend's group. Its "i" says whose ranking this is, then
+ * how players are ranked.
+ */
+function StandingsHeading({ intro }: { intro: string }) {
+  const [showRankingHelp, setShowRankingHelp] = useState(false);
+  return (
+    <>
+      <div className="section-heading">
+        <div className="heading-with-info">
+          <h2>Player Standings</h2>
+          <button
+            className="info-button"
+            type="button"
+            aria-label="About these standings"
+            onClick={() => setShowRankingHelp(true)}
+          >
+            i
+          </button>
+        </div>
+      </div>
+      {showRankingHelp ? (
+        <RankingHelp intro={intro} onClose={() => setShowRankingHelp(false)} />
+      ) : null}
+    </>
+  );
+}
+
 /** "Asha's Hosted Games": the name of another host's group on Ranks. */
 function hostedGamesTitle(hostName: string | null) {
   return `${hostName ?? "Friend"}'s Hosted Games`;
@@ -5402,20 +5433,16 @@ function GroupStandingsView({ group }: { group: GroupStandings }) {
 
   return (
     <div className="stack-list">
-      {/* The picker above already names the host, so no heading here. */}
-      <p className="group-standings-intro">
-        This is your overall ranking among everyone who has played in sessions
-        hosted by {hostName}
-      </p>
-      {group.lastPlayed ? (
-        <p className="muted small-note">
-          Last game{" "}
-          {new Date(group.lastPlayed).toLocaleDateString("en-IN", {
-            day: "numeric",
-            month: "short",
-            year: "numeric",
-          })}
-        </p>
+      {rows.length ? (
+        <LeaderboardChart
+          sessionCount={group.games}
+          lines={chartLinesFromGroup(group)}
+        />
+      ) : null}
+      {rows.length ? (
+        <StandingsHeading
+          intro={`This is your overall ranking among everyone who has played in sessions hosted by ${hostName}.`}
+        />
       ) : null}
       {rows.length ? (
         visible.map((row, index) => (
@@ -5459,7 +5486,6 @@ function StandingsView({
   const leaderboard = standings.entries;
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [showAll, setShowAll] = useState(false);
-  const [showRankingHelp, setShowRankingHelp] = useState(false);
   const sessionTitles = useMemo(
     () =>
       new Map(
@@ -5511,24 +5537,12 @@ function StandingsView({
 
   return (
     <div className="stack-list">
-      <LeaderboardChart standings={standings} />
+      <LeaderboardChart
+        sessionCount={standings.timeline.length}
+        lines={chartLinesFromStandings(standings)}
+      />
 
-      <div className="section-heading">
-        <div className="heading-with-info">
-          <h2>Player Standings</h2>
-          <button
-            className="info-button"
-            type="button"
-            aria-label="How players are ranked"
-            onClick={() => setShowRankingHelp(true)}
-          >
-            i
-          </button>
-        </div>
-        <span className="card-note">
-          {leaderboard.length} player{leaderboard.length === 1 ? "" : "s"}
-        </span>
-      </div>
+      <StandingsHeading intro="This is the overall ranking of everyone who has played in sessions you hosted." />
       {visible.map((entry) => (
         <StandingCard
           key={entry.key}
@@ -5558,14 +5572,17 @@ function StandingsView({
           {showAll ? "Show fewer" : `Show all ${leaderboard.length} players`}
         </button>
       ) : null}
-      {showRankingHelp ? (
-        <RankingHelp onClose={() => setShowRankingHelp(false)} />
-      ) : null}
     </div>
   );
 }
 
-function RankingHelp({ onClose }: { onClose: () => void }) {
+function RankingHelp({
+  intro,
+  onClose,
+}: {
+  intro: string;
+  onClose: () => void;
+}) {
   useEffect(() => {
     function closeOnEscape(event: KeyboardEvent) {
       if (event.key === "Escape") onClose();
@@ -5586,8 +5603,9 @@ function RankingHelp({ onClose }: { onClose: () => void }) {
         className="sheet ranking-help"
         role="dialog"
         aria-modal="true"
-        aria-label="How players are ranked"
+        aria-label="About these standings"
       >
+        <p>{intro}</p>
         <p>
           Players are ranked by their <b>average session return</b>: how much
           they won or lost in each game as a percentage of the chips they put
@@ -5709,34 +5727,89 @@ function SessionsView({
   );
 }
 
-function LeaderboardChart({ standings }: { standings: Standings }) {
+type ChartPoint = {
+  index: number;
+  value: number;
+  /** Null when the player missed this game and the average carried forward. */
+  sessionReturn: number | null;
+  sampleCount: number;
+};
+
+type ChartLine = {
+  key: string;
+  name: string;
+  averageReturn: number | null;
+  points: ChartPoint[];
+};
+
+function chartLinesFromStandings(standings: Standings): ChartLine[] {
+  return standings.entries.map((entry) => ({
+    key: entry.key,
+    name: entry.name,
+    averageReturn: entry.averageReturn,
+    points: (standings.series.get(entry.key)?.returns ?? []).flatMap((point) =>
+      point
+        ? [
+            {
+              index: point.sessionIndex,
+              value: point.runningAverage,
+              sessionReturn: point.sessionReturn,
+              sampleCount: point.sampleCount,
+            },
+          ]
+        : [],
+    ),
+  }));
+}
+
+/** Rebuilds each friend-visible line, carrying the average across missed games. */
+function chartLinesFromGroup(group: GroupStandings): ChartLine[] {
+  return group.rows.map((row, rowIndex) => {
+    const played = group.chart?.[rowIndex] ?? [];
+    const points: ChartPoint[] = [];
+    played.forEach(([index, value, sessionReturn], playedIndex) => {
+      const sampleCount = playedIndex + 1;
+      const nextPlayed = played[playedIndex + 1]?.[0] ?? group.games + 1;
+      points.push({ index, value, sessionReturn, sampleCount });
+      for (let missed = index + 1; missed < nextPlayed; missed += 1) {
+        points.push({ index: missed, value, sessionReturn: null, sampleCount });
+      }
+    });
+    return {
+      key: `row-${rowIndex}`,
+      name: row.name,
+      averageReturn: row.averageReturn,
+      points,
+    };
+  });
+}
+
+function LeaderboardChart({
+  sessionCount,
+  lines,
+}: {
+  sessionCount: number;
+  lines: ChartLine[];
+}) {
   const [highlight, setHighlight] = useState<string | null>(null);
   const chartWidth = 320;
   const chartHeight = 200;
   const plot = { top: 8, right: 6, bottom: 24, left: 40 };
   const plotWidth = chartWidth - plot.left - plot.right;
   const plotHeight = chartHeight - plot.top - plot.bottom;
-  const sessionCount = standings.timeline.length;
-  const series = standings.entries.map((entry) => {
-    const line = standings.series.get(entry.key);
-    const points = (line?.returns ?? []).flatMap((point) =>
-      point
-        ? [
-            {
-              index: point.sessionIndex,
-              value: point.runningAverage,
-              marked: point.sessionReturn !== null,
-              label: `${entry.name}, session ${point.sessionIndex}: ${
-                point.sessionReturn === null
-                  ? "did not play"
-                  : `session return ${formatPercent(point.sessionReturn)}`
-              } · running average ${formatPercent(point.runningAverage)} over ${
-                point.sampleCount
-              } session${point.sampleCount === 1 ? "" : "s"}`,
-            },
-          ]
-        : [],
-    );
+  const series = lines.map((entry) => {
+    const points = entry.points.map((point) => ({
+      index: point.index,
+      value: point.value,
+      marked: point.sessionReturn !== null,
+      label: `${entry.name}, session ${point.index}: ${
+        point.sessionReturn === null
+          ? "did not play"
+          : `session return ${formatPercent(point.sessionReturn)}`
+      } · running average ${formatPercent(point.value)} over ${
+        point.sampleCount
+      } session${point.sampleCount === 1 ? "" : "s"}`,
+    }));
     return {
       color: playerColor(entry.name),
       entry,
@@ -5770,120 +5843,119 @@ function LeaderboardChart({ standings }: { standings: Standings }) {
   );
 
   return (
-    <figure className="glass card leaderboard-chart" aria-label={title}>
-      <figcaption>
-        <div>
-          <h2 className="card-title">{title}</h2>
-          <span className="card-note">Running average after each session</span>
-        </div>
-      </figcaption>
-      <svg
-        className="chart-plot"
-        viewBox={`0 0 ${chartWidth} ${chartHeight}`}
-        role="img"
-        aria-labelledby="standings-chart-title standings-chart-description"
-      >
-        <title id="standings-chart-title">{title}</title>
-        <desc id="standings-chart-description">{description}</desc>
-
-        {yTicks.map((tick) => (
-          <g key={tick}>
-            <line
-              className={tick === 0 ? "chart-zero" : "chart-grid"}
-              x1={plot.left}
-              x2={chartWidth - plot.right}
-              y1={yFor(tick)}
-              y2={yFor(tick)}
-            />
-            <text
-              className="chart-label"
-              x={plot.left - 6}
-              y={yFor(tick) + 3}
-              textAnchor="end"
-            >
-              {tickLabel(tick)}
-            </text>
-          </g>
-        ))}
-
-        {Array.from({ length: sessionCount + 1 }, (_, index) =>
-          index === 0 ||
-          index === sessionCount ||
-          (index % xLabelEvery === 0 && sessionCount - index >= xLabelEvery / 2) ? (
-            <text
-              className="chart-label"
-              key={index}
-              x={xFor(index)}
-              y={chartHeight - 6}
-              textAnchor={index === 0 ? "start" : index === sessionCount ? "end" : "middle"}
-            >
-              {index === 0 ? "Start" : index}
-            </text>
-          ) : null,
-        )}
-
-        {drawOrder.map((player) => {
-          const last = player.points.at(-1);
-          const dimmed = highlight !== null && highlight !== player.entry.key;
-          const focused = highlight === player.entry.key;
-          return (
-            <g
-              key={player.entry.key}
-              className="chart-series"
-              opacity={dimmed ? 0.12 : 1}
-            >
-              <polyline
-                className="chart-line"
-                points={player.points
-                  .map((point) => `${xFor(point.index)},${yFor(point.value)}`)
-                  .join(" ")}
-                stroke={player.color}
-                strokeWidth={focused ? 3 : 1.8}
-              />
-              {player.points.map((point) =>
-                point.marked || point === last ? (
-                  <circle
-                    cx={xFor(point.index)}
-                    cy={yFor(point.value)}
-                    fill={player.color}
-                    key={point.index}
-                    r={point === last ? 3.2 : 1.4}
-                  >
-                    <title>{point.label}</title>
-                  </circle>
-                ) : null,
-              )}
-            </g>
-          );
-        })}
-      </svg>
-      <div className="chart-legend">
-        {series.map(({ color, entry }) => {
-          const value = entry.averageReturn;
-          const dimmed = highlight !== null && highlight !== entry.key;
-          return (
-            <button
-              className="legend-item"
-              key={entry.key}
-              type="button"
-              aria-pressed={highlight === entry.key}
-              style={{ opacity: dimmed ? 0.4 : 1 }}
-              onClick={() =>
-                setHighlight((current) =>
-                  current === entry.key ? null : entry.key,
-                )
-              }
-            >
-              <span className="legend-dot" style={{ backgroundColor: color }} />
-              <span className="legend-name">{entry.name}</span>
-              <span className={`legend-value ${toneClass(value)}`}>
-                {value === null ? "unranked" : formatPercent(value)}
-              </span>
-            </button>
-          );
-        })}
+    <>
+      <div className="section-heading">
+        <h2>{title}</h2>
       </div>
-    </figure>
+      <figure className="glass card leaderboard-chart" aria-label={title}>
+        <svg
+          className="chart-plot"
+          viewBox={`0 0 ${chartWidth} ${chartHeight}`}
+          role="img"
+          aria-labelledby="standings-chart-title standings-chart-description"
+        >
+          <title id="standings-chart-title">{title}</title>
+          <desc id="standings-chart-description">{description}</desc>
+
+          {yTicks.map((tick) => (
+            <g key={tick}>
+              <line
+                className={tick === 0 ? "chart-zero" : "chart-grid"}
+                x1={plot.left}
+                x2={chartWidth - plot.right}
+                y1={yFor(tick)}
+                y2={yFor(tick)}
+              />
+              <text
+                className="chart-label"
+                x={plot.left - 6}
+                y={yFor(tick) + 3}
+                textAnchor="end"
+              >
+                {tickLabel(tick)}
+              </text>
+            </g>
+          ))}
+
+          {Array.from({ length: sessionCount + 1 }, (_, index) =>
+            index === 0 ||
+            index === sessionCount ||
+            (index % xLabelEvery === 0 && sessionCount - index >= xLabelEvery / 2) ? (
+              <text
+                className="chart-label"
+                key={index}
+                x={xFor(index)}
+                y={chartHeight - 6}
+                textAnchor={index === 0 ? "start" : index === sessionCount ? "end" : "middle"}
+              >
+                {index === 0 ? "Start" : index}
+              </text>
+            ) : null,
+          )}
+
+          {drawOrder.map((player) => {
+            const last = player.points.at(-1);
+            const dimmed = highlight !== null && highlight !== player.entry.key;
+            const focused = highlight === player.entry.key;
+            return (
+              <g
+                key={player.entry.key}
+                className="chart-series"
+                opacity={dimmed ? 0.12 : 1}
+              >
+                <polyline
+                  className="chart-line"
+                  points={player.points
+                    .map((point) => `${xFor(point.index)},${yFor(point.value)}`)
+                    .join(" ")}
+                  stroke={player.color}
+                  strokeWidth={focused ? 3 : 1.8}
+                />
+                {player.points.map((point) =>
+                  point.marked || point === last ? (
+                    <circle
+                      cx={xFor(point.index)}
+                      cy={yFor(point.value)}
+                      fill={player.color}
+                      key={point.index}
+                      r={point === last ? 3.2 : 1.4}
+                    >
+                      <title>{point.label}</title>
+                    </circle>
+                  ) : null,
+                )}
+              </g>
+            );
+          })}
+        </svg>
+        <div className="chart-legend">
+          {series.map(({ color, entry }) => {
+            const value = entry.averageReturn;
+            const dimmed = highlight !== null && highlight !== entry.key;
+            return (
+              <button
+                className="legend-item"
+                key={entry.key}
+                type="button"
+                aria-pressed={highlight === entry.key}
+                style={{ opacity: dimmed ? 0.4 : 1 }}
+                onClick={() =>
+                  setHighlight((current) =>
+                    current === entry.key ? null : entry.key,
+                  )
+                }
+              >
+                <span className="legend-dot" style={{ backgroundColor: color }} />
+                <span className="legend-name">{entry.name}</span>
+                <span className={`legend-value ${toneClass(value)}`}>
+                  {value === null ? "unranked" : formatPercent(value)}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </figure>
+    </>
   );
 }
 

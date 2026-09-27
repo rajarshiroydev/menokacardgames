@@ -81,9 +81,43 @@ describe("group standings for a linked friend", () => {
     }
   });
 
+  it("sends one graph line per row: the games that changed that player's score", () => {
+    const withMiss: GroupSessions = {
+      ...group,
+      sessions: [
+        ...group.sessions,
+        {
+          id: "secret-session-3",
+          date: Date.UTC(2026, 8, 15),
+          startStack: 1000,
+          hands: 5,
+          results: [
+            { playerId: "p-raj", name: "Rajarshi", net: 250, end: 1250, buyIns: [1000] },
+            { playerId: "p-new", name: "Newcomer", net: -250, end: 750, buyIns: [1000] },
+          ],
+        },
+      ],
+    };
+    const result = buildGroupStandings(withMiss);
+    assert.equal(result.chart.length, result.rows.length);
+    const line = (name: string) => result.chart[result.rows.findIndex((row) => row.name === name)];
+    // Debraj missed game 3, so the phone carries his average; it isn't sent.
+    assert.deepEqual(line("Debraj"), [
+      [1, -50, -50],
+      [2, 25, 100],
+    ]);
+    assert.deepEqual(line("Rajarshi"), [
+      [1, 50, 50],
+      [2, 0, -50],
+      [3, 8.33, 25],
+    ]);
+    assert.deepEqual(line("Newcomer"), [[3, -25, -25]]);
+  });
+
   it("handles a host with no saved games", () => {
     const result = buildGroupStandings({ ...group, sessions: [] });
     assert.deepEqual(result.rows, []);
+    assert.deepEqual(result.chart, []);
     assert.equal(result.lastPlayed, null);
   });
 });

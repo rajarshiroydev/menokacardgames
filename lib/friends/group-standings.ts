@@ -34,6 +34,14 @@ export type GroupStandingRow = {
   isMe: boolean;
 };
 
+/**
+ * One player's graph line, in the same order as `rows`: only the games that
+ * changed their score, as [game number in date order, running average after
+ * it, that game's return], both in percent to two decimals. Games they missed
+ * repeat the previous average, so the phone fills those in.
+ */
+export type GroupChartLine = Array<[number, number, number]>;
+
 export type GroupStandings = {
   hostAccountId: string;
   hostName: string | null;
@@ -42,11 +50,16 @@ export type GroupStandings = {
   games: number;
   lastPlayed: number | null;
   rows: GroupStandingRow[];
+  chart: GroupChartLine[];
 };
+
+const twoDecimals = (value: number) => Math.round(value * 100) / 100;
 
 /**
  * Ranks a host's games exactly as the host's own standings do, then keeps
- * only what the standings list shows. Games themselves never leave the server.
+ * only what the standings list and its graph show. Games themselves, and any
+ * game, session or player IDs, never leave the server. The user accepted
+ * (2026-09-27) that the graph lets friends see each player's per-game return.
  */
 export function buildGroupStandings(group: GroupSessions): GroupStandings {
   const sessions: PokerSession[] = group.sessions.map((session) => ({
@@ -88,5 +101,18 @@ export function buildGroupStandings(group: GroupSessions): GroupStandings {
       profitableSessions: entry.profitableSessions,
       isMe: entry.key === myKey,
     })),
+    chart: standings.entries.map((entry) =>
+      (standings.series.get(entry.key)?.returns ?? []).flatMap((point) =>
+        point && point.sessionReturn !== null
+          ? [
+              [
+                point.sessionIndex,
+                twoDecimals(point.runningAverage),
+                twoDecimals(point.sessionReturn),
+              ] as [number, number, number],
+            ]
+          : [],
+      ),
+    ),
   };
 }
