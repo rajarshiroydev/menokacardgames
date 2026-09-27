@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { formatChipChange, formatRupees, smallBlindFor } from "@/lib/poker/game";
 import {
   LIVE_VIEW_POLL_MS,
+  LIVE_VIEW_REQUEST_TIMEOUT_MS,
   LIVE_VIEW_STALE_MS,
   type LiveView,
 } from "@/lib/poker/live-view";
@@ -45,58 +46,84 @@ export function LiveStandings({ token }: { token: string }) {
     return () => clearTimeout(timer);
   }, [token]);
 
+  // A once-a-second tick decides when to check, rather than each check
+  // booking the next one: on phones a request can hang after sleep or a
+  // network switch, and a chain of checks would then stop for good.
   useEffect(() => {
     let stopped = false;
-    let timer: ReturnType<typeof setTimeout> | undefined;
+    let ended = false;
+    let inFlight: { controller: AbortController; startedAt: number } | null = null;
+    let lastDone = 0;
 
     async function load() {
+      const controller = new AbortController();
+      const request = { controller, startedAt: Date.now() };
+      inFlight = request;
+      const timeout = setTimeout(() => controller.abort(), LIVE_VIEW_REQUEST_TIMEOUT_MS);
       try {
         const response = await fetch(`/api/live/${encodeURIComponent(token)}`, {
           cache: "no-store",
+          signal: controller.signal,
         });
-        if (stopped) return;
         if (response.status === 404) {
-          setState({ kind: "ended" });
+          ended = true;
+          if (!stopped) setState({ kind: "ended" });
           return;
         }
         if (!response.ok) throw new Error(String(response.status));
         const view = (await response.json()) as LiveResponse;
-        if (!stopped) setState({ kind: "live", view, failed: false });
+        if (!stopped && inFlight === request) {
+          setState({ kind: "live", view, failed: false });
+        }
       } catch {
-        if (!stopped) {
+        if (!stopped && inFlight === request) {
           setState((current) =>
             current.kind === "live" ? { ...current, failed: true } : current,
           );
         }
-      }
-      schedule();
-    }
-
-    function schedule() {
-      clearTimeout(timer);
-      // Hidden tabs stop checking; returning to the page checks at once.
-      if (!stopped && document.visibilityState === "visible") {
-        timer = setTimeout(load, LIVE_VIEW_POLL_MS);
+      } finally {
+        clearTimeout(timeout);
+        if (inFlight === request) {
+          inFlight = null;
+          lastDone = Date.now();
+        }
       }
     }
 
-    function onVisibility() {
-      if (document.visibilityState === "visible") {
-        clearTimeout(timer);
-        void load();
-      } else {
-        clearTimeout(timer);
+    function tick() {
+      setNow(Date.now());
+      // Hidden pages don't check; coming back checks at once (see onReturn).
+      if (stopped || ended || inFlight || document.visibilityState !== "visible") {
+        return;
       }
+      if (Date.now() - lastDone >= LIVE_VIEW_POLL_MS) void load();
+    }
+
+    /** The page is on screen again: drop a request left over from before. */
+    function onReturn() {
+      if (stopped || ended || document.visibilityState !== "visible") return;
+      // Several of these events arrive together; keep a check just started.
+      if (inFlight && Date.now() - inFlight.startedAt < 1000) return;
+      inFlight?.controller.abort();
+      inFlight = null;
+      void load();
     }
 
     void load();
-    document.addEventListener("visibilitychange", onVisibility);
-    const clock = setInterval(() => setNow(Date.now()), 1000);
+    const clock = setInterval(tick, 1000);
+    document.addEventListener("visibilitychange", onReturn);
+    // Some in-app browsers and back/forward restores skip visibilitychange.
+    window.addEventListener("pageshow", onReturn);
+    window.addEventListener("focus", onReturn);
+    window.addEventListener("online", onReturn);
     return () => {
       stopped = true;
-      clearTimeout(timer);
       clearInterval(clock);
-      document.removeEventListener("visibilitychange", onVisibility);
+      inFlight?.controller.abort();
+      document.removeEventListener("visibilitychange", onReturn);
+      window.removeEventListener("pageshow", onReturn);
+      window.removeEventListener("focus", onReturn);
+      window.removeEventListener("online", onReturn);
     };
   }, [token]);
 
@@ -155,7 +182,7 @@ export function LiveStandings({ token }: { token: string }) {
       <section className="glass card live-blinds" aria-label="Current blinds">
         <span className="blinds-label">Blinds</span>
         <span className="live-blinds-value">
-          {formatRupees(smallBlindFor(view.bigBlind))}
+          {formatRupees(view.smallBlind ?? smallBlindFor(view.bigBlind))}
           <span className="blinds-separator"> / </span>
           {formatRupees(view.bigBlind)}
         </span>
@@ -217,7 +244,7 @@ export function LiveStandings({ token }: { token: string }) {
         <p className={`small-note live-updated${stale ? " stale" : ""}`} role="status">
           <span className="live-dot" aria-hidden="true" />
           {failed
-            ? `Can't reach the app. Last update ${ago(age)}.`
+            ? `This phone can't reach the app. Last update ${ago(age)}.`
             : stale
               ? `Last update ${ago(age)}. The host's phone may be offline or asleep.`
               : `Updated ${ago(age)}`}

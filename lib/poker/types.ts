@@ -114,12 +114,24 @@ export type CompletedHand = {
   blindLevelsBefore?: BlindLevelRecord[];
 };
 
+/**
+ * An odd small blind, as the share of the big blind chosen at setup (for
+ * ₹40/₹100, small 40 and big 100). Absent means the usual half.
+ */
+export type SmallBlindRatio = {
+  small: number;
+  big: number;
+};
+
 export type BlindHistory = {
   plans: BlindPlan[];
   levels: BlindLevelRecord[];
+  smallBlindRatio?: SmallBlindRatio;
 };
 
 export type GameState = {
+  /** Odd blinds chosen at setup; without it the small blind is half. */
+  smallBlindRatio?: SmallBlindRatio;
   gameName?: string;
   sessionLabel?: string;
   /** Big blind for the current level. */

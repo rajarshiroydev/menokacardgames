@@ -1,5 +1,6 @@
 import { deriveSessionAccounting } from "./accounting.ts";
 import { isValidRebuy, MAX_BUY_INS } from "./buy-ins.ts";
+import { smallBlindFor } from "./game.ts";
 import { cleanPlayerName } from "./player-validation.ts";
 import type { GameState } from "./types";
 
@@ -11,6 +12,8 @@ import type { GameState } from "./types";
 
 /** Phones check for a new snapshot this often. */
 export const LIVE_VIEW_POLL_MS = 5_000;
+/** A check that takes longer is abandoned, so a hung request can't stall the page. */
+export const LIVE_VIEW_REQUEST_TIMEOUT_MS = 8_000;
 /** The host's device re-sends unchanged standings this often, as a heartbeat. */
 export const LIVE_VIEW_HEARTBEAT_MS = 60_000;
 /** Without an update for this long, the host's device may be offline. */
@@ -36,6 +39,8 @@ export type LiveSnapshot = {
   handNo: number;
   handInProgress: boolean;
   bigBlind: number;
+  /** Absent from older devices; the page then shows half the big blind. */
+  smallBlind?: number;
   players: LiveSnapshotPlayer[];
 };
 
@@ -53,6 +58,7 @@ export type LiveView = {
   handNo: number;
   handInProgress: boolean;
   bigBlind: number;
+  smallBlind?: number;
   standings: LiveStanding[];
 };
 
@@ -65,6 +71,7 @@ export function buildLiveSnapshot(game: GameState): LiveSnapshot {
     handNo: game.handNo,
     handInProgress: Boolean(hand),
     bigBlind: game.ante,
+    smallBlind: smallBlindFor(game.ante, game.smallBlindRatio),
     players: game.players.map((player, index) => {
       const buyIns = player.buyIns?.length ? [...player.buyIns] : [game.startStack];
       const before = hand?.stacksBeforeHand[index];
@@ -100,6 +107,13 @@ export function validateLiveSnapshot(input: unknown): LiveSnapshot {
   const startStack = asChips(snapshot.startStack, "Starting stack", 1);
   const handNo = asChips(snapshot.handNo, "Hand number");
   const bigBlind = asChips(snapshot.bigBlind, "Big blind", 1);
+  const smallBlind =
+    snapshot.smallBlind === undefined
+      ? undefined
+      : asChips(snapshot.smallBlind, "Small blind", 1);
+  if (smallBlind !== undefined && smallBlind > bigBlind) {
+    throw new Error("The small blind can't be bigger than the big blind");
+  }
   if (typeof snapshot.handInProgress !== "boolean") {
     throw new Error("Invalid hand status");
   }
@@ -149,6 +163,7 @@ export function validateLiveSnapshot(input: unknown): LiveSnapshot {
     handNo,
     handInProgress: snapshot.handInProgress,
     bigBlind,
+    ...(smallBlind === undefined ? {} : { smallBlind }),
     players,
   };
 }
@@ -193,6 +208,7 @@ export function deriveLiveView(snapshot: LiveSnapshot): LiveView {
     handNo: snapshot.handNo,
     handInProgress: snapshot.handInProgress,
     bigBlind: snapshot.bigBlind,
+    ...(snapshot.smallBlind === undefined ? {} : { smallBlind: snapshot.smallBlind }),
     standings,
   };
 }

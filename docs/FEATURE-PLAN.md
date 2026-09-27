@@ -588,3 +588,15 @@ Status 2026-09-25: items 1–2 done except custom SMTP (the user chose Neon's sh
   - "By Hands" and "By Minutes" are capitalised.
 - **Seat-drag jump:** a slow, frame-by-frame replay of a drag on the testbed measured neighbouring rows overshooting their new seat by 46–49 px on drop before sliding back, because their slide transition replayed the removed drag shift from the new position. The fix switches transitions off for the reordering frame. It also turns the dragged row's transition off from the first move, and measures the landing animation from centres, since the lifted row is scaled to 103%. After the fix the same replay measured 0 px overshoot in both directions.
 
+2026-09-27 odd blinds (built, not released): **User request:** a switch in place of the "Small blind ₹50" note; the raise hint under the big blind is removed.
+- **User decisions:**
+  - rising blinds keep the small blind's share of the big blind;
+  - a small blind from ₹1 up to and including the big blind is allowed;
+  - the picker is chips (25%, 40%, 60%, 75% and 100% of the big blind) plus Other.
+- **Model:** `GameState.smallBlindRatio` `{ small, big }` is set only when odd blinds are on and differ from half, so every existing game and every half-blind game keeps the exact old rounding, `floor(big / 2)`. `smallBlindFor(big, ratio)` rounds `big × small / big`, clamped to ₹1 up to the big blind.
+- **Saved games** carry the share in `blindHistory.smallBlindRatio`: the existing `blind_history` jsonb, so no migration. The server validates it (whole numbers, 1 ≤ small ≤ big), and the retry conflict check compares it.
+- **Live link:** the snapshot carries `smallBlind`, validated as 1 up to the big blind. Pages for older devices fall back to half.
+- **Checks:**
+  - 7 new unit tests (156 in total);
+  - on the testbed, a game at ₹40/₹100 doubling every hand dealt a ₹140 pot, showed "₹40 / ₹100", announced ₹80/₹200 next, and the small-blind seat showed "in ₹40".
+

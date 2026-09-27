@@ -26,6 +26,9 @@ function canonicalBlindHistory(history: BlindHistory | undefined) {
       dealtAt: level.dealtAt,
       bigBlind: level.bigBlind,
     })),
+    smallBlindRatio: history.smallBlindRatio
+      ? { small: history.smallBlindRatio.small, big: history.smallBlindRatio.big }
+      : null,
   };
 }
 

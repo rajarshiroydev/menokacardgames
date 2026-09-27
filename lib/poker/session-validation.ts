@@ -123,7 +123,18 @@ function validateBlindHistory(
   ) {
     throw new Error("Invalid blind history order");
   }
-  return { plans, levels };
+  if (input.smallBlindRatio === undefined || input.smallBlindRatio === null) {
+    return { plans, levels };
+  }
+  const ratio = asObject(input.smallBlindRatio, "small blind share");
+  const big = asSafeInteger(ratio.big, "small blind share big blind", { min: 1 });
+  const small = asSafeInteger(ratio.small, "small blind share small blind", {
+    min: 1,
+  });
+  if (small > big) {
+    throw new Error("The small blind can't be bigger than the big blind");
+  }
+  return { plans, levels, smallBlindRatio: { small, big } };
 }
 
 export function validateSession(input: unknown): PokerSession {

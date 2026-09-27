@@ -5,6 +5,7 @@ import type {
   CompletedHand,
   GameState,
   RaiseRecord,
+  SmallBlindRatio,
 } from "./types";
 
 export const STAGES = ["PREFLOP", "FLOP", "TURN", "RIVER"] as const;
@@ -247,8 +248,30 @@ export function resetRaiseRules(game: GameState) {
   hand.raiseOpen = game.players.map(() => true);
 }
 
-export function smallBlindFor(bigBlind: number) {
-  return Math.floor(bigBlind / 2);
+/**
+ * The small blind for a big blind: half, rounded down, unless the game uses
+ * odd blinds, which keep the share chosen at setup as the big blind rises
+ * (₹40/₹100 becomes ₹80/₹200), rounded, between ₹1 and the big blind.
+ */
+export function smallBlindFor(
+  bigBlind: number,
+  ratio?: SmallBlindRatio | null,
+) {
+  if (!ratio) return Math.floor(bigBlind / 2);
+  return Math.min(
+    bigBlind,
+    Math.max(1, Math.round((bigBlind * ratio.small) / ratio.big)),
+  );
+}
+
+/** An odd small blind may be anything from ₹1 up to the big blind. */
+export function isValidSmallBlind(smallBlind: number, bigBlind: number) {
+  return (
+    Number.isSafeInteger(smallBlind) &&
+    Number.isSafeInteger(bigBlind) &&
+    smallBlind >= 1 &&
+    smallBlind <= bigBlind
+  );
 }
 
 export function startingBigBlind(game: GameState) {
@@ -343,7 +366,7 @@ export function blindStatus(game: GameState, now = Date.now()) {
     schedule,
     level,
     bigBlind,
-    smallBlind: smallBlindFor(bigBlind),
+    smallBlind: smallBlindFor(bigBlind, game.smallBlindRatio),
     nextBigBlind: 0,
     nextSmallBlind: 0,
     /** Hands still to be played at this level, for hand-based schedules. */
@@ -356,7 +379,10 @@ export function blindStatus(game: GameState, now = Date.now()) {
   if (!schedule || schedule.every <= 0) return status;
 
   status.nextBigBlind = bigBlindAtLevel(base, schedule, level + 1);
-  status.nextSmallBlind = smallBlindFor(status.nextBigBlind);
+  status.nextSmallBlind = smallBlindFor(
+    status.nextBigBlind,
+    game.smallBlindRatio,
+  );
   if (schedule.unit === "hands") {
     status.handsLeft = Math.max(
       0,
@@ -392,7 +418,7 @@ function applyBlindLevel(game: GameState, handNo: number, now: number) {
   if (changed) {
     game.log.unshift(
       `Hand ${handNo}: blinds ${bigBlind > previousBigBlind ? "up" : "set"} to ${formatRupees(
-        smallBlindFor(bigBlind),
+        smallBlindFor(bigBlind, game.smallBlindRatio),
       )}/${formatRupees(bigBlind)} (level ${level + 1})`,
     );
     game.log = game.log.slice(0, 80);
@@ -426,7 +452,10 @@ export function dealNewHand(game: GameState, now = Date.now()) {
   const stacksBeforeHand = game.players.map((player) => player.stack);
   const committed = game.players.map(() => 0);
   let pot = 0;
-  [[smallBlindIndex, smallBlindFor(game.ante)], [bigBlindIndex, game.ante]].forEach(
+  [
+    [smallBlindIndex, smallBlindFor(game.ante, game.smallBlindRatio)],
+    [bigBlindIndex, game.ante],
+  ].forEach(
     ([index, blind]) => {
       const chips = Math.min(blind, game.players[index].stack);
       game.players[index].stack -= chips;

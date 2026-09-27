@@ -528,6 +528,51 @@ p {
   align-self: flex-end;
 }
 
+/* On/off switch (for example Odd blinds), green when on. */
+.switch-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ink2);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.switch {
+  position: relative;
+  flex: none;
+  width: 42px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid var(--gb);
+  border-radius: 999px;
+  background: var(--field);
+}
+
+.switch::after {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--ink3);
+  content: "";
+  transition:
+    transform 0.18s ease-out,
+    background-color 0.18s ease-out;
+}
+
+.switch[aria-checked="true"] {
+  border-color: var(--g);
+  background: var(--g);
+}
+
+.switch[aria-checked="true"]::after {
+  background: var(--onacc);
+  transform: translateX(18px);
+}
+
 /* Segmented control */
 
 .segmented {

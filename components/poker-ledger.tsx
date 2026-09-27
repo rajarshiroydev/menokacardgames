@@ -37,6 +37,7 @@ import {
   pendingBlindPlan,
   resetRaiseRules,
   returnToBetweenHands,
+  isValidSmallBlind,
   smallBlindFor,
   STAGES,
   startingBigBlind,
@@ -761,11 +762,20 @@ export function PokerLedger({
       name: string;
       stack: number;
       ante: number;
+      /** An odd small blind; null keeps the usual half. */
+      smallBlind: number | null;
       blinds: BlindSchedule | null;
       players: PlayerProfile[];
     }) => {
       if (input.ante <= 0) {
         showToast("Big blind must be greater than 0");
+        return;
+      }
+      if (
+        input.smallBlind !== null &&
+        !isValidSmallBlind(input.smallBlind, input.ante)
+      ) {
+        showToast("Small blind must be from ₹1 up to the big blind");
         return;
       }
       if (input.blinds && input.blinds.every < 1) {
@@ -787,6 +797,11 @@ export function PokerLedger({
         sessionLabel: gameName || `Game ${nextSessionNumber}`,
         ante: input.ante,
         baseAnte: input.ante,
+        // Only an odd choice is stored, so half keeps its exact old rounding.
+        ...(input.smallBlind !== null &&
+        input.smallBlind !== smallBlindFor(input.ante)
+          ? { smallBlindRatio: { small: input.smallBlind, big: input.ante } }
+          : {}),
         blinds: input.blinds,
         blindLevel: 0,
         blindPlans: [{
@@ -1225,7 +1240,7 @@ export function PokerLedger({
     if (next.ante !== anteBefore) {
       showToast(
         `Blinds up to ${formatRupees(
-          smallBlindFor(next.ante),
+          smallBlindFor(next.ante, next.smallBlindRatio),
         )}/${formatRupees(next.ante)}`,
       );
     }
@@ -1353,6 +1368,9 @@ export function PokerLedger({
               levels: game.blindLevels.filter(
                 (level) => level.handNo <= completedHands,
               ),
+              ...(game.smallBlindRatio
+                ? { smallBlindRatio: game.smallBlindRatio }
+                : {}),
             },
           }
         : {}),
@@ -2348,6 +2366,7 @@ function SetupView({
     name: string;
     stack: number;
     ante: number;
+    smallBlind: number | null;
     blinds: BlindSchedule | null;
     players: PlayerProfile[];
   }) => void;
@@ -2368,6 +2387,12 @@ function SetupView({
   );
   const [customStack, setCustomStack] = useState(false);
   const [customAnte, setCustomAnte] = useState(false);
+  // Odd blinds: off keeps the usual half. A chip picks a share of the big
+  // blind, so it follows big blind changes; Other is a fixed amount.
+  const [oddBlinds, setOddBlinds] = useState(false);
+  const [smallBlindShare, setSmallBlindShare] = useState(40);
+  const [customSmallBlind, setCustomSmallBlind] = useState(false);
+  const [smallBlindAmount, setSmallBlindAmount] = useState(40);
   // Tapping players seats them in tap order; the list below reorders them.
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const playerCount = selectedIds.length;
@@ -2684,6 +2709,7 @@ function SetupView({
       name,
       stack,
       ante,
+      smallBlind,
       blinds: schedule,
       players: selectedPlayers,
     });
@@ -2697,6 +2723,27 @@ function SetupView({
     players.find((player) => player.id === playerId)?.name ?? "";
   const stackPreset = STACK_PRESETS.some((option) => option.value === stack);
   const antePreset = ANTE_PRESETS.some((option) => option.value === ante);
+  const bigBlindForShares = Math.max(1, ante);
+  const smallBlindOptions = SMALL_BLIND_SHARES.map((percent) => ({
+    percent,
+    amount: Math.min(
+      bigBlindForShares,
+      Math.max(1, Math.round((bigBlindForShares * percent) / 100)),
+    ),
+  })).filter(
+    (option, index, all) =>
+      all.findIndex((other) => other.amount === option.amount) === index,
+  );
+  const sharedSmallBlind =
+    smallBlindOptions.find((option) => option.percent === smallBlindShare) ??
+    smallBlindOptions[0];
+  const smallBlind = oddBlinds
+    ? customSmallBlind
+      ? smallBlindAmount
+      : sharedSmallBlind.amount
+    : null;
+  const smallBlindValid =
+    smallBlind === null || isValidSmallBlind(smallBlind, ante);
   const blindLevelNote = !risingBlinds
     ? "Blinds stay fixed"
     : !scheduleValid
@@ -2898,9 +2945,17 @@ function SetupView({
       <section className="glass card">
         <div className="card-row">
           <span className="label">Big blind</span>
-          <span className="card-note">
-            Small blind {formatRupees(smallBlindFor(Math.max(1, ante)))}
-          </span>
+          <label className="switch-row">
+            <span>Odd blinds</span>
+            <button
+              className="switch"
+              type="button"
+              role="switch"
+              aria-checked={oddBlinds}
+              aria-label="Odd blinds"
+              onClick={() => setOddBlinds((on) => !on)}
+            />
+          </label>
         </div>
         <Segmented
           label="Big blind"
@@ -2927,10 +2982,53 @@ function SetupView({
             onChange={(event) => setAnte(Number(event.target.value))}
           />
         ) : null}
-        <p className="muted small-note">
-          First pre-flop raise to {formatRupees(Math.max(1, ante) * 2)}; each
-          raise must add at least as much as the last one.
-        </p>
+        {oddBlinds ? (
+          <>
+            <span className="label">Small blind</span>
+            <Segmented
+              label="Small blind"
+              options={[
+                ...smallBlindOptions.map((option) => ({
+                  value: option.amount,
+                  label: formatRupees(option.amount),
+                })),
+                { value: "other" as const, label: "Other" },
+              ]}
+              value={customSmallBlind ? "other" : sharedSmallBlind.amount}
+              onChange={(value) => {
+                if (value === "other") {
+                  setCustomSmallBlind(true);
+                  setSmallBlindAmount(sharedSmallBlind.amount);
+                  return;
+                }
+                setCustomSmallBlind(false);
+                const picked = smallBlindOptions.find(
+                  (option) => option.amount === value,
+                );
+                if (picked) setSmallBlindShare(picked.percent);
+              }}
+            />
+            {customSmallBlind ? (
+              <input
+                className="field"
+                aria-label="Small blind amount"
+                type="number"
+                inputMode="numeric"
+                min="1"
+                max={Math.max(1, ante)}
+                value={smallBlindAmount}
+                onChange={(event) =>
+                  setSmallBlindAmount(Number(event.target.value))
+                }
+              />
+            ) : null}
+            {smallBlindValid ? null : (
+              <p className="field-error" role="alert">
+                The small blind must be from ₹1 up to the big blind.
+              </p>
+            )}
+          </>
+        ) : null}
       </section>
 
       <section className="glass card">
@@ -3025,7 +3123,11 @@ function SetupView({
         className="cta"
         type="submit"
         disabled={
-          !selectionComplete || stack < 1 || ante < 1 || !scheduleValid
+          !selectionComplete ||
+          stack < 1 ||
+          ante < 1 ||
+          !scheduleValid ||
+          !smallBlindValid
         }
       >
         Deal First Hand →
@@ -3035,6 +3137,8 @@ function SetupView({
 }
 
 const MAX_SEATS = 10;
+/** Odd small blind chips, as percentages of the big blind (₹100: ₹25–₹100). */
+const SMALL_BLIND_SHARES = [25, 40, 60, 75, 100] as const;
 const STACK_PRESETS = [
   { value: 5_000, label: "5K" },
   { value: 10_000, label: "10K" },
@@ -4311,7 +4415,8 @@ function BlindEditor({
       >
         <h2 id="blind-editor-title">Edit Blind Plan</h2>
         <p className="muted rule-note">
-          Current blinds: {formatRupees(smallBlindFor(game.ante))}/
+          Current blinds:{" "}
+          {formatRupees(smallBlindFor(game.ante, game.smallBlindRatio))}/
           {formatRupees(game.ante)}. {game.hand
             ? "This hand keeps its posted blinds. The new plan starts with the next dealt hand."
             : "The new plan starts with the next dealt hand."}
@@ -4396,7 +4501,8 @@ function BlindEditor({
           </>
         ) : (
           <p className="muted rule-note">
-            Blinds will stay at {formatRupees(smallBlindFor(game.ante))}/
+            Blinds will stay at{" "}
+            {formatRupees(smallBlindFor(game.ante, game.smallBlindRatio))}/
             {formatRupees(game.ante)} from the next hand onward.
           </p>
         )}
@@ -5135,7 +5241,10 @@ function SessionCard({
             Blind history · {session.blindHistory.levels.length} amount
             {session.blindHistory.levels.length === 1 ? "" : "s"} used · finished at{" "}
             {formatRupees(
-              smallBlindFor(session.blindHistory.levels.at(-1)!.bigBlind),
+              smallBlindFor(
+                session.blindHistory.levels.at(-1)!.bigBlind,
+                session.blindHistory.smallBlindRatio,
+              ),
             )}
             /{formatRupees(session.blindHistory.levels.at(-1)!.bigBlind)}
           </summary>
@@ -5144,7 +5253,10 @@ function SessionCard({
             {session.blindHistory.plans.map((plan) => (
               <div key={plan.effectiveHand}>
                 From hand {plan.effectiveHand}: {formatRupees(
-                  smallBlindFor(plan.baseBigBlind),
+                  smallBlindFor(
+                    plan.baseBigBlind,
+                    session.blindHistory!.smallBlindRatio,
+                  ),
                 )}/{formatRupees(plan.baseBigBlind)} ·{" "}
                 {describeBlindSchedule(plan.schedule)}
               </div>
@@ -5153,7 +5265,10 @@ function SessionCard({
             {session.blindHistory.levels.map((level) => (
               <div key={level.handNo}>
                 Hand {level.handNo}: {formatRupees(
-                  smallBlindFor(level.bigBlind),
+                  smallBlindFor(
+                    level.bigBlind,
+                    session.blindHistory!.smallBlindRatio,
+                  ),
                 )}/{formatRupees(level.bigBlind)}
               </div>
             ))}

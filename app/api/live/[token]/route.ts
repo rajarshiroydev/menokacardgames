@@ -47,8 +47,9 @@ async function handleGet(
       },
       {
         headers: {
-          // Lets many phones share one database read every couple of seconds.
-          "Cache-Control": "public, s-maxage=2, stale-while-revalidate=3",
+          // Lets many phones share one database read a second, without handing
+          // out older standings while the cache refreshes.
+          "Cache-Control": "public, s-maxage=1",
           "Referrer-Policy": "no-referrer",
           "X-Robots-Tag": "noindex",
         },
