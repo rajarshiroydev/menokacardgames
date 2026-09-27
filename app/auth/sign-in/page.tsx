@@ -2,8 +2,10 @@ import { redirect } from "next/navigation";
 
 import { DELETION_GRACE_PERIOD_DAYS } from "@/lib/accounts/lifecycle";
 import { getHostSession } from "@/lib/auth/server";
+import { testbedMode } from "@/lib/testbed/server";
 
 import { MagicLinkForm } from "./magic-link-form";
+import { TestbedPersonas } from "./testbed-personas";
 
 export const dynamic = "force-dynamic";
 
@@ -13,7 +15,10 @@ export default async function SignInPage({
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
   if (await getHostSession()) redirect("/");
-  const deletionRequested = (await searchParams).deletion === "requested";
+  const params = await searchParams;
+  const deletionRequested = params.deletion === "requested";
+  const testbedError =
+    typeof params.testbed === "string" ? params.testbed.slice(0, 60) : null;
 
   return (
     <main className="auth-page">
@@ -34,7 +39,11 @@ export default async function SignInPage({
             it; after that, everything is permanently deleted.
           </p>
         ) : null}
-        <MagicLinkForm />
+        {testbedMode() ? (
+          <TestbedPersonas error={testbedError} />
+        ) : (
+          <MagicLinkForm />
+        )}
       </section>
     </main>
   );

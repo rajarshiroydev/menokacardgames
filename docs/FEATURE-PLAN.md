@@ -185,7 +185,7 @@ Official sources checked 2026-09-20; recheck during implementation/release:
 | Retire superseded files | Kept for now by user decision (2026-09-25). Delete `migrations/data/0003_backfill_rajarshi_reviewed_history.sql` (development-only, replaced by 0008) once nothing depends on it, and shrink `HISTORICAL-OWNERSHIP.md` to a note once the Emon-led and Rahul Basak claims are done. Update the docs that mention them in the same change |
 | Live standings link for players | Released to production on 2026-09-25 (`13f9838`, with the redesign); migration 0009 was already applied. Not yet checked on production: the iOS share sheet, a locked host screen, and CDN caching of the public GET |
 | Host invitations / friend network | Released to production 2026-09-25 (`244611c`; migrations 0010–0012 on `br-small-sea-ayumyssr`). Accepted model and three build steps are in the dated entries "friend network (accepted)" and "step 1/2/3". The preview test with two real extra accounts (Debraj Test, Saheb) passed for friend requests and group standings. Open follow-ups: notifications for new requests (none today), and the Emon-led and Rahul Basak hosts joining through the network |
-| App speed and hosting | Open (2026-09-27): see the dated entry "speed investigation". Step 1 (timing headers, a single-trip account check, the user code from the page) was committed 2026-09-27. **User decision (2026-09-27):** stay on Neon Free for now because of budget; cold starts stay. Vercel functions run in `iad1` (Washington), confirmed by the user. Open: a longer sign-in cookie cache, and a general-purpose testbed (see "testbed") |
+| App speed and hosting | Open (2026-09-27): see the dated entry "speed investigation". Step 1 (timing headers, a single-trip account check, the user code from the page) was committed 2026-09-27. **User decision (2026-09-27):** stay on Neon Free for now because of budget; cold starts stay. Vercel functions run in `iad1` (Washington), confirmed by the user. Open: a longer sign-in cookie cache. A small testbed runs locally against the separate project `menoka-testbed` (see the dated entry "testbed" and `testbed/README.md`) |
 | Cloud draft sync / device handoff | Deferred; needs conflict policy |
 | Shared ledgers/invitations | Requested 2026-09-25; see "Host invitations / friend network" above |
 | App Store / Play Store | Future separate plan after web stability |
@@ -541,4 +541,30 @@ Status 2026-09-25: items 1–2 done except custom SMTP (the user chose Neon's sh
 - a longer sign-in cookie cache (`sessionDataTtl`). The trade-off: a revoked session keeps working on other devices for up to that long, though the account lock still applies at once;
 - the Neon plan change;
 - the testbed: a seeded Neon branch plus a benchmark script reporting typical and worst-case (p95) times per endpoint, warm and cold.
+
+2026-09-27 testbed (accepted, in progress): **Problem:** features need testing at scale (friend requests, games, standings, live links), and a single dev account can't show how the app behaves with hundreds of people or where it slows down.
+- **User decisions (2026-09-27):**
+  - the testbed starts **empty**, with production's schema and no real names or games;
+  - fake accounts sign in with **passwords on the testbed branch only**. Production and preview stay magic-link only;
+  - a password form appears on the sign-in page only when the app runs locally against the testbed.
+- **Parts:**
+  - **T1:** a **separate Neon project**, `menoka-testbed` (`bold-firefly-91637201`, branch `br-young-night-b5xphgw8`, `aws-us-east-2`, compute 0.25–0.5 CU), with its own free compute allowance so test load doesn't use production's 100 CU-hours. `npm run testbed:setup` creates `menoka_app` and `menoka_purge` with SQL as in `migrations/README.md`, sets up Neon Auth (password sign-in on, magic links off, localhost allowed), applies the production migrations 0001–0012 in order, and writes a git-ignored `.env.testbed.local` without printing values. It uses a `TESTBED_NEON_API_KEY` scoped to that project, which the user adds to `.env.local`.
+    - *Why not a branch:* a schema-only branch of production couldn't set up Neon Auth, because the copy drops `neon_service`'s role memberships. Restoring the last one meant granting `neon_superuser`, which the permission check refused. The user chose the separate project on 2026-09-27, and the empty branch `br-divine-mode-ay4sjwat` was deleted;
+  - **T2 (working 2026-09-27):**
+    - `npm run testbed:dev` runs the app on port 3006 with `.env.testbed.local` on top of `.env.local`, and blanks the production keys (purge URL, Neon API key, cron and Healthchecks secrets);
+    - in testbed mode (`TESTBED=1` plus a persona password, never on Vercel production or preview; `lib/testbed/server.ts`) the sign-in page shows one **Sign in as** button per persona instead of the email form. The server action signs in with the personas' shared test password, which never reaches the browser;
+    - `testbed/lib/client.ts` signs up, signs in and calls the API with the session cookies, for scripts.
+  - **T3 (working 2026-09-27):** `npm run testbed:seed` creates the personas in `lib/testbed/personas.ts` through the app's own API: Bikram Big Host (60 players, 300 games), Asha (12 players, 25 games, friends with Bikram and linked both ways), Ravi (Asha's request pending), Meera (8 games, her request to Bikram pending), Karan (declined Meera), Farhan (no games or friends) and a new account without a name. It is deterministic (seed 20260927). `npm run testbed:reset` empties the testbed after checking it is the testbed's database. A unit test checks that 500 generated games pass `validateSession` and balance.
+- **Scope decision (user, 2026-09-27):** the agent advised against a full load-testing testbed for now: production holds 1 account and 27 games, and the slowdowns come from cold starts and distance, which load tests from the Mac wouldn't show. The user agreed to the small version: separate project, persona sign-in, and the seeded story above with one large host for long-list checks. **Deferred:** concurrent load scenarios, p95 reports and a testbed control page. Revisit when real use reaches dozens of active hosts.
+- **Acceptance:**
+  - one command each to set up, run, seed and reset;
+  - every persona signs in with one click and sees their story;
+  - no secrets printed or committed;
+  - production and preview auth settings unchanged.
+- **Run on 2026-09-27:**
+  - **Schema:** setup starts an empty database from `schema.sql`, because migration 0001 assumes tables that predate the migrations, then records 0001–0012 as applied. A read-only fingerprint (columns, functions, policies, triggers, grants and migration list) matched production `br-small-sea-ayumyssr` exactly.
+  - **Seed:** finished in 91 s. An API check of all seven personas matched their stories.
+  - **Browser:** Asha signed in with one click, and her Ranks screen shows "Your games | Bikram Big Host's games".
+  - **Fix found during the run:** `.env.local` is pulled from Vercel production (`VERCEL_ENV=production`), so the testbed-mode guard refused as designed. `testbed:dev` now marks its run as development.
+- **First finding (2026-09-27):** `/api/groups` for a friend of a 300-game host took 1.6–3.5 s of `db` time from the Mac. `EXPLAIN ANALYZE` shows `friend_group_sessions()` runs in 18 ms on indexes; the rest is moving about 233 KB of game JSON from Ohio to India. On Vercel (`iad1`, next to the database) it should be tens of milliseconds, so nothing is urgent. The payload does grow with the host's history, so if groups ever get slow in production, compute the rows in SQL or send less per game.
 

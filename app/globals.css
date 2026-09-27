@@ -2946,6 +2946,30 @@ p {
   font-size: 14px;
 }
 
+/* Testbed mode only (npm run testbed:dev): one button per fake persona. */
+.testbed-personas {
+  display: grid;
+  gap: 8px;
+}
+
+.testbed-persona {
+  display: grid;
+  gap: 2px;
+  width: 100%;
+  padding: 10px 14px;
+  border: 1px solid var(--gb);
+  border-radius: var(--rs);
+  background: var(--field);
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+
+.testbed-persona small {
+  color: var(--ink3);
+  font-size: 12px;
+}
+
 .auth-error {
   color: var(--neg);
   font-size: 14px;

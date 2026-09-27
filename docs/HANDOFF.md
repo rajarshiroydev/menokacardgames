@@ -15,7 +15,8 @@ Updated 2026-09-25 on **`main`**. **Production runs `96aebbf`** (name on first s
 
 ## Next steps
 
-0. **Speed work (2026-09-27):** step 1 (timing headers, a single-trip account check, the user code taken from the page) is committed on `main`, not pushed. The user stays on Neon Free for budget reasons; Vercel runs in `iad1`. Open: a longer sign-in cookie cache, and a general-purpose testbed. See "speed investigation" in `FEATURE-PLAN.md`.
+0. **Speed work (2026-09-27):** step 1 (timing headers, a single-trip account check, the user code taken from the page) is committed on `main`, not pushed. The user stays on Neon Free for budget reasons; Vercel runs in `iad1`. Open: a longer sign-in cookie cache.
+   - **Small testbed (working, uncommitted):** separate Neon project `menoka-testbed` (`bold-firefly-91637201`), seeded with seven personas. Commands are in `testbed/README.md`; the `testbed` launch configuration runs it on 3006. The first finding (large group payloads) is in the plan's "testbed" entry.
 1. **Name on first sign-in (live since 2026-09-25, `96aebbf`):** an account without a name sees a "What should friends call you?" screen before the app (`components/name-setup.tsx`, gated in `app/page.tsx`). The user checked it on the dev server as roystark24@gmail.com. The live account gets the screen on its next visit (not yet seen on production), after which the user shares their user code with friends.
 2. **Friend network follow-ups (ideas, not decided):** a badge or notification for new requests (today they appear only when the Players screen opens or on Refresh); a Home tile for groups.
 3. **Healthchecks.io alerts:** the check pings green but has no notification integration; the user adds email.

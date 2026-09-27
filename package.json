@@ -8,7 +8,12 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "node --experimental-strip-types --test test/**/*.test.ts"
+    "test": "node --experimental-strip-types --test test/**/*.test.ts",
+    "testbed:setup": "node testbed/setup.mjs",
+    "testbed:inspect": "node testbed/inspect.mjs",
+    "testbed:dev": "node testbed/dev.mjs",
+    "testbed:seed": "node --experimental-strip-types testbed/seed.ts",
+    "testbed:reset": "node testbed/reset.mjs"
   },
   "dependencies": {
     "@neondatabase/auth": "0.5.0-beta",
