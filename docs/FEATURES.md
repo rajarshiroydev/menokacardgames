@@ -61,7 +61,7 @@ This is a plain-language list of everything Menoka Card Games can do today. It i
 - **Fixed blinds** stay the same all game unless you change them.
 - **Rising blinds** go up automatically. You choose:
   - how often: every so many **hands** or every so many **minutes** (at least 1). Choosing By Hands starts at every 10 hands; By Minutes starts at every 20 minutes
-  - how: **multiply** the big blind (for example ×2, minimum ×1.1) or **add** a fixed amount (at least 1)
+  - how: **multiply** the big blind (for example ×2, minimum ×1.1) or **add** a fixed amount (at least 1). On the setup screen this Multiply / Add fixed amount choice comes first, above the "Every" and "Multiply by" (or "Add ₹") boxes
   - the setup screen previews the next few big blind levels, for example 100 → 200 → 400 → 800
 - **Blinds never change mid-hand.** A new level always starts when the next hand is dealt. For timed blinds, if the time runs out during a hand, the increase waits for the next deal.
 - **Blinds are easy to see.** During a hand, the current blinds appear in large numbers in a pill right under the pot, with a level badge (for example "L2") when blinds rise. The same pill appears between hands. Inside it is the countdown to the next level: hands left for hand-based levels, or minutes and seconds for timed ones (this keeps counting between hands). When the blinds go up, a short message says so.

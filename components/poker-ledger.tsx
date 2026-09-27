@@ -2950,6 +2950,20 @@ function SetupView({
         />
         {risingBlinds ? (
           <>
+            <Segmented
+              label="How the big blind rises"
+              options={[
+                { value: "multiply", label: "Multiply" },
+                { value: "add", label: "Add fixed amount" },
+              ]}
+              value={blindRaiseType}
+              onChange={(nextType) => {
+                setBlindRaiseType(nextType);
+                setBlindRaiseBy(
+                  nextType === "multiply" ? 2 : Math.max(1, ante),
+                );
+              }}
+            />
             <div className="field-grid">
               <div>
                 <label className="label" htmlFor="blind-every">
@@ -2985,20 +2999,6 @@ function SetupView({
                 />
               </div>
             </div>
-            <Segmented
-              label="How the big blind rises"
-              options={[
-                { value: "multiply", label: "Multiply" },
-                { value: "add", label: "Add fixed amount" },
-              ]}
-              value={blindRaiseType}
-              onChange={(nextType) => {
-                setBlindRaiseType(nextType);
-                setBlindRaiseBy(
-                  nextType === "multiply" ? 2 : Math.max(1, ante),
-                );
-              }}
-            />
             <p className="muted small-note">
               {scheduleValid ? (
                 <>
