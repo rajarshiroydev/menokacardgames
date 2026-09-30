@@ -113,6 +113,16 @@ const VIEWS: readonly View[] = [
   "players",
   "hands",
 ];
+
+/**
+ * Screens that show the player list or its count. It is reloaded when one
+ * opens, because a friend accepting a request on their phone adds or links a
+ * player here.
+ */
+function showsPlayerList(view: View) {
+  return view === "home" || view === "players" || view === "setup";
+}
+
 type ModalState =
   | {
       kind: "rules";
@@ -474,9 +484,44 @@ export function PokerLedger({
     toastTimer.current = setTimeout(() => setToast(""), 2600);
   }, []);
 
+  /**
+   * Reloads the player list. A quiet refresh keeps the current list on screen
+   * and ignores failures, for when a screen opens and a friend may have linked
+   * a player from another device since the list was loaded.
+   */
+  const refreshPlayers = useCallback(
+    async ({ quiet = false }: { quiet?: boolean } = {}) => {
+      if (!quiet) {
+        setPlayersLoading(true);
+        setPlayersError("");
+      }
+      try {
+        const data = await playersApi<{
+          discardedPlayers?: PlayerProfile[];
+          players?: PlayerProfile[];
+        }>();
+        setPlayers(Array.isArray(data.players) ? data.players : []);
+        setDiscardedPlayers(
+          Array.isArray(data.discardedPlayers) ? data.discardedPlayers : [],
+        );
+        setPlayersError("");
+      } catch (error) {
+        if (!quiet) {
+          setPlayersError(
+            error instanceof Error ? error.message : "Could not load players",
+          );
+        }
+      } finally {
+        if (!quiet) setPlayersLoading(false);
+      }
+    },
+    [],
+  );
+
   const navigate = useCallback(
     (nextView: View, options: { replace?: boolean } = {}) => {
       setView(nextView);
+      if (showsPlayerList(nextView)) void refreshPlayers({ quiet: true });
       const state = { ...window.history.state, menokaView: nextView };
       if (options.replace) {
         window.history.replaceState(state, "");
@@ -485,7 +530,7 @@ export function PokerLedger({
       }
       window.scrollTo(0, 0);
     },
-    [],
+    [refreshPlayers],
   );
 
   const refreshHistory = useCallback(async () => {
@@ -518,26 +563,6 @@ export function PokerLedger({
     }
   }, []);
 
-  const refreshPlayers = useCallback(async () => {
-    setPlayersLoading(true);
-    setPlayersError("");
-    try {
-      const data = await playersApi<{
-        discardedPlayers?: PlayerProfile[];
-        players?: PlayerProfile[];
-      }>();
-      setPlayers(Array.isArray(data.players) ? data.players : []);
-      setDiscardedPlayers(
-        Array.isArray(data.discardedPlayers) ? data.discardedPlayers : [],
-      );
-    } catch (error) {
-      setPlayersError(
-        error instanceof Error ? error.message : "Could not load players",
-      );
-    } finally {
-      setPlayersLoading(false);
-    }
-  }, []);
 
   useEffect(() => {
     const hydrationTimer = setTimeout(() => {
@@ -571,13 +596,15 @@ export function PokerLedger({
     function handleBrowserBack(event: PopStateEvent) {
       const nextView = event.state?.menokaView;
       setModal(null);
-      setView(VIEWS.includes(nextView) ? nextView : "home");
+      const view = VIEWS.includes(nextView) ? nextView : "home";
+      setView(view);
+      if (showsPlayerList(view)) void refreshPlayers({ quiet: true });
       window.scrollTo(0, 0);
     }
 
     window.addEventListener("popstate", handleBrowserBack);
     return () => window.removeEventListener("popstate", handleBrowserBack);
-  }, []);
+  }, [refreshPlayers]);
 
   useEffect(() => {
     if (!ready) return;
@@ -3361,6 +3388,10 @@ function FriendsCard({
     Record<string, { playerId: string; newName: string }>
   >({});
   const [requestError, setRequestError] = useState<Record<string, string>>({});
+  const listed = useRef({ players, onPlayersChanged });
+  useEffect(() => {
+    listed.current = { players, onPlayersChanged };
+  });
 
   useEffect(() => {
     let cancelled = false;
@@ -3370,6 +3401,16 @@ function FriendsCard({
         if (cancelled) return;
         setOverview(data.overview);
         setLoadError("");
+        // A friend who accepted on their phone linked a player the list
+        // loaded here doesn't have yet.
+        const known = new Set(listed.current.players.map((p) => p.id));
+        if (
+          data.overview.friends.some(
+            (friend) => friend.myPlayer && !known.has(friend.myPlayer.id),
+          )
+        ) {
+          listed.current.onPlayersChanged();
+        }
       } catch (error) {
         if (cancelled) return;
         setLoadError(

@@ -287,6 +287,7 @@ Everyone who signs in has their own account and can host their own games. Friend
 - Each friend is listed with the player they are in your list and the name you have in theirs, for example "Your player Debraj · you're Rajarshi Roy in their list". This is how you see which hosts have you as a linked player.
 - **Remove** (with a confirmation) ends the friendship and unlinks the players on both sides. Both of you keep the players and every game. Linking again needs a new friend request. Either person can remove the other.
 - **Refresh** reloads the card and the player list. Requests and new friends don't appear on their own; open the Players screen or press Refresh.
+- **When a friend accepts on their phone.** The player list reloads each time you open Home, Players or Start a Game (table setup), and whenever the Friends card finds a friend whose player isn't in the list yet. So the new or linked player shows up in the Active players count and can be seated, without reopening the app.
 - **What friends can see:** each other's name, and the standings of any host who has you as a linked player (see "Group standings" below). They never see your email, your saved games one by one, your graph or anything they could change.
 
 **Group standings (the Ranks screen)**
