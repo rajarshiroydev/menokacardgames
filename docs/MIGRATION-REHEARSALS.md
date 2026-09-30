@@ -321,6 +321,11 @@ Browser round trip on the same branch (see the plan entry) with a temporary "Tes
 
 Rollback: see `migrations/README.md`.
 
+## 0013 profile (own players and currency)
+
+- **Testbed** (`br-young-night-b5xphgw8`, fake data, 2026-09-30): applied and re-applied as the owner; every named persona got its own player. As `menoka_app`, in transactions that always rolled back: naming a new account creates its own player (numbered "Test Newbie (2)" when the name was taken); pointing an account at another player is refused ("the account's own player is set by the database"); removing the own player is refused; linking it to a friend is refused (`friend:player-unavailable`); a name change shows through `player_display_names()` while the tie stays. As the owner, rolled back: `adopt_self_player` made "Aditi T." Bikram's own player and deleted his empty automatic one; a bad player ID was refused; deleting an account still cascades.
+- **Development** (`br-little-rain-ay5fufwv`, 2026-09-30, user's go-ahead, applied through the Neon MCP as the owner): 26 statements, no errors. Before: migrations up to 0012 (with `data/0003`), 3 accounts; "Rajarshi Roy" with 9 players, 24 games, 72 results, and one "Rajarshi" player with 24 results. Then `adopt_self_player` for "Rajarshi" returned "set; there was no own player before", and the backfill gave "Roy dev" a new own player. After: "Rajarshi Roy" owns "Rajarshi" (24 results) with 9 players, 24 games and 72 results unchanged; "Roy dev" owns "Roy dev"; the unnamed account has none; every currency INR. Production build passes on the same code (`2e84f7f`).
+
 ## Production application
 
 - Date: 2026-09-25
