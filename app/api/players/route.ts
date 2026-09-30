@@ -55,7 +55,7 @@ async function handleGet() {
       sql`
         SELECT
           player.id,
-          player.name,
+          names.display_name AS name,
           player.player_code,
           player.linked_account_id IS NOT NULL AS linked,
           player.created_at,
@@ -67,10 +67,13 @@ async function handleGet() {
               AND result.player_id = player.id
           ) AS has_history
         FROM players AS player
+        -- People with an account go by the name they chose themselves.
+        JOIN public.player_display_names() AS names
+          ON names.player_id = player.id
         WHERE player.owner_id = ${ownerId}::uuid
         ORDER BY
           player.deleted_at NULLS FIRST,
-          lower(player.name),
+          lower(names.display_name),
           player.created_at
       `,
     ]);
@@ -143,12 +146,14 @@ async function handlePatch(request: Request) {
     const body = (read.body ?? {}) as {
       action?: unknown;
       id?: unknown;
+      name?: unknown;
     };
     const id = String(body?.id || "");
     if (!/^[A-Za-z0-9._:-]{1,100}$/.test(id)) {
       return json({ error: "Invalid player id" }, 400);
     }
     const action = body.action ?? "restore";
+    if (action === "rename") return renamePlayer(authUserId, ownerId, id, body.name);
     if (action !== "discard" && action !== "restore") {
       return json({ error: "Invalid player action" }, 400);
     }
@@ -161,6 +166,11 @@ async function handlePatch(request: Request) {
             WHERE id = ${id}
               AND owner_id = ${ownerId}::uuid
               AND deleted_at IS NULL
+              -- The account's own player stays in the list for good.
+              AND NOT EXISTS (
+                SELECT 1 FROM accounts
+                WHERE id = ${ownerId}::uuid AND self_player_id = players.id
+              )
             RETURNING id, name, player_code, linked_account_id IS NOT NULL AS linked, created_at, deleted_at
           `
         : sql`
@@ -179,7 +189,7 @@ async function handlePatch(request: Request) {
         {
           error:
             action === "discard"
-              ? "Active player not found"
+              ? "You can't remove yourself, and only active players can be removed"
               : "Discarded player not found",
         },
         404,
@@ -189,6 +199,58 @@ async function handlePatch(request: Request) {
   } catch (error) {
     console.error("players PATCH error", error);
     return json({ error: "Could not update the player" }, 500);
+  }
+}
+
+/**
+ * Renames a guest. People with an account (a linked friend, or the host's own
+ * player) go by the name they chose, so they can't be renamed here. Saved
+ * games keep the name each result was saved with.
+ */
+async function renamePlayer(
+  authUserId: string,
+  ownerId: string,
+  id: string,
+  input: unknown,
+) {
+  let name: string;
+  try {
+    name = cleanPlayerName(input);
+  } catch (error) {
+    return json(
+      { error: error instanceof Error ? error.message : "Invalid player name" },
+      400,
+    );
+  }
+
+  try {
+    const [result] = await runAsAuthenticatedUser(authUserId, (sql) => [
+      sql`
+        UPDATE players AS player
+        SET name = ${name}, name_key = ${playerNameKey(name)}
+        FROM accounts AS account
+        WHERE player.id = ${id}
+          AND player.owner_id = ${ownerId}::uuid
+          AND account.id = player.owner_id
+          AND player.linked_account_id IS NULL
+          AND account.self_player_id IS DISTINCT FROM player.id
+        RETURNING player.id, player.name, player.player_code, false AS linked, player.created_at, player.deleted_at
+      `,
+    ]);
+    const rows = result as PlayerRow[];
+    if (!rows.length) {
+      return json(
+        { error: "Only guests can be renamed. People on Menoka choose their own name" },
+        409,
+      );
+    }
+    return json({ player: mapPlayer(rows[0]) });
+  } catch (error) {
+    if ((error as { code?: string })?.code === "23505") {
+      return json({ error: "You already have a player with that name" }, 409);
+    }
+    console.error("players rename error", error);
+    return json({ error: "Could not rename the player" }, 500);
   }
 }
 

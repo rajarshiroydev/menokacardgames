@@ -1,12 +1,12 @@
 # Feature list
 
-Updated: 25 September 2026
+Updated: 30 September 2026
 
 This is a plain-language list of everything Menoka Card Games can do today. It is written for anyone, technical or not. It describes how the app behaves right now; plans and future ideas live in the [feature plan](./FEATURE-PLAN.md).
 
 **Keeping this list current:** whenever a feature is added, changed or removed, update its entry here in the same piece of work, and change the date above. If a rule has a specific number (a time limit, a minimum, a maximum), write the number down, because those are the details that get forgotten.
 
-**A note on money:** the app is a chip ledger. It does not handle real money, payments or cards. Game screens show amounts with a ₹ sign as a label for chips, and the standings show plain chip numbers.
+**A note on money:** the app is a chip ledger. It does not handle real money, payments or cards. Each host picks a currency on their Profile (section 3); every amount in their games, standings and live link is shown with that currency's sign as a label for chips. Nothing is ever converted between currencies.
 
 ---
 
@@ -15,7 +15,7 @@ This is a plain-language list of everything Menoka Card Games can do today. It i
 - **Sign in with your email, no password.** Enter your email address and the app emails you a one-time sign-in link. Opening the link signs you in. Each link works once and expires after five minutes.
 - **Open the link in the same browser.** The sign-in only applies to the browser that opens the link. If you request a link on your phone but open it on your laptop, the laptop is signed in, not the phone. In app previews that keep their own browser, copy the link from the email and paste it into that browser's address bar.
 - **Staying signed in.** A sign-in lasts about a week on that device. The bottom of the home screen shows "Signed in as" your email address, with a **Sign out** button.
-- **Save your name first.** Right after signing in, an account without a name sees only a "What should friends call you?" screen. Type your name (1 to 40 characters; extra spaces are tidied up) and press **Save and continue** to open the app. The button stays greyed out while the name is blank. There is no skip; **Sign out** at the top is the only other way out. This happens once: afterwards you can change the name on the Players screen (section 20).
+- **Save your name first.** Right after signing in, an account without a name sees only a "What should friends call you?" screen. Type your name (1 to 40 characters; extra spaces are tidied up) and press **Save and continue** to open the app. The button stays greyed out while the name is blank. There is no skip; **Sign out** at the top is the only other way out. This happens once: afterwards you can change the name on the Profile screen (section 3).
 - **Every host has a private ledger.** The person who signs in is the *host*. Each host has their own friend list, games, history and standings. Two hosts never see each other's data, even if they both have a friend called "Rajarshi". The same friend in two hosts' lists is two separate records with separate histories.
 - **Friends don't need accounts.** Friends are just names in the host's list. Only the host signs in.
 - **Only the app can change your data.** Requests that add, change or delete data are accepted only when they come from the app's own pages. A request sent from another website, or by a script without the browser's origin information, is refused, even if you are signed in.
@@ -24,35 +24,69 @@ This is a plain-language list of everything Menoka Card Games can do today. It i
 ## 2. Home screen and getting around
 
 - **Start A Game**, a green card that opens table setup. While a game is in progress it becomes a **Continue Game Session** card instead, marked "Live", with the hand number, the stage and the pot.
-- **Four tiles:** **All Time Standings** (how many saved game sessions there are), **Existing Players** (how many players are ready to play), **Hand Rankings** (all ten poker hands, see section 17) and **New Game**. While a game is in progress, New Game returns to it, because only one game runs at a time.
+- **Four tiles:** **All Time Standings** (how many saved game sessions there are), **Existing Players** (how many players are ready to play; opens the Profile tab), **Hand Rankings** (all ten poker hands, see section 17) and **New Game**. While a game is in progress, New Game returns to it, because only one game runs at a time.
 - **Read the poker rules**: the house rules explained in the app (see section 17).
 - **Delete my account**: a small link at the bottom (see section 14).
 - **Unassigned device data**: appears only if this device has games saved before accounts existed (see section 16).
-- **Tab bar.** A bar at the bottom of every screen has five tabs: **Home**, **Play** (the game in progress, or table setup when there isn't one), **Ranks** (standings), **Games** (saved game sessions) and **Players**. The current tab is highlighted in green.
-- **Every other screen** shows its title at the top left (for example **Players** or **Hand 12**) with no line above it, and the theme button at the top right. There is no on-screen back button; use the phone's back gesture or the browser's back button.
+- **Tab bar.** A bar at the bottom of every screen has five tabs: **Home**, **Play** (the game in progress, or table setup when there isn't one), **Ranks** (standings), **Games** (saved game sessions) and **Profile** (you and your players, section 3). The current tab is highlighted in green.
+- **Every other screen** shows its title at the top left (for example **Profile** or **Hand 12**) with no line above it, and the theme button at the top right. There is no on-screen back button; use the phone's back gesture or the browser's back button.
 - **Dark and light themes.** A round theme button shows a **sun** in dark mode (tap for light) and a **moon** in light mode (tap for dark). It's on every page: the app's screens, the sign-in page, the name screen, the locked-account page and the live standings link. The choice is remembered on that device. Dark is the default.
 
-## 3. Players (your friend list)
+## 3. Profile (you and your players)
 
-- **Add a player** by typing their name. Names can be 1 to 80 characters. Extra spaces are tidied up automatically.
-- **No duplicate names.** Names are compared ignoring capital letters, so "Soham" and "soham" are the same player. Typing the name of an active player shows "Soham is already in the directory." under the box and adds nothing. Adding a discarded player's name brings back that same player instead of creating a second one. Pressing **Add** with an empty box shows "Enter a name first."
-- **A player keeps their history when renamed.** Results are linked to the player, not just to the name typed at the time.
-- **Discard a player** to hide them from new games. Their past results stay in the history and standings. Discarded players move to the bottom of the list, faded and marked "· discarded".
-- **Restore a player** at any time from the list. Adding a discarded player's name again also restores them.
-- **Permanently delete a player** with the **Delete** button beside a discarded player. The button only appears when all of these are true:
-  - they have been discarded first
+The **Profile** tab replaced the Players tab on 30 September 2026. From the top:
+
+**Your card**
+
+- **Your name**, large, with your initial in a green-and-blue ring. The ✎ button turns it into a box with **Save** (1 to 40 characters; Escape cancels). Under the name: "Playing since" the month of your first counted game, or "No games yet".
+- **All-time net**: everything you've won or lost, in your currency. It's green when you're ahead and red when you're behind.
+- **Last 10**: one small bar for each of your latest games (up to 10, in your currency), green up for a win and red down for a loss, taller for bigger results. Hover or long-press a bar for its date and result.
+- **Three tiles:** **Games played**, **Avg return** (your average session return, section 12, to one decimal) and **Profitable** (games you finished ahead, for example 15/24).
+- **Which games count.** Every game you played in: the games you host yourself (as your own player, see "You" below) and the games your friends host where they've linked you (section 20). A game counts exactly when it would count in that host's standings.
+- **Other currencies.** Games hosted in a different currency count in the three tiles, but not in the all-time net or the bars, because amounts in different currencies are never added together. The card then says, for example, "Net leaves out 6 games played in another currency".
+- **Your user code** (two groups of four, for example 7KQ4-M2XP) with **Copy** (it shows "Copied" for a moment). The **⋯** button offers **Replace code**: you get a new random code straight away, the old one stops working, and existing friends stay (section 20).
+- **Currency.** Choose the currency for the games you host: ₹ INR (the default), $ USD, € EUR, £ GBP, A$ AUD, C$ CAD, S$ SGD, AED, ৳ BDT or ¥ JPY. It changes the sign on every amount in your games, saved history, standings, profile and live link straight away, including a game in progress and past games. Friends who look at your standings see your currency.
+
+**Friend requests** sent to you appear as cards under your card (section 20).
+
+**Players**
+
+- **The heading** says how many active players you have, with a green **+ Add** button.
+- **Filters:** **All**, **On Menoka** (you, your friends and requests you've sent) and **Guests** (players without an account), each with its count.
+- **Each row** shows the player's initial, name, a short line and their net result in your games (hidden until they've played):
+  - **You · 12 games**, for your own player;
+  - **On Menoka · 21 games**, for a friend, with a gradient initial and a green dot;
+  - **Request sent · waiting**, for someone you've sent a friend request;
+  - **Guest · 26 games**, for everyone else.
+  The list starts with you, then friends, then waiting requests, then guests; within each group, most games first.
+- **Names.** People with an account go by the name they chose themselves: a friend shows as their own saved name, and your own player as your name. Only guests can be renamed.
+- **Options.** Tap **⋯** on a row, or press and hold it (about half a second), for its options. Near the bottom of the screen they open upwards. Tap outside or press Escape to close them.
+  - **Guest:** **View standings** (opens Ranks with their card open), **Rename**, **Copy invite code** and **Remove player**.
+  - **You:** **View standings** only.
+  - **Friend:** **View standings** and **Unfriend** (section 20).
+  - **Request sent:** **Cancel request**.
+  - **View standings** appears only once the player has played.
+- **Add a player.** **+ Add** opens a sheet with two choices:
+  - **Friend on Menoka:** type their user code and press **Find**, then **Send request** (section 20).
+  - **Guest by name:** 1 to 80 characters; extra spaces are tidied up. Names are compared ignoring capital letters, so "Soham" and "soham" are the same player; a name you already have shows "You already have a player called Soham". Adding a removed player's name brings back that same player instead of making a second one.
+- **Rename a guest.** A small sheet with their name to edit and **Save**. The new name can't match another of your players. Their standings and future games use the new name; saved games keep the name each game was played under. Results stay with the player, not the name.
+- **You.** Every account has its own player in its own list, tied to the account, not to a name. It's made automatically when you save your name after first signing in, and there's nothing to set up. It always shows your current name (change it on your card), comes first in the list and on Table Setup (marked **You**), and can't be renamed, removed or linked to a friend. You seat it when you play in your own game, so those games count on your card. Accounts that hosted before this existed had their existing player tied to them in a one-off step, confirmed by the account owner.
+- **Remove a player** (after a confirmation) to hide them from new games. Their past results stay in the history and standings.
+- **Removed players.** "Show 2 removed players" under the list shows them faded, marked "Removed · history kept" (or just "Removed" if they never played). Their options are **Restore**, and **Delete permanently** when all of these are true:
+  - they have been removed first
   - they have never appeared in a saved game (players with saved history can never be permanently deleted, so the records stay complete)
+  - they aren't linked to a friend
   - you signed in within the last 10 minutes (see section 13)
-- **Player codes.** Every player has their own code, shown under their name as **P-** plus eight characters (for example P-N7QA-2G2P). Tap it to copy it. Codes are made up by the app, use only letters and numbers that can't be confused (no 0, O, 1, I or L), never change, and no two players share one. Give a friend who hasn't signed up yet their code: once they sign up, they put it in their friend request to you, so you can link their account to their history (see section 20). A code on its own gives nobody access to anything; you always confirm the link.
-- **Friends are marked.** A player linked to a friend's account shows "· friend" after their name. A linked player can be discarded and restored as usual, but can't be permanently deleted until you remove the friend.
+- **Invite codes.** Every player has their own code, **P-** plus eight characters (for example P-N7QA-2G2P); **Copy invite code** copies it. Codes use only letters and numbers that can't be confused (no 0, O, 1, I or L), never change, and no two players share one. Give a guest who hasn't signed up yet their code: once they sign up, they put it in their friend request to you, so you can link their account to their history (see section 20). A code on its own gives nobody access to anything; you always confirm the link.
+- A hint at the bottom says "Press and hold a player, or tap ⋯, for more options".
 
 ## 4. Starting a game
 
 - **Game name (optional).** If left empty, the game is called "Game" plus the next number in your ledger, for example "Game 25". Numbers count up separately for each host.
-- **Select players.** Every player on your friend list appears as a button. Tap players to seat them; the order you tap is the seating order, and each seated player shows their seat number. Tap a seated player again to take them off the table. There's no seated count or "need 2" note: **Deal First Hand** stays unavailable until two are seated. Up to 10 players can be seated; once 10 are seated, the others can't be tapped. There is a **Manage players** shortcut if someone is missing.
+- **Select players.** Every player on your friend list appears as a button, with you first, marked **You**. Tap players to seat them; the order you tap is the seating order, and each seated player shows their seat number. Tap a seated player again to take them off the table. There's no seated count or "need 2" note: **Deal First Hand** stays unavailable until two are seated. Up to 10 players can be seated; once 10 are seated, the others can't be tapped. There is a **Manage players** shortcut if someone is missing.
 - **Seating Order.** Once two or more are seated, a **Seating Order** list shows the seats in order. Its **i** button opens a sheet explaining that seat 1 deals first, the dealer moves to the next active player each hand, and a grip changes seats. The sheet closes with **Got it**, a tap outside it or Escape, like the other **i** sheets. Drag a player by the grip (⠿) to change seats, or use the arrow keys on the grip. Seat 1 deals first, and the dealer moves round the table in seat order.
 - **Starting stack / first buy-in.** Quick choices of 5K, 10K (the default), 20K and 50K chips, or **Other** to type any amount of at least 1.
-- **Big blind.** Quick choices of ₹50, ₹100 (the default), ₹200, ₹500 and ₹1K, or **Other** to type any amount of at least 1.
+- **Big blind.** Quick choices of 50, 100 (the default), 200, 500 and 1K, shown with your currency's sign (₹50 for rupees), or **Other** to type any amount of at least 1.
 - **Odd blinds.** A switch beside the Big Blind heading, off by default.
   - **Off:** the small blind is half the big blind, rounded down.
   - **On:** a **Small Blind** row appears with quick choices worked out from the big blind (25%, 40%, 60%, 75% and 100% of it; for ₹100 that's ₹25, ₹40, ₹60, ₹75 and ₹100, with ₹40 picked) or **Other** to type any amount. It must be from ₹1 up to the big blind; otherwise a message shows and Deal First Hand stays unavailable.
@@ -170,12 +204,14 @@ This is a plain-language list of everything Menoka Card Games can do today. It i
 - **What the score does not measure:** it doesn't adjust for luck, opponents, table size or how long a game lasted. It's a summary of results, not a skill rating.
 - **The heading.** "Player Standings" sits between the graph and the list, with only its **i** button beside it. A friend's group uses the same heading (see section 20).
 - **How it works, in the app.** The small **i** button next to the "Player Standings" heading opens a small window. Its first line says whose ranking this is: "This is the overall ranking of everyone who has played in sessions you hosted." Below that is a one-sentence explanation of the ranking. Close it with **Got it**, by tapping outside it, or with the Escape key.
+- **Current names.** A renamed guest, and a friend who changed their name, show under their current name, even for games saved under an older one.
+- **You.** Your own player (section 3) is outlined in green and marked **You**.
 - **Each player's row shows** rank (in a gold circle for 1st, silver for 2nd and bronze for 3rd; the live standings link uses the same colours), name and average return (to two decimal places). Tap a row to open or close its details:
   - **Sessions:** games played, for example 24. If some can't be ranked, it adds how many were, for example "24 (23 ranked)"
   - **Profitable:** games they finished ahead, with the percentage
   - **Hands:** total hands dealt in the games they played
   - **Invested:** total chips put in
-  - **Net chips:** total chips won or lost
+  - **Net:** total won or lost, in the host's currency
 - **Games that can't be ranked.** If a game's saved chip totals don't add up, or a player put in no chips, that game is left out of the ranking. The row says which game and why, for example "Not ranked: Game 12 — the saved chip totals do not add up". All the other stats on the row count only ranked games, so they always describe the same games. A player with no rankable games shows as "Unranked", never as 0%.
 - **Standings graph:**
   - Its title, **Average Return**, sits above the graph's card, styled like the **Player Standings** heading, with no subtitle.
@@ -186,7 +222,7 @@ This is a plain-language list of everything Menoka Card Games can do today. It i
 
 ## 13. Safety for permanent deletion
 
-- **Discard first, delete second.** Nothing can be permanently deleted without being discarded first. Discarding can always be undone.
+- **Discard first, delete second.** Nothing can be permanently deleted without being discarded first (for players, **Remove player** on the Profile tab). Discarding can always be undone.
 - **Recent sign-in required.** Permanent deletion only works if you signed in within the last **10 minutes**. This protects against someone using a phone or laptop that was left signed in.
 - **If your sign-in is older,** the app explains why and offers to email you a new sign-in link. Open it on the same device, then delete again.
 - **Only your own data.** A host can never delete, or even see, another host's players or games.
@@ -201,7 +237,7 @@ This is a plain-language list of everything Menoka Card Games can do today. It i
   - you are signed out on **every** device, not just this one
   - the game in progress on this device is cleared
   - the sign-in page confirms the account is locked
-  - your friends no longer see you in their Friends card, and you drop out of their requests (see section 20); the players they linked to you stay in their lists
+  - your friends no longer see you among their friends, and you drop out of their requests (see section 20); the players they linked to you stay in their lists
 - **30 days to change your mind.** Sign in again with the same email within **30 days** to see the "Deletion is scheduled" screen. It shows when you asked and the exact date and time everything will be deleted. Press **Recover my account** and everything comes back exactly as it was.
 - **After 30 days** the account can no longer be recovered. An automatic check runs once a day (around 08:30 India time) and permanently deletes every account whose 30 days are up:
   - first the sign-in identity, so the email can no longer sign in to it
@@ -258,42 +294,42 @@ This is a plain-language list of everything Menoka Card Games can do today. It i
 
 ## 20. Friends
 
-Everyone who signs in has their own account and can host their own games. Friends connect two accounts, so each appears as a player in the other's list and can be seated in the other's games. Everything is on the **Players** screen.
+Everyone who signs in has their own account and can host their own games. Friends connect two accounts, so each appears as a player in the other's list and can be seated in the other's games. Everything is on the **Profile** tab (section 3).
 
-**Your profile (the You card)**
+**Your code and name**
 
-- **Your user code.** Eight characters shown as two groups of four (for example 7KQ4-M2XP). Every account gets one automatically, including existing ones. It uses the same confusion-free letters and numbers as player codes. **Copy** copies it. Share it with friends so they can send you a request.
-- **Replace your code.** **Replace** gives you a new random code after a confirmation. The old code stops working straight away. There is no limit on how often you can replace it. Friendships you already have are not affected.
-- **Your name.** Type the name your friends know you by and press **Save**. It can be 1 to 40 characters; extra spaces are tidied up. Save stays greyed out until the name changes. Every account sets one straight after its first sign-in (section 1). You can change it at any time, but not remove it.
-- **Who can see them.** Someone who types your exact code sees only your name, never your email. There is no browsing or searching by name. Friends see your name in their Friends card.
+- **Your user code.** Eight characters shown as two groups of four (for example 7KQ4-M2XP) on your Profile card. Every account gets one automatically. It uses the same confusion-free letters and numbers as invite codes. **Copy** copies it. Share it with friends so they can send you a request.
+- **Replace your code.** **⋯ → Replace code** gives you a new random code straight away; the menu explains that the old code stops working and existing friends stay. There is no limit on how often you can replace it.
+- **Your name** is the one on your Profile card (1 to 40 characters). Every account sets one straight after its first sign-in (section 1). You can change it at any time, but not remove it. Friends see it as your name in their player list.
+- **Who can see them.** Someone who types your exact code sees only your name, never your email. There is no browsing or searching by name.
 
-**Sending a request (the Friends card)**
+**Sending a request**
 
-- **Find.** Type or paste a friend's user code (capitals, spaces and dashes don't matter) and press **Find**. The app shows their name, or says it's your own code, you're already friends, or a request is already waiting. A player code (P-…) or an unknown code gets a clear message instead.
-- **In your list, they are:** choose **A new player** or one of your players who isn't linked to anyone yet. Pick an existing player when you already record their games, so their history stays with them.
-- **Your player code in their list (optional):** if the friend already records your games, put the P- code they gave you. It tells them which of their players you are; they still confirm it.
-- **Send friend request.** It appears under the card as "Request sent, waiting for an answer", with **Cancel** to withdraw it.
+- **+ Add → Friend on Menoka.** Type or paste a friend's user code (capitals, spaces and dashes don't matter) and press **Find**. The app shows their name with **Send request**, or says it's your own code, you're already friends, or a request is already waiting. A player code (P-…) or an unknown code gets a clear message instead.
+- **Already in your list, or already recording you?** An optional section under their name:
+  - **In your list, they are:** **A new player** (the default) or one of your guests. Pick an existing guest when you already record their games, so their history stays with them.
+  - **Your invite code from them:** if the friend already records your games, put the P- code they gave you. It tells them which of their players you are; they still confirm it.
+- **Send request.** The sheet closes and they appear in your list as "Request sent · waiting", with **Cancel request** in their options.
 - **Limits:** at most **20** of your requests can be waiting at once, and only one request can be waiting between two people, in either direction. If someone declines you, you can't ask them again for **7 days**.
 
 **Answering a request**
 
-- A request shows "Name wants to be friends", with **Accept** and **Decline**. When they gave a player code that matches one of your unlinked players, the app says "They say they're your player Debraj" and picks that player for you; otherwise it says the code doesn't match.
-- **In your list, they are:** choose one of your unlinked players, or **A new player** with a name you can change (their name to start with). A new player's name can't match a player you already have.
-- **Accept** makes you friends. You become linked to the player you chose; on their side, the player they chose is linked to you, or, if they chose a new player, one is added under your name (with a number, such as "Rajarshi Roy (2)", if they already have a player of that name).
+- A request is a green-edged card under your Profile card: "Name wants to be friends", or, when they gave an invite code that matches one of your guests, "Name says they're Debraj in your list".
+- **In your list, they are:** one of your guests (the matching one is picked for you), or **A new player**. A new player's name starts as their name; if you already have a player with that name, the card asks you to pick them or type another name.
+- **Accept and link** (or **Accept** for a new player) makes you friends. You become linked to the player you chose; on their side, the player they chose is linked to you, or, if they chose a new player, one is added under your name (with a number, such as "Rajarshi Roy (2)", if they already have a player of that name).
 - **Decline** ends the request. They can ask again after 7 days.
 
 **Your friends**
 
-- Each friend is listed with the player they are in your list and the name you have in theirs, for example "Your player Debraj · you're Rajarshi Roy in their list". This is how you see which hosts have you as a linked player.
-- **Remove** (with a confirmation) ends the friendship and unlinks the players on both sides. Both of you keep the players and every game. Linking again needs a new friend request. Either person can remove the other.
-- **Refresh** reloads the card and the player list. Requests and new friends don't appear on their own; open the Players screen or press Refresh.
-- **When a friend accepts on their phone.** The player list reloads each time you open Home, Players or Start a Game (table setup), and whenever the Friends card finds a friend whose player isn't in the list yet. So the new or linked player shows up in the Active players count and can be seated, without reopening the app.
-- **What friends can see:** each other's name, and the standings of any host who has you as a linked player (see "Group standings" below). They never see your email, your saved games one by one, your graph or anything they could change.
+- Friends are in your player list under **On Menoka**, by the name they chose, with their games and net in your ledger.
+- **Unfriend** (in the friend's options, with a confirmation) ends the friendship and unlinks the players on both sides. Both of you keep the players and every game. Linking again needs a new friend request. Either person can unfriend the other.
+- **When things update.** Requests, friends and the player list reload each time you open Home, Profile or Start a Game (table setup), and when the Profile finds a friend whose player isn't in the list yet. So a new or linked player shows up and can be seated without reopening the app.
+- **What friends can see:** each other's name, and the standings of any host who has you as a linked player (see "Group standings" below). They never see your email, your saved games one by one, or anything they could change.
 
 **Group standings (the Ranks screen)**
 
 - **Your games and your groups.** When at least one host has you as a linked friend, the top of the **Ranks** screen shows a green dropdown (the phone's own picker) of whose standings to show. **My Hosted Games** (your own standings, exactly as before) comes first, then each host's "Name's Hosted Games" in alphabetical order. Every entry shows its game count, for example "Meera's Hosted Games · 8 games". With no linked hosts there's no dropdown.
-- **What a group shows:** the same **Average Return** graph as your own standings (every player's running average after each of that host's games, with a tappable legend), then that host's standings list, ranked exactly as the host sees it (same average session return, same ties): every player's rank, name, score and, when opened, Sessions, Profitable, Hands, Invested and Net chips. Your own row is outlined in green and marked **You**. Between the graph and the list is the same **Player Standings** heading as on your own standings. Its **i** opens with "This is your overall ranking among everyone who has played in sessions hosted by Name.", followed by how players are ranked. The game count is in the dropdown. The screen title is just **Standings**, for your own games and for every group.
+- **What a group shows:** the same **Average Return** graph as your own standings (every player's running average after each of that host's games, with a tappable legend), then that host's standings list, ranked exactly as the host sees it (same average session return, same ties): every player's rank, name, score and, when opened, Sessions, Profitable, Hands, Invested and Net (in that host's currency). Your own row is outlined in green and marked **You**. Between the graph and the list is the same **Player Standings** heading as on your own standings. Its **i** opens with "This is your overall ranking among everyone who has played in sessions hosted by Name.", followed by how players are ranked. The game count is in the dropdown. The screen title is just **Standings**, for your own games and for every group.
 - **What a group doesn't show:** the host's game-by-game history, the running-average graph, the names of games left out of the ranking, discarded games, or anything you could change. The app works the standings out on the server and sends your phone only the list.
 - **When it updates:** each time you open the Ranks screen.
 - **When a group disappears:** as soon as either of you removes the friendship, or while the host's account is locked for deletion. There is no combined score across groups.
@@ -305,6 +341,6 @@ Everyone who signs in has their own account and can host their own games. Friend
 These are known limitations, not planned features. Planned work is in the [feature plan](./FEATURE-PLAN.md).
 
 - A game in progress can't be moved to another device before it's saved.
-- Friend requests don't send notifications or emails; people see them when they open the Players screen.
+- Friend requests don't send notifications or emails; people see them when they open the Profile tab.
 - The live standings link can't be used to play or change the game; only the host's device records it. If the host's phone is locked or offline, the link stops updating until the host opens the app again.
 - Import handles up to 250 new games per file.

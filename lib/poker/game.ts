@@ -1,4 +1,5 @@
 import { MAX_BUY_INS } from "./buy-ins.ts";
+import { formatMoney } from "./money.ts";
 import type {
   BlindPlan,
   BlindSchedule,
@@ -16,10 +17,6 @@ export const DEFAULT_BLIND_SCHEDULE: BlindSchedule = {
   raiseType: "multiply",
   raiseBy: 2,
 };
-
-export function formatRupees(value: number) {
-  return `₹${Number(value).toLocaleString("en-IN")}`;
-}
 
 const chipFormat = new Intl.NumberFormat("en-IN", { signDisplay: "exceptZero" });
 const percentFormat = new Intl.NumberFormat("en-IN", {
@@ -417,9 +414,10 @@ function applyBlindLevel(game: GameState, handNo: number, now: number) {
       : [...previousLevels, { handNo, dealtAt: now, bigBlind }];
   if (changed) {
     game.log.unshift(
-      `Hand ${handNo}: blinds ${bigBlind > previousBigBlind ? "up" : "set"} to ${formatRupees(
+      `Hand ${handNo}: blinds ${bigBlind > previousBigBlind ? "up" : "set"} to ${formatMoney(
         smallBlindFor(bigBlind, game.smallBlindRatio),
-      )}/${formatRupees(bigBlind)} (level ${level + 1})`,
+        game.currency,
+      )}/${formatMoney(bigBlind, game.currency)} (level ${level + 1})`,
     );
     game.log = game.log.slice(0, 80);
   }

@@ -52,7 +52,9 @@ export async function provisionHostAccount(authUserId: unknown) {
             lifecycle_state,
             deletion_requested_at,
             user_code,
-            display_name
+            display_name,
+            currency,
+            self_player_id
           FROM accounts
           WHERE auth_user_id = ${authUserId}::uuid
         ),
@@ -68,7 +70,9 @@ export async function provisionHostAccount(authUserId: unknown) {
             lifecycle_state,
             deletion_requested_at,
             user_code,
-            display_name
+            display_name,
+            currency,
+            self_player_id
         )
         SELECT * FROM existing
         UNION ALL
@@ -139,10 +143,17 @@ export async function recoverAccount(authUserId: string) {
 type ProfileRow = {
   user_code: string;
   display_name: string | null;
+  currency: string;
+  self_player_id: string | null;
 };
 
 function mapProfile(row: ProfileRow): AccountProfile {
-  return { userCode: row.user_code, displayName: row.display_name };
+  return {
+    userCode: row.user_code,
+    displayName: row.display_name,
+    currency: row.currency,
+    selfPlayerId: row.self_player_id,
+  };
 }
 
 /** Sets the name others see; `displayName` must come from cleanDisplayName. */
@@ -153,7 +164,7 @@ export async function updateDisplayName(authUserId: string, displayName: string)
       SET display_name = ${displayName}, updated_at = now()
       WHERE auth_user_id = ${authUserId}::uuid
         AND lifecycle_state = 'active'
-      RETURNING user_code, display_name
+      RETURNING user_code, display_name, currency, self_player_id
     `,
   ]);
   const rows = result as ProfileRow[];
@@ -172,14 +183,29 @@ export async function replaceUserCode(authUserId: string) {
         SET user_code = public.new_identity_code(), updated_at = now()
         WHERE auth_user_id = ${authUserId}::uuid
           AND lifecycle_state = 'active'
-        RETURNING id, user_code, display_name
+        RETURNING id, user_code, display_name, currency, self_player_id
       ),
       audit AS (
         INSERT INTO audit_events (owner_id, actor_auth_user_id, action, target_kind, target_id)
         SELECT id, ${authUserId}::uuid, 'account.user_code_replaced', 'account', id::text
         FROM replaced
       )
-      SELECT user_code, display_name FROM replaced
+      SELECT user_code, display_name, currency, self_player_id FROM replaced
+    `,
+  ]);
+  const rows = result as ProfileRow[];
+  return rows[0] ? mapProfile(rows[0]) : null;
+}
+
+/** Sets the currency the host's games are counted in; `currency` is checked. */
+export async function updateCurrency(authUserId: string, currency: string) {
+  const [result] = await runAsAuthenticatedUser(authUserId, (sql) => [
+    sql`
+      UPDATE accounts
+      SET currency = ${currency}, updated_at = now()
+      WHERE auth_user_id = ${authUserId}::uuid
+        AND lifecycle_state = 'active'
+      RETURNING user_code, display_name, currency, self_player_id
     `,
   ]);
   const rows = result as ProfileRow[];

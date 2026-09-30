@@ -22,7 +22,8 @@ Updated 2026-09-25. Durable working agreements, decisions and environment facts,
 - Permanent deletion of players or games requires discarding first and a sign-in within the last **10 minutes**. The user kept 10 minutes for now and may revisit it.
 - Account deletion: immediate lock, hide and sign-out everywhere; recovery within **30 days**; then a daily automated purge. The disclosure quotes Neon's **6-hour** history retention, which applies to the current free plan.
 - Purge infrastructure: a daily Vercel Cron job, a project-scoped Neon API key to delete the sign-in identity, and Healthchecks.io alerts.
-- Starting stack must be at least 1. Standings and graph show chips, not ₹; game screens still use ₹ as a chip label.
+- Starting stack must be at least 1. Since 2026-09-30 (user decision, Profile tab) each host picks a currency for the games they host; it labels every amount in their games, standings, profile and live link, and nothing is converted. Profile stats span every ledger a person played in, but the all-time net and last-10 bars add up only games in their own currency.
+- People with an account go by the name they chose themselves in every host's list; only guests can be renamed (user decision 2026-09-30). Every account has its own player, tied to the account (not to a name), created automatically once it has a name; the user rejected a manual "This is me" step. An existing player becomes someone's own only by a reviewed step they confirm through `adopt_self_player` (Rajarshi's "Rajarshi" confirmed 2026-09-30; Emon's and Rahul Basak's after their claims).
 - Historical ownership is decided for every legacy game. Rajarshi's 27 are claimed in production; the Emon-led group's (32, 33, 37) and Rahul Basak's (24, 25) are claimed when those hosts sign in. Never infer ownership from names or stakes; ask. Details are in [`HISTORICAL-OWNERSHIP.md`](./HISTORICAL-OWNERSHIP.md).
 
 ## Environment facts

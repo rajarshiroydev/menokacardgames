@@ -57,8 +57,8 @@ For each target host ledger, create independent player profiles from the session
 | Host | Legacy game numbers | Friend list | When |
 | --- | --- | --- | --- |
 | Rajarshi | 5–23, 26–29, 31, 34–36 | Rajarshi, Debraj, Pratik, Rahul Basak, Ratan, Shubhankar, Soham, Utsav, Abhirup | Done 2026-09-25: 27 games, account `4db9f3e6-9b4b-445b-8ca3-831773acdb3c` |
-| Emon-led group | 32, 33, 37 | Emon, Abhirup, Supratik, Ashish | After the host signs in; the user supplies the email |
-| Rahul Basak | 24, 25 | Rahul Basak, Ashit, Rana | After Rahul signs in; the user supplies the email |
+| Emon-led group | 32, 33, 37 | Emon, Abhirup, Supratik, Ashish | After the host signs in; the user supplies the email. Then make the claimed "Emon" his own player with `adopt_self_player` (migration 0013), with his confirmation |
+| Rahul Basak | 24, 25 | Rahul Basak, Ashit, Rana | After Rahul signs in; the user supplies the email. Then make the claimed "Rahul Basak" his own player with `adopt_self_player`, with his confirmation |
 
 ## Review status
 

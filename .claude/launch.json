@@ -17,7 +17,8 @@
         "run",
         "testbed:dev"
       ],
-      "port": 3006
+      "port": 3006,
+      "autoPort": true
     }
   ]
 }

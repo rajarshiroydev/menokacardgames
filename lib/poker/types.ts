@@ -130,6 +130,8 @@ export type BlindHistory = {
 };
 
 export type GameState = {
+  /** The host's currency when the game started; older games lack it (INR). */
+  currency?: string;
   /** Odd blinds chosen at setup; without it the small blind is half. */
   smallBlindRatio?: SmallBlindRatio;
   gameName?: string;

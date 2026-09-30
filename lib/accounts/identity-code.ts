@@ -40,4 +40,8 @@ export function cleanDisplayName(value: unknown) {
 export type AccountProfile = {
   userCode: string;
   displayName: string | null;
+  /** Currency code the host's games are counted in (migration 0013). */
+  currency: string;
+  /** The player in the host's own list who is the host, if chosen. */
+  selfPlayerId: string | null;
 };

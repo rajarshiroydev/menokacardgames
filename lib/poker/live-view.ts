@@ -55,6 +55,8 @@ export type LiveStanding = {
 
 export type LiveView = {
   gameName: string;
+  /** The host's currency code; views stored before it existed lack it (INR). */
+  currency?: string;
   handNo: number;
   handInProgress: boolean;
   bigBlind: number;

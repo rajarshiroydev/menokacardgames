@@ -3,12 +3,15 @@ import {
   STANDINGS_METRIC_VERSION,
   standingsKey,
 } from "../poker/standings.ts";
+import { DEFAULT_CURRENCY } from "../poker/money.ts";
 import type { PokerSession, SessionResult } from "../poker/types";
 
 /** One linked host's saved games, as `public.friend_group_sessions()` returns them. */
 export type GroupSessions = {
   hostAccountId: string;
   hostName: string | null;
+  /** The host's currency code; absent before migration 0013 (INR). */
+  currency?: string;
   myPlayerId: string;
   myPlayerName: string;
   sessions: Array<{
@@ -45,6 +48,7 @@ export type GroupChartLine = Array<[number, number, number]>;
 export type GroupStandings = {
   hostAccountId: string;
   hostName: string | null;
+  currency: string;
   myPlayerName: string;
   metricVersion: number;
   games: number;
@@ -83,6 +87,7 @@ export function buildGroupStandings(group: GroupSessions): GroupStandings {
   return {
     hostAccountId: group.hostAccountId,
     hostName: group.hostName,
+    currency: group.currency ?? DEFAULT_CURRENCY,
     myPlayerName: group.myPlayerName,
     metricVersion: STANDINGS_METRIC_VERSION,
     games: sessions.length,

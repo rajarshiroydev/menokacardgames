@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 
-import { formatChipChange, formatRupees, smallBlindFor } from "@/lib/poker/game";
+import { formatChipChange, smallBlindFor } from "@/lib/poker/game";
+import { formatMoney } from "@/lib/poker/money";
 import {
   LIVE_VIEW_POLL_MS,
   LIVE_VIEW_REQUEST_TIMEOUT_MS,
@@ -182,9 +183,9 @@ export function LiveStandings({ token }: { token: string }) {
       <section className="glass card live-blinds" aria-label="Current blinds">
         <span className="blinds-label">Blinds</span>
         <span className="live-blinds-value">
-          {formatRupees(view.smallBlind ?? smallBlindFor(view.bigBlind))}
+          {formatMoney(view.smallBlind ?? smallBlindFor(view.bigBlind), view.currency)}
           <span className="blinds-separator"> / </span>
-          {formatRupees(view.bigBlind)}
+          {formatMoney(view.bigBlind, view.currency)}
         </span>
       </section>
 
@@ -214,7 +215,7 @@ export function LiveStandings({ token }: { token: string }) {
               <b>{row.name}</b>
               <span className="live-stack">
                 <small>Stack</small>
-                {formatRupees(row.stack)}
+                {formatMoney(row.stack, view.currency)}
               </span>
             </span>
             <span className="live-values">
@@ -222,7 +223,7 @@ export function LiveStandings({ token }: { token: string }) {
                 {row.net > 0 ? "▲ " : row.net < 0 ? "▼ " : ""}
                 {formatChipChange(row.net)}
               </b>
-              <small>Buy-In {formatRupees(row.invested)}</small>
+              <small>Buy-In {formatMoney(row.invested, view.currency)}</small>
               {row.rebuys > 0 ? (
                 <small>
                   {row.rebuys} rebuy{row.rebuys === 1 ? "" : "s"}

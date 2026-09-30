@@ -9,8 +9,10 @@ import {
   recoverAccount,
   replaceUserCode,
   requestAccountDeletion,
+  updateCurrency,
   updateDisplayName,
 } from "@/lib/accounts/server";
+import { isCurrencyCode } from "@/lib/poker/money";
 import {
   auth,
   hasRecentSignIn,
@@ -98,6 +100,25 @@ async function handlePost(request: Request) {
         },
         500,
       );
+    }
+  }
+
+  if (action === "set-currency") {
+    const accessError = accountAccessError(account);
+    if (accessError) return json({ error: accessError }, 423);
+    const currency = (read.body as { currency?: unknown }).currency;
+    if (!isCurrencyCode(currency)) {
+      return json({ error: "Choose a currency from the list" }, 400);
+    }
+    try {
+      const profile = await updateCurrency(session.user.id, currency);
+      if (!profile) {
+        return json({ error: "This account is locked while deletion is pending" }, 423);
+      }
+      return json({ profile });
+    } catch (error) {
+      console.error("account set-currency error", error);
+      return json({ error: "Could not save your currency" }, 500);
     }
   }
 

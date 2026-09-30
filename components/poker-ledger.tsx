@@ -5,7 +5,9 @@ import {
   FormEvent,
   ReactNode,
   PointerEvent as ReactPointerEvent,
+  createContext,
   useCallback,
+  useContext,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -26,7 +28,6 @@ import {
   editBlindSchedule,
   formatDate,
   formatPercent,
-  formatRupees,
   applyRaiseRules,
   mayRaise,
   minimumRaise,
@@ -44,6 +45,13 @@ import {
   totalBuyIns,
   undoLastHand,
 } from "@/lib/poker/game";
+import {
+  CURRENCIES,
+  currencySymbol,
+  DEFAULT_CURRENCY,
+  formatMoney,
+  formatSignedMoney,
+} from "@/lib/poker/money";
 import {
   accountGameStorageKey,
   accountLiveTokenStorageKey,
@@ -74,9 +82,11 @@ import {
 } from "@/lib/auth/recent-sign-in";
 import {
   buildStandings,
+  standingsKey,
   type IneligibleReason,
   type Standings,
 } from "@/lib/poker/standings";
+import type { ProfileStats } from "@/lib/profile/stats";
 import {
   buildLiveSnapshot,
   LIVE_VIEW_HEARTBEAT_MS,
@@ -96,13 +106,29 @@ import type {
   WinnerAnnouncement,
 } from "@/lib/poker/types";
 
+/** The signed-in host's currency, for every amount the ledger shows. */
+const CurrencyContext = createContext<string>(DEFAULT_CURRENCY);
+
+function useMoney() {
+  const currency = useContext(CurrencyContext);
+  return useMemo(
+    () => ({
+      currency,
+      symbol: currencySymbol(currency),
+      money: (value: number) => formatMoney(value, currency),
+      signedMoney: (value: number) => formatSignedMoney(value, currency),
+    }),
+    [currency],
+  );
+}
+
 type View =
   | "home"
   | "setup"
   | "game"
   | "history"
   | "sessions"
-  | "players"
+  | "profile"
   | "hands";
 const VIEWS: readonly View[] = [
   "home",
@@ -110,7 +136,7 @@ const VIEWS: readonly View[] = [
   "game",
   "history",
   "sessions",
-  "players",
+  "profile",
   "hands",
 ];
 
@@ -120,7 +146,7 @@ const VIEWS: readonly View[] = [
  * player here.
  */
 function showsPlayerList(view: View) {
-  return view === "home" || view === "players" || view === "setup";
+  return view === "home" || view === "profile" || view === "setup";
 }
 
 type ModalState =
@@ -369,13 +395,16 @@ function formatCountdown(ms: number) {
   return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")}`;
 }
 
-function describeBlindSchedule(schedule: BlindSchedule | null) {
+function describeBlindSchedule(
+  schedule: BlindSchedule | null,
+  currency: string,
+) {
   if (!schedule) return "Fixed blinds";
   const interval = `${schedule.every} ${schedule.unit === "hands"
     ? schedule.every === 1 ? "hand" : "hands"
     : schedule.every === 1 ? "minute" : "minutes"}`;
   return schedule.raiseType === "add"
-    ? `Add ${formatRupees(schedule.raiseBy)} to the big blind every ${interval}`
+    ? `Add ${formatMoney(schedule.raiseBy, currency)} to the big blind every ${interval}`
     : `Multiply the big blind by ${schedule.raiseBy} every ${interval}`;
 }
 
@@ -416,8 +445,9 @@ function awardPot(game: GameState, playerIndex: number, automatic = false) {
   game.players[playerIndex].stack += pot;
   recordWin(
     game,
-    `Hand ${hand.no}: ${game.players[playerIndex].name} wins ${formatRupees(
+    `Hand ${hand.no}: ${game.players[playerIndex].name} wins ${formatMoney(
       pot,
+      game.currency,
     )}${automatic ? " (others folded)" : ""}`,
   );
   game.lastHand = completedHandRecord(game);
@@ -444,6 +474,8 @@ export function PokerLedger({
   // The page read the profile while rendering, so the user code shows without
   // another request; profile actions keep it current from here.
   const [profile, setProfile] = useState(initialProfile);
+  const currency = profile.currency;
+  const money = (value: number) => formatMoney(value, currency);
   const gameStorageKey = accountGameStorageKey(accountId);
   const liveTokenStorageKey = accountLiveTokenStorageKey(accountId);
   const [game, setGame] = useState<GameState | null>(null);
@@ -462,6 +494,8 @@ export function PokerLedger({
   const [playersLoading, setPlayersLoading] = useState(true);
   const [playersError, setPlayersError] = useState("");
   const [view, setView] = useState<View>("home");
+  /** The standings card "View standings" opens; cleared when Ranks closes. */
+  const [rankFocus, setRankFocus] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
   const [toast, setToast] = useState("");
   const [modal, setModal] = useState<ModalState | null>(null);
@@ -521,6 +555,7 @@ export function PokerLedger({
   const navigate = useCallback(
     (nextView: View, options: { replace?: boolean } = {}) => {
       setView(nextView);
+      if (nextView !== "history") setRankFocus(null);
       if (showsPlayerList(nextView)) void refreshPlayers({ quiet: true });
       const state = { ...window.history.state, menokaView: nextView };
       if (options.replace) {
@@ -802,7 +837,9 @@ export function PokerLedger({
         input.smallBlind !== null &&
         !isValidSmallBlind(input.smallBlind, input.ante)
       ) {
-        showToast("Small blind must be from ₹1 up to the big blind");
+        showToast(
+          `Small blind must be from ${formatMoney(1, currency)} up to the big blind`,
+        );
         return;
       }
       if (input.blinds && input.blinds.every < 1) {
@@ -822,6 +859,7 @@ export function PokerLedger({
       const nextGame: GameState = {
         ...(gameName ? { gameName } : {}),
         sessionLabel: gameName || `Game ${nextSessionNumber}`,
+        currency,
         ante: input.ante,
         baseAnte: input.ante,
         // Only an odd choice is stored, so half keeps its exact old rounding.
@@ -856,7 +894,7 @@ export function PokerLedger({
       setGame(nextGame);
       navigate("game", { replace: true });
     },
-    [navigate, nextSessionNumber, showToast],
+    [currency, navigate, nextSessionNumber, showToast],
   );
 
   const addPlayer = useCallback(
@@ -890,10 +928,25 @@ export function PokerLedger({
     [showToast],
   );
 
+  async function renamePlayer(player: PlayerProfile, name: string) {
+    try {
+      await playersApi<{ player: PlayerProfile }>("", {
+        method: "PATCH",
+        body: JSON.stringify({ action: "rename", id: player.id, name }),
+      });
+      await refreshPlayers({ quiet: true });
+      showToast("Player Renamed");
+      return true;
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Player Was Not Renamed");
+      return false;
+    }
+  }
+
   function discardPlayer(player: PlayerProfile) {
     ask(
-      `Discard ${player.name}? They will be hidden from new games, while their identity and past results stay connected.`,
-      "Discard Player",
+      `Remove ${player.name}? They're hidden from new games, while their past games and standings stay. You can restore them later.`,
+      "Remove Player",
       () => void updatePlayerState(player, "discard"),
     );
   }
@@ -908,7 +961,7 @@ export function PokerLedger({
         body: JSON.stringify({ action, id: player.id }),
       });
       await refreshPlayers();
-      showToast(action === "discard" ? "Player Discarded" : "Player Restored");
+      showToast(action === "discard" ? "Player Removed" : "Player Restored");
     } catch (error) {
       showToast(
         error instanceof Error ? error.message : "Player Was Not Updated",
@@ -1045,7 +1098,7 @@ export function PokerLedger({
     } else if (type === "check") {
       if (hand.roundHigh > hand.committed[playerIndex]) {
         showToast(
-          `Cannot check — must call ${formatRupees(
+          `Cannot check — must call ${money(
             hand.roundHigh - hand.committed[playerIndex],
           )}`,
         );
@@ -1075,7 +1128,7 @@ export function PokerLedger({
         next,
         playerIndex,
         { type, chips: needed, raiseBefore },
-        `${player.name} calls ${formatRupees(needed)}`,
+        `${player.name} calls ${money(needed)}`,
       );
     } else {
       const chips =
@@ -1087,12 +1140,12 @@ export function PokerLedger({
         return;
       }
       if (chips > player.stack) {
-        showToast(`Only ${formatRupees(player.stack)} left`);
+        showToast(`Only ${money(player.stack)} left`);
         return;
       }
       const minimum = minimumRaise(next, playerIndex);
       if (chips < minimum && chips < player.stack) {
-        showToast(`Minimum is ${formatRupees(minimum)}`);
+        showToast(`Minimum is ${money(minimum)}`);
         return;
       }
 
@@ -1111,14 +1164,14 @@ export function PokerLedger({
       const raiseBefore = applyRaiseRules(next, playerIndex);
       const description =
         type === "all-in"
-          ? `goes all-in for ${formatRupees(chips)}${
-              wasRaise ? ` (to ${formatRupees(total)})` : ""
+          ? `goes all-in for ${money(chips)}${
+              wasRaise ? ` (to ${money(total)})` : ""
             }${wasRaise && !raiseBefore.full ? ", short of a full raise" : ""}`
           : wasRaise
             ? opening
-              ? `bets ${formatRupees(chips)}`
-              : `raises to ${formatRupees(total)}`
-            : `calls ${formatRupees(chips)}`;
+              ? `bets ${money(chips)}`
+              : `raises to ${money(total)}`
+            : `calls ${money(chips)}`;
       recordAction(
         next,
         playerIndex,
@@ -1132,7 +1185,7 @@ export function PokerLedger({
       const winner = active[0];
       const pot = awardPot(next, winner, true);
       setGame(next);
-      showToast(`${next.players[winner].name} +${formatRupees(pot)}`);
+      showToast(`${next.players[winner].name} +${money(pot)}`);
       return;
     }
     hand.currentPlayer = nextPlayerToAct(next, playerIndex);
@@ -1187,7 +1240,7 @@ export function PokerLedger({
   function pickWinner(playerIndex: number) {
     if (!game?.hand) return;
     ask(
-      `Give the ${formatRupees(game.hand.pot)} pot to ${
+      `Give the ${money(game.hand.pot)} pot to ${
         game.players[playerIndex].name
       }?`,
       `${game.players[playerIndex].name} wins`,
@@ -1195,7 +1248,7 @@ export function PokerLedger({
         const next = structuredClone(game);
         const pot = awardPot(next, playerIndex);
         setGame(next);
-        showToast(`${next.players[playerIndex].name} +${formatRupees(pot)}`);
+        showToast(`${next.players[playerIndex].name} +${money(pot)}`);
       },
     );
   }
@@ -1241,7 +1294,7 @@ export function PokerLedger({
     });
     recordWin(
       next,
-      `Hand ${hand.no}: split ${formatRupees(hand.pot)} between ${winners
+      `Hand ${hand.no}: split ${money(hand.pot)} between ${winners
         .map((index) => next.players[index].name)
         .join(", ")}`,
     );
@@ -1266,9 +1319,9 @@ export function PokerLedger({
     setGame(next);
     if (next.ante !== anteBefore) {
       showToast(
-        `Blinds up to ${formatRupees(
+        `Blinds up to ${money(
           smallBlindFor(next.ante, next.smallBlindRatio),
-        )}/${formatRupees(next.ante)}`,
+        )}/${money(next.ante)}`,
       );
     }
   }
@@ -1286,8 +1339,8 @@ export function PokerLedger({
     if (amount === null) return;
     const player = game.players[playerIndex];
     ask(
-      `Buy in ${player.name} for ${formatRupees(amount)}?`,
-      `Buy In · ${formatRupees(amount)}`,
+      `Buy in ${player.name} for ${money(amount)}?`,
+      `Buy In · ${money(amount)}`,
       () => {
         const next = structuredClone(game);
         const confirmedAmount = buyInPlayer(next, playerIndex);
@@ -1295,11 +1348,11 @@ export function PokerLedger({
         const confirmedPlayer = next.players[playerIndex];
         recordWin(
           next,
-          `Hand ${next.handNo}: ${confirmedPlayer.name} buys in for ${formatRupees(confirmedAmount)}`,
+          `Hand ${next.handNo}: ${confirmedPlayer.name} buys in for ${money(confirmedAmount)}`,
         );
         setGame(next);
         showToast(
-          `${confirmedPlayer.name} buys in for ${formatRupees(confirmedAmount)}`,
+          `${confirmedPlayer.name} buys in for ${money(confirmedAmount)}`,
         );
       },
     );
@@ -1572,7 +1625,7 @@ export function PokerLedger({
   }
 
   function openPlayers() {
-    navigate("players");
+    navigate("profile");
   }
 
   function openHands() {
@@ -1601,8 +1654,8 @@ export function PokerLedger({
             ? { title: "Standings" }
             : view === "sessions"
               ? { title: "Game Sessions" }
-              : view === "players"
-                ? { title: "Players" }
+              : view === "profile"
+                ? { title: "Profile" }
                 : view === "hands"
                   ? { title: "Hand Rankings" }
                   : null;
@@ -1627,6 +1680,7 @@ export function PokerLedger({
   );
 
   return (
+    <CurrencyContext.Provider value={currency}>
     <main className={`ledger-shell view-${view}`}>
       <div className={`toast ${toast ? "show" : ""}`} role="status">
         {toast}
@@ -1654,6 +1708,9 @@ export function PokerLedger({
         ) : view === "history" ? (
           <RanksView
             history={history}
+            players={[...players, ...discardedPlayers]}
+            selfPlayerId={profile.selfPlayerId}
+            focusKey={rankFocus}
             loading={historyLoading}
             error={historyError}
             onRetry={() => void refreshHistory()}
@@ -1671,33 +1728,39 @@ export function PokerLedger({
             onExport={exportData}
             onImport={importData}
           />
-        ) : view === "players" ? (
-          <PlayersView
-            network={
-              <FriendNetwork
-                profile={profile}
-                onProfile={setProfile}
-                players={players}
-                onPlayersChanged={() => void refreshPlayers()}
-                onToast={showToast}
-                onAsk={ask}
-              />
-            }
+        ) : view === "profile" ? (
+          <ProfileView
+            profile={profile}
+            onProfile={(next) => {
+              setProfile(next);
+              // Your own player goes by your name, so the list follows it.
+              void refreshPlayers({ quiet: true });
+            }}
             players={players}
             discardedPlayers={discardedPlayers}
+            history={history}
             loading={playersLoading}
             error={playersError}
             onRetry={() => void refreshPlayers()}
             onAdd={addPlayer}
+            onRename={renamePlayer}
             onDiscard={discardPlayer}
             onRestore={(player) => void updatePlayerState(player, "restore")}
             onDeletePermanently={deletePlayerPermanently}
+            onPlayersChanged={() => void refreshPlayers({ quiet: true })}
+            onViewStandings={(player) => {
+              setRankFocus(standingsKey({ playerId: player.id, name: player.name }));
+              navigate("history");
+            }}
+            onToast={showToast}
+            onAsk={ask}
           />
         ) : view === "hands" ? (
           <PokerHandsChart />
         ) : view === "setup" ? (
           <SetupView
             players={players}
+            selfPlayerId={profile.selfPlayerId}
             loading={playersLoading}
             error={playersError}
             onRetry={() => void refreshPlayers()}
@@ -1790,17 +1853,18 @@ export function PokerLedger({
         />
       ) : null}
     </main>
+    </CurrencyContext.Provider>
   );
 }
 
-type TabTarget = "home" | "play" | "history" | "sessions" | "players";
+type TabTarget = "home" | "play" | "history" | "sessions" | "profile";
 
 const TABS: ReadonlyArray<{ target: TabTarget; icon: string; label: string }> = [
   { target: "home", icon: "♠", label: "Home" },
   { target: "play", icon: "♦", label: "Play" },
   { target: "history", icon: "♣", label: "Ranks" },
   { target: "sessions", icon: "♥", label: "Games" },
-  { target: "players", icon: "●", label: "Players" },
+  { target: "profile", icon: "●", label: "Profile" },
 ];
 
 function tabForView(view: View): TabTarget {
@@ -1859,12 +1923,6 @@ function playerColor(name: string) {
     for (const char of key) hue = (hue * 31 + char.charCodeAt(0)) % 360;
   }
   return `oklch(0.78 0.15 ${hue})`;
-}
-
-/** "+₹8,000", "−₹2,000" or "₹0". */
-function formatSignedRupees(value: number) {
-  const sign = value > 0 ? "+" : value < 0 ? "−" : "";
-  return `${sign}${formatRupees(Math.abs(value))}`;
 }
 
 function toneClass(value: number | null) {
@@ -1958,6 +2016,7 @@ function HomeView({
   onRules: () => void;
   onDeleteAccount: () => void;
 }) {
+  const { money } = useMoney();
   const hand = game?.hand ?? null;
   const tiles = [
     {
@@ -2074,7 +2133,7 @@ function HomeView({
             <span>
               <span className="label">{hand ? "Pot" : "Game"}</span>
               <span className="live-pot">
-                {hand ? formatRupees(hand.pot) : game.sessionLabel || game.gameName}
+                {hand ? money(hand.pot) : game.sessionLabel || game.gameName}
               </span>
             </span>
             <span className="arrow-circle" aria-hidden="true">
@@ -2147,6 +2206,7 @@ function LegacySessionReview({
   onAdopt: (selectedIds: Set<string>) => Promise<void>;
   onClose: () => void;
 }) {
+  const { money } = useMoney();
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [submitting, setSubmitting] = useState(false);
 
@@ -2197,7 +2257,7 @@ function LegacySessionReview({
               <span>
                 <strong>{session.name || "Saved Game"}</strong>
                 <small>
-                  {formatDate(session.date)} · Big Blind {formatRupees(session.ante)}
+                  {formatDate(session.date)} · Big Blind {money(session.ante)}
                   {" · "}
                   {session.results.map((result) => result.name).join(", ")}
                 </small>
@@ -2255,6 +2315,7 @@ function ImportReview({
   onConfirm: (plan: ImportPlan) => Promise<void>;
   onClose: () => void;
 }) {
+  const { money } = useMoney();
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const count = plan.additions.length;
@@ -2328,7 +2389,7 @@ function ImportReview({
                 <strong>{session.name || "Saved Game"}</strong>
                 <small>
                   {formatDate(session.date)} · Big Blind{" "}
-                  {formatRupees(session.ante)}
+                  {money(session.ante)}
                   {" · "}
                   {session.results.map((result) => result.name).join(", ")}
                 </small>
@@ -2376,6 +2437,7 @@ function ImportReview({
 
 function SetupView({
   players,
+  selfPlayerId,
   loading,
   error,
   onRetry,
@@ -2384,6 +2446,8 @@ function SetupView({
   onStart,
 }: {
   players: PlayerProfile[];
+  /** Your own player, listed first and marked You. */
+  selfPlayerId: string | null;
   loading: boolean;
   error: string;
   onRetry: () => void;
@@ -2398,6 +2462,7 @@ function SetupView({
     players: PlayerProfile[];
   }) => void;
 }) {
+  const { money, symbol } = useMoney();
   const [name, setName] = useState("");
   const [stack, setStack] = useState(10_000);
   const [ante, setAnte] = useState(100);
@@ -2779,7 +2844,7 @@ function SetupView({
         ? "Big blind doubles each level"
         : blindRaiseType === "multiply"
           ? `Big blind ×${blindRaiseBy} each level`
-          : `Big blind +${formatRupees(blindRaiseBy)} each level`;
+          : `Big blind +${money(blindRaiseBy)} each level`;
 
   return (
     <form className="stack-list setup-view" onSubmit={submit}>
@@ -2812,7 +2877,10 @@ function SetupView({
           <p className="muted">Loading players…</p>
         ) : players.length ? (
           <div className="seat-chips">
-            {players.map((player) => {
+            {[
+              ...players.filter((player) => player.id === selfPlayerId),
+              ...players.filter((player) => player.id !== selfPlayerId),
+            ].map((player) => {
               const seat = selectedIds.indexOf(player.id);
               const full = seat < 0 && playerCount >= MAX_SEATS;
               return (
@@ -2828,6 +2896,9 @@ function SetupView({
                     {seat >= 0 ? seat + 1 : "+"}
                   </span>
                   {player.name}
+                  {player.id === selfPlayerId ? (
+                    <span className="you-tag">You</span>
+                  ) : null}
                 </button>
               );
             })}
@@ -2940,7 +3011,7 @@ function SetupView({
       <section className="glass card">
         <div className="card-row">
           <span className="label">Starting stack</span>
-          <span className="card-note">First buy-in {formatRupees(stack)}</span>
+          <span className="card-note">First buy-in {money(stack)}</span>
         </div>
         <Segmented
           label="Starting stack"
@@ -2986,7 +3057,13 @@ function SetupView({
         </div>
         <Segmented
           label="Big blind"
-          options={[...ANTE_PRESETS, { value: "other", label: "Other" }]}
+          options={[
+            ...ANTE_PRESETS.map((option) => ({
+              ...option,
+              label: `${symbol}${option.label}`,
+            })),
+            { value: "other", label: "Other" },
+          ]}
           value={customAnte || !antePreset ? "other" : ante}
           onChange={(value) => {
             if (value === "other") {
@@ -3017,7 +3094,7 @@ function SetupView({
               options={[
                 ...smallBlindOptions.map((option) => ({
                   value: option.amount,
-                  label: formatRupees(option.amount),
+                  label: money(option.amount),
                 })),
                 { value: "other" as const, label: "Other" },
               ]}
@@ -3051,7 +3128,7 @@ function SetupView({
             ) : null}
             {smallBlindValid ? null : (
               <p className="field-error" role="alert">
-                The small blind must be from ₹1 up to the big blind.
+                The small blind must be from {money(1)} up to the big blind.
               </p>
             )}
           </>
@@ -3108,7 +3185,7 @@ function SetupView({
               </div>
               <div>
                 <label className="label" htmlFor="blind-raise-by">
-                  {blindRaiseType === "multiply" ? "Multiply by" : "Add ₹"}
+                  {blindRaiseType === "multiply" ? "Multiply by" : `Add ${symbol.trim()}`}
                 </label>
                 <input
                   className="field"
@@ -3128,7 +3205,7 @@ function SetupView({
               {scheduleValid ? (
                 <>
                   Big blind: {ladder
-                    .map((bigBlind) => formatRupees(bigBlind))
+                    .map((bigBlind) => money(bigBlind))
                     .join(" → ")}{" "}
                   → …
                   {blindUnit === "minutes"
@@ -3164,7 +3241,7 @@ function SetupView({
 }
 
 const MAX_SEATS = 10;
-/** Odd small blind chips, as percentages of the big blind (₹100: ₹25–₹100). */
+/** Odd small blind chips, as percentages of the big blind (100: 25–100). */
 const SMALL_BLIND_SHARES = [25, 40, 60, 75, 100] as const;
 const STACK_PRESETS = [
   { value: 5_000, label: "5K" },
@@ -3173,41 +3250,654 @@ const STACK_PRESETS = [
   { value: 50_000, label: "50K" },
 ] as const;
 const ANTE_PRESETS = [
-  { value: 50, label: "₹50" },
-  { value: 100, label: "₹100" },
-  { value: 200, label: "₹200" },
-  { value: 500, label: "₹500" },
-  { value: 1_000, label: "₹1K" },
+  { value: 50, label: "50" },
+  { value: 100, label: "100" },
+  { value: 200, label: "200" },
+  { value: 500, label: "500" },
+  { value: 1_000, label: "1K" },
 ] as const;
 
+/** Value of the "In your list, they are" choice for a new player. */
+const NEW_PLAYER = "";
+/** How long a press on a player opens their options. */
+const LONG_PRESS_MS = 450;
+
+type PlayerFilter = "all" | "app" | "guest";
+
+type ProfileRow = {
+  key: string;
+  kind: "self" | "friend" | "guest" | "pending" | "removed";
+  name: string;
+  player?: PlayerProfile;
+  friend?: FriendOverview["friends"][number];
+  requestId?: string;
+  games: number;
+  net: number;
+};
+
+type RowAction = { label: string; danger?: boolean; run: () => void };
+
+async function profileStatsApi() {
+  const response = await fetch("/api/profile");
+  const data = (await response.json().catch(() => ({}))) as {
+    stats?: ProfileStats;
+    error?: string;
+  };
+  if (!response.ok || !data.stats) {
+    throw new Error(
+      apiErrorMessage(response.status, data.error, "Could not load your stats"),
+    );
+  }
+  return data.stats;
+}
+
+const shortPercent = new Intl.NumberFormat("en-IN", {
+  maximumFractionDigits: 1,
+  signDisplay: "exceptZero",
+});
+
+/** "+12.4%": one decimal, to fit the profile's small tiles. */
+function formatShortPercent(value: number) {
+  return `${shortPercent.format(value)}%`;
+}
+
+function monthYear(timestamp: number) {
+  return new Date(timestamp).toLocaleDateString("en-IN", {
+    month: "short",
+    year: "numeric",
+  });
+}
+
 /**
- * The signed-in person's own identity in the friend network: the user code
- * friends will search for, and the name they will see.
+ * The Profile tab: who you are to your friends, your own record across every
+ * ledger you played in, your currency, friend requests, and your players.
  */
-function ProfileCard({
+function ProfileView({
   profile,
   onProfile,
+  players,
+  discardedPlayers,
+  history,
+  loading,
+  error,
+  onRetry,
+  onAdd,
+  onRename,
+  onDiscard,
+  onRestore,
+  onDeletePermanently,
+  onPlayersChanged,
+  onViewStandings,
   onToast,
   onAsk,
 }: {
   profile: AccountProfile;
   onProfile: (profile: AccountProfile) => void;
+  players: PlayerProfile[];
+  discardedPlayers: PlayerProfile[];
+  history: PokerSession[];
+  loading: boolean;
+  error: string;
+  onRetry: () => void;
+  onAdd: (name: string) => Promise<PlayerProfile | null>;
+  onRename: (player: PlayerProfile, name: string) => Promise<boolean>;
+  onDiscard: (player: PlayerProfile) => void;
+  onRestore: (player: PlayerProfile) => void;
+  onDeletePermanently: (player: PlayerProfile) => void;
+  onPlayersChanged: () => void;
+  onViewStandings: (player: PlayerProfile) => void;
   onToast: (message: string) => void;
   onAsk: (message: string, confirmLabel: string, onConfirm: () => void) => void;
 }) {
-  const [name, setName] = useState(profile.displayName ?? "");
+  const [overview, setOverview] = useState<FriendOverview | null>(null);
+  const [overviewError, setOverviewError] = useState("");
+  const [overviewAttempt, setOverviewAttempt] = useState(0);
+  const [filter, setFilter] = useState<PlayerFilter>("all");
+  const [menu, setMenu] = useState<string | null>(null);
+  /** Near the bottom of the screen, a row's options open upwards, clear of the tab bar. */
+  const [menuAbove, setMenuAbove] = useState(false);
+  const [showRemoved, setShowRemoved] = useState(false);
+  const [adding, setAdding] = useState(false);
+  const [renaming, setRenaming] = useState<PlayerProfile | null>(null);
+  const [busy, setBusy] = useState("");
+  const listed = useRef({ players, onPlayersChanged });
+  useEffect(() => {
+    listed.current = { players, onPlayersChanged };
+  });
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const data = await friendsApi<{ overview: FriendOverview }>();
+        if (cancelled) return;
+        setOverview(data.overview);
+        setOverviewError("");
+        // A friend who accepted on their phone linked a player the list
+        // loaded here doesn't have yet.
+        const known = new Set(listed.current.players.map((p) => p.id));
+        if (
+          data.overview.friends.some(
+            (friend) => friend.myPlayer && !known.has(friend.myPlayer.id),
+          )
+        ) {
+          listed.current.onPlayersChanged();
+        }
+      } catch (error) {
+        if (cancelled) return;
+        setOverviewError(
+          error instanceof Error ? error.message : "Could not load your friends",
+        );
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [overviewAttempt]);
+
+  useEffect(() => {
+    if (menu === null) return;
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") setMenu(null);
+    }
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [menu]);
+
+  const reloadOverview = () => setOverviewAttempt((count) => count + 1);
+  const openMenu = (key: string, element: Element) => {
+    setMenuAbove(element.getBoundingClientRect().bottom > window.innerHeight - 340);
+    setMenu(key);
+  };
+  const { signedMoney } = useMoney();
+  const standings = useMemo(() => buildStandings(history), [history]);
+
+  async function run(key: string, action: () => Promise<void>) {
+    if (busy) return;
+    setBusy(key);
+    try {
+      await action();
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function copyInviteCode(player: PlayerProfile) {
+    try {
+      await navigator.clipboard.writeText(formatPlayerCode(player.code));
+      onToast("Invite Code Copied");
+    } catch {
+      onToast(formatPlayerCode(player.code));
+    }
+  }
+
+  function unfriend(friend: FriendOverview["friends"][number]) {
+    const name = friend.displayName ?? "this friend";
+    onAsk(
+      `Unfriend ${name}? Your players and games stay in both lists, but they're no longer linked, and ${name} stops being your friend. Linking again needs a new friend request.`,
+      "Unfriend",
+      () =>
+        void run(friend.accountId, async () => {
+          try {
+            await friendsApi({ action: "remove", accountId: friend.accountId });
+            onToast("Friend Removed");
+            reloadOverview();
+            onPlayersChanged();
+          } catch (error) {
+            onToast(
+              error instanceof Error ? error.message : "Could not remove the friend",
+            );
+          }
+        }),
+    );
+  }
+
+  function cancelRequest(requestId: string) {
+    void run(requestId, async () => {
+      try {
+        await friendsApi({ action: "cancel", requestId });
+        onToast("Request Cancelled");
+        reloadOverview();
+      } catch (error) {
+        onToast(
+          error instanceof Error ? error.message : "Could not cancel the request",
+        );
+      }
+    });
+  }
+
+  const friendByPlayer = new Map(
+    (overview?.friends ?? []).flatMap((friend) =>
+      friend.myPlayer ? [[friend.myPlayer.id, friend] as const] : [],
+    ),
+  );
+  const record = (player: PlayerProfile) => {
+    const entry = standings.entries.find(
+      (item) => item.key === standingsKey({ playerId: player.id, name: player.name }),
+    );
+    return { games: entry?.totalSessions ?? 0, net: entry?.net ?? 0 };
+  };
+  const liveRows: ProfileRow[] = [
+    ...players.map((player): ProfileRow => ({
+      key: player.id,
+      kind:
+        player.id === profile.selfPlayerId
+          ? "self"
+          : player.linked
+            ? "friend"
+            : "guest",
+      name: player.name,
+      player,
+      friend: friendByPlayer.get(player.id),
+      ...record(player),
+    })),
+    ...(overview?.sent ?? []).map((request): ProfileRow => ({
+      key: `request:${request.requestId}`,
+      kind: "pending",
+      name: request.displayName ?? "Someone",
+      requestId: request.requestId,
+      games: 0,
+      net: 0,
+    })),
+  ];
+  const order: Record<ProfileRow["kind"], number> = {
+    self: 0,
+    friend: 1,
+    pending: 2,
+    guest: 3,
+    removed: 4,
+  };
+  liveRows.sort(
+    (a, b) =>
+      order[a.kind] - order[b.kind] ||
+      b.games - a.games ||
+      a.name.localeCompare(b.name),
+  );
+  const onMenoka = (row: ProfileRow) => row.kind !== "guest";
+  const counts: Record<PlayerFilter, number> = {
+    all: liveRows.length,
+    app: liveRows.filter(onMenoka).length,
+    guest: liveRows.filter((row) => !onMenoka(row)).length,
+  };
+  const removedRows: ProfileRow[] = discardedPlayers.map((player) => ({
+    key: player.id,
+    kind: "removed",
+    name: player.name,
+    player,
+    ...record(player),
+  }));
+  const rows = [
+    ...liveRows.filter(
+      (row) =>
+        filter === "all" || (filter === "app" ? onMenoka(row) : !onMenoka(row)),
+    ),
+    ...(showRemoved ? removedRows : []),
+  ];
+
+  function actionsFor(row: ProfileRow): RowAction[] {
+    const player = row.player;
+    const standingsAction: RowAction[] =
+      player && row.games
+        ? [{ label: "View standings", run: () => onViewStandings(player) }]
+        : [];
+    if (row.kind === "pending" && row.requestId) {
+      const requestId = row.requestId;
+      return [
+        { label: "Cancel request", danger: true, run: () => cancelRequest(requestId) },
+      ];
+    }
+    if (!player) return [];
+    if (row.kind === "removed") {
+      return [
+        { label: "Restore", run: () => onRestore(player) },
+        ...(player.hasHistory || player.linked
+          ? []
+          : [
+              {
+                label: "Delete permanently",
+                danger: true,
+                run: () => onDeletePermanently(player),
+              },
+            ]),
+      ];
+    }
+    // You are always in your own list, under the name on your card.
+    if (row.kind === "self") return standingsAction;
+    if (row.kind === "friend") {
+      const friend = row.friend;
+      return [
+        ...standingsAction,
+        ...(friend
+          ? [{ label: "Unfriend", danger: true, run: () => unfriend(friend) }]
+          : []),
+      ];
+    }
+    return [
+      ...standingsAction,
+      { label: "Rename", run: () => setRenaming(player) },
+      { label: "Copy invite code", run: () => void copyInviteCode(player) },
+      { label: "Remove player", danger: true, run: () => onDiscard(player) },
+    ];
+  }
+
+  function subtitle(row: ProfileRow) {
+    const games = `${row.games} game${row.games === 1 ? "" : "s"}`;
+    switch (row.kind) {
+      case "self":
+        return `You · ${games}`;
+      case "friend":
+        return `On Menoka · ${games}`;
+      case "pending":
+        return "Request sent · waiting";
+      case "removed":
+        return row.games ? "Removed · history kept" : "Removed";
+      default:
+        return `Guest · ${games}`;
+    }
+  }
+
+  const freePlayers = players.filter(
+    (player) => !player.linked && player.id !== profile.selfPlayerId,
+  );
+  const filters: Array<[PlayerFilter, string]> = [
+    ["all", "All"],
+    ["app", "On Menoka"],
+    ["guest", "Guests"],
+  ];
+
+  return (
+    <div className="stack-list profile-screen">
+      <ProfileCard profile={profile} onProfile={onProfile} onToast={onToast} />
+
+      {overview?.received.map((request) => (
+        <FriendRequestCard
+          key={request.requestId}
+          request={request}
+          freePlayers={freePlayers}
+          busy={busy}
+          onAnswered={(accepted) => {
+            reloadOverview();
+            if (accepted) onPlayersChanged();
+          }}
+          run={run}
+          onToast={onToast}
+        />
+      ))}
+
+      <div className="profile-players-heading">
+        <h2>
+          Players <span>{players.length}</span>
+        </h2>
+        <button
+          className="profile-add-button"
+          type="button"
+          onClick={() => setAdding(true)}
+        >
+          <span aria-hidden="true">+</span>Add
+        </button>
+      </div>
+
+      <div className="profile-filters" role="group" aria-label="Show players">
+        {filters.map(([key, label]) => (
+          <button
+            key={key}
+            type="button"
+            className={filter === key ? "selected" : ""}
+            aria-pressed={filter === key}
+            onClick={() => {
+              setFilter(key);
+              setMenu(null);
+            }}
+          >
+            {label}
+            <span>{counts[key]}</span>
+          </button>
+        ))}
+      </div>
+
+      <section className="glass profile-list">
+        {error ? (
+          <div className="directory-state">
+            <p className="muted">{error}</p>
+            <button className="ghost full" type="button" onClick={onRetry}>
+              Try again
+            </button>
+          </div>
+        ) : loading ? (
+          <p className="muted profile-list-note">Loading players…</p>
+        ) : rows.length ? (
+          rows.map((row) => {
+            const actions = actionsFor(row);
+            const open = menu === row.key;
+            const onApp = row.kind === "self" || row.kind === "friend";
+            return (
+              <div className="profile-row-wrap" key={row.key}>
+                <PressableRow
+                  className={`profile-row${row.kind === "removed" ? " removed" : ""}`}
+                  onLongPress={
+                    actions.length ? (element) => openMenu(row.key, element) : null
+                  }
+                >
+                  <span
+                    className={`profile-avatar${onApp ? " on-app" : ""}`}
+                    aria-hidden="true"
+                  >
+                    {row.name.trim().charAt(0).toUpperCase() || "?"}
+                    {onApp ? <span className="profile-avatar-dot" /> : null}
+                  </span>
+                  <span className="profile-row-copy">
+                    <b>{row.name}</b>
+                    <small className={`row-kind-${row.kind}`}>{subtitle(row)}</small>
+                  </span>
+                  {row.games && row.kind !== "pending" ? (
+                    <span className={`profile-row-net ${toneClass(row.net)}`}>
+                      {signedMoney(row.net)}
+                    </span>
+                  ) : null}
+                  {actions.length ? (
+                    <button
+                      className="profile-more"
+                      type="button"
+                      aria-label={`Options for ${row.name}`}
+                      aria-expanded={open}
+                      disabled={busy !== ""}
+                      onClick={(event) => {
+                        if (open) setMenu(null);
+                        else openMenu(row.key, event.currentTarget);
+                      }}
+                    >
+                      ⋯
+                    </button>
+                  ) : null}
+                </PressableRow>
+                {open ? (
+                  <>
+                    <button
+                      className="profile-menu-scrim"
+                      type="button"
+                      aria-label="Close options"
+                      onClick={() => setMenu(null)}
+                    />
+                    <div
+                      className={`profile-menu${menuAbove ? " above" : ""}`}
+                      role="menu"
+                    >
+                      {actions.map((action) => (
+                        <button
+                          key={action.label}
+                          type="button"
+                          role="menuitem"
+                          className={action.danger ? "danger-text" : ""}
+                          onClick={() => {
+                            setMenu(null);
+                            action.run();
+                          }}
+                        >
+                          {action.label}
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                ) : null}
+              </div>
+            );
+          })
+        ) : (
+          <p className="muted profile-list-note">No players here yet</p>
+        )}
+      </section>
+
+      {overviewError ? (
+        <div className="inline-state">
+          <span>{overviewError}</span>
+          <button className="pill-button" type="button" onClick={reloadOverview}>
+            Try again
+          </button>
+        </div>
+      ) : null}
+      {removedRows.length ? (
+        <button
+          className="profile-removed-toggle"
+          type="button"
+          onClick={() => setShowRemoved((shown) => !shown)}
+        >
+          {showRemoved
+            ? "Hide removed players"
+            : `Show ${removedRows.length} removed player${removedRows.length === 1 ? "" : "s"}`}
+        </button>
+      ) : null}
+      <p className="profile-hint">
+        Press and hold a player, or tap ⋯, for more options
+      </p>
+
+      {adding ? (
+        <AddPlayerSheet
+          players={players}
+          freePlayers={freePlayers}
+          onAdd={onAdd}
+          onRequestSent={() => {
+            reloadOverview();
+            setFilter("all");
+          }}
+          onToast={onToast}
+          onClose={() => setAdding(false)}
+        />
+      ) : null}
+      {renaming ? (
+        <RenameSheet
+          player={renaming}
+          players={[...players, ...discardedPlayers]}
+          onRename={onRename}
+          onClose={() => setRenaming(null)}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+/** A row that opens its options on a long press or a right click. */
+function PressableRow({
+  className,
+  onLongPress,
+  children,
+}: {
+  className: string;
+  onLongPress: ((element: Element) => void) | null;
+  children: ReactNode;
+}) {
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cancel = () => {
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = null;
+  };
+  useEffect(() => cancel, []);
+  return (
+    <div
+      className={className}
+      onPointerDown={(event) => {
+        cancel();
+        const element = event.currentTarget;
+        if (onLongPress) {
+          timer.current = setTimeout(() => onLongPress(element), LONG_PRESS_MS);
+        }
+      }}
+      onPointerUp={cancel}
+      onPointerLeave={cancel}
+      onPointerCancel={cancel}
+      onContextMenu={(event) => {
+        if (!onLongPress) return;
+        event.preventDefault();
+        onLongPress(event.currentTarget);
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+/** The card at the top: name, record, user code and currency. */
+function ProfileCard({
+  profile,
+  onProfile,
+  onToast,
+}: {
+  profile: AccountProfile;
+  onProfile: (profile: AccountProfile) => void;
+  onToast: (message: string) => void;
+}) {
+  const { signedMoney } = useMoney();
+  const [stats, setStats] = useState<ProfileStats | null>(null);
+  const [statsError, setStatsError] = useState("");
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState("");
   const [nameError, setNameError] = useState("");
   const [saving, setSaving] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [codeMenu, setCodeMenu] = useState(false);
   const [replacing, setReplacing] = useState(false);
+  const copiedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const next = await profileStatsApi();
+        if (cancelled) return;
+        setStats(next);
+        setStatsError("");
+      } catch (error) {
+        if (cancelled) return;
+        setStatsError(
+          error instanceof Error ? error.message : "Could not load your stats",
+        );
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [profile.currency, profile.selfPlayerId]);
+
+  useEffect(
+    () => () => {
+      if (copiedTimer.current) clearTimeout(copiedTimer.current);
+    },
+    [],
+  );
+
+  const name = profile.displayName ?? "";
 
   async function saveName(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (saving) return;
     let displayName: string;
     try {
-      displayName = cleanDisplayName(name);
+      displayName = cleanDisplayName(draft);
     } catch (error) {
       setNameError(error instanceof Error ? error.message : "Enter your name");
+      return;
+    }
+    if (displayName === name) {
+      setEditing(false);
       return;
     }
     setSaving(true);
@@ -3217,7 +3907,7 @@ function ProfileCard({
         displayName,
       });
       onProfile(data.profile);
-      setName(data.profile.displayName ?? "");
+      setEditing(false);
       setNameError("");
       onToast("Name Saved");
     } catch (error) {
@@ -3229,16 +3919,19 @@ function ProfileCard({
     }
   }
 
-  async function copyCode(code: string) {
+  async function copyCode() {
     try {
-      await navigator.clipboard.writeText(formatUserCode(code));
-      onToast("Code Copied");
+      await navigator.clipboard.writeText(formatUserCode(profile.userCode));
+      setCopied(true);
+      if (copiedTimer.current) clearTimeout(copiedTimer.current);
+      copiedTimer.current = setTimeout(() => setCopied(false), 1400);
     } catch {
       // Clipboard blocked: the code is on screen to copy by hand.
     }
   }
 
   async function replaceCode() {
+    setCodeMenu(false);
     setReplacing(true);
     try {
       const data = await accountApi<{ profile: AccountProfile }>({
@@ -3255,466 +3948,557 @@ function ProfileCard({
     }
   }
 
-  const savedName = profile.displayName ?? "";
+  async function changeCurrency(currency: string) {
+    try {
+      const data = await accountApi<{ profile: AccountProfile }>({
+        action: "set-currency",
+        currency,
+      });
+      onProfile(data.profile);
+      onToast("Currency Saved");
+    } catch (error) {
+      onToast(
+        error instanceof Error ? error.message : "Could not save your currency",
+      );
+    }
+  }
+
+  const netText = stats ? signedMoney(stats.net) : "–";
+  const recent = stats?.recent ?? [];
+  const largest = Math.max(1, ...recent.map((game) => Math.abs(game.net)));
+  const bar = (value: number) =>
+    value ? Math.max(3, Math.round((Math.abs(value) / largest) * 20)) : 0;
+  const tiles: Array<[string, string, string]> = [
+    ["Games played", stats ? String(stats.games) : "–", ""],
+    [
+      "Avg return",
+      stats?.averageReturn == null ? "–" : formatShortPercent(stats.averageReturn),
+      toneClass(stats?.averageReturn ?? null),
+    ],
+    [
+      "Profitable",
+      stats ? `${stats.profitableGames}/${stats.games}` : "–",
+      "blue",
+    ],
+  ];
 
   return (
-    <section className="glass card profile-card">
-      <span className="eyebrow">You</span>
-      <div className="profile-code">
-        <div className="profile-code-copy">
-          <small>Your user code</small>
-          <strong>{formatUserCode(profile.userCode)}</strong>
+    <section className="glass profile-card">
+      <span className="profile-card-glow" aria-hidden="true" />
+      <div className="profile-identity">
+        <span className="profile-ring" aria-hidden="true">
+          <span>{name.trim().charAt(0).toUpperCase() || "?"}</span>
+        </span>
+        <div className="profile-name">
+          {editing ? (
+            <form className="profile-name-form" onSubmit={saveName}>
+              <input
+                className="field"
+                aria-label="Your name"
+                autoFocus
+                maxLength={MAX_DISPLAY_NAME_LENGTH}
+                value={draft}
+                onChange={(event) => {
+                  setDraft(event.target.value);
+                  if (nameError) setNameError("");
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "Escape") setEditing(false);
+                }}
+              />
+              <button className="accent-button" type="submit" disabled={saving}>
+                {saving ? "Saving…" : "Save"}
+              </button>
+            </form>
+          ) : (
+            <>
+              <h2 className={name.length > 9 ? "long" : ""}>{name}</h2>
+              <p>
+                {stats?.firstPlayed
+                  ? `Playing since ${monthYear(stats.firstPlayed)}`
+                  : stats
+                    ? "No games yet"
+                    : " "}
+              </p>
+            </>
+          )}
+          {nameError ? (
+            <p className="field-error" role="alert">
+              {nameError}
+            </p>
+          ) : null}
         </div>
-        <div className="profile-code-actions">
+        {editing ? null : (
           <button
-            className="pill-button"
+            className="profile-edit"
             type="button"
-            onClick={() => void copyCode(profile.userCode)}
+            aria-label="Edit name"
+            onClick={() => {
+              setDraft(name);
+              setEditing(true);
+            }}
           >
-            Copy
+            ✎
           </button>
-          <button
-            className="pill-button"
-            type="button"
-            disabled={replacing}
-            onClick={() =>
-              onAsk(
-                "Replace your user code? Your current code stops working straight away, so anyone you gave it to will need the new one.",
-                "Replace Code",
-                () => void replaceCode(),
-              )
-            }
-          >
-            Replace
-          </button>
-        </div>
+        )}
       </div>
-      <form className="add-player-row" onSubmit={saveName}>
-        <input
-          className="field"
-          aria-label="Your name"
-          maxLength={MAX_DISPLAY_NAME_LENGTH}
-          placeholder="Your name for friends"
-          value={name}
-          onChange={(event) => {
-            setName(event.target.value);
-            if (nameError) setNameError("");
-          }}
-        />
-        <button
-          className="accent-button"
-          type="submit"
-          disabled={saving || name.trim() === savedName}
-        >
-          {saving ? "Saving…" : "Save"}
-        </button>
-      </form>
-      {nameError ? (
-        <p className="field-error" role="alert">
-          {nameError}
+
+      <div className="profile-record">
+        <div>
+          <span className="profile-kicker">All-time net</span>
+          <strong
+            className={`profile-net ${
+              stats && stats.net < 0 ? "neg" : "gradient-text-vertical"
+            }${netText.length > 9 ? " long" : netText.length > 7 ? " wide" : ""}`}
+          >
+            {netText}
+          </strong>
+        </div>
+        {recent.length ? (
+          <div className="profile-form">
+            <span className="profile-kicker">Last {recent.length}</span>
+            <div className="profile-bars" aria-label="Net of your latest games">
+              {recent.map((game, index) => (
+                <span
+                  className="profile-bar"
+                  key={index}
+                  title={`${formatDate(game.date)}: ${signedMoney(game.net)}`}
+                >
+                  <span>
+                    <i className="up" style={{ height: game.net > 0 ? bar(game.net) : 0 }} />
+                  </span>
+                  <span>
+                    <i className="down" style={{ height: game.net < 0 ? bar(game.net) : 0 }} />
+                  </span>
+                </span>
+              ))}
+            </div>
+          </div>
+        ) : null}
+      </div>
+      {stats?.otherCurrencyGames ? (
+        <p className="profile-note">
+          Net leaves out {stats.otherCurrencyGames} game
+          {stats.otherCurrencyGames === 1 ? "" : "s"} played in another currency.
         </p>
       ) : null}
-      <p className="muted small-note">
-        Friends use your code to send you a friend request. It shows them
-        only your name, never your email.
-      </p>
+      {statsError ? <p className="profile-note">{statsError}</p> : null}
+
+      <div className="profile-tiles">
+        {tiles.map(([label, value, tone]) => (
+          <div key={label}>
+            <strong className={tone}>{value}</strong>
+            <small>{label}</small>
+          </div>
+        ))}
+      </div>
+
+      <div className="profile-code-row">
+        <div>
+          <small>Your user code · friends add you with it</small>
+          <strong>{formatUserCode(profile.userCode)}</strong>
+        </div>
+        <button
+          className={`pill-button${copied ? " accent-text" : ""}`}
+          type="button"
+          onClick={() => void copyCode()}
+        >
+          {copied ? "Copied" : "Copy"}
+        </button>
+        <div className="profile-code-more">
+          <button
+            className="profile-more bordered"
+            type="button"
+            aria-label="More about your code"
+            aria-expanded={codeMenu}
+            disabled={replacing}
+            onClick={() => setCodeMenu((shown) => !shown)}
+          >
+            ⋯
+          </button>
+          {codeMenu ? (
+            <>
+              <button
+                className="profile-menu-scrim"
+                type="button"
+                aria-label="Close options"
+                onClick={() => setCodeMenu(false)}
+              />
+              <div className="profile-menu above" role="menu">
+                <button type="button" role="menuitem" onClick={() => void replaceCode()}>
+                  Replace code
+                </button>
+                <p>Old code stops working. Existing friends stay.</p>
+              </div>
+            </>
+          ) : null}
+        </div>
+      </div>
+
+      <label className="profile-currency">
+        <span>
+          <small>Currency · for the games you host</small>
+          <b>{CURRENCIES.find((item) => item.code === profile.currency)?.name}</b>
+        </span>
+        <select
+          className="select-control"
+          value={profile.currency}
+          onChange={(event) => void changeCurrency(event.target.value)}
+        >
+          {CURRENCIES.map((currency) => (
+            <option key={currency.code} value={currency.code}>
+              {`${currency.symbol.trim()} ${currency.code}`}
+            </option>
+          ))}
+        </select>
+      </label>
     </section>
   );
 }
 
-/** The You and Friends cards at the top of the Players screen. */
-function FriendNetwork({
-  profile,
-  onProfile,
-  players,
-  onPlayersChanged,
+/** A friend request sent to you, answered right on the Profile tab. */
+function FriendRequestCard({
+  request,
+  freePlayers,
+  busy,
+  run,
+  onAnswered,
   onToast,
-  onAsk,
 }: {
-  profile: AccountProfile;
-  onProfile: (profile: AccountProfile) => void;
-  players: PlayerProfile[];
-  onPlayersChanged: () => void;
+  request: FriendOverview["received"][number];
+  freePlayers: PlayerProfile[];
+  busy: string;
+  run: (key: string, action: () => Promise<void>) => Promise<void>;
+  onAnswered: (accepted: boolean) => void;
   onToast: (message: string) => void;
-  onAsk: (message: string, confirmLabel: string, onConfirm: () => void) => void;
 }) {
-  return (
-    <>
-      <ProfileCard
-        profile={profile}
-        onProfile={onProfile}
-        onToast={onToast}
-        onAsk={onAsk}
-      />
-      <FriendsCard
-        hasName={Boolean(profile.displayName)}
-        players={players}
-        onPlayersChanged={onPlayersChanged}
-        onToast={onToast}
-        onAsk={onAsk}
-      />
-    </>
+  const claimed = request.claimedPlayer;
+  const [playerId, setPlayerId] = useState(
+    claimed && freePlayers.some((player) => player.id === claimed.id)
+      ? claimed.id
+      : NEW_PLAYER,
   );
-}
+  const [newName, setNewName] = useState(request.displayName ?? "");
+  const [error, setError] = useState("");
+  const [nameTaken, setNameTaken] = useState(false);
+  const name = request.displayName ?? "Someone";
+  const selectId = `friend-accept-${request.requestId}`;
 
-/** Value of the "In your list, they are" choice for a new player. */
-const NEW_PLAYER = "";
-
-function FriendsCard({
-  hasName,
-  players,
-  onPlayersChanged,
-  onToast,
-  onAsk,
-}: {
-  hasName: boolean;
-  players: PlayerProfile[];
-  onPlayersChanged: () => void;
-  onToast: (message: string) => void;
-  onAsk: (message: string, confirmLabel: string, onConfirm: () => void) => void;
-}) {
-  const [overview, setOverview] = useState<FriendOverview | null>(null);
-  const [loadError, setLoadError] = useState("");
-  const [attempt, setAttempt] = useState(0);
-  const [busy, setBusy] = useState("");
-  const [code, setCode] = useState("");
-  const [found, setFound] = useState<(FoundAccount & { code: string }) | null>(
-    null,
-  );
-  const [findError, setFindError] = useState("");
-  const [sendPlayerId, setSendPlayerId] = useState(NEW_PLAYER);
-  const [claimCode, setClaimCode] = useState("");
-  const [choices, setChoices] = useState<
-    Record<string, { playerId: string; newName: string }>
-  >({});
-  const [requestError, setRequestError] = useState<Record<string, string>>({});
-  const listed = useRef({ players, onPlayersChanged });
-  useEffect(() => {
-    listed.current = { players, onPlayersChanged };
-  });
-
-  useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      try {
-        const data = await friendsApi<{ overview: FriendOverview }>();
-        if (cancelled) return;
-        setOverview(data.overview);
-        setLoadError("");
-        // A friend who accepted on their phone linked a player the list
-        // loaded here doesn't have yet.
-        const known = new Set(listed.current.players.map((p) => p.id));
-        if (
-          data.overview.friends.some(
-            (friend) => friend.myPlayer && !known.has(friend.myPlayer.id),
-          )
-        ) {
-          listed.current.onPlayersChanged();
-        }
-      } catch (error) {
-        if (cancelled) return;
-        setLoadError(
-          error instanceof Error ? error.message : "Could not load your friends",
-        );
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [attempt]);
-
-  const reload = () => setAttempt((count) => count + 1);
-  const freePlayers = players.filter((player) => !player.linked);
-
-  async function run(key: string, action: () => Promise<void>) {
-    if (busy) return;
-    setBusy(key);
-    try {
-      await action();
-    } finally {
-      setBusy("");
-    }
-  }
-
-  function find(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    void run("find", async () => {
-      setFound(null);
-      setFindError("");
-      try {
-        const data = await friendsApi<{ found: FoundAccount }>({
-          action: "find",
-          code,
-        });
-        setFound({ ...data.found, code });
-        setSendPlayerId(NEW_PLAYER);
-        setClaimCode("");
-      } catch (error) {
-        setFindError(
-          error instanceof Error ? error.message : "Could not look up that code",
-        );
-      }
-    });
-  }
-
-  function send() {
-    if (!found) return;
-    void run("send", async () => {
-      setFindError("");
-      try {
-        await friendsApi({
-          action: "send",
-          code: found.code,
-          myPlayerId: sendPlayerId || null,
-          claimedPlayerCode: claimCode.trim() || null,
-        });
-        onToast("Request Sent");
-        setFound(null);
-        setCode("");
-        reload();
-      } catch (error) {
-        setFindError(
-          error instanceof Error ? error.message : "The request was not sent",
-        );
-      }
-    });
-  }
-
-  function choiceFor(request: FriendOverview["received"][number]) {
-    return (
-      choices[request.requestId] ?? {
-        playerId: request.claimedPlayer?.id ?? NEW_PLAYER,
-        newName: request.displayName ?? "",
-      }
-    );
-  }
-
-  function answer(
-    request: FriendOverview["received"][number],
-    action: "accept" | "decline",
-  ) {
-    const choice = choiceFor(request);
+  function answer(action: "accept" | "decline") {
     void run(request.requestId, async () => {
-      setRequestError((current) => ({ ...current, [request.requestId]: "" }));
+      setError("");
       try {
         await friendsApi(
           action === "accept"
             ? {
                 action,
                 requestId: request.requestId,
-                myPlayerId: choice.playerId || null,
-                newPlayerName: choice.playerId ? null : choice.newName,
+                myPlayerId: playerId || null,
+                newPlayerName: playerId ? null : newName,
               }
             : { action, requestId: request.requestId },
         );
         onToast(action === "accept" ? "Friend Added" : "Request Declined");
-        reload();
-        if (action === "accept") onPlayersChanged();
+        onAnswered(action === "accept");
       } catch (error) {
-        setRequestError((current) => ({
-          ...current,
-          [request.requestId]:
-            error instanceof Error ? error.message : "Could not answer the request",
-        }));
-      }
-    });
-  }
-
-  function cancel(requestId: string) {
-    void run(requestId, async () => {
-      try {
-        await friendsApi({ action: "cancel", requestId });
-        onToast("Request Cancelled");
-        reload();
-      } catch (error) {
-        onToast(
-          error instanceof Error ? error.message : "Could not cancel the request",
+        if (error instanceof ApiError && error.code === "friend-name-taken") {
+          setNameTaken(true);
+        }
+        setError(
+          error instanceof Error ? error.message : "Could not answer the request",
         );
       }
     });
   }
 
-  function remove(friend: FriendOverview["friends"][number]) {
-    const name = friend.displayName ?? "this friend";
-    onAsk(
-      `Remove ${name} as a friend? Your players and games stay in both lists, but they're no longer linked, and ${name} stops being your friend. Linking again needs a new friend request.`,
-      "Remove Friend",
-      () =>
-        void run(friend.accountId, async () => {
-          try {
-            await friendsApi({ action: "remove", accountId: friend.accountId });
-            onToast("Friend Removed");
-            reload();
-            onPlayersChanged();
-          } catch (error) {
-            onToast(
-              error instanceof Error ? error.message : "Could not remove the friend",
-            );
-          }
-        }),
-    );
-  }
+  return (
+    <section className="glass profile-request">
+      <div className="profile-request-head">
+        <span className="profile-avatar on-app" aria-hidden="true">
+          {name.trim().charAt(0).toUpperCase() || "?"}
+        </span>
+        <div>
+          <span className="eyebrow">Friend request</span>
+          <p>
+            {claimed ? (
+              <>
+                <b>{name}</b> says they&apos;re <b>{claimed.name}</b> in your list
+              </>
+            ) : (
+              <>
+                <b>{name}</b> wants to be friends
+              </>
+            )}
+          </p>
+        </div>
+      </div>
+      <label className="profile-request-choice" htmlFor={selectId}>
+        <span>In your list, they are</span>
+        <select
+          className="select-control"
+          id={selectId}
+          value={playerId}
+          onChange={(event) => setPlayerId(event.target.value)}
+        >
+          <option value={NEW_PLAYER}>A new player</option>
+          {freePlayers.map((player) => (
+            <option key={player.id} value={player.id}>
+              {player.name}
+            </option>
+          ))}
+        </select>
+      </label>
+      {nameTaken && playerId === NEW_PLAYER ? (
+        <input
+          className="field"
+          aria-label="New player's name"
+          maxLength={80}
+          value={newName}
+          onChange={(event) => setNewName(event.target.value)}
+        />
+      ) : null}
+      {error ? (
+        <p className="field-error" role="alert">
+          {error}
+        </p>
+      ) : null}
+      <div className="friend-actions">
+        <button
+          className="accent-button"
+          type="button"
+          disabled={busy !== ""}
+          onClick={() => answer("accept")}
+        >
+          {busy === request.requestId
+            ? "Saving…"
+            : playerId
+              ? "Accept and link"
+              : "Accept"}
+        </button>
+        <button
+          className="ghost"
+          type="button"
+          disabled={busy !== ""}
+          onClick={() => answer("decline")}
+        >
+          Decline
+        </button>
+      </div>
+    </section>
+  );
+}
 
+/** The Add sheet: a friend on Menoka by user code, or a guest by name. */
+function AddPlayerSheet({
+  players,
+  freePlayers,
+  onAdd,
+  onRequestSent,
+  onToast,
+  onClose,
+}: {
+  players: PlayerProfile[];
+  freePlayers: PlayerProfile[];
+  onAdd: (name: string) => Promise<PlayerProfile | null>;
+  onRequestSent: () => void;
+  onToast: (message: string) => void;
+  onClose: () => void;
+}) {
+  const [mode, setMode] = useState<"code" | "name">("code");
+  const [input, setInput] = useState("");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [found, setFound] = useState<(FoundAccount & { code: string }) | null>(
+    null,
+  );
+  const [sendPlayerId, setSendPlayerId] = useState(NEW_PLAYER);
+  const [claimCode, setClaimCode] = useState("");
+
+  useEffect(() => {
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") onClose();
+    }
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [onClose]);
+
+  const byCode = mode === "code";
   const relationNote: Record<FoundAccount["relation"], string> = {
     self: "That's your own code.",
     friends: "You're already friends.",
     "request-sent": "You've already sent them a request.",
-    "request-received": "They've sent you a request. Answer it below.",
+    "request-received": "They've sent you a request. Answer it on your profile.",
     none: "",
   };
 
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (busy) return;
+    const value = input.trim();
+    setError("");
+    setFound(null);
+    if (byCode) {
+      if (!value) {
+        setError("Enter their user code");
+        return;
+      }
+      setBusy(true);
+      try {
+        const data = await friendsApi<{ found: FoundAccount }>({
+          action: "find",
+          code: value,
+        });
+        setFound({ ...data.found, code: value });
+        setSendPlayerId(NEW_PLAYER);
+        setClaimCode("");
+      } catch (error) {
+        setError(
+          error instanceof Error ? error.message : "Could not look up that code",
+        );
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
+    if (!value) {
+      setError("Enter a name");
+      return;
+    }
+    const existing = players.find(
+      (player) => player.name.trim().toLowerCase() === value.toLowerCase(),
+    );
+    if (existing) {
+      setError(`You already have a player called ${existing.name}`);
+      return;
+    }
+    setBusy(true);
+    const player = await onAdd(value);
+    setBusy(false);
+    if (player) onClose();
+  }
+
+  async function send() {
+    if (!found || busy) return;
+    setBusy(true);
+    setError("");
+    try {
+      await friendsApi({
+        action: "send",
+        code: found.code,
+        myPlayerId: sendPlayerId || null,
+        claimedPlayerCode: claimCode.trim() || null,
+      });
+      onToast("Request Sent");
+      onRequestSent();
+      onClose();
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "The request was not sent");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
-    <section className="glass card friends-card">
-      <div className="friends-heading">
-        <span className="eyebrow">Friends</span>
-        <button
-          className="text-button"
-          type="button"
-          onClick={() => {
-            reload();
-            onPlayersChanged();
-          }}
-        >
-          Refresh
-        </button>
-      </div>
-
-      <form className="add-player-row" onSubmit={find}>
-        <input
-          className="field"
-          aria-label="Friend's user code"
-          autoCapitalize="characters"
-          autoComplete="off"
-          maxLength={12}
-          placeholder="Friend's user code"
-          value={code}
-          onChange={(event) => {
-            setCode(event.target.value);
-            setFound(null);
-            if (findError) setFindError("");
-          }}
-        />
-        <button
-          className="accent-button"
-          type="submit"
-          disabled={busy !== "" || !code.trim()}
-        >
-          {busy === "find" ? "Finding…" : "Find"}
-        </button>
-      </form>
-      {findError ? (
-        <p className="field-error" role="alert">
-          {findError}
+    <div
+      className="modal show"
+      role="presentation"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <div
+        className="sheet profile-sheet"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="add-player-title"
+      >
+        <span className="sheet-grabber" aria-hidden="true" />
+        <h2 id="add-player-title">Add player</h2>
+        <div className="profile-modes" role="group" aria-label="Who are you adding">
+          {(
+            [
+              ["code", "Friend on Menoka"],
+              ["name", "Guest by name"],
+            ] as const
+          ).map(([key, label]) => (
+            <button
+              key={key}
+              type="button"
+              className={mode === key ? "selected" : ""}
+              aria-pressed={mode === key}
+              onClick={() => {
+                setMode(key);
+                setInput("");
+                setError("");
+                setFound(null);
+              }}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        <p className="muted small-note">
+          {byCode
+            ? "Enter their user code. They get a request, and once they accept you see each other by name."
+            : "For someone who doesn't use the app. You can link them to their account later."}
         </p>
-      ) : null}
-
-      {found ? (
-        <div className="friend-found">
-          <p>
-            <strong>{found.displayName ?? "Someone without a name yet"}</strong>
-          </p>
-          {found.relation !== "none" ? (
-            <p className="muted">{relationNote[found.relation]}</p>
-          ) : (
-            <>
-              <label className="label" htmlFor="friend-send-player">
-                In your list, they are
-              </label>
-              <select
-                className="select-control"
-                id="friend-send-player"
-                value={sendPlayerId}
-                onChange={(event) => setSendPlayerId(event.target.value)}
-              >
-                <option value={NEW_PLAYER}>A new player</option>
-                {freePlayers.map((player) => (
-                  <option key={player.id} value={player.id}>
-                    {player.name}
-                  </option>
-                ))}
-              </select>
-              <label className="label" htmlFor="friend-claim-code">
-                Your player code in their list <span className="label-note">(optional)</span>
-              </label>
-              <input
-                className="field"
-                id="friend-claim-code"
-                autoCapitalize="characters"
-                autoComplete="off"
-                maxLength={14}
-                placeholder="P-XXXX-XXXX"
-                value={claimCode}
-                onChange={(event) => setClaimCode(event.target.value)}
-              />
-              <p className="muted small-note">
-                If they already record your games, ask them for your player
-                code so your history is linked to you. They confirm it.
-              </p>
-              {hasName ? null : (
-                <p className="field-error">Save your name above first.</p>
-              )}
-              <button
-                className="accent-button full"
-                type="button"
-                disabled={busy !== "" || !hasName}
-                onClick={send}
-              >
-                {busy === "send" ? "Sending…" : "Send friend request"}
-              </button>
-            </>
-          )}
-        </div>
-      ) : null}
-
-      {loadError ? (
-        <div className="directory-state">
-          <p className="muted">{loadError}</p>
-          <button className="ghost full" type="button" onClick={reload}>
-            Try again
+        <form className="add-player-row" onSubmit={submit}>
+          <input
+            className={`field${byCode ? " code-field" : ""}`}
+            aria-label={byCode ? "Their user code" : "Their name"}
+            autoCapitalize={byCode ? "characters" : "words"}
+            autoComplete="off"
+            autoFocus
+            maxLength={byCode ? 12 : 80}
+            placeholder={byCode ? "XXXX-XXXX" : "Their name"}
+            value={input}
+            onChange={(event) => {
+              setInput(event.target.value);
+              setError("");
+              setFound(null);
+            }}
+          />
+          <button className="accent-button" type="submit" disabled={busy}>
+            {busy && !found ? (byCode ? "Finding…" : "Adding…") : byCode ? "Find" : "Add"}
           </button>
-        </div>
-      ) : !overview ? (
-        <p className="muted">Loading your friends…</p>
-      ) : (
-        <>
-          {overview.received.map((request) => {
-            const choice = choiceFor(request);
-            const setChoice = (next: Partial<typeof choice>) =>
-              setChoices((current) => ({
-                ...current,
-                [request.requestId]: { ...choice, ...next },
-              }));
-            const selectId = `friend-accept-${request.requestId}`;
-            return (
-              <div className="friend-request" key={request.requestId}>
-                <p>
-                  <strong>{request.displayName ?? "Someone"}</strong> wants to
-                  be friends.
-                </p>
-                {request.claimedPlayerCode ? (
-                  <p className="muted small-note">
-                    {request.claimedPlayer ? (
-                      <>
-                        They say they&apos;re your player{" "}
-                        <strong>{request.claimedPlayer.name}</strong>.
-                      </>
-                    ) : (
-                      <>
-                        Their player code{" "}
-                        {formatPlayerCode(request.claimedPlayerCode)} doesn&apos;t
-                        match a player you can link.
-                      </>
-                    )}
-                  </p>
-                ) : null}
-                <label className="label" htmlFor={selectId}>
-                  In your list, they are
-                </label>
+        </form>
+        {error ? (
+          <p className="field-error" role="alert">
+            {error}
+          </p>
+        ) : null}
+        {found ? (
+          <div className="profile-found">
+            <div className="profile-found-head">
+              <span className="profile-avatar on-app" aria-hidden="true">
+                {(found.displayName ?? "?").trim().charAt(0).toUpperCase()}
+              </span>
+              <span className="profile-row-copy">
+                <b>{found.displayName ?? "Someone without a name yet"}</b>
+                <small>
+                  {found.relation === "none" ? "On Menoka" : relationNote[found.relation]}
+                </small>
+              </span>
+              {found.relation === "none" ? (
+                <button
+                  className="accent-button small"
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void send()}
+                >
+                  {busy ? "Sending…" : "Send request"}
+                </button>
+              ) : null}
+            </div>
+            {found.relation === "none" ? (
+              <details className="profile-found-more">
+                <summary>Already in your list, or already recording you?</summary>
+                <label htmlFor="friend-send-player">In your list, they are</label>
                 <select
                   className="select-control"
-                  id={selectId}
-                  value={choice.playerId}
-                  onChange={(event) => setChoice({ playerId: event.target.value })}
+                  id="friend-send-player"
+                  value={sendPlayerId}
+                  onChange={(event) => setSendPlayerId(event.target.value)}
                 >
                   <option value={NEW_PLAYER}>A new player</option>
                   {freePlayers.map((player) => (
@@ -3723,291 +4507,126 @@ function FriendsCard({
                     </option>
                   ))}
                 </select>
-                {choice.playerId === NEW_PLAYER ? (
-                  <input
-                    className="field"
-                    aria-label="New player's name"
-                    maxLength={80}
-                    value={choice.newName}
-                    onChange={(event) => setChoice({ newName: event.target.value })}
-                  />
-                ) : null}
-                {requestError[request.requestId] ? (
-                  <p className="field-error" role="alert">
-                    {requestError[request.requestId]}
-                  </p>
-                ) : null}
-                {hasName ? null : (
-                  <p className="field-error">Save your name above first.</p>
-                )}
-                <div className="friend-actions">
-                  <button
-                    className="accent-button"
-                    type="button"
-                    disabled={busy !== "" || !hasName}
-                    onClick={() => answer(request, "accept")}
-                  >
-                    {busy === request.requestId ? "Saving…" : "Accept"}
-                  </button>
-                  <button
-                    className="ghost"
-                    type="button"
-                    disabled={busy !== ""}
-                    onClick={() => answer(request, "decline")}
-                  >
-                    Decline
-                  </button>
-                </div>
-              </div>
-            );
-          })}
-
-          {overview.friends.length ? (
-            <ul className="friend-list">
-              {overview.friends.map((friend) => (
-                <li key={friend.accountId}>
-                  <div className="friend-copy">
-                    <strong>{friend.displayName ?? "Friend"}</strong>
-                    <small>
-                      {friend.myPlayer
-                        ? `Your player ${friend.myPlayer.name}`
-                        : "No player linked"}
-                      {friend.theirNameForMe
-                        ? ` · you're ${friend.theirNameForMe} in their list`
-                        : ""}
-                    </small>
-                  </div>
-                  <button
-                    className="pill-button"
-                    type="button"
-                    disabled={busy !== ""}
-                    onClick={() => remove(friend)}
-                  >
-                    Remove
-                  </button>
-                </li>
-              ))}
-            </ul>
-          ) : null}
-
-          {overview.sent.length ? (
-            <ul className="friend-list">
-              {overview.sent.map((request) => (
-                <li key={request.requestId}>
-                  <div className="friend-copy">
-                    <strong>{request.displayName ?? "Someone"}</strong>
-                    <small>
-                      Request sent, waiting for an answer
-                      {request.myPlayerName
-                        ? ` · your player ${request.myPlayerName}`
-                        : ""}
-                    </small>
-                  </div>
-                  <button
-                    className="pill-button"
-                    type="button"
-                    disabled={busy !== ""}
-                    onClick={() => cancel(request.requestId)}
-                  >
-                    Cancel
-                  </button>
-                </li>
-              ))}
-            </ul>
-          ) : null}
-
-          {!overview.friends.length &&
-          !overview.received.length &&
-          !overview.sent.length ? (
-            <p className="muted small-note">
-              No friends yet. Enter a friend&apos;s user code to send them a
-              request. Friends appear in each other&apos;s player lists.
-            </p>
-          ) : null}
-        </>
-      )}
-    </section>
+                <label htmlFor="friend-claim-code">
+                  Your invite code from them (optional)
+                </label>
+                <input
+                  className="field"
+                  id="friend-claim-code"
+                  autoCapitalize="characters"
+                  autoComplete="off"
+                  maxLength={14}
+                  placeholder="P-XXXX-XXXX"
+                  value={claimCode}
+                  onChange={(event) => setClaimCode(event.target.value)}
+                />
+                <p className="muted small-note">
+                  If they already record your games, ask them for your invite
+                  code so your history is linked to you. They confirm it.
+                </p>
+              </details>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
+    </div>
   );
 }
 
-function PlayersView({
-  network,
+/** Renames a guest. People on Menoka choose their own name. */
+function RenameSheet({
+  player,
   players,
-  discardedPlayers,
-  loading,
-  error,
-  onRetry,
-  onAdd,
-  onDiscard,
-  onRestore,
-  onDeletePermanently,
+  onRename,
+  onClose,
 }: {
-  network: React.ReactNode;
+  player: PlayerProfile;
   players: PlayerProfile[];
-  discardedPlayers: PlayerProfile[];
-  loading: boolean;
-  error: string;
-  onRetry: () => void;
-  onAdd: (name: string) => Promise<PlayerProfile | null>;
-  onDiscard: (player: PlayerProfile) => void;
-  onRestore: (player: PlayerProfile) => void;
-  onDeletePermanently: (player: PlayerProfile) => void;
+  onRename: (player: PlayerProfile, name: string) => Promise<boolean>;
+  onClose: () => void;
 }) {
-  const [name, setName] = useState("");
-  const [adding, setAdding] = useState(false);
-  const [nameError, setNameError] = useState("");
-  const [copiedId, setCopiedId] = useState("");
+  const [name, setName] = useState(player.name);
+  const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
 
-  async function add(event: FormEvent<HTMLFormElement>) {
+  useEffect(() => {
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") onClose();
+    }
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [onClose]);
+
+  async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (adding) return;
-    const trimmed = name.trim();
+    if (saving) return;
+    const trimmed = name.trim().replace(/\s+/g, " ");
     if (!trimmed) {
-      setNameError("Enter a name first.");
+      setError("Enter a name");
       return;
     }
-    const existing = players.find(
-      (player) => player.name.trim().toLowerCase() === trimmed.toLowerCase(),
+    if (trimmed === player.name) {
+      onClose();
+      return;
+    }
+    const taken = players.find(
+      (other) =>
+        other.id !== player.id &&
+        other.name.trim().toLowerCase() === trimmed.toLowerCase(),
     );
-    if (existing) {
-      setNameError(`${existing.name} is already in the directory.`);
+    if (taken) {
+      setError(`You already have a player called ${taken.name}`);
       return;
     }
-    setNameError("");
-    setAdding(true);
-    const player = await onAdd(trimmed);
-    if (player) setName("");
-    setAdding(false);
-  }
-
-  async function copyPlayerCode(player: PlayerProfile) {
-    try {
-      await navigator.clipboard.writeText(formatPlayerCode(player.code));
-      setCopiedId(player.id);
-    } catch {
-      // Clipboard blocked: the code is on screen to copy by hand.
-    }
+    setSaving(true);
+    const saved = await onRename(player, trimmed);
+    setSaving(false);
+    if (saved) onClose();
   }
 
   return (
-    <div className="stack-list">
-      {network}
-      <section className="glass card">
-        <div className="count-hero">
-          <strong className="gradient-text-vertical">{players.length}</strong>
-          <div>
-            <span className="eyebrow">Active players</span>
-            <p className="muted">
-              One saved name keeps every future session and standing together.
-            </p>
-          </div>
-        </div>
-
-        <form className="add-player-row" onSubmit={add}>
+    <div
+      className="modal show"
+      role="presentation"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <form
+        className="sheet profile-sheet"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="rename-player-title"
+        onSubmit={save}
+      >
+        <span className="sheet-grabber" aria-hidden="true" />
+        <h2 id="rename-player-title">Rename</h2>
+        <p className="muted small-note">
+          Their standings and future games use the new name. Saved games keep
+          the name they were played under.
+        </p>
+        <div className="add-player-row">
           <input
             className="field"
-            id="new-player-name"
-            aria-label="New player name"
+            aria-label="New name"
+            autoFocus
             maxLength={80}
-            placeholder="Enter their name"
             value={name}
             onChange={(event) => {
               setName(event.target.value);
-              if (nameError) setNameError("");
+              setError("");
             }}
           />
-          <button className="accent-button" type="submit" disabled={adding}>
-            {adding ? "Adding…" : "Add"}
+          <button className="accent-button" type="submit" disabled={saving}>
+            {saving ? "Saving…" : "Save"}
           </button>
-        </form>
-        {nameError ? (
+        </div>
+        {error ? (
           <p className="field-error" role="alert">
-            {nameError}
+            {error}
           </p>
         ) : null}
-      </section>
-
-      <section className="glass card list-card">
-        {error ? (
-          <div className="directory-state">
-            <p className="muted">{error}</p>
-            <button className="ghost full" type="button" onClick={onRetry}>
-              Try again
-            </button>
-          </div>
-        ) : loading ? (
-          <p className="muted">Loading players…</p>
-        ) : players.length || discardedPlayers.length ? (
-          <>
-            {players.map((player, index) => (
-              <div className="directory-player" key={player.id}>
-                <span className="directory-index">
-                  {String(index + 1).padStart(2, "0")}
-                </span>
-                <span className="directory-name">
-                  {player.name}
-                  {player.linked ? <small> · friend</small> : null}
-                  <button
-                    className="directory-code"
-                    type="button"
-                    aria-label={`Copy ${player.name}'s player code, ${formatPlayerCode(player.code)}`}
-                    onClick={() => void copyPlayerCode(player)}
-                  >
-                    {formatPlayerCode(player.code)}
-                    {copiedId === player.id ? " · copied" : ""}
-                  </button>
-                </span>
-                <button
-                  className="pill-button"
-                  type="button"
-                  onClick={() => onDiscard(player)}
-                >
-                  Discard
-                </button>
-              </div>
-            ))}
-            {discardedPlayers.map((player, index) => (
-              <div className="directory-player discarded" key={player.id}>
-                <span className="directory-index">
-                  {String(players.length + index + 1).padStart(2, "0")}
-                </span>
-                <span className="directory-name">
-                  {player.name} <small>· discarded</small>
-                </span>
-                <div className="directory-actions">
-                  <button
-                    className="pill-button"
-                    type="button"
-                    onClick={() => onRestore(player)}
-                  >
-                    Restore
-                  </button>
-                  {player.hasHistory || player.linked ? null : (
-                    <button
-                      className="pill-button danger-text"
-                      type="button"
-                      title="Delete this player permanently"
-                      onClick={() => onDeletePermanently(player)}
-                    >
-                      Delete
-                    </button>
-                  )}
-                </div>
-              </div>
-            ))}
-          </>
-        ) : (
-          <p className="muted">
-            No players yet. Add the first name above, then return to New Game.
-          </p>
-        )}
-      </section>
-      {discardedPlayers.length ? (
-        <p className="muted small-note list-footnote">
-          Discarded players are hidden from new games. Players with saved
-          history can be restored but not permanently deleted.
-        </p>
-      ) : null}
+      </form>
     </div>
   );
 }
@@ -4040,6 +4659,7 @@ type GameViewProps = {
 };
 
 function GameView(props: GameViewProps) {
+  const { currency, money, signedMoney } = useMoney();
   const { game } = props;
   const hand = game.hand;
   const net = (index: number) =>
@@ -4049,7 +4669,7 @@ function GameView(props: GameViewProps) {
   const now = useBlindClock(game.blinds?.unit === "minutes");
   const blinds = blindStatus(game, now);
   const pendingPlan = pendingBlindPlan(game);
-  const nextBlinds = `${formatRupees(blinds.nextSmallBlind)}/${formatRupees(
+  const nextBlinds = `${money(blinds.nextSmallBlind)}/${money(
     blinds.nextBigBlind,
   )}`;
   const blindNote = !blinds.schedule
@@ -4066,9 +4686,9 @@ function GameView(props: GameViewProps) {
       <div className="blinds-pill">
         <span className="blinds-label">Blinds</span>
         <span className="blinds-value">
-          {formatRupees(blinds.smallBlind)}
+          {money(blinds.smallBlind)}
           <span className="blinds-separator"> / </span>
-          {formatRupees(blinds.bigBlind)}
+          {money(blinds.bigBlind)}
         </span>
         {blinds.schedule ? (
           <span className="blinds-level">L{blinds.level + 1}</span>
@@ -4085,7 +4705,7 @@ function GameView(props: GameViewProps) {
       {pendingPlan ? (
         <div className="blind-timer due">
           From hand {pendingPlan.effectiveHand}:{" "}
-          {describeBlindSchedule(pendingPlan.schedule)}
+          {describeBlindSchedule(pendingPlan.schedule, currency)}
         </div>
       ) : null}
     </div>
@@ -4166,11 +4786,11 @@ function GameView(props: GameViewProps) {
                 className="pot gradient-text"
                 style={
                   {
-                    "--chars": formatRupees(hand.pot).length,
+                    "--chars": money(hand.pot).length,
                   } as React.CSSProperties
                 }
               >
-                {formatRupees(hand.pot)}
+                {money(hand.pot)}
               </span>
             </div>
             {blindsDisplay}
@@ -4216,7 +4836,7 @@ function GameView(props: GameViewProps) {
                 <section className="glass card winner-picker">
                   <div className="card-row">
                     <span className="label">Pick the winner</span>
-                    <span className="accent-amount">{formatRupees(hand.pot)}</span>
+                    <span className="accent-amount">{money(hand.pot)}</span>
                   </div>
                   {pending ? (
                     <p className="muted small-note">
@@ -4236,7 +4856,7 @@ function GameView(props: GameViewProps) {
                         {game.players[playerIndex].name} wins
                       </span>
                       <span className="contender-amount">
-                        {formatRupees(hand.pot)}
+                        {money(hand.pot)}
                       </span>
                     </button>
                   ))}
@@ -4276,7 +4896,7 @@ function GameView(props: GameViewProps) {
       <section className="glass card">
         <div className="card-row">
           <h2 className="card-title">Session Standings</h2>
-          <span className="card-note">Start {formatRupees(game.startStack)}</span>
+          <span className="card-note">Start {money(game.startStack)}</span>
         </div>
         <button
           className={`glass-button full live-share-button${
@@ -4302,12 +4922,12 @@ function GameView(props: GameViewProps) {
               <span className="standing-rank">{rank + 1}</span>
               <div className="standing-name">
                 <b>{player.name}</b>
-                <small>Invested {formatRupees(totalBuyIns(game, index))}</small>
+                <small>Invested {money(totalBuyIns(game, index))}</small>
               </div>
               <div className="standing-values">
-                <b>{formatRupees(player.stack)}</b>
+                <b>{money(player.stack)}</b>
                 <small className={toneClass(net(index))}>
-                  {formatSignedRupees(net(index))}
+                  {signedMoney(net(index))}
                 </small>
               </div>
             </div>
@@ -4413,6 +5033,7 @@ function BlindEditor({
   onClose: () => void;
   onSave: (schedule: BlindSchedule | null) => void;
 }) {
+  const { money } = useMoney();
   const pending = pendingBlindPlan(game);
   const initial = pending ? pending.schedule : (game.blinds ?? null);
   const defaults = initial ?? DEFAULT_BLIND_SCHEDULE;
@@ -4457,8 +5078,8 @@ function BlindEditor({
         <h2 id="blind-editor-title">Edit Blind Plan</h2>
         <p className="muted rule-note">
           Current blinds:{" "}
-          {formatRupees(smallBlindFor(game.ante, game.smallBlindRatio))}/
-          {formatRupees(game.ante)}. {game.hand
+          {money(smallBlindFor(game.ante, game.smallBlindRatio))}/
+          {money(game.ante)}. {game.hand
             ? "This hand keeps its posted blinds. The new plan starts with the next dealt hand."
             : "The new plan starts with the next dealt hand."}
         </p>
@@ -4535,7 +5156,7 @@ function BlindEditor({
             <p className="muted rule-note">
               {valid
                 ? `Next levels: ${Array.from({ length: 4 }, (_, level) =>
-                    formatRupees(bigBlindAtLevel(game.ante, schedule, level)),
+                    money(bigBlindAtLevel(game.ante, schedule, level)),
                   ).join(" → ")}. ${unit === "minutes" ? "The timer starts when you save." : "The hand count starts with the next hand."}`
                 : "Enter a whole hand or minute interval and an increase that raises the big blind."}
             </p>
@@ -4543,8 +5164,8 @@ function BlindEditor({
         ) : (
           <p className="muted rule-note">
             Blinds will stay at{" "}
-            {formatRupees(smallBlindFor(game.ante, game.smallBlindRatio))}/
-            {formatRupees(game.ante)} from the next hand onward.
+            {money(smallBlindFor(game.ante, game.smallBlindRatio))}/
+            {money(game.ante)} from the next hand onward.
           </p>
         )}
         <button className="primary full" type="submit" disabled={!valid}>
@@ -4708,6 +5329,7 @@ function BuyInOptions({
   game: GameState;
   onBuyIn: (playerIndex: number) => void;
 }) {
+  const { money } = useMoney();
   const offers = game.players.flatMap((player, index) => {
     const amount = nextBuyIn(game, index);
     return amount === null ? [] : [{ player, index, amount }];
@@ -4729,7 +5351,7 @@ function BuyInOptions({
         >
           <Avatar name={player.name} size="small" />
           <span className="contender-name">{player.name}</span>
-          <span className="contender-amount">Buy in · {formatRupees(amount)}</span>
+          <span className="contender-amount">Buy in · {money(amount)}</span>
         </button>
       ))}
     </div>
@@ -4743,6 +5365,7 @@ function WinnerCard({
   announcement: WinnerAnnouncement;
   onNext: () => void;
 }) {
+  const { money } = useMoney();
   const winnerText = announcement.split
     ? `${announcement.names.join(" And ")} Win`
     : `${announcement.names[0]} Wins`;
@@ -4763,7 +5386,7 @@ function WinnerCard({
         <span className="eyebrow">Pot won · Hand {announcement.handNo}</span>
         <h2 id="winner-title">{winnerText}</h2>
         <p className="gradient-text winner-pot">
-          {formatRupees(announcement.pot)}
+          {money(announcement.pot)}
         </p>
         <button className="cta" type="button" onClick={onNext}>
           Next →
@@ -4773,32 +5396,36 @@ function WinnerCard({
   );
 }
 
-function seatStatus(game: GameState, playerIndex: number) {
+function seatStatus(
+  game: GameState,
+  playerIndex: number,
+  money: (value: number) => string,
+) {
   const hand = game.hand!;
   const player = game.players[playerIndex];
   const committed = hand.committed[playerIndex];
   if (!hand.in[playerIndex]) return "Folded";
-  if (player.stack === 0) return `All in ${formatRupees(committed)}`;
+  if (player.stack === 0) return `All in ${money(committed)}`;
   const last = hand.last[playerIndex];
   if (last) {
     if (last.type === "check") return "Checked";
-    if (last.type === "call") return `Called ${formatRupees(committed)}`;
+    if (last.type === "call") return `Called ${money(committed)}`;
     if (last.type === "bet") {
       // The log line already says whether the chips opened, raised or called.
       return last.line.includes(" raises to ")
-        ? `Raised to ${formatRupees(committed)}`
+        ? `Raised to ${money(committed)}`
         : last.line.includes(" bets ")
-          ? `Bet ${formatRupees(committed)}`
-          : `Called ${formatRupees(committed)}`;
+          ? `Bet ${money(committed)}`
+          : `Called ${money(committed)}`;
     }
-    if (last.type === "all-in") return `All in ${formatRupees(committed)}`;
+    if (last.type === "all-in") return `All in ${money(committed)}`;
   }
   if (hand.stage === 0 && committed > 0) {
     if (playerIndex === hand.bigBlindIndex) {
-      return `Big blind ${formatRupees(committed)}`;
+      return `Big blind ${money(committed)}`;
     }
     if (playerIndex === hand.smallBlindIndex) {
-      return `Small blind ${formatRupees(committed)}`;
+      return `Small blind ${money(committed)}`;
     }
   }
   return "Waiting";
@@ -4829,6 +5456,7 @@ function PlayerRow({
   /** This player's action closed the round; keep the card open but locked. */
   roundClosed?: boolean;
 }) {
+  const { money, symbol } = useMoney();
   const [amount, setAmount] = useState("");
   const hand = game.hand;
   if (!hand) return null;
@@ -4842,7 +5470,7 @@ function PlayerRow({
   const raiseClosed = !mayRaise(game, playerIndex) && player.stack > owed;
   const committed = hand.committed[playerIndex];
   // Once a bet stands (the big blind counts), putting in more is a raise.
-  // Raises are shown as the total they reach, like "raise to ₹1,300",
+  // Raises are shown as the total they reach, like "raise to 1,300",
   // while the box and slider stay as chips to put in now.
   const raising = hand.roundHigh > 0;
   const canUndo = hand.last[playerIndex] && !hand.splitSel;
@@ -4858,7 +5486,7 @@ function PlayerRow({
     stops.findLastIndex((stop) => stop <= betAmount),
   );
   const role = seatRole(game, playerIndex);
-  const stackLine = `${formatRupees(player.stack)} · in ${formatRupees(committed)}`;
+  const stackLine = `${money(player.stack)} · in ${money(committed)}`;
 
   if (roundClosed) {
     return (
@@ -4869,7 +5497,7 @@ function PlayerRow({
             <b>{player.name}</b>
             <small>{stackLine}</small>
           </div>
-          <span className="status-pill">{seatStatus(game, playerIndex)}</span>
+          <span className="status-pill">{seatStatus(game, playerIndex, money)}</span>
           {canUndo ? (
             <button
               className="pill-button"
@@ -4888,7 +5516,7 @@ function PlayerRow({
               Deal <b>{STAGES[hand.stage + 1]}</b> next
             </p>
             <label className="bet-input">
-              <span>₹</span>
+              <span>{symbol.trim()}</span>
               <input type="number" disabled placeholder="—" />
             </label>
           </div>
@@ -4926,7 +5554,7 @@ function PlayerRow({
             <b>{player.name}</b>
             <small>{stackLine}</small>
           </div>
-          <span className="status-pill">{seatStatus(game, playerIndex)}</span>
+          <span className="status-pill">{seatStatus(game, playerIndex, money)}</span>
           {canUndo ? (
             <button
               className="pill-button"
@@ -4957,8 +5585,8 @@ function PlayerRow({
     : allIn
       ? "All in"
       : raising
-        ? `Raise ${formatRupees(committed + betAmount)}`
-        : `Bet ${formatRupees(betAmount)}`;
+        ? `Raise ${money(committed + betAmount)}`
+        : `Bet ${money(betAmount)}`;
 
   return (
     <div className="glass seat-card active">
@@ -4973,27 +5601,27 @@ function PlayerRow({
       <div className="bet-panel">
         <div className="bet-summary">
           <p>
-            To call <b>{formatRupees(Math.min(owed, player.stack))}</b>
+            To call <b>{money(Math.min(owed, player.stack))}</b>
             <br />
             {raiseClosed ? (
               "Call or fold only"
             ) : minimum >= player.stack ? (
               <>
-                All in <b>{formatRupees(player.stack)}</b>
+                All in <b>{money(player.stack)}</b>
               </>
             ) : raising ? (
               <>
-                Min raise <b>{formatRupees(committed + minimum)}</b>
+                Min raise <b>{money(committed + minimum)}</b>
               </>
             ) : (
               <>
-                Min bet <b>{formatRupees(minimum)}</b>
+                Min bet <b>{money(minimum)}</b>
               </>
             )}
           </p>
           {raiseClosed ? null : (
             <label className="bet-input">
-              <span>₹</span>
+              <span>{symbol.trim()}</span>
               <input
                 type="number"
                 inputMode="numeric"
@@ -5025,10 +5653,10 @@ function PlayerRow({
               aria-label={raising ? "Raise size" : "Bet size"}
               aria-valuetext={
                 allIn
-                  ? `All in ${formatRupees(betAmount)}`
+                  ? `All in ${money(betAmount)}`
                   : raising
-                    ? `Raise to ${formatRupees(committed + betAmount)}`
-                    : formatRupees(betAmount)
+                    ? `Raise to ${money(committed + betAmount)}`
+                    : money(betAmount)
               }
               onChange={(event) => {
                 const index = Number(event.target.value);
@@ -5067,7 +5695,7 @@ function PlayerRow({
             onClick={() => onAct(playerIndex, owed > 0 ? "call" : "check")}
           >
             {owed > 0
-              ? `Call ${formatRupees(Math.min(owed, player.stack))}`
+              ? `Call ${money(Math.min(owed, player.stack))}`
               : "Check"}
           </button>
           {raiseClosed ? null : (
@@ -5111,6 +5739,7 @@ function SplitView({
   onSplit: () => void;
   onBack: () => void;
 }) {
+  const { money } = useMoney();
   const hand = game.hand;
   if (!hand?.splitSel) return null;
   const selected = [...hand.splitSel].sort((a, b) => a - b);
@@ -5121,7 +5750,7 @@ function SplitView({
     <section className="glass card winner-picker">
       <div className="card-row">
         <span className="label">Split the pot</span>
-        <span className="accent-amount">{formatRupees(hand.pot)}</span>
+        <span className="accent-amount">{money(hand.pot)}</span>
       </div>
       {activeIndexes(game).map((playerIndex) => {
         const isSelected = hand.splitSel?.includes(playerIndex) ?? false;
@@ -5140,14 +5769,14 @@ function SplitView({
               {game.players[playerIndex].name}
             </span>
             <span className={`contender-amount ${isSelected ? "" : "muted"}`}>
-              {isSelected ? formatRupees(share) : "Tap to include"}
+              {isSelected ? money(share) : "Tap to include"}
             </span>
           </button>
         );
       })}
       {selected.length > 1 ? (
         <button className="blue-button full tall" type="button" onClick={onSplit}>
-          Split {formatRupees(hand.pot)} {selected.length} ways
+          Split {money(hand.pot)} {selected.length} ways
         </button>
       ) : (
         <p className="muted small-note">Select at least 2 players.</p>
@@ -5233,6 +5862,7 @@ function SessionCard({
   onRestore?: (id: string) => void;
   onDeletePermanently?: (id: string) => void;
 }) {
+  const { currency, money, signedMoney } = useMoney();
   const sortedResults = [...session.results].sort((a, b) => b.net - a.net);
 
   return (
@@ -5244,7 +5874,7 @@ function SessionCard({
           </h2>
           <p className="muted session-meta">
             {formatDate(session.date)} · {session.hands} hands · Big blind{" "}
-            {formatRupees(session.ante)} · {session.results.length} players
+            {money(session.ante)} · {session.results.length} players
           </p>
         </div>
         <div className="session-actions">
@@ -5281,36 +5911,36 @@ function SessionCard({
           <summary>
             Blind history · {session.blindHistory.levels.length} amount
             {session.blindHistory.levels.length === 1 ? "" : "s"} used · finished at{" "}
-            {formatRupees(
+            {money(
               smallBlindFor(
                 session.blindHistory.levels.at(-1)!.bigBlind,
                 session.blindHistory.smallBlindRatio,
               ),
             )}
-            /{formatRupees(session.blindHistory.levels.at(-1)!.bigBlind)}
+            /{money(session.blindHistory.levels.at(-1)!.bigBlind)}
           </summary>
           <div className="session-blind-history-content">
             <b>Plans</b>
             {session.blindHistory.plans.map((plan) => (
               <div key={plan.effectiveHand}>
-                From hand {plan.effectiveHand}: {formatRupees(
+                From hand {plan.effectiveHand}: {money(
                   smallBlindFor(
                     plan.baseBigBlind,
                     session.blindHistory!.smallBlindRatio,
                   ),
-                )}/{formatRupees(plan.baseBigBlind)} ·{" "}
-                {describeBlindSchedule(plan.schedule)}
+                )}/{money(plan.baseBigBlind)} ·{" "}
+                {describeBlindSchedule(plan.schedule, currency)}
               </div>
             ))}
             <b>Blinds used</b>
             {session.blindHistory.levels.map((level) => (
               <div key={level.handNo}>
-                Hand {level.handNo}: {formatRupees(
+                Hand {level.handNo}: {money(
                   smallBlindFor(
                     level.bigBlind,
                     session.blindHistory!.smallBlindRatio,
                   ),
-                )}/{formatRupees(level.bigBlind)}
+                )}/{money(level.bigBlind)}
               </div>
             ))}
           </div>
@@ -5330,14 +5960,14 @@ function SessionCard({
               {result.buyIns && result.buyIns.length > 1 ? (
                 <small>
                   Buy-ins{" "}
-                  {formatRupees(
+                  {money(
                     result.buyIns.reduce((sum, amount) => sum + amount, 0),
                   )}
                 </small>
               ) : null}
             </span>
             <span className={`result-amount ${toneClass(result.net)}`}>
-              {formatSignedRupees(result.net)}
+              {signedMoney(result.net)}
             </span>
           </div>
         ))}
@@ -5368,16 +5998,19 @@ type StandingCardEntry = {
 };
 
 function StandingCard({
+  id,
   entry,
   open,
   onToggle,
   excluded,
 }: {
+  id?: string;
   entry: StandingCardEntry;
   open: boolean;
   onToggle: () => void;
   excluded?: React.ReactNode;
 }) {
+  const { money, signedMoney } = useMoney();
   const profitableRate = Math.round(
     (entry.profitableSessions / entry.totalSessions) * 100,
   );
@@ -5391,11 +6024,11 @@ function StandingCard({
     ],
     ["Profitable", `${entry.profitableSessions} (${profitableRate}%)`, null],
     ["Hands", entry.hands.toLocaleString("en-IN"), null],
-    ["Invested", formatRupees(entry.invested), null],
-    ["Net chips", formatSignedRupees(entry.net), entry.net],
+    ["Invested", money(entry.invested), null],
+    ["Net", signedMoney(entry.net), entry.net],
   ];
   return (
-    <section className={`glass standing-card${entry.isMe ? " is-me" : ""}`}>
+    <section id={id} className={`glass standing-card${entry.isMe ? " is-me" : ""}`}>
       <button
         className="standing-toggle"
         type="button"
@@ -5577,7 +6210,9 @@ function GroupStandingsView({ group }: { group: GroupStandings }) {
     });
   }
 
+  // Amounts show in the currency this host counts their games in.
   return (
+    <CurrencyContext.Provider value={group.currency}>
     <div className="stack-list">
       {rows.length ? (
         <LeaderboardChart
@@ -5614,24 +6249,58 @@ function GroupStandingsView({ group }: { group: GroupStandings }) {
         </button>
       ) : null}
     </div>
+    </CurrencyContext.Provider>
   );
 }
 
 function StandingsView({
   history,
+  players,
+  selfPlayerId,
+  focusKey,
   loading,
   error,
   onRetry,
 }: {
   history: PokerSession[];
+  /** Current names: a renamed guest or a friend's chosen name wins over saved ones. */
+  players: PlayerProfile[];
+  selfPlayerId: string | null;
+  /** A player's card to open and scroll to, from "View standings". */
+  focusKey: string | null;
   loading: boolean;
   error: string;
   onRetry: () => void;
 }) {
-  const standings = useMemo(() => buildStandings(history), [history]);
+  const standings = useMemo(() => {
+    const built = buildStandings(history);
+    const names = new Map(players.map((player) => [player.id, player.name]));
+    const selfKey = selfPlayerId ? `id:${selfPlayerId}` : null;
+    return {
+      ...built,
+      entries: built.entries.map((entry) => ({
+        ...entry,
+        name: (entry.playerId && names.get(entry.playerId)) || entry.name,
+        isMe: entry.key === selfKey,
+      })),
+    };
+  }, [history, players, selfPlayerId]);
   const leaderboard = standings.entries;
-  const [expanded, setExpanded] = useState<Set<string>>(new Set());
-  const [showAll, setShowAll] = useState(false);
+  const [expanded, setExpanded] = useState<Set<string>>(
+    () => new Set(focusKey ? [focusKey] : []),
+  );
+  // A focused player past the first few opens the full list.
+  const [showAll, setShowAll] = useState(
+    () =>
+      Boolean(focusKey) &&
+      leaderboard.findIndex((entry) => entry.key === focusKey) >= STANDINGS_START,
+  );
+  useEffect(() => {
+    if (!focusKey || loading) return;
+    document
+      .getElementById(`standing-${focusKey}`)
+      ?.scrollIntoView({ block: "center" });
+  }, [focusKey, loading, showAll]);
   const sessionTitles = useMemo(
     () =>
       new Map(
@@ -5692,6 +6361,7 @@ function StandingsView({
       {visible.map((entry) => (
         <StandingCard
           key={entry.key}
+          id={`standing-${entry.key}`}
           entry={entry}
           open={expanded.has(entry.key)}
           onToggle={() => toggle(entry.key)}
@@ -6134,6 +6804,7 @@ function Modal({
   onClose: () => void;
   onConfirm: () => void;
 }) {
+  const { money } = useMoney();
   function confirm() {
     if (state.kind === "rules") {
       onClose();
@@ -6234,8 +6905,8 @@ function Modal({
                   The Smallest Bet Is The Big Blind. A Raise Must Add At Least
                   As Much As The Last Bet Or Raise On This Street, So Before
                   The Flop The First Raise Makes The Total Twice The Big
-                  Blind, And After A Raise From ₹100 To ₹400 The Next Raise Is
-                  To At Least ₹700. Each New Street Starts Again At The Big
+                  Blind, And After A Raise From {money(100)} To {money(400)} The
+                  Next Raise Is To At Least {money(700)}. Each New Street Starts Again At The Big
                   Blind. A Player May Always Go All-In For Less, But That Short
                   All-In Doesn&apos;t Let Players Who Already Acted Raise Again:
                   They May Only Call Or Fold.
@@ -6250,7 +6921,7 @@ function Modal({
                 <p>
                   After The River, Choose One Winner Or Split The Pot Between
                   Two Or More Active Players. A Split Is Equal, With Any
-                  Leftover ₹1 Chips Awarded In Player Order. Confirm The Winner,
+                  Leftover {money(1)} Chips Awarded In Player Order. Confirm The Winner,
                   Then Deal The Next Hand To Rotate The Button And Post Fresh
                   Blinds.
                 </p>

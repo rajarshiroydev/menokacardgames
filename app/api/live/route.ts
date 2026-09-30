@@ -22,12 +22,16 @@ function json(body: object, status = 200) {
 /** Reads and checks the host's snapshot, returning the standings to store. */
 async function readLiveView(
   request: Request,
+  currency: string,
 ): Promise<{ view: LiveView } | { response: Response }> {
   const read = await readJsonBody(request, SMALL_JSON_BODY_LIMIT);
   if (!read.ok) return { response: json({ error: read.error }, read.status) };
   try {
     const body = (read.body ?? {}) as { snapshot?: unknown };
-    return { view: deriveLiveView(validateLiveSnapshot(body.snapshot)) };
+    // The currency comes from the host's account, not from the device.
+    return {
+      view: { ...deriveLiveView(validateLiveSnapshot(body.snapshot)), currency },
+    };
   } catch (error) {
     return {
       response: json(
@@ -48,7 +52,7 @@ async function handlePost(request: Request) {
   const ownerId = authResult.account.id;
   const authUserId = authResult.session.user.id;
 
-  const read = await readLiveView(request);
+  const read = await readLiveView(request, authResult.profile.currency);
   if ("response" in read) return read.response;
 
   try {
@@ -91,7 +95,7 @@ async function handlePut(request: Request) {
   const ownerId = authResult.account.id;
   const authUserId = authResult.session.user.id;
 
-  const read = await readLiveView(request);
+  const read = await readLiveView(request, authResult.profile.currency);
   if ("response" in read) return read.response;
 
   try {

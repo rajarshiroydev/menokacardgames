@@ -1,4 +1,5 @@
-// Runs the app locally against the testbed (http://localhost:3006).
+// Runs the app locally against the testbed (http://localhost:3006, or the
+// port in PORT, which the preview pane sets when 3006 is taken).
 // Values from .env.testbed.local override .env.local (Next never overwrites
 // variables that are already set), and every production-related credential is
 // blanked so testbed mode can't reach real data or real services.
@@ -8,7 +9,7 @@ import { spawn } from "node:child_process";
 
 import { testbedEnv } from "./lib/env.mjs";
 
-export const TESTBED_PORT = 3006;
+export const TESTBED_PORT = Number(process.env.PORT) || 3006;
 
 const BLANKED = [
   "PURGE_DATABASE_URL",

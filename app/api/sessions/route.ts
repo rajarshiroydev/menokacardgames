@@ -164,6 +164,23 @@ async function handleGet() {
 
 type PlayerRecord = { id: string; name: string; name_key: string };
 
+/**
+ * The owner's players, each with the name saved results should carry: people
+ * with an account go by the name they chose (see player_display_names).
+ */
+function selectPlayerRecords(
+  sql: TransactionSql,
+  ownerId: string,
+) {
+  return sql`
+    SELECT player.id, names.display_name AS name, player.name_key
+    FROM players AS player
+    JOIN public.player_display_names() AS names
+      ON names.player_id = player.id
+    WHERE player.owner_id = ${ownerId}::uuid
+  `;
+}
+
 type PlayerDirectory = {
   byId: Map<string, PlayerRecord>;
   byName: Map<string, PlayerRecord>;
@@ -295,11 +312,7 @@ async function handlePost(request: Request) {
     // writing anything, so a conflicting request saves nothing.
     const [existingPlayers, existingSessionsResult] =
       await runAsAuthenticatedUser(authUserId, (sql) => [
-        sql`
-          SELECT id, name, name_key
-          FROM players
-          WHERE owner_id = ${ownerId}::uuid
-        `,
+        selectPlayerRecords(sql, ownerId),
         selectSessions(sql, ownerId, sessionIds),
       ]);
     const savedBefore = savedSessionMap(
@@ -335,11 +348,7 @@ async function handlePost(request: Request) {
     }
 
     const [playersResult] = await runAsAuthenticatedUser(authUserId, (sql) => [
-      sql`
-        SELECT id, name, name_key
-        FROM players
-        WHERE owner_id = ${ownerId}::uuid
-      `,
+      selectPlayerRecords(sql, ownerId),
     ]);
     const players = playerDirectory(playersResult as PlayerRecord[]);
 

@@ -1,7 +1,8 @@
 // Talks to the locally running testbed app (npm run testbed:dev) as one
 // persona: signs up or in through the app's own auth route, keeps the session
 // cookies, and calls the API the way the browser does.
-export const TESTBED_ORIGIN = "http://localhost:3006";
+/** Set TESTBED_PORT when the testbed app runs on another port. */
+export const TESTBED_ORIGIN = `http://localhost:${process.env.TESTBED_PORT || 3006}`;
 
 export class ApiError extends Error {
   status: number;
