@@ -2178,7 +2178,7 @@ function HomeView({
       <footer className="home-footer">
         <div className="account-pill">
           <span>
-            Signed in as <strong>{accountEmail}</strong>
+            Signed in as <strong className="literal-text">{accountEmail}</strong>
           </span>
           <form action={signOut}>
             <button type="submit">Sign out</button>
@@ -3766,9 +3766,6 @@ function ProfileView({
             : `Show ${removedRows.length} removed player${removedRows.length === 1 ? "" : "s"}`}
         </button>
       ) : null}
-      <p className="profile-hint">
-        Press and hold a player, or tap ⋯, for more options
-      </p>
 
       {adding ? (
         <AddPlayerSheet

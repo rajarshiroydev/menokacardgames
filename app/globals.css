@@ -82,6 +82,10 @@ body {
   font: 400 15px/1.5 var(--fb);
   -webkit-text-size-adjust: 100%;
   font-variant-numeric: tabular-nums;
+  /* House style (user decision 2026-09-30): every word starts with a
+     capital. Headings set their own uppercase. What people type, emails and
+     links keep their exact case (see .literal-text). */
+  text-transform: capitalize;
 }
 
 button,
@@ -90,6 +94,12 @@ select,
 textarea {
   font: inherit;
   color: inherit;
+}
+
+button,
+select {
+  /* Browsers reset this on form controls; follow the house style. */
+  text-transform: inherit;
 }
 
 button {
@@ -316,6 +326,17 @@ p {
 
 .literal-text {
   overflow-wrap: anywhere;
+  text-transform: none;
+}
+
+input,
+textarea {
+  text-transform: none;
+}
+
+input::placeholder,
+textarea::placeholder {
+  text-transform: capitalize;
 }
 
 /* Inputs */
@@ -1971,14 +1992,6 @@ p {
   color: var(--ink3);
   font-size: 13px;
   font-weight: 600;
-}
-
-.profile-hint {
-  padding: 0 20px;
-  color: var(--ink3);
-  font-size: 11px;
-  line-height: 1.4;
-  text-align: center;
 }
 
 .sheet.profile-sheet {
@@ -3769,6 +3782,7 @@ p {
 
 .live-link {
   color: var(--ink2);
+  text-transform: none;
   font-size: 12px;
   text-align: center;
   overflow-wrap: anywhere;

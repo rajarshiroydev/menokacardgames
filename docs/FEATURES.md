@@ -30,6 +30,7 @@ This is a plain-language list of everything Menoka Card Games can do today. It i
 - **Unassigned device data**: appears only if this device has games saved before accounts existed (see section 16).
 - **Tab bar.** A bar at the bottom of every screen has five tabs: **Home**, **Play** (the game in progress, or table setup when there isn't one), **Ranks** (standings), **Games** (saved game sessions) and **Profile** (you and your players, section 3). The current tab is highlighted in green.
 - **Every other screen** shows its title at the top left (for example **Profile** or **Hand 12**) with no line above it, and the theme button at the top right. There is no on-screen back button; use the phone's back gesture or the browser's back button.
+- **Title Case everywhere.** All text on every page (buttons, labels, notes, messages, the live link and the sign-in pages) starts each word with a capital, and headings are in capitals. The messages quoted in this list are shown that way in the app. Text boxes keep what you type, and email addresses and links keep their exact case.
 - **Dark and light themes.** A round theme button shows a **sun** in dark mode (tap for light) and a **moon** in light mode (tap for dark). It's on every page: the app's screens, the sign-in page, the name screen, the locked-account page and the live standings link. The choice is remembered on that device. Dark is the default.
 
 ## 3. Profile (you and your players)
@@ -78,7 +79,6 @@ The **Profile** tab replaced the Players tab on 30 September 2026. From the top:
   - they aren't linked to a friend
   - you signed in within the last 10 minutes (see section 13)
 - **Invite codes.** Every player has their own code, **P-** plus eight characters (for example P-N7QA-2G2P); **Copy invite code** copies it. Codes use only letters and numbers that can't be confused (no 0, O, 1, I or L), never change, and no two players share one. Give a guest who hasn't signed up yet their code: once they sign up, they put it in their friend request to you, so you can link their account to their history (see section 20). A code on its own gives nobody access to anything; you always confirm the link.
-- A hint at the bottom says "Press and hold a player, or tap ⋯, for more options".
 
 ## 4. Starting a game
 

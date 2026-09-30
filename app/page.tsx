@@ -27,7 +27,7 @@ export default async function Home() {
         <>
           <header className="account-bar">
             <span>
-              Signed in as <strong>{session.user.email}</strong>
+              Signed in as <strong className="literal-text">{session.user.email}</strong>
             </span>
             <form action={signOut}>
               <button type="submit">Sign out</button>
@@ -51,7 +51,7 @@ export default async function Home() {
     <>
       <header className="account-bar">
         <span>
-          Signed in as <strong>{session.user.email}</strong>
+          Signed in as <strong className="literal-text">{session.user.email}</strong>
         </span>
         <form action={signOut}>
           <button type="submit">Sign out</button>

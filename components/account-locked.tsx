@@ -115,7 +115,7 @@ export function AccountLocked({
                 <p>
                   For safety, recovery needs a sign-in from the last{" "}
                   {RECENT_SIGN_IN_WINDOW_MS / 60_000} minutes. We will email a
-                  new sign-in link to <strong>{email}</strong>. Open it on this
+                  new sign-in link to <strong className="literal-text">{email}</strong>. Open it on this
                   device, then recover again.
                 </p>
                 <button type="button" onClick={() => void sendLink()}>
