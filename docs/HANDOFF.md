@@ -22,7 +22,7 @@ Updated 2026-09-27 on **`main`**. **Production runs `d993b89`** (pushed 2026-09-
 1. **Name on first sign-in (live since 2026-09-25, `96aebbf`):** an account without a name sees a "What should friends call you?" screen before the app (`components/name-setup.tsx`, gated in `app/page.tsx`). The user checked it on the dev server as roystark24@gmail.com. The live account gets the screen on its next visit (not yet seen on production), after which the user shares their user code with friends.
 2. **Friend network follow-ups (ideas, not decided):** a badge or notification for new requests (today they appear only when the Players screen opens or on Refresh); a Home tile for groups.
 3. **Healthchecks.io alerts:** the check pings green but has no notification integration; the user adds email.
-4. **Firewall:** "Limit API writes" is in **Log** mode since 2026-09-25. Around 2026-10-02, check Firewall → Overview, switch it to 429 with the user's OK, then send 31 quick writes and confirm "Too many requests". Friend actions are POSTs, so they count.
+4. **Firewall:** "Limit API writes" is in **Log** mode since 2026-09-25. Checked 2026-09-30: clean, but Hobby shows only the past day. User decision: the day after the next game, check Firewall → Overview (Past Day), then switch it to 429 with the user's OK, send 31 quick writes and confirm "Too many requests". Friend actions are POSTs, so they count. Before the App Store launch: per-account server limits and Vercel Pro (plan entry "Rate limits and hosting for the store launch").
 5. **Neon tidy-up (with the user's OK):**
    - done 2026-09-30: `br-small-sea-ayumyssr` is the default branch;
    - consider deleting `restore-copy-2026-09-24`, `claim-test-throwaway` and `vercel-preview`;
