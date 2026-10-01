@@ -1,5 +1,5 @@
 // Neon Auth settings for one branch through the Neon API.
-// Usage: node scripts/neon-auth.mjs <branchId> get | harden | add-domain <https://origin> | no-localhost
+// Usage: node scripts/neon-auth.mjs <branchId> get | harden | rename | add-domain <https://origin> | no-localhost
 // Reads NEON_API_KEY from the repo's .env.local and never prints it.
 import { readFileSync } from "node:fs";
 const env = Object.fromEntries(
@@ -32,6 +32,9 @@ if (action === "get") {
 } else if (action === "no-localhost") {
   await call("PATCH", "/allow_localhost", { allow_localhost: false });
   await call("GET", "/allow_localhost");
+} else if (action === "rename") {
+  // The app name Neon Auth puts in sign-in emails; touches nothing else.
+  await call("PATCH", "/config", { name: "Pokerize" });
 } else if (action === "harden") {
   await call("PATCH", "/email_and_password", { enabled: false, disable_sign_up: true });
   await call("PATCH", "/plugins/magic-link", { enabled: true, expires_in: 5, disable_sign_up: false });
