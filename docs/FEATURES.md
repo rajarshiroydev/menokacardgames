@@ -100,7 +100,7 @@ The **Profile** tab replaced the Players tab on 30 September 2026. From the top:
 - **Rising blinds** go up automatically. You choose:
   - how often: every so many **hands** or every so many **minutes** (at least 1). Choosing By Hands starts at every 10 hands; By Minutes starts at every 20 minutes
   - how: **multiply** the big blind (for example ×2, minimum ×1.1) or **add** a fixed amount (at least 1). On the setup screen this Multiply / Add fixed amount choice comes first, above the "Every" and "Multiply by" (or "Add ₹") boxes
-  - the setup screen previews the next few big blind levels, for example 100 → 200 → 400 → 800
+  - the setup screen previews the next few big blind levels, for example 100, 200, 400, 800
 - **Blinds never change mid-hand.** A new level always starts when the next hand is dealt. For timed blinds, if the time runs out during a hand, the increase waits for the next deal.
 - **Blinds are easy to see.** During a hand, the current blinds appear in large numbers in a pill right under the pot, with a level badge (for example "L2") when blinds rise. The same pill appears between hands. Inside it is the countdown to the next level: hands left for hand-based levels, or minutes and seconds for timed ones (this keeps counting between hands). When the blinds go up, a short message says so.
 - **Edit Blind Plan** between hands. You can switch rising blinds on or off or change the schedule. Changes start with the next dealt hand, and the screen shows when the new plan begins.
@@ -130,7 +130,7 @@ The **Profile** tab replaced the Players tab on 30 September 2026. From the top:
   - each new street (flop, turn, river) starts again at the big blind
   - a player can always go all in for less
 - **Short all-ins.** An all-in that raises by less than the minimum is a "short all-in". Players who already acted must still call it or fold, but they can't raise again: their row shows only Call and Fold, with a note saying why. Players who haven't acted yet on that street can still raise. A later full raise lets everyone raise again. The action log marks it as "short of a full raise".
-- **A raise reopens the betting.** The round ends only when every player still in has called, checked, folded or gone all in. The blue button that deals the next street always names it ("Deal FLOP →", "Deal TURN →" or "Deal RIVER →"); it is faded and can't be pressed until the round ends. It sits under the seat cards and stays in the same spot while you play: when a player's action ends the round, their card stays open (greyed out, marked "Betting round complete · Deal FLOP next", with Undo still available) until the next street is dealt, so the Deal button doesn't jump. At the river it is replaced by the Pick the winner card.
+- **A raise reopens the betting.** The round ends only when every player still in has called, checked, folded or gone all in. The blue button that deals the next street always names it ("Deal FLOP", "Deal TURN" or "Deal RIVER"); it is faded and can't be pressed until the round ends. It sits under the seat cards and stays in the same spot while you play: when a player's action ends the round, their card stays open (greyed out, marked "Betting round complete · Deal FLOP next", with Undo still available) until the next street is dealt, so the Deal button doesn't jump. At the river it is replaced by the Pick the winner card.
 - **Pot and stages.** A scoreboard at the top shows the four stages as a bar (finished stages green, the current one green-blue), the pot in very large numbers and the blinds. Very large pots shrink to fit on one line.
 - **Everyone else folds:** the last player left wins the pot automatically.
 - **All-in run-out:** once betting can't continue (for example, everyone else is all in), the host can deal the remaining stages straight to the showdown without more betting.
@@ -297,7 +297,7 @@ Everyone who signs in has their own account and can host their own games. Friend
 
 **Your code and name**
 
-- **Your user code.** Eight characters shown as two groups of four (for example 7KQ4-M2XP) on your Profile card. Every account gets one automatically. It uses only letters and numbers that can't be confused (no 0, O, 1, I or L). **Copy** copies it. Share it with friends so they can send you a request.
+- **Your user code.** Eight characters shown as two groups of four (for example 7KQ4-M2XP) on your Profile card. Every account gets one automatically. It uses only letters and numbers that can't be confused (no 0, O, 1, I or L). The **copy** button (a copy icon) copies it and briefly shows a green tick. Share it with friends so they can send you a request.
 - **Replace your code.** **⋯ → Replace code** gives you a new random code straight away; the menu explains that the old code stops working and existing friends stay. There is no limit on how often you can replace it.
 - **Your name** is the one on your Profile card (1 to 40 characters). Every account sets one straight after its first sign-in (section 1). You can change it at any time, but not remove it. Friends see it as your name in their player list.
 - **Who can see them.** Someone who types your exact code sees only your name, never your email. There is no browsing or searching by name.

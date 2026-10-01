@@ -2137,9 +2137,6 @@ function HomeView({
                 {hand ? money(hand.pot) : game.sessionLabel || game.gameName}
               </span>
             </span>
-            <span className="arrow-circle" aria-hidden="true">
-              →
-            </span>
           </span>
         </button>
       ) : (
@@ -2147,9 +2144,6 @@ function HomeView({
           <span>
             <strong>Start A Game</strong>
             <small>Seat players, set stacks, deal</small>
-          </span>
-          <span className="start-arrow" aria-hidden="true">
-            →
           </span>
         </button>
       )}
@@ -3207,8 +3201,8 @@ function SetupView({
                 <>
                   Big blind: {ladder
                     .map((bigBlind) => money(bigBlind))
-                    .join(" → ")}{" "}
-                  → …
+                    .join(", ")}
+                  , …
                   {blindUnit === "minutes"
                     ? " Timed levels apply when the next hand is dealt."
                     : ""}
@@ -3235,7 +3229,7 @@ function SetupView({
           !smallBlindValid
         }
       >
-        Deal First Hand →
+        Deal First Hand
       </button>
     </form>
   );
@@ -3637,7 +3631,8 @@ function ProfileView({
 
       <div className="profile-players-heading">
         <h2>
-          Players <span>{players.length}</span>
+          <span>{players.length}</span>{" "}
+          {players.length === 1 ? "Player" : "Players"}
         </h2>
         <button
           className="profile-add-button"
@@ -4124,11 +4119,32 @@ function ProfileCard({
           <strong>{formatUserCode(profile.userCode)}</strong>
         </div>
         <button
-          className={`pill-button${copied ? " accent-text" : ""}`}
+          className={`profile-more bordered profile-copy${copied ? " accent-text" : ""}`}
           type="button"
+          aria-label={copied ? "Copied" : "Copy your user code"}
+          title={copied ? "Copied" : "Copy"}
           onClick={() => void copyCode()}
         >
-          {copied ? "Copied" : "Copy"}
+          <svg
+            viewBox="0 0 24 24"
+            width="16"
+            height="16"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            {copied ? (
+              <path d="M5 12.5l4.5 4.5L19 7.5" />
+            ) : (
+              <>
+                <rect x="9" y="9" width="11" height="11" rx="2.5" />
+                <path d="M15 9V6.5A2.5 2.5 0 0 0 12.5 4h-6A2.5 2.5 0 0 0 4 6.5v6A2.5 2.5 0 0 0 6.5 15H9" />
+              </>
+            )}
+          </svg>
         </button>
         <div className="profile-code-more">
           <button
@@ -4843,7 +4859,7 @@ function GameView(props: GameViewProps) {
             <>
               {enoughPlayers ? (
                 <button className="cta" type="button" onClick={props.onNextHand}>
-                  Deal The Next Hand →
+                  Deal The Next Hand
                 </button>
               ) : null}
               <BuyInOptions game={game} onBuyIn={props.onBuyIn} />
@@ -4927,7 +4943,7 @@ function GameView(props: GameViewProps) {
                   disabled={pending}
                   onClick={props.onNextStage}
                 >
-                  Deal {STAGES[hand.stage + 1]} →
+                  Deal {STAGES[hand.stage + 1]}
                 </button>
               ) : (
                 <section className="glass card winner-picker">
@@ -5254,7 +5270,7 @@ function BlindEditor({
               {valid
                 ? `Next levels: ${Array.from({ length: 4 }, (_, level) =>
                     money(bigBlindAtLevel(game.ante, schedule, level)),
-                  ).join(" → ")}. ${unit === "minutes" ? "The timer starts when you save." : "The hand count starts with the next hand."}`
+                  ).join(", ")}. ${unit === "minutes" ? "The timer starts when you save." : "The hand count starts with the next hand."}`
                 : "Enter a whole hand or minute interval and an increase that raises the big blind."}
             </p>
           </>
@@ -5486,7 +5502,7 @@ function WinnerCard({
           {money(announcement.pot)}
         </p>
         <button className="cta" type="button" onClick={onNext}>
-          Next →
+          Next
         </button>
       </section>
     </div>

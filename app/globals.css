@@ -23,6 +23,7 @@
   --orb: 0.55;
   --scrim: rgba(2, 4, 5, 0.72);
   --sheet: rgba(14, 19, 22, 0.92);
+  --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='rgba(243,246,244,0.64)' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
   color-scheme: dark;
 }
 
@@ -44,6 +45,7 @@
   --orb: 0.6;
   --scrim: rgba(40, 55, 62, 0.4);
   --sheet: rgba(240, 244, 246, 0.94);
+  --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='rgba(7,10,12,0.64)' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
   color-scheme: light;
 }
 
@@ -358,6 +360,18 @@ textarea::placeholder {
   outline: none;
 }
 
+/* Our own chevron, inset from the edge: the browser's arrow ignores padding. */
+.sheet select,
+.select-control {
+  -webkit-appearance: none;
+  appearance: none;
+  padding-right: 40px;
+  background-image: var(--chevron);
+  background-position: right 14px center;
+  background-repeat: no-repeat;
+  background-size: 12px 8px;
+}
+
 .field:focus,
 .sheet input:focus,
 .sheet select:focus {
@@ -632,7 +646,8 @@ textarea::placeholder {
 /* The Ranks screen's choice of whose standings, in the selected-button green. */
 .standings-picker .select-control {
   overflow: hidden;
-  padding-right: 32px;
+  padding-right: 40px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%2303110a' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
   border-color: var(--g);
   background-color: var(--g);
   color: var(--onacc);
@@ -1024,19 +1039,6 @@ textarea::placeholder {
   white-space: nowrap;
 }
 
-.arrow-circle {
-  display: grid;
-  flex: none;
-  place-items: center;
-  width: 44px;
-  height: 44px;
-  border-radius: 50%;
-  background: var(--g);
-  color: var(--onacc);
-  font-size: 20px;
-  font-weight: 700;
-}
-
 .start-card {
   display: flex;
   align-items: center;
@@ -1054,11 +1056,6 @@ textarea::placeholder {
 .start-card small {
   color: var(--onacc);
   font-weight: 500;
-}
-
-.start-arrow {
-  font-size: 24px;
-  font-weight: 700;
 }
 
 .home-tiles {
@@ -1392,6 +1389,9 @@ textarea::placeholder {
   gap: 18px;
   padding: 18px;
   overflow: hidden;
+  /* The glow sticks out; clip, unlike hidden, can't be scrolled sideways
+     when a button inside gets focus or is scrolled into view. */
+  overflow: clip;
 }
 
 .profile-card > * {
@@ -1665,10 +1665,13 @@ textarea::placeholder {
   letter-spacing: 0.08em;
 }
 
-.profile-code-row .pill-button {
-  height: 32px;
-  padding: 0 13px;
-  font-weight: 700;
+.profile-copy {
+  display: inline-grid;
+  place-items: center;
+}
+
+.profile-copy.accent-text {
+  color: var(--g);
 }
 
 .profile-code-more {
@@ -1686,7 +1689,8 @@ textarea::placeholder {
   flex: none;
   width: 112px;
   height: 36px;
-  padding: 0 10px;
+  padding: 0 32px 0 14px;
+  background-position: right 13px center;
   border-radius: 999px;
   font-size: 13px;
   font-weight: 700;
@@ -1825,9 +1829,7 @@ textarea::placeholder {
 }
 
 .profile-players-heading h2 span {
-  margin-left: 4px;
   color: var(--b);
-  font-size: 20px;
 }
 
 .profile-add-button {
