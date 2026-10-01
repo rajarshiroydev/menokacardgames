@@ -603,35 +603,3 @@ export function undoLastHand(game: GameState, now = Date.now()) {
 }
 
 /** Refunds the current hand and restores the state from immediately before it was dealt. */
-export function returnToBetweenHands(game: GameState) {
-  const hand = game.hand;
-  if (!hand) return false;
-
-  game.players.forEach((player, index) => {
-    player.stack = hand.stacksBeforeHand[index];
-  });
-  game.log = game.log.filter(
-    (line) => !new RegExp(`^Hand ${hand.no}(?::|\\s)`).test(line),
-  );
-  game.handNo = hand.no - 1;
-  game.dealerIndex =
-    hand.dealerIndexBefore ?? previousEligibleIndex(hand.in, hand.dealerIndex);
-
-  const restoredLevels = hand.blindLevelsBefore
-    ? structuredClone(hand.blindLevelsBefore)
-    : (game.blindLevels ?? []).filter((level) => level.handNo < hand.no);
-  const restoredAnte =
-    hand.anteBefore ?? restoredLevels.at(-1)?.bigBlind ?? startingBigBlind(game);
-  const currentAnte = game.ante;
-  game.ante = restoredAnte;
-  game.blindLevel =
-    hand.blindLevelBefore ??
-    (currentAnte === restoredAnte
-      ? (game.blindLevel ?? 0)
-      : Math.max(0, (game.blindLevel ?? 0) - 1));
-  game.blinds = hand.blindsBefore ?? planForHand(game, Math.max(1, hand.no - 1)).schedule;
-  game.blindLevels = restoredLevels;
-  game.winnerAnnouncement = null;
-  game.hand = null;
-  return true;
-}

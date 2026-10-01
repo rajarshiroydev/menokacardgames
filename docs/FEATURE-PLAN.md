@@ -639,3 +639,4 @@ Status 2026-09-25: items 1–2 done except custom SMTP (the user chose Neon's sh
   - After the switch to automatic own players, the revised 0013 was re-applied to the testbed and every named persona got its own player (fake data, so no existing row was tied). The browser checks above predate this switch and should be repeated.
 - **Not yet checked:** production data (migration not applied), a real phone's long press, iOS Safari.
 
+2026-10-01 remove between hands (user decision): the Between hands button under the current hand is removed because letting the host rewind a hand mid-game invites confusion. Its rule `returnToBetweenHands` and test are removed too. Cancel hand, Undo and Undo last hand stay. Status: built, uncommitted.
