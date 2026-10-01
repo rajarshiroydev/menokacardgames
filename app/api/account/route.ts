@@ -9,9 +9,11 @@ import {
   recoverAccount,
   replaceUserCode,
   requestAccountDeletion,
+  updateAvatar,
   updateCurrency,
   updateDisplayName,
 } from "@/lib/accounts/server";
+import { isAvatarId } from "@/lib/avatars";
 import { isCurrencyCode } from "@/lib/poker/money";
 import {
   auth,
@@ -119,6 +121,25 @@ async function handlePost(request: Request) {
     } catch (error) {
       console.error("account set-currency error", error);
       return json({ error: "Could not save your currency" }, 500);
+    }
+  }
+
+  if (action === "set-avatar") {
+    const accessError = accountAccessError(account);
+    if (accessError) return json({ error: accessError }, 423);
+    const avatar = (read.body as { avatar?: unknown }).avatar;
+    if (!isAvatarId(avatar)) {
+      return json({ error: "Choose an avatar from the list" }, 400);
+    }
+    try {
+      const profile = await updateAvatar(session.user.id, avatar);
+      if (!profile) {
+        return json({ error: "This account is locked while deletion is pending" }, 423);
+      }
+      return json({ profile });
+    } catch (error) {
+      console.error("account set-avatar error", error);
+      return json({ error: "Could not save your avatar" }, 500);
     }
   }
 

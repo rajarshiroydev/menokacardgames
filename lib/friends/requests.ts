@@ -35,6 +35,7 @@ export type FriendRelation =
 
 export type FoundAccount = {
   displayName: string | null;
+  avatar?: string;
   relation: FriendRelation;
 };
 
@@ -42,6 +43,7 @@ export type FriendOverview = {
   friends: Array<{
     accountId: string;
     displayName: string | null;
+    avatar?: string;
     since: number;
     myPlayer: { id: string; name: string } | null;
     theirNameForMe: string | null;
@@ -49,6 +51,7 @@ export type FriendOverview = {
   received: Array<{
     requestId: string;
     displayName: string | null;
+    avatar?: string;
     sentAt: number;
     claimedPlayerCode: string | null;
     claimedPlayer: { id: string; name: string } | null;
@@ -56,6 +59,7 @@ export type FriendOverview = {
   sent: Array<{
     requestId: string;
     displayName: string | null;
+    avatar?: string;
     sentAt: number;
     myPlayerName: string | null;
   }>;

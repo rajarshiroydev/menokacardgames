@@ -1,3 +1,4 @@
+import { isAvatarId } from "../avatars.ts";
 import { deriveSessionAccounting } from "./accounting.ts";
 import { isValidRebuy, MAX_BUY_INS } from "./buy-ins.ts";
 import { smallBlindFor } from "./game.ts";
@@ -7,7 +8,7 @@ import type { GameState } from "./types";
 /**
  * Live standings shared with players through a link. The host's device sends
  * a snapshot of the game in progress; the server validates it and derives the
- * standings players see. Only names and chip counts leave the device.
+ * standings players see. Only names, avatars and chip counts leave the device.
  */
 
 /** Phones check for a new snapshot this often. */
@@ -25,6 +26,8 @@ const MAX_GAME_NAME_LENGTH = 80;
 
 export type LiveSnapshotPlayer = {
   name: string;
+  /** The avatar the host's list shows them as; absent from older devices. */
+  avatar?: string;
   /** Chips behind right now, after any bets in the current hand. */
   stack: number;
   /** Initial buy-in followed by each rebuy. */
@@ -47,6 +50,7 @@ export type LiveSnapshot = {
 export type LiveStanding = {
   rank: number;
   name: string;
+  avatar?: string;
   stack: number;
   invested: number;
   net: number;
@@ -65,7 +69,11 @@ export type LiveView = {
 };
 
 /** What the host's device sends. Net and rank are left to the server. */
-export function buildLiveSnapshot(game: GameState): LiveSnapshot {
+export function buildLiveSnapshot(
+  game: GameState,
+  avatarOf: (player: GameState["players"][number]) => string | undefined = () =>
+    undefined,
+): LiveSnapshot {
   const hand = game.hand;
   return {
     gameName: game.sessionLabel || game.gameName || "Game",
@@ -80,7 +88,14 @@ export function buildLiveSnapshot(game: GameState): LiveSnapshot {
       // A player who was bust when the hand was dealt sat it out, so their
       // stack only changes by a rebuy and is already settled.
       const settledStack = hand && before ? before : player.stack;
-      return { name: player.name, stack: player.stack, buyIns, settledStack };
+      const avatar = avatarOf(player);
+      return {
+        name: player.name,
+        ...(avatar ? { avatar } : {}),
+        stack: player.stack,
+        buyIns,
+        settledStack,
+      };
     }),
   };
 }
@@ -156,7 +171,9 @@ export function validateLiveSnapshot(input: unknown): LiveSnapshot {
     if (stack > settledStack && snapshot.handInProgress) {
       throw new Error(`${name}'s stack cannot grow during a hand`);
     }
-    return { name, stack, buyIns, settledStack };
+    // An avatar the server doesn't know is dropped; the page draws a stand-in.
+    const avatar = isAvatarId(player.avatar) ? player.avatar : undefined;
+    return { name, ...(avatar ? { avatar } : {}), stack, buyIns, settledStack };
   });
 
   return {
@@ -188,6 +205,9 @@ export function deriveLiveView(snapshot: LiveSnapshot): LiveView {
 
   const rows = accounting.results.map((result, index) => ({
     name: result.name,
+    ...(snapshot.players[index].avatar
+      ? { avatar: snapshot.players[index].avatar }
+      : {}),
     stack: snapshot.players[index].stack,
     invested: result.invested,
     net: result.net,

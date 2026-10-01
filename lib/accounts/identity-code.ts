@@ -44,4 +44,6 @@ export type AccountProfile = {
   currency: string;
   /** The player in the host's own list who is the host, if chosen. */
   selfPlayerId: string | null;
+  /** The avatar this person chose (lib/avatars.ts; migration 0015). */
+  avatar: string;
 };

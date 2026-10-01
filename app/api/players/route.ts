@@ -2,6 +2,7 @@ import {
   requireHostAccount,
   requireRecentHostAccount,
 } from "@/lib/auth/server";
+import { isAvatarId } from "@/lib/avatars";
 import { runAsAuthenticatedUser } from "@/lib/poker/database";
 import {
   cleanPlayerName,
@@ -17,6 +18,7 @@ type PlayerRow = {
   id: string;
   name: string;
   player_code: string;
+  avatar: string;
   linked: boolean;
   created_at: Date | string;
   deleted_at: Date | string | null;
@@ -35,6 +37,7 @@ function mapPlayer(row: PlayerRow): PlayerProfile {
     id: row.id,
     name: row.name,
     code: row.player_code,
+    avatar: row.avatar,
     linked: Boolean(row.linked),
     createdAt: new Date(row.created_at).getTime(),
     hasHistory: Boolean(row.has_history),
@@ -57,6 +60,7 @@ async function handleGet() {
           player.id,
           names.display_name AS name,
           player.player_code,
+          avatars.avatar,
           player.linked_account_id IS NOT NULL AS linked,
           player.created_at,
           player.deleted_at,
@@ -70,6 +74,9 @@ async function handleGet() {
         -- People with an account go by the name they chose themselves.
         JOIN public.player_display_names() AS names
           ON names.player_id = player.id
+        -- ...and show as the avatar they chose.
+        JOIN public.player_avatars() AS avatars
+          ON avatars.player_id = player.id
         WHERE player.owner_id = ${ownerId}::uuid
         ORDER BY
           player.deleted_at NULLS FIRST,
@@ -121,7 +128,7 @@ async function handlePost(request: Request) {
         VALUES (${ownerId}::uuid, ${name}, ${playerNameKey(name)})
         ON CONFLICT (owner_id, name_key) WHERE owner_id IS NOT NULL DO UPDATE
         SET name = EXCLUDED.name, deleted_at = NULL
-        RETURNING id, name, player_code, linked_account_id IS NOT NULL AS linked, created_at, deleted_at
+        RETURNING id, name, player_code, avatar, linked_account_id IS NOT NULL AS linked, created_at, deleted_at
       `,
     ]);
     const rows = result as PlayerRow[];
@@ -147,6 +154,7 @@ async function handlePatch(request: Request) {
       action?: unknown;
       id?: unknown;
       name?: unknown;
+      avatar?: unknown;
     };
     const id = String(body?.id || "");
     if (!/^[A-Za-z0-9._:-]{1,100}$/.test(id)) {
@@ -154,6 +162,7 @@ async function handlePatch(request: Request) {
     }
     const action = body.action ?? "restore";
     if (action === "rename") return renamePlayer(authUserId, ownerId, id, body.name);
+    if (action === "avatar") return setGuestAvatar(authUserId, ownerId, id, body.avatar);
     if (action !== "discard" && action !== "restore") {
       return json({ error: "Invalid player action" }, 400);
     }
@@ -171,7 +180,7 @@ async function handlePatch(request: Request) {
                 SELECT 1 FROM accounts
                 WHERE id = ${ownerId}::uuid AND self_player_id = players.id
               )
-            RETURNING id, name, player_code, linked_account_id IS NOT NULL AS linked, created_at, deleted_at
+            RETURNING id, name, player_code, avatar, linked_account_id IS NOT NULL AS linked, created_at, deleted_at
           `
         : sql`
             UPDATE players
@@ -179,7 +188,7 @@ async function handlePatch(request: Request) {
             WHERE id = ${id}
               AND owner_id = ${ownerId}::uuid
               AND deleted_at IS NOT NULL
-            RETURNING id, name, player_code, linked_account_id IS NOT NULL AS linked, created_at, deleted_at
+            RETURNING id, name, player_code, avatar, linked_account_id IS NOT NULL AS linked, created_at, deleted_at
           `,
     ]);
     const rows = result as PlayerRow[];
@@ -234,7 +243,7 @@ async function renamePlayer(
           AND account.id = player.owner_id
           AND player.linked_account_id IS NULL
           AND account.self_player_id IS DISTINCT FROM player.id
-        RETURNING player.id, player.name, player.player_code, false AS linked, player.created_at, player.deleted_at
+        RETURNING player.id, player.name, player.player_code, player.avatar, false AS linked, player.created_at, player.deleted_at
       `,
     ]);
     const rows = result as PlayerRow[];
@@ -251,6 +260,48 @@ async function renamePlayer(
     }
     console.error("players rename error", error);
     return json({ error: "Could not rename the player" }, 500);
+  }
+}
+
+/**
+ * Chooses a guest's avatar. People with an account (a linked friend, or the
+ * host's own player) choose their own, so they can't be changed here.
+ */
+async function setGuestAvatar(
+  authUserId: string,
+  ownerId: string,
+  id: string,
+  avatar: unknown,
+) {
+  if (!isAvatarId(avatar)) {
+    return json({ error: "Choose an avatar from the list" }, 400);
+  }
+
+  try {
+    const [result] = await runAsAuthenticatedUser(authUserId, (sql) => [
+      sql`
+        UPDATE players AS player
+        SET avatar = ${avatar}
+        FROM accounts AS account
+        WHERE player.id = ${id}
+          AND player.owner_id = ${ownerId}::uuid
+          AND account.id = player.owner_id
+          AND player.linked_account_id IS NULL
+          AND account.self_player_id IS DISTINCT FROM player.id
+        RETURNING player.id, player.name, player.player_code, player.avatar, false AS linked, player.created_at, player.deleted_at
+      `,
+    ]);
+    const rows = result as PlayerRow[];
+    if (!rows.length) {
+      return json(
+        { error: "Only guests' avatars can be changed. People on Menoka choose their own" },
+        409,
+      );
+    }
+    return json({ player: mapPlayer(rows[0]) });
+  } catch (error) {
+    console.error("players avatar error", error);
+    return json({ error: "Could not change the avatar" }, 500);
   }
 }
 

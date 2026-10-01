@@ -39,7 +39,8 @@ The **Profile** tab replaced the Players tab on 30 September 2026. From the top:
 
 **Your card**
 
-- **Your name**, large, with your initial in a green-and-blue ring. The ✎ button turns it into a box with **Save** (1 to 40 characters; Escape cancels). Under the name: "Playing since" the month of your first counted game, or "No games yet".
+- **Your avatar**, in a green-and-blue ring, next to your name. Tap it (it has a small ✎ badge) to choose another; see **Avatars** below.
+- **Your name**, large. The ✎ button turns it into a box with **Save** (1 to 40 characters; Escape cancels). Under the name: "Playing since" the month of your first counted game, or "No games yet".
 - **All-time net**: everything you've won or lost, in your currency. It's green when you're ahead and red when you're behind.
 - **Last 10**: one small bar for each of your latest games (up to 10, in your currency), green up for a win and red down for a loss, taller for bigger results. Hover or long-press a bar for its date and result.
 - **Three tiles:** **Games played**, **Avg return** (your average session return, section 12, to one decimal) and **Profitable** (games you finished ahead, for example 15/24).
@@ -54,15 +55,15 @@ The **Profile** tab replaced the Players tab on 30 September 2026. From the top:
 
 - **The heading** says how many active players you have, with a green **+ Add** button.
 - **Filters:** **All**, **On Menoka** (you, your friends and requests you've sent) and **Guests** (players without an account), each with its count.
-- **Each row** shows the player's initial, name, a short line and their net result in your games (hidden until they've played):
+- **Each row** shows the player's avatar, name, a short line and their net result in your games (hidden until they've played):
   - **You · 12 games**, for your own player;
-  - **On Menoka · 21 games**, for a friend, with a gradient initial and a green dot;
+  - **On Menoka · 21 games**, for a friend, with a green-and-blue ring around their avatar and a green dot;
   - **Request sent · waiting**, for someone you've sent a friend request;
   - **Guest · 26 games**, for everyone else.
   The list starts with you, then friends, then waiting requests, then guests; within each group, most games first.
 - **Names.** People with an account go by the name they chose themselves: a friend shows as their own saved name, and your own player as your name. Only guests can be renamed.
 - **Options.** Tap **⋯** on a row, or press and hold it (about half a second), for its options. Near the bottom of the screen they open upwards. Tap outside or press Escape to close them.
-  - **Guest:** **View standings** (opens Ranks with their card open), **Rename** and **Remove player**.
+  - **Guest:** **View standings** (opens Ranks with their card open), **Rename**, **Change avatar** and **Remove player**.
   - **You:** **View standings** only.
   - **Friend:** **View standings**, **Link to guest…** and **Unfriend** (section 20).
   - **Request sent:** **Cancel request**.
@@ -72,6 +73,11 @@ The **Profile** tab replaced the Players tab on 30 September 2026. From the top:
   - **Add Guest:** 1 to 80 characters; extra spaces are tidied up. Names are compared ignoring capital letters, so "Soham" and "soham" are the same player; a name you already have shows "You already have a player called Soham". Adding a removed player's name brings back that same player instead of making a second one.
 - **Rename a guest.** A small sheet with their name to edit and **Save**. The new name can't match another of your players. Their standings and future games use the new name; saved games keep the name each game was played under. Results stay with the player, not the name.
 - **You.** Every account has its own player in its own list, tied to the account, not to a name. It's made automatically when you save your name after first signing in, and there's nothing to set up. It always shows your current name (change it on your card), comes first in the list and on Table Setup (marked **You**), and can't be renamed, removed or linked to a friend. You seat it when you play in your own game, so those games count on your card. Accounts that hosted before this existed had their existing player tied to them in a one-off step, confirmed by the account owner.
+- **Avatars** (added 1 October 2026). Nobody uploads a photo; everyone shows as one of 20 drawn cartoon people, including two with a hijab and two with a turban. Everyone gets one at random until it's changed.
+  - **Yours:** tap your avatar on your card. A sheet shows all 20 (five to a row) with yours ringed in green; tapping one saves it straight away ("Avatar Saved"). Every host who has you as a friend sees the one you chose, the same way they see the name you chose.
+  - **A guest's:** **⋯ → Change avatar** opens the same sheet. Only guests' avatars can be changed this way; a friend's is theirs to choose.
+  - **Where they show:** your card, the player list, friend requests and the find-a-friend result, the seating order on Table Setup, every seat at the table (with the D, SB and BB badges), buy-in and split-pot choices, the Ranks cards (yours and friends' groups), and the live standings link.
+  - Games saved before avatars, and anyone the app can't match to a player, show a stand-in avatar picked from their name, so the same name always gets the same one.
 - **Remove a player** (after a confirmation) to hide them from new games. Their past results stay in the history and standings.
 - **Removed players.** "Show 2 removed players" under the list shows them faded, marked "Removed · history kept" (or just "Removed" if they never played). Their options are **Restore**, and **Delete permanently** when all of these are true:
   - they have been removed first
@@ -282,12 +288,12 @@ The **Profile** tab replaced the Players tab on 30 September 2026. From the top:
 ## 19. Live standings for players
 
 - **Share the game with the table.** During a game, the **Session Standings** card has a **Share live standings** button. **Create live link** makes a link and shows it as a QR code, with **Share link** (the phone's share menu, for example WhatsApp) and **Copy link**.
-- **No sign-in for players.** Anyone who opens the link sees a read-only page. From the top: the game name, the current blinds in large type, then every player's card with rank, stack (in large type), net ▲/▼ and **Buy-In** (everything they've bought in, including rebuys, with the number of rebuys), and finally the hand status (for example "Hand 12 in progress" or "After hand 12") with when it was last updated.
+- **No sign-in for players.** Anyone who opens the link sees a read-only page. From the top: the game name, the current blinds in large type, then every player's card with rank, their avatar (as in the host's list), stack (in large type), net ▲/▼ and **Buy-In** (everything they've bought in, including rebuys, with the number of rebuys), and finally the hand status (for example "Hand 12 in progress" or "After hand 12") with when it was last updated.
 - **When the numbers change.** Stacks update after every action, so a player can check their chips before betting. Net and rank change only when a hand ends, so the order doesn't jump around during a hand.
 - **How fast.** The host's phone sends each change about a second after the host stops tapping, at most once every 3 seconds. Players' phones check every 5 seconds while the page is open on screen, and at once when they come back to it (after unlocking the phone, switching back from another app, or getting the network back). A check that gets no answer within 8 seconds is dropped and tried again, so a bad connection can't stop the page from updating.
 - **Is the host still connected?** The page says "Updated 12s ago". While the host's phone is on, it also checks in once a minute when nothing has changed. After 2½ minutes without any update, the page warns that the host's phone may be offline or asleep. If instead the player's own phone can't reach the app, the page says "This phone can't reach the app" and keeps trying.
 - **Tap your name** to highlight your own row. The highlight is remembered on that phone.
-- **What the link does not show:** other games, saved history, all-time standings, the action log, or anything else in the host's account.
+- **What the link does not show:** the host's player list, other games, saved history, all-time standings, the action log, or anything else in the host's account.
 - **When the link stops working.** It ends when the host saves or discards the game, taps **Stop sharing**, or deletes their account. It also stops 12 hours after the host's last update. Afterwards it shows "This game has ended". Sharing again makes a new link; old links never come back.
 - **Who can see it.** Anyone who has the link can see those names and chip counts until it ends, so share it only with the table. The button reads "Sharing live · show link" while a link is active, and "Live link not updating" if the host's updates keep failing.
 
@@ -304,7 +310,7 @@ Everyone who signs in has their own account and can host their own games. Friend
 
 **Sending a request**
 
-- **+ Add → Find Friend.** Type or paste a friend's user code (capitals, spaces and dashes don't matter) and press **Find**. The app shows their name with **Send request**, or says it's your own code, you're already friends, or a request is already waiting. An old player code (P-…, no longer shown in the app) gets its own message; a wrong or unknown code shows "No such user found".
+- **+ Add → Find Friend.** Type or paste a friend's user code (capitals, spaces and dashes don't matter) and press **Find**. The app shows their avatar and name with **Send request**, or says it's your own code, you're already friends, or a request is already waiting. An old player code (P-…, no longer shown in the app) gets its own message; a wrong or unknown code shows "No such user found".
 - **Send request.** You don't choose a player when sending; to tie them to a guest you already record, use **Link to guest…** after they accept (below). The sheet closes and they appear in your list as "Request sent · waiting", with **Cancel request** in their options.
 - **Limits:** at most **20** of your requests can be waiting at once, and only one request can be waiting between two people, in either direction. If someone declines you, you can't ask them again for **7 days**.
 

@@ -54,7 +54,8 @@ export async function provisionHostAccount(authUserId: unknown) {
             user_code,
             display_name,
             currency,
-            self_player_id
+            self_player_id,
+            avatar
           FROM accounts
           WHERE auth_user_id = ${authUserId}::uuid
         ),
@@ -72,7 +73,8 @@ export async function provisionHostAccount(authUserId: unknown) {
             user_code,
             display_name,
             currency,
-            self_player_id
+            self_player_id,
+            avatar
         )
         SELECT * FROM existing
         UNION ALL
@@ -145,6 +147,7 @@ type ProfileRow = {
   display_name: string | null;
   currency: string;
   self_player_id: string | null;
+  avatar: string;
 };
 
 function mapProfile(row: ProfileRow): AccountProfile {
@@ -153,6 +156,7 @@ function mapProfile(row: ProfileRow): AccountProfile {
     displayName: row.display_name,
     currency: row.currency,
     selfPlayerId: row.self_player_id,
+    avatar: row.avatar,
   };
 }
 
@@ -164,7 +168,7 @@ export async function updateDisplayName(authUserId: string, displayName: string)
       SET display_name = ${displayName}, updated_at = now()
       WHERE auth_user_id = ${authUserId}::uuid
         AND lifecycle_state = 'active'
-      RETURNING user_code, display_name, currency, self_player_id
+      RETURNING user_code, display_name, currency, self_player_id, avatar
     `,
   ]);
   const rows = result as ProfileRow[];
@@ -183,14 +187,14 @@ export async function replaceUserCode(authUserId: string) {
         SET user_code = public.new_identity_code(), updated_at = now()
         WHERE auth_user_id = ${authUserId}::uuid
           AND lifecycle_state = 'active'
-        RETURNING id, user_code, display_name, currency, self_player_id
+        RETURNING id, user_code, display_name, currency, self_player_id, avatar
       ),
       audit AS (
         INSERT INTO audit_events (owner_id, actor_auth_user_id, action, target_kind, target_id)
         SELECT id, ${authUserId}::uuid, 'account.user_code_replaced', 'account', id::text
         FROM replaced
       )
-      SELECT user_code, display_name, currency, self_player_id FROM replaced
+      SELECT user_code, display_name, currency, self_player_id, avatar FROM replaced
     `,
   ]);
   const rows = result as ProfileRow[];
@@ -205,7 +209,22 @@ export async function updateCurrency(authUserId: string, currency: string) {
       SET currency = ${currency}, updated_at = now()
       WHERE auth_user_id = ${authUserId}::uuid
         AND lifecycle_state = 'active'
-      RETURNING user_code, display_name, currency, self_player_id
+      RETURNING user_code, display_name, currency, self_player_id, avatar
+    `,
+  ]);
+  const rows = result as ProfileRow[];
+  return rows[0] ? mapProfile(rows[0]) : null;
+}
+
+/** Sets the avatar this person shows as everywhere; `avatar` is checked. */
+export async function updateAvatar(authUserId: string, avatar: string) {
+  const [result] = await runAsAuthenticatedUser(authUserId, (sql) => [
+    sql`
+      UPDATE accounts
+      SET avatar = ${avatar}, updated_at = now()
+      WHERE auth_user_id = ${authUserId}::uuid
+        AND lifecycle_state = 'active'
+      RETURNING user_code, display_name, currency, self_player_id, avatar
     `,
   ]);
   const rows = result as ProfileRow[];

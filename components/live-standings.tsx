@@ -10,6 +10,7 @@ import {
   LIVE_VIEW_STALE_MS,
   type LiveView,
 } from "@/lib/poker/live-view";
+import { AvatarArt } from "@/components/avatar-art";
 import { ThemeToggle } from "@/components/theme-toggle";
 
 type LiveResponse = LiveView & { updatedAt: number };
@@ -210,6 +211,9 @@ export function LiveStandings({ token }: { token: string }) {
               }`}
             >
               {row.rank}
+            </span>
+            <span className="avatar avatar-small">
+              <AvatarArt id={row.avatar} seed={row.name} />
             </span>
             <span className="live-player">
               <b>{row.name}</b>

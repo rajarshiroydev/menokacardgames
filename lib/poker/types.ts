@@ -11,6 +11,8 @@ export type PlayerProfile = {
   name: string;
   /** Shareable player code (see lib/accounts/identity-code.ts). */
   code: string;
+  /** The avatar this player shows as (lib/avatars.ts). */
+  avatar?: string;
   /** Linked to a friend's account by an accepted friend request. */
   linked: boolean;
   createdAt: number;

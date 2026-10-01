@@ -5,6 +5,7 @@ import {
 } from "../poker/standings.ts";
 import { DEFAULT_CURRENCY } from "../poker/money.ts";
 import type { PokerSession, SessionResult } from "../poker/types";
+import { fallbackAvatarId } from "../avatars.ts";
 
 /** One linked host's saved games, as `public.friend_group_sessions()` returns them. */
 export type GroupSessions = {
@@ -19,7 +20,10 @@ export type GroupSessions = {
     date: number;
     startStack: number;
     hands: number;
-    results: Array<Required<Pick<SessionResult, "playerId">> & SessionResult>;
+    /** `avatar` is what the player shows as in the host's list (migration 0015). */
+    results: Array<
+      Required<Pick<SessionResult, "playerId">> & SessionResult & { avatar?: string }
+    >;
   }>;
 };
 
@@ -27,6 +31,7 @@ export type GroupSessions = {
 export type GroupStandingRow = {
   rank: number | null;
   name: string;
+  avatar: string;
   averageReturn: number | null;
   eligibleSessions: number;
   totalSessions: number;
@@ -82,6 +87,12 @@ export function buildGroupStandings(group: GroupSessions): GroupStandings {
     })),
   }));
   const standings = buildStandings(sessions);
+  const avatars = new Map<string, string>();
+  for (const session of group.sessions) {
+    for (const result of session.results) {
+      if (result.avatar) avatars.set(result.playerId, result.avatar);
+    }
+  }
   const myKey = standingsKey({ playerId: group.myPlayerId, name: group.myPlayerName });
 
   return {
@@ -97,6 +108,9 @@ export function buildGroupStandings(group: GroupSessions): GroupStandings {
     rows: standings.entries.map((entry) => ({
       rank: entry.rank,
       name: entry.name,
+      avatar:
+        (entry.playerId && avatars.get(entry.playerId)) ||
+        fallbackAvatarId(entry.name),
       averageReturn: entry.averageReturn,
       eligibleSessions: entry.eligibleSessions,
       totalSessions: entry.totalSessions,

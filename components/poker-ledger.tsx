@@ -63,7 +63,9 @@ import { useRouter } from "next/navigation";
 import qrcode from "qrcode-generator";
 
 import { signOut } from "@/app/auth/sign-in/actions";
+import { AvatarArt } from "@/components/avatar-art";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { AVATARS } from "@/lib/avatars";
 import {
   type AccountProfile,
   cleanDisplayName,
@@ -107,6 +109,33 @@ import type {
 
 /** The signed-in host's currency, for every amount the ledger shows. */
 const CurrencyContext = createContext<string>(DEFAULT_CURRENCY);
+
+/**
+ * The avatar a player in the host's list shows as, by player id or, for games
+ * saved without ids, by name. Undefined means the drawing falls back to a
+ * stable pick from the name.
+ */
+type AvatarLookup = (playerId?: string, name?: string) => string | undefined;
+const AvatarContext = createContext<AvatarLookup>(() => undefined);
+
+function buildAvatarLookup(
+  players: PlayerProfile[],
+  selfPlayerId: string | null,
+  selfAvatar: string,
+): AvatarLookup {
+  const byId = new Map<string, string>();
+  const byName = new Map<string, string>();
+  for (const player of players) {
+    if (!player.avatar) continue;
+    byId.set(player.id, player.avatar);
+    byName.set(player.name.trim().toLowerCase(), player.avatar);
+  }
+  // Your own choice shows at once, before the list reloads.
+  if (selfPlayerId) byId.set(selfPlayerId, selfAvatar);
+  return (playerId, name) =>
+    (playerId && byId.get(playerId)) ||
+    (name ? byName.get(name.trim().toLowerCase()) : undefined);
+}
 
 function useMoney() {
   const currency = useContext(CurrencyContext);
@@ -664,11 +693,31 @@ export function PokerLedger({
     [liveTokenStorageKey],
   );
 
+  const avatarLookup = useMemo(
+    () =>
+      buildAvatarLookup(
+        [...players, ...discardedPlayers],
+        profile.selfPlayerId,
+        profile.avatar,
+      ),
+    [discardedPlayers, players, profile.avatar, profile.selfPlayerId],
+  );
+  // The live link shows the same avatars; read through a ref so a new list
+  // doesn't restart the update timer.
+  const avatarOfSeat = useRef<(player: GameState["players"][number]) => string | undefined>(
+    () => undefined,
+  );
+  useEffect(() => {
+    avatarOfSeat.current = (player) => avatarLookup(player.id, player.name);
+  }, [avatarLookup]);
+
   const sendLiveSnapshot = useCallback(
     async (current: GameState) => {
       liveSync.current.lastSent = Date.now();
       try {
-        await liveApi("PUT", { snapshot: buildLiveSnapshot(current) });
+        await liveApi("PUT", {
+          snapshot: buildLiveSnapshot(current, avatarOfSeat.current),
+        });
         liveSync.current.failures = 0;
         setLiveFailing(false);
       } catch (error) {
@@ -721,7 +770,7 @@ export function PokerLedger({
     setLiveBusy(true);
     try {
       const data = await liveApi<{ token: string }>("POST", {
-        snapshot: buildLiveSnapshot(game),
+        snapshot: buildLiveSnapshot(game, avatarOfSeat.current),
       });
       liveSync.current.lastSent = Date.now();
       rememberLiveToken(data.token);
@@ -926,6 +975,25 @@ export function PokerLedger({
     },
     [showToast],
   );
+
+  async function setGuestAvatar(player: PlayerProfile, avatar: string) {
+    try {
+      const data = await playersApi<{ player: PlayerProfile }>("", {
+        method: "PATCH",
+        body: JSON.stringify({ action: "avatar", id: player.id, avatar }),
+      });
+      setPlayers((current) =>
+        current.map((item) =>
+          item.id === data.player.id ? { ...item, avatar: data.player.avatar } : item,
+        ),
+      );
+      showToast("Avatar Saved");
+      return true;
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Avatar Was Not Saved");
+      return false;
+    }
+  }
 
   async function renamePlayer(player: PlayerProfile, name: string) {
     try {
@@ -1680,6 +1748,7 @@ export function PokerLedger({
 
   return (
     <CurrencyContext.Provider value={currency}>
+    <AvatarContext.Provider value={avatarLookup}>
     <main className={`ledger-shell view-${view}`}>
       <div className={`toast ${toast ? "show" : ""}`} role="status">
         {toast}
@@ -1743,6 +1812,7 @@ export function PokerLedger({
             onRetry={() => void refreshPlayers()}
             onAdd={addPlayer}
             onRename={renamePlayer}
+            onGuestAvatar={setGuestAvatar}
             onDiscard={discardPlayer}
             onRestore={(player) => void updatePlayerState(player, "restore")}
             onDeletePermanently={deletePlayerPermanently}
@@ -1854,6 +1924,7 @@ export function PokerLedger({
         />
       ) : null}
     </main>
+    </AvatarContext.Provider>
     </CurrencyContext.Provider>
   );
 }
@@ -1932,20 +2003,22 @@ function toneClass(value: number | null) {
 
 function Avatar({
   name,
+  playerId,
+  avatar,
   role,
   size = "large",
 }: {
   name: string;
+  playerId?: string;
+  /** Overrides the lookup, for people outside the host's list. */
+  avatar?: string;
   role?: string;
   size?: "large" | "small";
 }) {
+  const lookup = useContext(AvatarContext);
   return (
-    <span
-      className={`avatar avatar-${size}`}
-      style={{ color: playerColor(name) }}
-      aria-hidden="true"
-    >
-      {name.trim().charAt(0).toUpperCase() || "?"}
+    <span className={`avatar avatar-${size}`} aria-hidden="true">
+      <AvatarArt id={avatar ?? lookup(playerId, name)} seed={name} />
       {role ? (
         <span className={`role-badge ${role === "D" ? "dealer" : ""}`}>
           {role}
@@ -2965,7 +3038,7 @@ function SetupView({
                     <span className="seat-number" aria-hidden="true">
                       {index + 1}
                     </span>
-                    <Avatar name={seatName} size="small" />
+                    <Avatar name={seatName} playerId={selectedId} size="small" />
                     <span className="seat-name">{seatName}</span>
                     <button
                       className="seat-drag-handle"
@@ -3263,6 +3336,7 @@ type ProfileRow = {
   key: string;
   kind: "self" | "friend" | "guest" | "pending" | "removed";
   name: string;
+  avatar?: string;
   player?: PlayerProfile;
   friend?: FriendOverview["friends"][number];
   requestId?: string;
@@ -3318,6 +3392,7 @@ function ProfileView({
   onRetry,
   onAdd,
   onRename,
+  onGuestAvatar,
   onDiscard,
   onRestore,
   onDeletePermanently,
@@ -3338,6 +3413,7 @@ function ProfileView({
   onRetry: () => void;
   onAdd: (name: string) => Promise<PlayerProfile | null>;
   onRename: (player: PlayerProfile, name: string) => Promise<boolean>;
+  onGuestAvatar: (player: PlayerProfile, avatar: string) => Promise<boolean>;
   onDiscard: (player: PlayerProfile) => void;
   onRestore: (player: PlayerProfile) => void;
   onDeletePermanently: (player: PlayerProfile) => void;
@@ -3360,6 +3436,7 @@ function ProfileView({
   const [showRemoved, setShowRemoved] = useState(false);
   const [adding, setAdding] = useState(false);
   const [renaming, setRenaming] = useState<PlayerProfile | null>(null);
+  const [choosingAvatar, setChoosingAvatar] = useState<PlayerProfile | null>(null);
   const [linking, setLinking] = useState<{
     friend: FriendOverview["friends"][number];
     games: number;
@@ -3483,6 +3560,7 @@ function ProfileView({
             ? "friend"
             : "guest",
       name: player.name,
+      avatar: player.id === profile.selfPlayerId ? profile.avatar : player.avatar,
       player,
       friend: friendByPlayer.get(player.id),
       ...record(player),
@@ -3491,6 +3569,7 @@ function ProfileView({
       key: `request:${request.requestId}`,
       kind: "pending",
       name: request.displayName ?? "Someone",
+      avatar: request.avatar,
       requestId: request.requestId,
       games: 0,
       net: 0,
@@ -3519,6 +3598,7 @@ function ProfileView({
     key: player.id,
     kind: "removed",
     name: player.name,
+    avatar: player.avatar,
     player,
     ...record(player),
   }));
@@ -3581,6 +3661,7 @@ function ProfileView({
     return [
       ...standingsAction,
       { label: "Rename", run: () => setRenaming(player) },
+      { label: "Change avatar", run: () => setChoosingAvatar(player) },
       { label: "Remove player", danger: true, run: () => onDiscard(player) },
     ];
   }
@@ -3688,7 +3769,7 @@ function ProfileView({
                     className={`profile-avatar${onApp ? " on-app" : ""}`}
                     aria-hidden="true"
                   >
-                    {row.name.trim().charAt(0).toUpperCase() || "?"}
+                    <AvatarArt id={row.avatar} seed={row.name} />
                     {onApp ? <span className="profile-avatar-dot" /> : null}
                   </span>
                   <span className="profile-row-copy">
@@ -3793,6 +3874,16 @@ function ProfileView({
           onClose={() => setRenaming(null)}
         />
       ) : null}
+      {choosingAvatar ? (
+        <AvatarSheet
+          title={`Avatar for ${choosingAvatar.name}`}
+          note="People on Menoka choose their own. You choose for your guests."
+          current={choosingAvatar.avatar}
+          seed={choosingAvatar.name}
+          onPick={(avatar) => onGuestAvatar(choosingAvatar, avatar)}
+          onClose={() => setChoosingAvatar(null)}
+        />
+      ) : null}
       {linking ? (
         <LinkGuestSheet
           friend={linking.friend}
@@ -3875,6 +3966,7 @@ function ProfileCard({
   const [copied, setCopied] = useState(false);
   const [codeMenu, setCodeMenu] = useState(false);
   const [replacing, setReplacing] = useState(false);
+  const [choosingAvatar, setChoosingAvatar] = useState(false);
   const copiedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -3968,6 +4060,23 @@ function ProfileCard({
     }
   }
 
+  async function changeAvatar(avatar: string) {
+    try {
+      const data = await accountApi<{ profile: AccountProfile }>({
+        action: "set-avatar",
+        avatar,
+      });
+      onProfile(data.profile);
+      onToast("Avatar Saved");
+      return true;
+    } catch (error) {
+      onToast(
+        error instanceof Error ? error.message : "Could not save your avatar",
+      );
+      return false;
+    }
+  }
+
   async function changeCurrency(currency: string) {
     try {
       const data = await accountApi<{ profile: AccountProfile }>({
@@ -4003,12 +4112,31 @@ function ProfileCard({
   ];
 
   return (
+    <>
     <section className="glass profile-card">
       <span className="profile-card-glow" aria-hidden="true" />
       <div className="profile-identity">
-        <span className="profile-ring" aria-hidden="true">
-          <span>{name.trim().charAt(0).toUpperCase() || "?"}</span>
-        </span>
+        <button
+          className="profile-ring"
+          type="button"
+          aria-label="Change your avatar"
+          onClick={() => setChoosingAvatar(true)}
+        >
+          <span>
+            <AvatarArt id={profile.avatar} seed={name} />
+          </span>
+          <span className="profile-ring-edit" aria-hidden="true">
+            <svg viewBox="0 0 16 16" width="12" height="12">
+              <path
+                d="M10.6 2.6l2.8 2.8-7.6 7.6H3v-2.8z"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.6"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </span>
+        </button>
         <div className="profile-name">
           {editing ? (
             <form className="profile-name-form" onSubmit={saveName}>
@@ -4194,6 +4322,18 @@ function ProfileCard({
         </select>
       </label>
     </section>
+    {/* Outside the card: its blur would trap a fixed-position sheet. */}
+    {choosingAvatar ? (
+      <AvatarSheet
+        title="Your avatar"
+        note="Everyone sees you with this avatar, in every host's list and on live links."
+        current={profile.avatar}
+        seed={name}
+        onPick={changeAvatar}
+        onClose={() => setChoosingAvatar(false)}
+      />
+    ) : null}
+    </>
   );
 }
 
@@ -4256,7 +4396,7 @@ function FriendRequestCard({
     <section className="glass profile-request">
       <div className="profile-request-head">
         <span className="profile-avatar on-app" aria-hidden="true">
-          {name.trim().charAt(0).toUpperCase() || "?"}
+          <AvatarArt id={request.avatar} seed={name} />
         </span>
         <div>
           <span className="eyebrow">Friend request</span>
@@ -4504,7 +4644,7 @@ function AddPlayerSheet({
           <div className="profile-found">
             <div className="profile-found-head">
               <span className="profile-avatar on-app" aria-hidden="true">
-                {(found.displayName ?? "?").trim().charAt(0).toUpperCase()}
+                <AvatarArt id={found.avatar} seed={found.displayName ?? ""} />
               </span>
               <span className="profile-row-copy">
                 <b>{found.displayName ?? "Someone without a name yet"}</b>
@@ -4647,6 +4787,83 @@ function LinkGuestSheet({
 }
 
 /** Renames a guest. People on Menoka choose their own name. */
+/** Picks an avatar; tapping one saves it. */
+function AvatarSheet({
+  title,
+  note,
+  current,
+  seed,
+  onPick,
+  onClose,
+}: {
+  title: string;
+  note: string;
+  current: string | undefined;
+  seed: string;
+  onPick: (avatar: string) => Promise<boolean>;
+  onClose: () => void;
+}) {
+  const [saving, setSaving] = useState("");
+
+  useEffect(() => {
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") onClose();
+    }
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [onClose]);
+
+  async function pick(avatar: string) {
+    if (saving) return;
+    if (avatar === current) {
+      onClose();
+      return;
+    }
+    setSaving(avatar);
+    const saved = await onPick(avatar);
+    setSaving("");
+    if (saved) onClose();
+  }
+
+  return (
+    <div
+      className="modal show"
+      role="presentation"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <div
+        className="sheet profile-sheet"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="avatar-sheet-title"
+      >
+        <span className="sheet-grabber" aria-hidden="true" />
+        <h2 id="avatar-sheet-title">{title}</h2>
+        <p className="muted small-note">{note}</p>
+        <div className="avatar-grid" role="group" aria-label="Avatars">
+          {AVATARS.map((avatar, index) => (
+            <button
+              key={avatar.id}
+              type="button"
+              className={`avatar-choice${
+                avatar.id === (current ?? "") ? " selected" : ""
+              }${saving === avatar.id ? " saving" : ""}`}
+              aria-label={`Avatar ${index + 1}`}
+              aria-pressed={avatar.id === current}
+              disabled={saving !== ""}
+              onClick={() => void pick(avatar.id)}
+            >
+              <AvatarArt id={avatar.id} seed={seed} />
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function RenameSheet({
   player,
   players,
@@ -4964,7 +5181,11 @@ function GameView(props: GameViewProps) {
                       key={playerIndex}
                       onClick={() => props.onPickWinner(playerIndex)}
                     >
-                      <Avatar name={game.players[playerIndex].name} size="small" />
+                      <Avatar
+                        name={game.players[playerIndex].name}
+                        playerId={game.players[playerIndex].id}
+                        size="small"
+                      />
                       <span className="contender-name">
                         {game.players[playerIndex].name} wins
                       </span>
@@ -5462,7 +5683,7 @@ function BuyInOptions({
           type="button"
           onClick={() => onBuyIn(index)}
         >
-          <Avatar name={player.name} size="small" />
+          <Avatar name={player.name} playerId={player.id} size="small" />
           <span className="contender-name">{player.name}</span>
           <span className="contender-amount">Buy in · {money(amount)}</span>
         </button>
@@ -5605,7 +5826,7 @@ function PlayerRow({
     return (
       <div className="glass seat-card round-closed">
         <div className="seat-main">
-          <Avatar name={player.name} role={role} />
+          <Avatar name={player.name} playerId={player.id} role={role} />
           <div className="seat-copy">
             <b>{player.name}</b>
             <small>{stackLine}</small>
@@ -5662,7 +5883,7 @@ function PlayerRow({
     return (
       <div className={`glass seat-card ${folded ? "folded" : ""}`}>
         <div className="seat-main">
-          <Avatar name={player.name} role={role} />
+          <Avatar name={player.name} playerId={player.id} role={role} />
           <div className="seat-copy">
             <b>{player.name}</b>
             <small>{stackLine}</small>
@@ -5704,7 +5925,7 @@ function PlayerRow({
   return (
     <div className="glass seat-card active">
       <div className="seat-main">
-        <Avatar name={player.name} role={role} />
+        <Avatar name={player.name} playerId={player.id} role={role} />
         <div className="seat-copy">
           <b>{player.name}</b>
           <small>{stackLine}</small>
@@ -5877,7 +6098,11 @@ function SplitView({
             key={playerIndex}
             onClick={() => onToggle(playerIndex)}
           >
-            <Avatar name={game.players[playerIndex].name} size="small" />
+            <Avatar
+              name={game.players[playerIndex].name}
+              playerId={game.players[playerIndex].id}
+              size="small"
+            />
             <span className="contender-name">
               {game.players[playerIndex].name}
             </span>
@@ -6100,6 +6325,9 @@ const STANDINGS_START = 4;
 type StandingCardEntry = {
   rank: number | null;
   name: string;
+  playerId?: string;
+  /** Sent with a friend's group, whose players aren't in your list. */
+  avatar?: string;
   averageReturn: number | null;
   eligibleSessions: number;
   totalSessions: number;
@@ -6161,6 +6389,12 @@ function StandingCard({
         >
           {entry.rank ?? "–"}
         </span>
+        <Avatar
+          name={entry.name}
+          playerId={entry.playerId}
+          avatar={entry.avatar}
+          size="small"
+        />
         <span className="standing-name">
           <b>
             {entry.name}
