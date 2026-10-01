@@ -73,13 +73,13 @@ async function handlePost(request: Request) {
     if (action === "find" || action === "send") {
       const parsed = parseCodeInput(body.code);
       if (!parsed) {
-        return json({ error: "Enter an 8-character user code" }, 400);
+        return json({ error: "No such user found" }, 400);
       }
       if (parsed.kind === "player") {
         return json(
           {
             error:
-              "That's a player code (P-…). Ask your friend for their user code, shown at the top of their Players screen",
+              "That's a player code (P-…), not a user code. Ask your friend for their user code, shown on their Profile card",
           },
           400,
         );
@@ -92,7 +92,7 @@ async function handlePost(request: Request) {
         );
         if (!found) {
           return json(
-            { error: "No one has that user code. Check it and try again" },
+            { error: "No such user found" },
             404,
           );
         }
@@ -103,22 +103,12 @@ async function handlePost(request: Request) {
       if (myPlayerId === undefined) {
         return json({ error: "Invalid player" }, 400);
       }
-      let claimedPlayerCode: string | null = null;
-      if (body.claimedPlayerCode) {
-        const claimed = parseCodeInput(body.claimedPlayerCode);
-        if (!claimed || claimed.kind !== "player") {
-          return json(
-            { error: "Player codes look like P-7KQ4-M2XP. Check it, or leave it empty" },
-            400,
-          );
-        }
-        claimedPlayerCode = claimed.code;
-      }
-
+      // Player codes are no longer offered in the app (2026-09-30): the host
+      // links the request to a player by choosing from their list on accept.
       const sent = await callFriendFunction<{ requestId: string }>(
         authUserId,
         (sql) => [
-          sql`SELECT public.friend_send(${parsed.code}, ${myPlayerId}, ${claimedPlayerCode}) AS result`,
+          sql`SELECT public.friend_send(${parsed.code}, ${myPlayerId}, NULL) AS result`,
         ],
       );
       return json({ sent }, 201);

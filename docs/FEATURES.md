@@ -62,14 +62,14 @@ The **Profile** tab replaced the Players tab on 30 September 2026. From the top:
   The list starts with you, then friends, then waiting requests, then guests; within each group, most games first.
 - **Names.** People with an account go by the name they chose themselves: a friend shows as their own saved name, and your own player as your name. Only guests can be renamed.
 - **Options.** Tap **⋯** on a row, or press and hold it (about half a second), for its options. Near the bottom of the screen they open upwards. Tap outside or press Escape to close them.
-  - **Guest:** **View standings** (opens Ranks with their card open), **Rename**, **Copy invite code** and **Remove player**.
+  - **Guest:** **View standings** (opens Ranks with their card open), **Rename** and **Remove player**.
   - **You:** **View standings** only.
   - **Friend:** **View standings** and **Unfriend** (section 20).
   - **Request sent:** **Cancel request**.
   - **View standings** appears only once the player has played.
 - **Add a player.** **+ Add** opens a sheet with two choices:
-  - **Friend on Menoka:** type their user code and press **Find**, then **Send request** (section 20).
-  - **Guest by name:** 1 to 80 characters; extra spaces are tidied up. Names are compared ignoring capital letters, so "Soham" and "soham" are the same player; a name you already have shows "You already have a player called Soham". Adding a removed player's name brings back that same player instead of making a second one.
+  - **Find Friend:** type their user code and press **Find**, then **Send request** (section 20).
+  - **Add Guest:** 1 to 80 characters; extra spaces are tidied up. Names are compared ignoring capital letters, so "Soham" and "soham" are the same player; a name you already have shows "You already have a player called Soham". Adding a removed player's name brings back that same player instead of making a second one.
 - **Rename a guest.** A small sheet with their name to edit and **Save**. The new name can't match another of your players. Their standings and future games use the new name; saved games keep the name each game was played under. Results stay with the player, not the name.
 - **You.** Every account has its own player in its own list, tied to the account, not to a name. It's made automatically when you save your name after first signing in, and there's nothing to set up. It always shows your current name (change it on your card), comes first in the list and on Table Setup (marked **You**), and can't be renamed, removed or linked to a friend. You seat it when you play in your own game, so those games count on your card. Accounts that hosted before this existed had their existing player tied to them in a one-off step, confirmed by the account owner.
 - **Remove a player** (after a confirmation) to hide them from new games. Their past results stay in the history and standings.
@@ -78,7 +78,6 @@ The **Profile** tab replaced the Players tab on 30 September 2026. From the top:
   - they have never appeared in a saved game (players with saved history can never be permanently deleted, so the records stay complete)
   - they aren't linked to a friend
   - you signed in within the last 10 minutes (see section 13)
-- **Invite codes.** Every player has their own code, **P-** plus eight characters (for example P-N7QA-2G2P); **Copy invite code** copies it. Codes use only letters and numbers that can't be confused (no 0, O, 1, I or L), never change, and no two players share one. Give a guest who hasn't signed up yet their code: once they sign up, they put it in their friend request to you, so you can link their account to their history (see section 20). A code on its own gives nobody access to anything; you always confirm the link.
 
 ## 4. Starting a game
 
@@ -298,24 +297,22 @@ Everyone who signs in has their own account and can host their own games. Friend
 
 **Your code and name**
 
-- **Your user code.** Eight characters shown as two groups of four (for example 7KQ4-M2XP) on your Profile card. Every account gets one automatically. It uses the same confusion-free letters and numbers as invite codes. **Copy** copies it. Share it with friends so they can send you a request.
+- **Your user code.** Eight characters shown as two groups of four (for example 7KQ4-M2XP) on your Profile card. Every account gets one automatically. It uses only letters and numbers that can't be confused (no 0, O, 1, I or L). **Copy** copies it. Share it with friends so they can send you a request.
 - **Replace your code.** **⋯ → Replace code** gives you a new random code straight away; the menu explains that the old code stops working and existing friends stay. There is no limit on how often you can replace it.
 - **Your name** is the one on your Profile card (1 to 40 characters). Every account sets one straight after its first sign-in (section 1). You can change it at any time, but not remove it. Friends see it as your name in their player list.
 - **Who can see them.** Someone who types your exact code sees only your name, never your email. There is no browsing or searching by name.
 
 **Sending a request**
 
-- **+ Add → Friend on Menoka.** Type or paste a friend's user code (capitals, spaces and dashes don't matter) and press **Find**. The app shows their name with **Send request**, or says it's your own code, you're already friends, or a request is already waiting. A player code (P-…) or an unknown code gets a clear message instead.
-- **Already in your list, or already recording you?** An optional section under their name:
-  - **In your list, they are:** **A new player** (the default) or one of your guests. Pick an existing guest when you already record their games, so their history stays with them.
-  - **Your invite code from them:** if the friend already records your games, put the P- code they gave you. It tells them which of their players you are; they still confirm it.
+- **+ Add → Find Friend.** Type or paste a friend's user code (capitals, spaces and dashes don't matter) and press **Find**. The app shows their name with **Send request**, or says it's your own code, you're already friends, or a request is already waiting. An old player code (P-…, no longer shown in the app) gets its own message; a wrong or unknown code shows "No such user found".
+- **Already in your list?** An optional section under their name. **In your list, they are:** **A new player** (the default) or one of your guests. Pick an existing guest when you already record their games, so their history stays with them.
 - **Send request.** The sheet closes and they appear in your list as "Request sent · waiting", with **Cancel request** in their options.
 - **Limits:** at most **20** of your requests can be waiting at once, and only one request can be waiting between two people, in either direction. If someone declines you, you can't ask them again for **7 days**.
 
 **Answering a request**
 
-- A request is a green-edged card under your Profile card: "Name wants to be friends", or, when they gave an invite code that matches one of your guests, "Name says they're Debraj in your list".
-- **In your list, they are:** one of your guests (the matching one is picked for you), or **A new player**. A new player's name starts as their name; if you already have a player with that name, the card asks you to pick them or type another name.
+- A request is a green-edged card under your Profile card: "Name wants to be friends". (Requests sent before 30 September 2026 may instead say "Name says they're Debraj in your list", from the invite codes the app used to have.)
+- **In your list, they are:** one of your guests, or **A new player**. If they're a guest whose games you already record, pick that guest so their history is linked to their account. A new player's name starts as their name; if you already have a player with that name, the card asks you to pick them or type another name.
 - **Accept and link** (or **Accept** for a new player) makes you friends. You become linked to the player you chose; on their side, the player they chose is linked to you, or, if they chose a new player, one is added under your name (with a number, such as "Rajarshi Roy (2)", if they already have a player of that name).
 - **Decline** ends the request. They can ask again after 7 days.
 

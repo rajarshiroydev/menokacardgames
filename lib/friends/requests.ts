@@ -68,7 +68,7 @@ export type FriendOverview = {
 const FRIEND_ERRORS = {
   locked: [423, "This account is locked while deletion is pending"],
   "name-required": [409, "Save your name first, so your friend knows who you are"],
-  "not-found": [404, "No one has that user code. Check it and try again"],
+  "not-found": [404, "No such user found"],
   self: [400, "That's your own code"],
   "already-friends": [409, "You're already friends"],
   "request-pending": [409, "You've already sent them a request"],

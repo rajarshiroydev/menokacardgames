@@ -67,7 +67,6 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import {
   type AccountProfile,
   cleanDisplayName,
-  formatPlayerCode,
   formatUserCode,
   MAX_DISPLAY_NAME_LENGTH,
 } from "@/lib/accounts/identity-code";
@@ -3422,15 +3421,6 @@ function ProfileView({
     }
   }
 
-  async function copyInviteCode(player: PlayerProfile) {
-    try {
-      await navigator.clipboard.writeText(formatPlayerCode(player.code));
-      onToast("Invite Code Copied");
-    } catch {
-      onToast(formatPlayerCode(player.code));
-    }
-  }
-
   function unfriend(friend: FriendOverview["friends"][number]) {
     const name = friend.displayName ?? "this friend";
     onAsk(
@@ -3575,7 +3565,6 @@ function ProfileView({
     return [
       ...standingsAction,
       { label: "Rename", run: () => setRenaming(player) },
-      { label: "Copy invite code", run: () => void copyInviteCode(player) },
       { label: "Remove player", danger: true, run: () => onDiscard(player) },
     ];
   }
@@ -4309,7 +4298,6 @@ function AddPlayerSheet({
     null,
   );
   const [sendPlayerId, setSendPlayerId] = useState(NEW_PLAYER);
-  const [claimCode, setClaimCode] = useState("");
 
   useEffect(() => {
     function closeOnEscape(event: KeyboardEvent) {
@@ -4347,7 +4335,6 @@ function AddPlayerSheet({
         });
         setFound({ ...data.found, code: value });
         setSendPlayerId(NEW_PLAYER);
-        setClaimCode("");
       } catch (error) {
         setError(
           error instanceof Error ? error.message : "Could not look up that code",
@@ -4383,7 +4370,6 @@ function AddPlayerSheet({
         action: "send",
         code: found.code,
         myPlayerId: sendPlayerId || null,
-        claimedPlayerCode: claimCode.trim() || null,
       });
       onToast("Request Sent");
       onRequestSent();
@@ -4414,8 +4400,8 @@ function AddPlayerSheet({
         <div className="profile-modes" role="group" aria-label="Who are you adding">
           {(
             [
-              ["code", "Friend on Menoka"],
-              ["name", "Guest by name"],
+              ["code", "Find Friend"],
+              ["name", "Add Guest"],
             ] as const
           ).map(([key, label]) => (
             <button
@@ -4436,8 +4422,8 @@ function AddPlayerSheet({
         </div>
         <p className="muted small-note">
           {byCode
-            ? "Enter their user code. They get a request, and once they accept you see each other by name."
-            : "For someone who doesn't use the app. You can link them to their account later."}
+            ? "Enter their user code to add them as a friend."
+            : "Add someone who doesn't use the app."}
         </p>
         <form className="add-player-row" onSubmit={submit}>
           <input
@@ -4489,7 +4475,7 @@ function AddPlayerSheet({
             </div>
             {found.relation === "none" ? (
               <details className="profile-found-more">
-                <summary>Already in your list, or already recording you?</summary>
+                <summary>Already in your list?</summary>
                 <label htmlFor="friend-send-player">In your list, they are</label>
                 <select
                   className="select-control"
@@ -4504,23 +4490,6 @@ function AddPlayerSheet({
                     </option>
                   ))}
                 </select>
-                <label htmlFor="friend-claim-code">
-                  Your invite code from them (optional)
-                </label>
-                <input
-                  className="field"
-                  id="friend-claim-code"
-                  autoCapitalize="characters"
-                  autoComplete="off"
-                  maxLength={14}
-                  placeholder="P-XXXX-XXXX"
-                  value={claimCode}
-                  onChange={(event) => setClaimCode(event.target.value)}
-                />
-                <p className="muted small-note">
-                  If they already record your games, ask them for your invite
-                  code so your history is linked to you. They confirm it.
-                </p>
               </details>
             ) : null}
           </div>
