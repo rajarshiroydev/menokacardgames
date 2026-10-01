@@ -25,6 +25,8 @@ This is a plain-language list of everything Pokerize can do today. It is written
 
 Home (redesigned 1 October 2026) is a summary of where things stand; the tab bar handles getting around. From the top:
 
+- **The Pokerize logo and name.** The logo is a glowing stack of green-and-blue poker chips topped with a spade (see section 18).
+
 - **Your name**, large, under "Good morning", "Good afternoon" or "Good evening" (from your phone's clock; evening from 5 pm to 5 am), or "Game in progress" while a game is on. Long names wrap onto a second line.
 - **One game card.** With no game running it's the green **Start a game** card, which opens table setup. While a game is on it becomes a **Live** card showing the game name, hand number and stage (or "Between hands"), the **pot** (or how many hands have been dealt, between hands), the blinds (with the level, such as "L2", when they rise on a schedule), **your stack** (or how many players are at the table, if you aren't seated) and the **chip leader** with their stack. Tap anywhere on it, or **Back to the table**, to return to the game.
 - **Unassigned device data**: appears only if this device has games saved before accounts existed (see section 16).
@@ -285,7 +287,7 @@ The **Profile** tab replaced the Players tab on 30 September 2026. From the top:
 ## 18. Devices and installation
 
 - Designed for phones first. On tablets and desktops the app keeps the phone layout in a centred column up to 480 pixels wide.
-- Can be added to a phone's home screen and opened like an app, full screen and without the browser bar.
+- Can be added to a phone's home screen and opened like an app, full screen and without the browser bar. The home-screen icon, the browser tab icon and the mark on the sign-in, name and locked-account screens are all the Pokerize logo: a glowing stack of green-and-blue poker chips topped with a spade.
 - Respects the "reduce motion" setting for animations such as the seat-dragging effect.
 
 ## 19. Live standings for players

@@ -9,6 +9,7 @@ import {
   RECENT_SIGN_IN_WINDOW_MS,
 } from "@/lib/auth/recent-sign-in";
 import { apiErrorMessage } from "@/lib/security/rate-limit-message";
+import { BrandMark } from "@/components/brand-mark";
 import { ThemeToggle } from "@/components/theme-toggle";
 
 function formatDeadline(timestamp: number) {
@@ -93,9 +94,7 @@ export function AccountLocked({
     <main className="auth-page">
       <ThemeToggle className="page-theme-toggle" />
       <section className="auth-card" aria-labelledby="locked-title">
-        <div className="auth-mark" aria-hidden="true">
-          ♠
-        </div>
+        <BrandMark className="auth-mark" />
         <p className="eyebrow">Account Locked</p>
         <h1 id="locked-title">
           {recoverable ? "Deletion is scheduled" : "This account is being deleted"}

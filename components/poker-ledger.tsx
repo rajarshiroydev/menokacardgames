@@ -64,6 +64,7 @@ import qrcode from "qrcode-generator";
 
 import { signOut } from "@/app/auth/sign-in/actions";
 import { AvatarArt } from "@/components/avatar-art";
+import { BrandMark } from "@/components/brand-mark";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { AVATARS } from "@/lib/avatars";
 import { APP_NAME } from "@/lib/brand";
@@ -2148,9 +2149,7 @@ function HomeView({
       <HomeFan />
       <div className="home-top">
         <div className="brand">
-          <span className="brand-chip" aria-hidden="true">
-            <span>♠</span>
-          </span>
+          <BrandMark className="brand-chip" />
           <span className="brand-name">{APP_NAME}</span>
         </div>
       </div>

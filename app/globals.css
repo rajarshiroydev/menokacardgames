@@ -1016,24 +1016,11 @@ textarea::placeholder {
 }
 
 .brand-chip {
-  display: grid;
-  place-items: center;
+  display: block;
   width: 34px;
   height: 34px;
-  border-radius: 50%;
-  background: conic-gradient(from 20deg, var(--g), var(--b), var(--g));
-}
-
-.brand-chip span {
-  display: grid;
-  place-items: center;
-  width: 26px;
-  height: 26px;
-  border: 1.5px dashed var(--gb);
-  border-radius: 50%;
-  background: var(--bg);
-  color: var(--ink);
-  font-size: 14px;
+  border-radius: 9px;
+  box-shadow: 0 0 0 1px var(--line);
 }
 
 .brand-name {
@@ -3730,16 +3717,11 @@ textarea::placeholder {
 }
 
 .auth-mark {
-  display: grid;
-  place-items: center;
-  width: 48px;
-  height: 48px;
-  border-radius: 50%;
-  background:
-    radial-gradient(circle, var(--bg) 0 60%, transparent 61%),
-    conic-gradient(from 20deg, var(--g), var(--b), var(--g));
-  color: var(--ink);
-  font-size: 20px;
+  display: block;
+  width: 64px;
+  height: 64px;
+  border-radius: 16px;
+  box-shadow: 0 0 0 1px var(--line);
 }
 
 .auth-card .eyebrow {

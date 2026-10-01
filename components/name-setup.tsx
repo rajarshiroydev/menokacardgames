@@ -8,6 +8,7 @@ import {
   MAX_DISPLAY_NAME_LENGTH,
 } from "@/lib/accounts/identity-code";
 import { apiErrorMessage } from "@/lib/security/rate-limit-message";
+import { BrandMark } from "@/components/brand-mark";
 import { ThemeToggle } from "@/components/theme-toggle";
 
 /**
@@ -62,9 +63,7 @@ export function NameSetup() {
     <main className="auth-page">
       <ThemeToggle className="page-theme-toggle" />
       <section className="auth-card" aria-labelledby="name-setup-title">
-        <div className="auth-mark" aria-hidden="true">
-          ♠
-        </div>
+        <BrandMark className="auth-mark" />
         <p className="eyebrow">Welcome</p>
         <h1 id="name-setup-title">What should friends call you?</h1>
         <p className="auth-intro">

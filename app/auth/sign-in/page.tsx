@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 
+import { BrandMark } from "@/components/brand-mark";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { DELETION_GRACE_PERIOD_DAYS } from "@/lib/accounts/lifecycle";
 import { getHostSession } from "@/lib/auth/server";
@@ -26,9 +27,7 @@ export default async function SignInPage({
     <main className="auth-page">
       <ThemeToggle className="page-theme-toggle" />
       <section className="auth-card" aria-labelledby="sign-in-title">
-        <div className="auth-mark" aria-hidden="true">
-          ♠
-        </div>
+        <BrandMark className="auth-mark" />
         <p className="eyebrow">{APP_NAME}</p>
         <h1 id="sign-in-title">Your private poker ledger</h1>
         <p className="auth-intro">
