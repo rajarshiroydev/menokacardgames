@@ -35,6 +35,9 @@ describe("friend errors from the database", () => {
     assert.match(mapped?.error ?? "", /20 requests/);
     assert.equal(friendErrorFromDatabase(new Error("friend:declined-recently"))?.status, 429);
     assert.equal(friendErrorFromDatabase(new Error("friend:request-not-found"))?.status, 404);
+    const sameGame = friendErrorFromDatabase(new Error("friend:same-game"));
+    assert.equal(sameGame?.status, 409);
+    assert.equal(sameGame?.code, "friend-same-game");
   });
 
   it("ignores unknown codes and other errors", () => {

@@ -1753,6 +1753,8 @@ export function PokerLedger({
             }}
             onToast={showToast}
             onAsk={ask}
+            seatedPlayerIds={game?.players.flatMap((player) => player.id ?? []) ?? []}
+            onGamesMoved={() => void refreshHistory()}
           />
         ) : view === "hands" ? (
           <PokerHandsChart />
@@ -3329,6 +3331,8 @@ function ProfileView({
   onViewStandings,
   onToast,
   onAsk,
+  seatedPlayerIds,
+  onGamesMoved,
 }: {
   profile: AccountProfile;
   onProfile: (profile: AccountProfile) => void;
@@ -3347,6 +3351,10 @@ function ProfileView({
   onViewStandings: (player: PlayerProfile) => void;
   onToast: (message: string) => void;
   onAsk: (message: string, confirmLabel: string, onConfirm: () => void) => void;
+  /** Players in the game in progress on this device. */
+  seatedPlayerIds: string[];
+  /** Saved games now belong to another player, so reload them. */
+  onGamesMoved: () => void;
 }) {
   const [overview, setOverview] = useState<FriendOverview | null>(null);
   const [overviewError, setOverviewError] = useState("");
@@ -3358,6 +3366,10 @@ function ProfileView({
   const [showRemoved, setShowRemoved] = useState(false);
   const [adding, setAdding] = useState(false);
   const [renaming, setRenaming] = useState<PlayerProfile | null>(null);
+  const [linking, setLinking] = useState<{
+    friend: FriendOverview["friends"][number];
+    games: number;
+  } | null>(null);
   const [busy, setBusy] = useState("");
   const listed = useRef({ players, onPlayersChanged });
   useEffect(() => {
@@ -3558,7 +3570,17 @@ function ProfileView({
       return [
         ...standingsAction,
         ...(friend
-          ? [{ label: "Unfriend", danger: true, run: () => unfriend(friend) }]
+          ? [
+              ...(freePlayers.length
+                ? [
+                    {
+                      label: "Link to guest…",
+                      run: () => setLinking({ friend, games: row.games }),
+                    },
+                  ]
+                : []),
+              { label: "Unfriend", danger: true, run: () => unfriend(friend) },
+            ]
           : []),
       ];
     }
@@ -3759,7 +3781,6 @@ function ProfileView({
       {adding ? (
         <AddPlayerSheet
           players={players}
-          freePlayers={freePlayers}
           onAdd={onAdd}
           onRequestSent={() => {
             reloadOverview();
@@ -3775,6 +3796,24 @@ function ProfileView({
           players={[...players, ...discardedPlayers]}
           onRename={onRename}
           onClose={() => setRenaming(null)}
+        />
+      ) : null}
+      {linking ? (
+        <LinkGuestSheet
+          friend={linking.friend}
+          games={linking.games}
+          seated={
+            !!linking.friend.myPlayer &&
+            seatedPlayerIds.includes(linking.friend.myPlayer.id)
+          }
+          freePlayers={freePlayers}
+          onLinked={(merged) => {
+            onToast(merged ? "Games Merged" : "Guest Linked");
+            onPlayersChanged();
+            if (merged) onGamesMoved();
+            reloadOverview();
+          }}
+          onClose={() => setLinking(null)}
         />
       ) : null}
     </div>
@@ -4277,14 +4316,12 @@ function FriendRequestCard({
 /** The Add sheet: a friend on Menoka by user code, or a guest by name. */
 function AddPlayerSheet({
   players,
-  freePlayers,
   onAdd,
   onRequestSent,
   onToast,
   onClose,
 }: {
   players: PlayerProfile[];
-  freePlayers: PlayerProfile[];
   onAdd: (name: string) => Promise<PlayerProfile | null>;
   onRequestSent: () => void;
   onToast: (message: string) => void;
@@ -4297,7 +4334,6 @@ function AddPlayerSheet({
   const [found, setFound] = useState<(FoundAccount & { code: string }) | null>(
     null,
   );
-  const [sendPlayerId, setSendPlayerId] = useState(NEW_PLAYER);
 
   useEffect(() => {
     function closeOnEscape(event: KeyboardEvent) {
@@ -4334,7 +4370,6 @@ function AddPlayerSheet({
           code: value,
         });
         setFound({ ...data.found, code: value });
-        setSendPlayerId(NEW_PLAYER);
       } catch (error) {
         setError(
           error instanceof Error ? error.message : "Could not look up that code",
@@ -4369,7 +4404,6 @@ function AddPlayerSheet({
       await friendsApi({
         action: "send",
         code: found.code,
-        myPlayerId: sendPlayerId || null,
       });
       onToast("Request Sent");
       onRequestSent();
@@ -4473,28 +4507,125 @@ function AddPlayerSheet({
                 </button>
               ) : null}
             </div>
-            {found.relation === "none" ? (
-              <details className="profile-found-more">
-                <summary>Already in your list?</summary>
-                <label htmlFor="friend-send-player">In your list, they are</label>
-                <select
-                  className="select-control"
-                  id="friend-send-player"
-                  value={sendPlayerId}
-                  onChange={(event) => setSendPlayerId(event.target.value)}
-                >
-                  <option value={NEW_PLAYER}>A new player</option>
-                  {freePlayers.map((player) => (
-                    <option key={player.id} value={player.id}>
-                      {player.name}
-                    </option>
-                  ))}
-                </select>
-              </details>
-            ) : null}
           </div>
         ) : null}
       </div>
+    </div>
+  );
+}
+
+/**
+ * Links one of your guests to a friend, so the guest's games count as theirs.
+ * The player made for them when the request was accepted is deleted; any
+ * games it has move to the guest first, which can't be undone.
+ */
+function LinkGuestSheet({
+  friend,
+  games,
+  seated,
+  freePlayers,
+  onLinked,
+  onClose,
+}: {
+  friend: FriendOverview["friends"][number];
+  /** Saved games the friend's current player has, which would be merged. */
+  games: number;
+  /** The friend's current player is in the game in progress. */
+  seated: boolean;
+  freePlayers: PlayerProfile[];
+  onLinked: (merged: boolean) => void;
+  onClose: () => void;
+}) {
+  const [playerId, setPlayerId] = useState(freePlayers[0]?.id ?? "");
+  const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
+  const name = friend.displayName ?? "your friend";
+
+  useEffect(() => {
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") onClose();
+    }
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [onClose]);
+
+  async function link(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (saving || !playerId || seated) return;
+    setSaving(true);
+    setError("");
+    try {
+      await friendsApi({ action: "link-guest", accountId: friend.accountId, playerId });
+      onLinked(games > 0);
+      onClose();
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "The guest was not linked");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div
+      className="modal show"
+      role="presentation"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <form
+        className="sheet profile-sheet"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="link-guest-title"
+        onSubmit={link}
+      >
+        <span className="sheet-grabber" aria-hidden="true" />
+        <h2 id="link-guest-title">Link to guest</h2>
+        <p className="muted small-note">
+          Pick the guest who is {name}. Their games will count as {name}&apos;s.
+        </p>
+        {games > 0 ? (
+          <p className="field-error" role="note">
+            {name} already has {games} game{games === 1 ? "" : "s"} in your
+            list. They&apos;ll be merged into the guest you pick. This
+            can&apos;t be undone.
+          </p>
+        ) : null}
+        {seated ? (
+          <p className="field-error" role="alert">
+            {name} is in the game in progress. End or discard it first.
+          </p>
+        ) : freePlayers.length ? (
+          <div className="add-player-row">
+            <select
+              className="select-control"
+              aria-label="Guest"
+              value={playerId}
+              onChange={(event) => {
+                setPlayerId(event.target.value);
+                setError("");
+              }}
+            >
+              {freePlayers.map((player) => (
+                <option key={player.id} value={player.id}>
+                  {player.name}
+                </option>
+              ))}
+            </select>
+            <button className="accent-button" type="submit" disabled={saving}>
+              {saving ? "Linking…" : games > 0 ? "Merge" : "Link"}
+            </button>
+          </div>
+        ) : (
+          <p className="muted small-note">You have no guests to link.</p>
+        )}
+        {error ? (
+          <p className="field-error" role="alert">
+            {error}
+          </p>
+        ) : null}
+      </form>
     </div>
   );
 }

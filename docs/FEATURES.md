@@ -64,7 +64,7 @@ The **Profile** tab replaced the Players tab on 30 September 2026. From the top:
 - **Options.** Tap **⋯** on a row, or press and hold it (about half a second), for its options. Near the bottom of the screen they open upwards. Tap outside or press Escape to close them.
   - **Guest:** **View standings** (opens Ranks with their card open), **Rename** and **Remove player**.
   - **You:** **View standings** only.
-  - **Friend:** **View standings** and **Unfriend** (section 20).
+  - **Friend:** **View standings**, **Link to guest…** and **Unfriend** (section 20).
   - **Request sent:** **Cancel request**.
   - **View standings** appears only once the player has played.
 - **Add a player.** **+ Add** opens a sheet with two choices:
@@ -305,20 +305,20 @@ Everyone who signs in has their own account and can host their own games. Friend
 **Sending a request**
 
 - **+ Add → Find Friend.** Type or paste a friend's user code (capitals, spaces and dashes don't matter) and press **Find**. The app shows their name with **Send request**, or says it's your own code, you're already friends, or a request is already waiting. An old player code (P-…, no longer shown in the app) gets its own message; a wrong or unknown code shows "No such user found".
-- **Already in your list?** An optional section under their name. **In your list, they are:** **A new player** (the default) or one of your guests. Pick an existing guest when you already record their games, so their history stays with them.
-- **Send request.** The sheet closes and they appear in your list as "Request sent · waiting", with **Cancel request** in their options.
+- **Send request.** You don't choose a player when sending; to tie them to a guest you already record, use **Link to guest…** after they accept (below). The sheet closes and they appear in your list as "Request sent · waiting", with **Cancel request** in their options.
 - **Limits:** at most **20** of your requests can be waiting at once, and only one request can be waiting between two people, in either direction. If someone declines you, you can't ask them again for **7 days**.
 
 **Answering a request**
 
 - A request is a green-edged card under your Profile card: "Name wants to be friends". (Requests sent before 30 September 2026 may instead say "Name says they're Debraj in your list", from the invite codes the app used to have.)
 - **In your list, they are:** one of your guests, or **A new player**. If they're a guest whose games you already record, pick that guest so their history is linked to their account. A new player's name starts as their name; if you already have a player with that name, the card asks you to pick them or type another name.
-- **Accept and link** (or **Accept** for a new player) makes you friends. You become linked to the player you chose; on their side, the player they chose is linked to you, or, if they chose a new player, one is added under your name (with a number, such as "Rajarshi Roy (2)", if they already have a player of that name).
+- **Accept and link** (or **Accept** for a new player) makes you friends. You become linked to the player you chose; on their side, a new player is added under your name (with a number, such as "Rajarshi Roy (2)", if they already have a player of that name). Requests sent before 1 October 2026 may instead link a guest the sender chose.
 - **Decline** ends the request. They can ask again after 7 days.
 
 **Your friends**
 
 - Friends are in your player list under **On Menoka**, by the name they chose, with their games and net in your ledger.
+- **Link to guest…** (in the friend's options) ties one of your guests to the friend: pick the guest and press **Link**. The guest becomes the friend and keeps all their games; the player that was linked before is deleted. If that player already has games (you played with them before linking), the sheet warns "already has N games in your list. They'll be merged into the guest you pick. This can't be undone." and the button reads **Merge**: their games move to the guest, with every result, buy-in and net unchanged. Merging is refused if both played in the same game ("They both played in the same game, so they can't be merged"), and while the friend is seated in the game in progress on that device. Your own player, guests already linked, and removed players can't be picked; with no guest to pick, the option isn't shown.
 - **Unfriend** (in the friend's options, with a confirmation) ends the friendship and unlinks the players on both sides. Both of you keep the players and every game. Linking again needs a new friend request. Either person can unfriend the other.
 - **When things update.** Requests, friends and the player list reload each time you open Home, Profile or Start a Game (table setup), and when the Profile finds a friend whose player isn't in the list yet. So a new or linked player shows up and can be seated without reopening the app.
 - **What friends can see:** each other's name, and the standings of any host who has you as a linked player (see "Group standings" below). They never see your email, your saved games one by one, or anything they could change.

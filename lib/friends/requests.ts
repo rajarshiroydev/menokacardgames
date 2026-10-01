@@ -86,6 +86,10 @@ const FRIEND_ERRORS = {
   "invalid-name": [400, "Player names must be 1 to 80 characters"],
   "name-taken": [409, "You already have a player with that name. Pick them, or choose another name"],
   "not-friends": [404, "You're not friends with this person"],
+  "same-game": [
+    409,
+    "They both played in the same game, so they can't be merged",
+  ],
 } as const satisfies Record<string, readonly [number, string]>;
 
 export type FriendErrorCode = keyof typeof FRIEND_ERRORS;

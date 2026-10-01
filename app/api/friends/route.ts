@@ -99,16 +99,12 @@ async function handlePost(request: Request) {
         return json({ found });
       }
 
-      const myPlayerId = optionalPlayerId(body.myPlayerId);
-      if (myPlayerId === undefined) {
-        return json({ error: "Invalid player" }, 400);
-      }
-      // Player codes are no longer offered in the app (2026-09-30): the host
-      // links the request to a player by choosing from their list on accept.
+      // A request names no player (2026-10-01): the person accepting picks
+      // theirs, and the sender links a guest afterwards with "link-guest".
       const sent = await callFriendFunction<{ requestId: string }>(
         authUserId,
         (sql) => [
-          sql`SELECT public.friend_send(${parsed.code}, ${myPlayerId}, NULL) AS result`,
+          sql`SELECT public.friend_send(${parsed.code}, NULL, NULL) AS result`,
         ],
       );
       return json({ sent }, 201);
@@ -151,6 +147,24 @@ async function handlePost(request: Request) {
           : sql`SELECT public.friend_cancel(${requestId}::uuid) AS result`,
       ]);
       return json({ ok: true });
+    }
+
+    if (action === "link-guest") {
+      const accountId = body.accountId;
+      if (typeof accountId !== "string" || !UUID_PATTERN.test(accountId)) {
+        return json({ error: "Invalid friend" }, 400);
+      }
+      const playerId = optionalPlayerId(body.playerId);
+      if (!playerId) {
+        return json({ error: "Invalid player" }, 400);
+      }
+      const linked = await callFriendFunction<{ playerId: string; name: string }>(
+        authUserId,
+        (sql) => [
+          sql`SELECT public.friend_link_guest(${accountId}::uuid, ${playerId}) AS result`,
+        ],
+      );
+      return json({ linked });
     }
 
     if (action === "remove") {
