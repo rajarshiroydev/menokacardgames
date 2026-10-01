@@ -851,10 +851,11 @@ textarea::placeholder {
 .account-menu {
   position: relative;
   flex: none;
+  align-self: flex-start;
 }
 
 .profile-menu.account-menu-list {
-  top: 50px;
+  top: 44px;
   width: 250px;
 }
 
@@ -1731,17 +1732,15 @@ textarea::placeholder {
   padding: 10px 0;
 }
 
+/* Accept and Decline are the same width. */
 .friend-actions {
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
   gap: 8px;
 }
 
 .friend-actions button {
   min-height: 40px;
-}
-
-.friend-actions .accent-button {
-  flex: 1;
 }
 
 .profile-card {
@@ -1912,7 +1911,8 @@ textarea::placeholder {
   border-radius: 50%;
   background: var(--field);
   color: var(--ink2);
-  font-size: 15px;
+  font-size: 16px;
+  line-height: 1;
 }
 
 .profile-kicker {
@@ -2208,22 +2208,6 @@ textarea::placeholder {
   text-wrap: pretty;
 }
 
-.profile-request-choice {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  color: var(--ink2);
-  font-size: 13px;
-}
-
-.profile-request-choice span {
-  flex: none;
-}
-
-.profile-request-choice .select-control {
-  height: 40px;
-}
-
 .profile-players-heading {
   display: flex;
   align-items: center;
@@ -2386,13 +2370,6 @@ textarea::placeholder {
 
 .profile-row-copy small.row-kind-pending {
   color: var(--b);
-}
-
-.profile-row-net {
-  font-family: var(--fd);
-  font-size: 18px;
-  font-weight: 800;
-  font-variant-numeric: tabular-nums;
 }
 
 .profile-removed-toggle {
@@ -3418,10 +3395,18 @@ textarea::placeholder {
   color: var(--ink);
 }
 
+.history-expander {
+  display: grid;
+  grid-auto-columns: 1fr;
+  grid-auto-flow: column;
+  gap: 8px;
+}
+
 .history-expander .expander-button {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: center;
+  gap: 8px;
   width: 100%;
   height: 50px;
   padding: 0 16px;
@@ -3439,10 +3424,6 @@ textarea::placeholder {
   color: var(--ink2);
   font-size: 12px;
   font-weight: 500;
-}
-
-.history-expander .expander-button small::after {
-  content: " ↓";
 }
 
 /* ------------------------------------------------------------------

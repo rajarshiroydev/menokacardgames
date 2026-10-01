@@ -14,7 +14,7 @@ This is a plain-language list of everything Menoka Card Games can do today. It i
 
 - **Sign in with your email, no password.** Enter your email address and the app emails you a one-time sign-in link. Opening the link signs you in. Each link works once and expires after five minutes.
 - **Open the link in the same browser.** The sign-in only applies to the browser that opens the link. If you request a link on your phone but open it on your laptop, the laptop is signed in, not the phone. In app previews that keep their own browser, copy the link from the email and paste it into that browser's address bar.
-- **Staying signed in.** A sign-in lasts about a week on that device. The **⋯** button at the top right of the Profile tab shows "Signed in as" your email address, with **Sign out** and **Delete my account** (section 14).
+- **Staying signed in.** A sign-in lasts about a week on that device. The **⋯** button beside your name on the Profile card shows "Signed in as" your email address, with **Edit name**, **Sign out** and **Delete my account** (section 14).
 - **Save your name first.** Right after signing in, an account without a name sees only a "What should friends call you?" screen. Type your name (1 to 40 characters; extra spaces are tidied up) and press **Save and continue** to open the app. The button stays greyed out while the name is blank. There is no skip; **Sign out** at the top is the only other way out. This happens once: afterwards you can change the name on the Profile screen (section 3).
 - **Every host has a private ledger.** The person who signs in is the *host*. Each host has their own friend list, games, history and standings. Two hosts never see each other's data, even if they both have a friend called "Rajarshi". The same friend in two hosts' lists is two separate records with separate histories.
 - **Friends don't need accounts.** Friends are just names in the host's list. Only the host signs in.
@@ -34,7 +34,7 @@ Home (redesigned 1 October 2026) is a summary of where things stand; the tab bar
 - There is no standings summary on Home; see the Ranks tab.
 - **Background:** behind Home, a fanned hand of glass cards (A♠ K♥ Q♣ J♦ 10♠) at the top right with a soft blue glow, in both themes. Other screens keep the green and blue lights and faint pitch lines.
 - **Tab bar.** A bar at the bottom of every screen has five tabs: **Home**, **Play** (the game in progress, or table setup when there isn't one), **Ranks** (standings), **Games** (saved game sessions) and **Profile** (you and your players, section 3; its icon is a small person, the others are card suits). The current tab is highlighted in green. A green dot on **Play** means a game is in progress; a blue dot on **Profile** means friend requests are waiting.
-- **Every other screen** shows its title at the top left (for example **Profile** or **Hand 12**) with no line above it. Profile also has the theme button and an **⋯** account button at the top right (section 14). There is no on-screen back button; use the phone's back gesture or the browser's back button.
+- **Every other screen** shows its title at the top left (for example **Profile** or **Hand 12**) with no line above it. Profile also has the theme button at the top right. There is no on-screen back button; use the phone's back gesture or the browser's back button.
 - **Title Case everywhere.** All text on every page (buttons, labels, notes, messages, the live link and the sign-in pages) starts each word with a capital, and headings are in capitals. The messages quoted in this list are shown that way in the app. Text boxes keep what you type, and email addresses and links keep their exact case.
 - **Dark and light themes.** A round theme button shows a **sun** in dark mode (tap for light) and a **moon** in light mode (tap for dark). In the app it's only on the **Profile** tab (since 1 October 2026); it's also on the pages outside the app: the sign-in page, the name screen, the locked-account page and the live standings link. The choice is remembered on that device. Dark is the default.
 
@@ -45,7 +45,7 @@ The **Profile** tab replaced the Players tab on 30 September 2026. From the top:
 **Your card**
 
 - **Your avatar**, in a green-and-blue ring, next to your name. Tap it (it has a small ✎ badge) to choose another; see **Avatars** below.
-- **Your name**, large. The ✎ button turns it into a box with **Save** (1 to 40 characters; Escape cancels). Under the name: "Playing since" the month of your first counted game, or "No games yet".
+- **Your name**, large, with an **⋯** account menu beside it: "Signed in as" your email, **Edit name**, **Sign out** and **Delete my account**. **Edit name** turns the name into a box with **Save** (1 to 40 characters; Escape cancels). Under the name: "Playing since" the month of your first counted game, or "No games yet".
 - **All-time net**: everything you've won or lost, in your currency. It's green when you're ahead and red when you're behind.
 - **Last 10**: one small bar for each of your latest games (up to 10, in your currency), green up for a win and red down for a loss, taller for bigger results. Hover or long-press a bar for its date and result.
 - **Three tiles:** **Games played**, **Avg return** (your average session return, section 12, to one decimal) and **Profitable** (games you finished ahead, for example 15/24).
@@ -59,10 +59,10 @@ The **Profile** tab replaced the Players tab on 30 September 2026. From the top:
 **Players**
 
 - **The heading** says how many active players you have, with a green **+ Add** button.
-- **Filters:** **All**, **On Menoka** (you, your friends and requests you've sent) and **Guests** (players without an account), each with its count.
-- **Each row** shows the player's avatar, name, a short line and their net result in your games (hidden until they've played):
+- **Filters:** **All**, **Friends** (you, your friends and requests you've sent) and **Guests** (players without an account), each with its count.
+- **Each row** shows the player's avatar, name and a short line (no money amounts; wins and losses are on the Ranks tab):
   - **You · 12 games**, for your own player;
-  - **On Menoka · 21 games**, for a friend, with a green-and-blue ring around their avatar and a green dot;
+  - **Friend · 21 games**, for a friend, with a green-and-blue ring around their avatar and a green dot;
   - **Request sent · waiting**, for someone you've sent a friend request;
   - **Guest · 26 games**, for everyone else.
   The list starts with you, then friends, then waiting requests, then guests; within each group, most games first.
@@ -188,12 +188,12 @@ The **Profile** tab replaced the Players tab on 30 September 2026. From the top:
 - **Saving twice is safe.** If a save is retried, for example after a network problem, the game is still saved only once and doesn't use up a second game number.
 - **A different game can't hide behind a retry.** A retry only counts as the same save if it describes the same game: the same times, stakes, hands, blinds, players in the same seats, buy-ins and final chips. If a save arrives with the ID of an already saved game but different details, it is refused with "A different session with the same ID is already saved" and nothing is changed.
 - **The server double-checks every save.** A game is rejected if the chip totals don't add up, the same player appears twice, or a number is invalid. A bad game can't reach your history.
-- **Game history** is on the **Games** tab and lists saved games, newest first. The five most recent are shown. The button under the list, for example "Show 10 older games", adds 10 more at a time and says how many are left when more than 10 remain; the button moves down below the newly shown games. Once every game is shown, it becomes "Show fewer" and goes back to five. Each game card shows:
+- **Game history** is on the **Games** tab, headed **My Hosted Games**, and lists saved games, newest first. The five most recent are shown. Under the list, **Show 10 more games** adds 10 more at a time, and beside it **Show all games** (with how many are left) shows the whole list at once; it only appears while more than 10 are left. The buttons move down below the newly shown games. Once every game is shown, a single **Show fewer** button goes back to five. Each game card shows:
   - name or number, date, number of hands, big blind and number of players
   - each player's result, biggest winner first with a green **Win** tag (when they finished ahead), written as "+₹8,000" or "−₹2,000"
   - total buy-ins for any player who bought in more than once
-  - blind history, when blinds changed during the game: each plan, the blinds used from each hand, and the blinds it finished at
-- **Discard a game** to remove it from the standings and graph. It moves to a faded "Discarded" list under the saved games.
+  - blind history, for every game (tap to open): each plan, the blinds used from each hand, and the blinds it finished at. Games saved before 18 September 2026 kept no record, and blinds couldn't change then, so they show fixed blinds at their starting big blind with a half-size small blind
+- **No Discard button for now.** Since 1 October 2026 game cards have no **Discard** button (it may come back if people ask). Games discarded before then stay in a faded "Discarded" list under the saved games.
 - **Restore a game** to count it again. Standings and graph update straight away.
 - **Permanently delete a game** only after it has been discarded, and only within 10 minutes of signing in (see section 13).
 
@@ -240,7 +240,7 @@ The **Profile** tab replaced the Players tab on 30 September 2026. From the top:
 
 ## 14. Deleting your account
 
-- **Delete my account** is in the **⋯** account menu at the top right of the Profile tab, under "Signed in as" and **Sign out**. A confirmation explains exactly what happens before anything changes.
+- **Delete my account** is in the **⋯** account menu beside your name on the Profile card, under "Signed in as", **Edit name** and **Sign out**. A confirmation explains exactly what happens before anything changes.
 - **Recent sign-in required.** Like permanent deletion, it only works within **10 minutes** of signing in. Otherwise the app offers to email a fresh sign-in link.
 - **What happens straight away:**
   - your players, games and standings are locked and hidden
@@ -320,14 +320,13 @@ Everyone who signs in has their own account and can host their own games. Friend
 
 **Answering a request**
 
-- A request is a green-edged card under your Profile card: "Name wants to be friends". (Requests sent before 30 September 2026 may instead say "Name says they're Debraj in your list", from the invite codes the app used to have.)
-- **In your list, they are:** one of your guests, or **A new player**. If they're a guest whose games you already record, pick that guest so their history is linked to their account. A new player's name starts as their name; if you already have a player with that name, the card asks you to pick them or type another name.
-- **Accept and link** (or **Accept** for a new player) makes you friends. You become linked to the player you chose; on their side, a new player is added under your name (with a number, such as "Rajarshi Roy (2)", if they already have a player of that name). Requests sent before 1 October 2026 may instead link a guest the sender chose.
+- A request is a green-edged card under your Profile card: "Name wants to be friends", with **Accept** and **Decline** side by side, the same width.
+- **Accept** makes you friends and adds them to your list as a new player under their name. If you already have a player with that name, the card asks you to type another name. If they're really one of your guests (someone whose games you already record), use **Link to guest…** in their options afterwards to move the link onto that guest and keep the guest's games. On their side, a new player is added under your name (with a number, such as "Rajarshi Roy (2)", if they already have a player of that name). Requests sent before 1 October 2026 may instead link a guest the sender chose.
 - **Decline** ends the request. They can ask again after 7 days.
 
 **Your friends**
 
-- Friends are in your player list under **On Menoka**, by the name they chose, with their games and net in your ledger.
+- Friends are in your player list under **Friends**, by the name they chose, with how many of your games they played.
 - **Link to guest…** (in the friend's options) ties one of your guests to the friend: pick the guest and press **Link**. The guest becomes the friend and keeps all their games; the player that was linked before is deleted. If that player already has games (you played with them before linking), the sheet warns "already has N games in your list. They'll be merged into the guest you pick. This can't be undone." and the button reads **Merge**: their games move to the guest, with every result, buy-in and net unchanged. Merging is refused if both played in the same game ("They both played in the same game, so they can't be merged"), and while the friend is seated in the game in progress on that device. Your own player, guests already linked, and removed players can't be picked; with no guest to pick, the option isn't shown.
 - **Unfriend** (in the friend's options, with a confirmation) ends the friendship and unlinks the players on both sides. Both of you keep the players and every game. Linking again needs a new friend request. Either person can unfriend the other.
 - **When things update.** Requests, friends and the player list reload each time you open Home, Profile or Start a Game (table setup), and when the Profile finds a friend whose player isn't in the list yet. So a new or linked player shows up and can be seated without reopening the app.

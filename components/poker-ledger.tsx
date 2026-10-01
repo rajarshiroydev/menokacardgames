@@ -21,6 +21,7 @@ import {
   bigBlindAtLevel,
   betStops,
   blindStatus,
+  sessionBlindHistory,
   buyInPlayer,
   completedHandRecord,
   dealNewHand,
@@ -1743,7 +1744,7 @@ export function PokerLedger({
           : view === "history"
             ? { title: "Standings" }
             : view === "sessions"
-              ? { title: "Game Sessions" }
+              ? { title: "My Hosted Games" }
               : view === "profile"
                 ? { title: "Profile" }
                 : view === "hands"
@@ -1789,12 +1790,7 @@ export function PokerLedger({
             </h1>
           </div>
           {/* The theme switch lives on Profile only (user decision 2026-10-01). */}
-          {view === "profile" ? (
-            <>
-              <ThemeToggle />
-              <AccountMenu email={accountEmail} onDeleteAccount={deleteAccount} />
-            </>
-          ) : null}
+          {view === "profile" ? <ThemeToggle /> : null}
         </header>
       ) : null}
 
@@ -1827,6 +1823,8 @@ export function PokerLedger({
         ) : view === "profile" ? (
           <ProfileView
             profile={profile}
+            accountEmail={accountEmail}
+            onDeleteAccount={deleteAccount}
             onProfile={(next) => {
               setProfile(next);
               // Your own player goes by your name, so the list follows it.
@@ -3575,8 +3573,6 @@ const ANTE_PRESETS = [
   { value: 1_000, label: "1K" },
 ] as const;
 
-/** Value of the "In your list, they are" choice for a new player. */
-const NEW_PLAYER = "";
 /** How long a press on a player opens their options. */
 const LONG_PRESS_MS = 450;
 
@@ -3591,7 +3587,6 @@ type ProfileRow = {
   friend?: FriendOverview["friends"][number];
   requestId?: string;
   games: number;
-  net: number;
 };
 
 type RowAction = { label: string; danger?: boolean; run: () => void };
@@ -3633,6 +3628,8 @@ function monthYear(timestamp: number) {
  */
 function ProfileView({
   profile,
+  accountEmail,
+  onDeleteAccount,
   onProfile,
   players,
   discardedPlayers,
@@ -3655,6 +3652,8 @@ function ProfileView({
   onFriendRequests,
 }: {
   profile: AccountProfile;
+  accountEmail: string;
+  onDeleteAccount: () => void;
   onProfile: (profile: AccountProfile) => void;
   players: PlayerProfile[];
   discardedPlayers: PlayerProfile[];
@@ -3745,7 +3744,6 @@ function ProfileView({
     setMenuAbove(element.getBoundingClientRect().bottom > window.innerHeight - 340);
     setMenu(key);
   };
-  const { signedMoney } = useMoney();
   const standings = useMemo(() => buildStandings(history), [history]);
 
   async function run(key: string, action: () => Promise<void>) {
@@ -3802,7 +3800,7 @@ function ProfileView({
     const entry = standings.entries.find(
       (item) => item.key === standingsKey({ playerId: player.id, name: player.name }),
     );
-    return { games: entry?.totalSessions ?? 0, net: entry?.net ?? 0 };
+    return { games: entry?.totalSessions ?? 0 };
   };
   const liveRows: ProfileRow[] = [
     ...players.map((player): ProfileRow => ({
@@ -3826,7 +3824,6 @@ function ProfileView({
       avatar: request.avatar,
       requestId: request.requestId,
       games: 0,
-      net: 0,
     })),
   ];
   const order: Record<ProfileRow["kind"], number> = {
@@ -3926,7 +3923,7 @@ function ProfileView({
       case "self":
         return `You · ${games}`;
       case "friend":
-        return `On Menoka · ${games}`;
+        return `Friend · ${games}`;
       case "pending":
         return "Request sent · waiting";
       case "removed":
@@ -3941,19 +3938,24 @@ function ProfileView({
   );
   const filters: Array<[PlayerFilter, string]> = [
     ["all", "All"],
-    ["app", "On Menoka"],
+    ["app", "Friends"],
     ["guest", "Guests"],
   ];
 
   return (
     <div className="stack-list profile-screen">
-      <ProfileCard profile={profile} onProfile={onProfile} onToast={onToast} />
+      <ProfileCard
+        profile={profile}
+        accountEmail={accountEmail}
+        onDeleteAccount={onDeleteAccount}
+        onProfile={onProfile}
+        onToast={onToast}
+      />
 
       {overview?.received.map((request) => (
         <FriendRequestCard
           key={request.requestId}
           request={request}
-          freePlayers={freePlayers}
           busy={busy}
           onAnswered={(accepted) => {
             reloadOverview();
@@ -4030,11 +4032,6 @@ function ProfileView({
                     <b>{row.name}</b>
                     <small className={`row-kind-${row.kind}`}>{subtitle(row)}</small>
                   </span>
-                  {row.games && row.kind !== "pending" ? (
-                    <span className={`profile-row-net ${toneClass(row.net)}`}>
-                      {signedMoney(row.net)}
-                    </span>
-                  ) : null}
                   {actions.length ? (
                     <button
                       className="profile-more"
@@ -4163,25 +4160,37 @@ function ProfileView({
 /** Profile's ⋯ button: who is signed in, Sign out and Delete my account. */
 function AccountMenu({
   email,
+  onEditName,
   onDeleteAccount,
 }: {
   email: string;
+  onEditName: () => void;
   onDeleteAccount: () => void;
 }) {
   const [open, setOpen] = useState(false);
+  const container = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!open) return;
     function closeOnEscape(event: KeyboardEvent) {
       if (event.key === "Escape") setOpen(false);
     }
+    // The card's blur makes a fixed scrim cover only the card, so a press
+    // anywhere outside the menu closes it instead.
+    function closeOutside(event: PointerEvent) {
+      if (!container.current?.contains(event.target as Node)) setOpen(false);
+    }
     window.addEventListener("keydown", closeOnEscape);
-    return () => window.removeEventListener("keydown", closeOnEscape);
+    document.addEventListener("pointerdown", closeOutside);
+    return () => {
+      window.removeEventListener("keydown", closeOnEscape);
+      document.removeEventListener("pointerdown", closeOutside);
+    };
   }, [open]);
 
   return (
-    <div className="account-menu">
+    <div className="account-menu" ref={container}>
       <button
-        className="round-button"
+        className="profile-edit"
         type="button"
         aria-label="Account"
         aria-expanded={open}
@@ -4190,36 +4199,38 @@ function AccountMenu({
         ⋯
       </button>
       {open ? (
-        <>
-          <button
-            className="profile-menu-scrim"
-            type="button"
-            aria-label="Close account menu"
-            onClick={() => setOpen(false)}
-          />
-          <div className="profile-menu account-menu-list" role="menu">
-            <div className="account-menu-who">
-              <small>Signed in as</small>
-              <b className="literal-text">{email}</b>
-            </div>
-            <form action={signOut}>
-              <button type="submit" role="menuitem">
-                Sign out
-              </button>
-            </form>
-            <button
-              type="button"
-              role="menuitem"
-              className="danger-text"
-              onClick={() => {
-                setOpen(false);
-                onDeleteAccount();
-              }}
-            >
-              Delete my account
-            </button>
+        <div className="profile-menu account-menu-list" role="menu">
+          <div className="account-menu-who">
+            <small>Signed in as</small>
+            <b className="literal-text">{email}</b>
           </div>
-        </>
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              setOpen(false);
+              onEditName();
+            }}
+          >
+            Edit name
+          </button>
+          <form action={signOut}>
+            <button type="submit" role="menuitem">
+              Sign out
+            </button>
+          </form>
+          <button
+            type="button"
+            role="menuitem"
+            className="danger-text"
+            onClick={() => {
+              setOpen(false);
+              onDeleteAccount();
+            }}
+          >
+            Delete my account
+          </button>
+        </div>
       ) : null}
     </div>
   );
@@ -4268,10 +4279,14 @@ function PressableRow({
 /** The card at the top: name, record, user code and currency. */
 function ProfileCard({
   profile,
+  accountEmail,
+  onDeleteAccount,
   onProfile,
   onToast,
 }: {
   profile: AccountProfile;
+  accountEmail: string;
+  onDeleteAccount: () => void;
   onProfile: (profile: AccountProfile) => void;
   onToast: (message: string) => void;
 }) {
@@ -4496,17 +4511,14 @@ function ProfileCard({
           ) : null}
         </div>
         {editing ? null : (
-          <button
-            className="profile-edit"
-            type="button"
-            aria-label="Edit name"
-            onClick={() => {
+          <AccountMenu
+            email={accountEmail}
+            onEditName={() => {
               setDraft(name);
               setEditing(true);
             }}
-          >
-            ✎
-          </button>
+            onDeleteAccount={onDeleteAccount}
+          />
         )}
       </div>
 
@@ -4659,30 +4671,23 @@ function ProfileCard({
 /** A friend request sent to you, answered right on the Profile tab. */
 function FriendRequestCard({
   request,
-  freePlayers,
   busy,
   run,
   onAnswered,
   onToast,
 }: {
   request: FriendOverview["received"][number];
-  freePlayers: PlayerProfile[];
   busy: string;
   run: (key: string, action: () => Promise<void>) => Promise<void>;
   onAnswered: (accepted: boolean) => void;
   onToast: (message: string) => void;
 }) {
-  const claimed = request.claimedPlayer;
-  const [playerId, setPlayerId] = useState(
-    claimed && freePlayers.some((player) => player.id === claimed.id)
-      ? claimed.id
-      : NEW_PLAYER,
-  );
+  // Accepting always adds them as a new player; a guest who is the same
+  // person is linked afterwards with "Link to guest…" (user decision).
   const [newName, setNewName] = useState(request.displayName ?? "");
   const [error, setError] = useState("");
   const [nameTaken, setNameTaken] = useState(false);
   const name = request.displayName ?? "Someone";
-  const selectId = `friend-accept-${request.requestId}`;
 
   function answer(action: "accept" | "decline") {
     void run(request.requestId, async () => {
@@ -4693,8 +4698,8 @@ function FriendRequestCard({
             ? {
                 action,
                 requestId: request.requestId,
-                myPlayerId: playerId || null,
-                newPlayerName: playerId ? null : newName,
+                myPlayerId: null,
+                newPlayerName: newName,
               }
             : { action, requestId: request.requestId },
         );
@@ -4720,35 +4725,11 @@ function FriendRequestCard({
         <div>
           <span className="eyebrow">Friend request</span>
           <p>
-            {claimed ? (
-              <>
-                <b>{name}</b> says they&apos;re <b>{claimed.name}</b> in your list
-              </>
-            ) : (
-              <>
-                <b>{name}</b> wants to be friends
-              </>
-            )}
+            <b>{name}</b> wants to be friends
           </p>
         </div>
       </div>
-      <label className="profile-request-choice" htmlFor={selectId}>
-        <span>In your list, they are</span>
-        <select
-          className="select-control"
-          id={selectId}
-          value={playerId}
-          onChange={(event) => setPlayerId(event.target.value)}
-        >
-          <option value={NEW_PLAYER}>A new player</option>
-          {freePlayers.map((player) => (
-            <option key={player.id} value={player.id}>
-              {player.name}
-            </option>
-          ))}
-        </select>
-      </label>
-      {nameTaken && playerId === NEW_PLAYER ? (
+      {nameTaken ? (
         <input
           className="field"
           aria-label="New player's name"
@@ -4769,11 +4750,7 @@ function FriendRequestCard({
           disabled={busy !== ""}
           onClick={() => answer("accept")}
         >
-          {busy === request.requestId
-            ? "Saving…"
-            : playerId
-              ? "Accept and link"
-              : "Accept"}
+          {busy === request.requestId ? "Saving…" : "Accept"}
         </button>
         <button
           className="ghost"
@@ -6450,19 +6427,21 @@ const LIST_START = 5;
 const LIST_STEP = 10;
 
 /**
- * Shows the first items of a long list and 10 more per press. The button
- * sits under the last visible item, so it moves down as the list grows;
- * once everything is shown it collapses the list back.
+ * Shows the first items of a long list, with buttons under the last visible
+ * item to add 10 more or show the rest at once; once everything is shown,
+ * one button collapses the list back.
  */
 function ExpandingList<T>({
   items,
   render,
   more,
+  all,
   className,
 }: {
   items: T[];
   render: (item: T) => ReactNode;
   more: (count: number) => string;
+  all: string;
   className?: string;
 }) {
   const [shown, setShown] = useState(LIST_START);
@@ -6470,11 +6449,7 @@ function ExpandingList<T>({
   const visible = items.slice(0, shown).map(render);
   const remaining = items.length - shown;
 
-  function toggle() {
-    if (remaining > 0) {
-      setShown(shown + LIST_STEP);
-      return;
-    }
+  function collapse() {
     setShown(LIST_START);
     // Collapsing leaves the page scrolled far below the short list.
     requestAnimationFrame(() =>
@@ -6487,19 +6462,37 @@ function ExpandingList<T>({
       {className ? <div className={className}>{visible}</div> : visible}
       {items.length > LIST_START ? (
         <div className="history-expander">
-          <button
-            ref={buttonRef}
-            type="button"
-            className={`expander-button ${remaining > 0 ? "" : "open"}`}
-            onClick={toggle}
-          >
-            <span>
-              {remaining > 0
-                ? more(Math.min(LIST_STEP, remaining))
-                : "Show fewer"}
-            </span>
-            {remaining > LIST_STEP ? <small>{remaining} left</small> : null}
-          </button>
+          {remaining > 0 ? (
+            <>
+              <button
+                type="button"
+                className="expander-button"
+                onClick={() => setShown(shown + LIST_STEP)}
+              >
+                {more(Math.min(LIST_STEP, remaining))}
+              </button>
+              {/* With 10 or fewer left, "more" already shows them all. */}
+              {remaining > LIST_STEP ? (
+                <button
+                  type="button"
+                  className="expander-button"
+                  onClick={() => setShown(items.length)}
+                >
+                  {all}
+                  <small>{remaining} left</small>
+                </button>
+              ) : null}
+            </>
+          ) : (
+            <button
+              ref={buttonRef}
+              type="button"
+              className="expander-button open"
+              onClick={collapse}
+            >
+              Show fewer
+            </button>
+          )}
         </div>
       ) : null}
     </>
@@ -6509,18 +6502,20 @@ function ExpandingList<T>({
 function SessionCard({
   session,
   discarded = false,
-  onDiscard,
   onRestore,
   onDeletePermanently,
 }: {
   session: PokerSession;
   discarded?: boolean;
+  /** Not shown for now: the Discard button is hidden (user decision 2026-10-01). */
   onDiscard?: (id: string) => void;
   onRestore?: (id: string) => void;
   onDeletePermanently?: (id: string) => void;
 }) {
   const { currency, money, signedMoney } = useMoney();
   const sortedResults = [...session.results].sort((a, b) => b.net - a.net);
+  const blinds = sessionBlindHistory(session);
+  const lastBigBlind = blinds.levels.at(-1)!.bigBlind;
 
   return (
     <article className={`glass card session-card ${discarded ? "discarded" : ""}`}>
@@ -6552,57 +6547,38 @@ function SessionCard({
                 Delete
               </button>
             </>
-          ) : (
-            <button
-              className="pill-button"
-              type="button"
-              onClick={() => onDiscard?.(session.id)}
-            >
-              Discard
-            </button>
-          )}
+          ) : null}
+          {/* Discard is hidden until users ask for it back (user decision
+              2026-10-01); onDiscard and discardSession stay for that. */}
         </div>
       </div>
-      {session.blindHistory ? (
-        <details className="session-blind-history">
-          <summary>
-            Blind history · {session.blindHistory.levels.length} amount
-            {session.blindHistory.levels.length === 1 ? "" : "s"} used · finished at{" "}
-            {money(
-              smallBlindFor(
-                session.blindHistory.levels.at(-1)!.bigBlind,
-                session.blindHistory.smallBlindRatio,
-              ),
-            )}
-            /{money(session.blindHistory.levels.at(-1)!.bigBlind)}
-          </summary>
-          <div className="session-blind-history-content">
-            <b>Plans</b>
-            {session.blindHistory.plans.map((plan) => (
-              <div key={plan.effectiveHand}>
-                From hand {plan.effectiveHand}: {money(
-                  smallBlindFor(
-                    plan.baseBigBlind,
-                    session.blindHistory!.smallBlindRatio,
-                  ),
-                )}/{money(plan.baseBigBlind)} ·{" "}
-                {describeBlindSchedule(plan.schedule, currency)}
-              </div>
-            ))}
-            <b>Blinds used</b>
-            {session.blindHistory.levels.map((level) => (
-              <div key={level.handNo}>
-                Hand {level.handNo}: {money(
-                  smallBlindFor(
-                    level.bigBlind,
-                    session.blindHistory!.smallBlindRatio,
-                  ),
-                )}/{money(level.bigBlind)}
-              </div>
-            ))}
-          </div>
-        </details>
-      ) : null}
+      <details className="session-blind-history">
+        <summary>
+          Blind history · {blinds.levels.length} amount
+          {blinds.levels.length === 1 ? "" : "s"} used · finished at{" "}
+          {money(smallBlindFor(lastBigBlind, blinds.smallBlindRatio))}/
+          {money(lastBigBlind)}
+        </summary>
+        <div className="session-blind-history-content">
+          <b>Plans</b>
+          {blinds.plans.map((plan) => (
+            <div key={plan.effectiveHand}>
+              From hand {plan.effectiveHand}: {money(
+                smallBlindFor(plan.baseBigBlind, blinds.smallBlindRatio),
+              )}/{money(plan.baseBigBlind)} ·{" "}
+              {describeBlindSchedule(plan.schedule, currency)}
+            </div>
+          ))}
+          <b>Blinds used</b>
+          {blinds.levels.map((level) => (
+            <div key={level.handNo}>
+              Hand {level.handNo}: {money(
+                smallBlindFor(level.bigBlind, blinds.smallBlindRatio),
+              )}/{money(level.bigBlind)}
+            </div>
+          ))}
+        </div>
+      </details>
       <div className="rows">
         {sortedResults.map((result, index) => (
           <div
@@ -7169,7 +7145,8 @@ function SessionsView({
           render={(session) => (
             <SessionCard key={session.id} session={session} onDiscard={onDiscard} />
           )}
-          more={(count) => `Show ${count} older game${count === 1 ? "" : "s"}`}
+          more={(count) => `Show ${count} more game${count === 1 ? "" : "s"}`}
+          all="Show all games"
         />
       ) : (
         <section className="glass card">

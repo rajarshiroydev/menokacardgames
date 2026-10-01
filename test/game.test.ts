@@ -19,6 +19,7 @@ import {
   raiseSize,
   resetRaiseRules,
   returnToBetweenHands,
+  sessionBlindHistory,
   totalBuyIns,
   undoLastHand,
   undoRaiseRules,
@@ -718,3 +719,23 @@ describe("undo last hand", () => {
   });
 });
 
+
+describe("sessionBlindHistory", () => {
+  test("keeps a saved history", () => {
+    const blindHistory = {
+      plans: [{ effectiveHand: 1, effectiveAt: 5, baseBigBlind: 100, schedule: null }],
+      levels: [
+        { handNo: 1, dealtAt: 5, bigBlind: 100 },
+        { handNo: 11, dealtAt: 9, bigBlind: 200 },
+      ],
+    };
+    assert.equal(sessionBlindHistory({ ante: 100, date: 5, blindHistory }), blindHistory);
+  });
+
+  test("shows an older game as fixed at its starting big blind", () => {
+    assert.deepEqual(sessionBlindHistory({ ante: 500, date: 7 }), {
+      plans: [{ effectiveHand: 1, effectiveAt: 7, baseBigBlind: 500, schedule: null }],
+      levels: [{ handNo: 1, dealtAt: 7, bigBlind: 500 }],
+    });
+  });
+});

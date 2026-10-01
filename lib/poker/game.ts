@@ -1,10 +1,12 @@
 import { MAX_BUY_INS } from "./buy-ins.ts";
 import { formatMoney } from "./money.ts";
 import type {
+  BlindHistory,
   BlindPlan,
   BlindSchedule,
   CompletedHand,
   GameState,
+  PokerSession,
   RaiseRecord,
   SmallBlindRatio,
 } from "./types";
@@ -269,6 +271,33 @@ export function isValidSmallBlind(smallBlind: number, bigBlind: number) {
     smallBlind >= 1 &&
     smallBlind <= bigBlind
   );
+}
+
+/**
+ * A saved game's blind plan and the blinds it used. Games saved before
+ * 18 September 2026 have no record, and blinds couldn't change then, so they
+ * show as fixed at the starting big blind with the usual half small blind.
+ */
+export function sessionBlindHistory(
+  session: Pick<PokerSession, "ante" | "date" | "blindHistory">,
+): BlindHistory {
+  if (session.blindHistory?.plans.length && session.blindHistory.levels.length) {
+    return session.blindHistory;
+  }
+  return {
+    plans: [
+      {
+        effectiveHand: 1,
+        effectiveAt: session.date,
+        baseBigBlind: session.ante,
+        schedule: null,
+      },
+    ],
+    levels: [{ handNo: 1, dealtAt: session.date, bigBlind: session.ante }],
+    ...(session.blindHistory?.smallBlindRatio
+      ? { smallBlindRatio: session.blindHistory.smallBlindRatio }
+      : {}),
+  };
 }
 
 export function startingBigBlind(game: GameState) {
