@@ -3553,6 +3553,26 @@ textarea::placeholder {
   line-height: 1.5;
 }
 
+.sheet .msg-title {
+  margin: 0 0 10px;
+  font-weight: 700;
+}
+
+.sheet .msg-points {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding-left: 20px;
+  color: var(--ink2);
+  font-size: 15px;
+  line-height: 1.45;
+  list-style: disc;
+}
+
+.sheet .msg-points li::marker {
+  color: var(--ink3);
+}
+
 .sheet > button,
 .sheet .legacy-review-actions button {
   width: 100%;

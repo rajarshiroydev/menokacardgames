@@ -187,6 +187,8 @@ type ModalState =
   | {
       kind: "confirm";
       message: string;
+      /** Shown as a list under the message, for confirmations with several facts. */
+      points?: string[];
       confirmLabel: string;
       danger?: boolean;
       onConfirm: () => void;
@@ -1182,7 +1184,13 @@ export function PokerLedger({
     setModal({
       kind: "confirm",
       danger: true,
-      message: `Delete your account? Your players, games and standings are locked and hidden straight away, and you are signed out on every device. You can recover everything by signing in again within ${DELETION_GRACE_PERIOD_DAYS} days. After that, everything is permanently deleted and cannot be recovered. Our database provider keeps short-term recovery copies of deleted data for up to 6 hours.`,
+      message: "Delete your account?",
+      points: [
+        "Your players, games and standings are locked and hidden straight away.",
+        "You are signed out on every device.",
+        `Sign in again within ${DELETION_GRACE_PERIOD_DAYS} days to recover everything.`,
+        "After that, everything is permanently deleted and can't be recovered.",
+      ],
       confirmLabel: "Delete My Account",
       onConfirm: () => void requestAccountDeletion(),
     });
@@ -7476,6 +7484,15 @@ function Modal({
               sign-in link to{" "}
               <span className="literal-text">{state.email}</span>. Open it on
               this device, then try again.
+            </>
+          ) : state.points?.length ? (
+            <>
+              <p className="msg-title">{state.message}</p>
+              <ul className="msg-points">
+                {state.points.map((point) => (
+                  <li key={point}>{point}</li>
+                ))}
+              </ul>
             </>
           ) : (
             state.message

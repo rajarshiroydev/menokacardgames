@@ -241,7 +241,7 @@ The **Profile** tab replaced the Players tab on 30 September 2026. From the top:
 
 ## 14. Deleting your account
 
-- **Delete my account** is in the **⋯** account menu beside your name on the Profile card, under "Signed in as", **Edit name** and **Sign out**. A confirmation explains exactly what happens before anything changes.
+- **Delete my account** is in the **⋯** account menu beside your name on the Profile card, under "Signed in as", **Edit name** and **Sign out**. A confirmation explains exactly what happens before anything changes, as a short list of points (locked and hidden straight away, signed out everywhere, 30 days to recover, then permanent). The 6-hour provider backups are described under Backups below, not in the confirmation.
 - **Recent sign-in required.** Like permanent deletion, it only works within **10 minutes** of signing in. Otherwise the app offers to email a fresh sign-in link.
 - **What happens straight away:**
   - your players, games and standings are locked and hidden
