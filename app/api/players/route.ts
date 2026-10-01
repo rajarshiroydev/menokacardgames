@@ -108,8 +108,13 @@ async function handlePost(request: Request) {
   if (!read.ok) return json({ error: read.error }, read.status);
 
   try {
-    const body = read.body as { name?: unknown } | null;
+    const body = read.body as { name?: unknown; avatar?: unknown } | null;
     let name: string;
+    // Optional: without one, the database picks a random avatar.
+    const avatar = body?.avatar ?? null;
+    if (avatar !== null && !isAvatarId(avatar)) {
+      return json({ error: "Choose an avatar from the list" }, 400);
+    }
 
     try {
       name = cleanPlayerName(body?.name);
@@ -124,10 +129,23 @@ async function handlePost(request: Request) {
 
     const [result] = await runAsAuthenticatedUser(authUserId, (sql) => [
       sql`
-        INSERT INTO players (owner_id, name, name_key)
-        VALUES (${ownerId}::uuid, ${name}, ${playerNameKey(name)})
+        INSERT INTO players (owner_id, name, name_key, avatar)
+        VALUES (
+          ${ownerId}::uuid,
+          ${name},
+          ${playerNameKey(name)},
+          COALESCE(${avatar}::text, public.random_avatar())
+        )
         ON CONFLICT (owner_id, name_key) WHERE owner_id IS NOT NULL DO UPDATE
-        SET name = EXCLUDED.name, deleted_at = NULL
+        SET name = EXCLUDED.name,
+          deleted_at = NULL,
+          -- Restoring a removed guest takes the avatar chosen now; people with
+          -- an account keep their own.
+          avatar = CASE
+            WHEN ${avatar}::text IS NOT NULL AND players.linked_account_id IS NULL
+              THEN EXCLUDED.avatar
+            ELSE players.avatar
+          END
         RETURNING id, name, player_code, avatar, linked_account_id IS NOT NULL AS linked, created_at, deleted_at
       `,
     ]);

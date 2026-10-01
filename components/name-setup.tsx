@@ -8,16 +8,19 @@ import {
   MAX_DISPLAY_NAME_LENGTH,
 } from "@/lib/accounts/identity-code";
 import { apiErrorMessage } from "@/lib/security/rate-limit-message";
+import { AvatarPicker } from "@/components/avatar-picker";
 import { BrandMark } from "@/components/brand-mark";
 import { ThemeToggle } from "@/components/theme-toggle";
 
 /**
  * The first step after signing in: an account without a name sees only this
  * screen until it saves one. The home page decides on the server whether to
- * show it, so the ledger never opens for a nameless account.
+ * show it, so the ledger never opens for a nameless account. The avatar is
+ * saved with the name; it starts as the random one the account was given.
  */
-export function NameSetup() {
+export function NameSetup({ initialAvatar }: { initialAvatar: string }) {
   const [name, setName] = useState("");
+  const [avatar, setAvatar] = useState(initialAvatar);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const router = useRouter();
@@ -39,7 +42,7 @@ export function NameSetup() {
       const response = await fetch("/api/account", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "update-profile", displayName }),
+        body: JSON.stringify({ action: "update-profile", displayName, avatar }),
       });
       const data = (await response.json().catch(() => ({}))) as {
         error?: string;
@@ -66,11 +69,6 @@ export function NameSetup() {
         <BrandMark className="auth-mark" />
         <p className="eyebrow">Welcome</p>
         <h1 id="name-setup-title">What should friends call you?</h1>
-        <p className="auth-intro">
-          Before you start, save the name your friends know you by. They see it
-          when you send or accept a friend request, never your email. You can
-          change it later on the Players screen.
-        </p>
         <form onSubmit={saveName} className="auth-form">
           <label htmlFor="display-name">Your name</label>
           <input
@@ -88,6 +86,15 @@ export function NameSetup() {
             }}
             required
             autoFocus
+          />
+          <span className="auth-label">
+            Your avatar
+          </span>
+          <AvatarPicker
+            value={avatar}
+            seed={name}
+            disabled={saving}
+            onChange={setAvatar}
           />
           {error ? (
             <p className="auth-error" role="alert">

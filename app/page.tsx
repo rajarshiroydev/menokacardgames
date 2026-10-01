@@ -33,7 +33,7 @@ export default async function Home() {
               <button type="submit">Sign out</button>
             </form>
           </header>
-          <NameSetup />
+          <NameSetup initialAvatar={profile.avatar} />
         </>
       );
     }

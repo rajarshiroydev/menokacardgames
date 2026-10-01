@@ -64,6 +64,7 @@ import qrcode from "qrcode-generator";
 
 import { signOut } from "@/app/auth/sign-in/actions";
 import { AvatarArt } from "@/components/avatar-art";
+import { AvatarPicker, randomAvatarId } from "@/components/avatar-picker";
 import { BrandMark } from "@/components/brand-mark";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { AVATARS } from "@/lib/avatars";
@@ -1053,11 +1054,11 @@ export function PokerLedger({
   );
 
   const addPlayer = useCallback(
-    async (name: string) => {
+    async (name: string, avatar: string) => {
       try {
         const data = await playersApi<{ player: PlayerProfile }>("", {
           method: "POST",
-          body: JSON.stringify({ name }),
+          body: JSON.stringify({ name, avatar }),
         });
         setPlayers((current) => {
           const withoutPlayer = current.filter(
@@ -3737,7 +3738,7 @@ function ProfileView({
   loading: boolean;
   error: string;
   onRetry: () => void;
-  onAdd: (name: string) => Promise<PlayerProfile | null>;
+  onAdd: (name: string, avatar: string) => Promise<PlayerProfile | null>;
   onRename: (player: PlayerProfile, name: string) => Promise<boolean>;
   onGuestAvatar: (player: PlayerProfile, avatar: string) => Promise<boolean>;
   onDiscard: (player: PlayerProfile) => void;
@@ -4799,13 +4800,14 @@ function AddPlayerSheet({
   onClose,
 }: {
   players: PlayerProfile[];
-  onAdd: (name: string) => Promise<PlayerProfile | null>;
+  onAdd: (name: string, avatar: string) => Promise<PlayerProfile | null>;
   onRequestSent: () => void;
   onToast: (message: string) => void;
   onClose: () => void;
 }) {
   const [mode, setMode] = useState<"code" | "name">("code");
   const [input, setInput] = useState("");
+  const [guestAvatar, setGuestAvatar] = useState(randomAvatarId);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [found, setFound] = useState<(FoundAccount & { code: string }) | null>(
@@ -4868,7 +4870,7 @@ function AddPlayerSheet({
       return;
     }
     setBusy(true);
-    const player = await onAdd(value);
+    const player = await onAdd(value, guestAvatar);
     setBusy(false);
     if (player) onClose();
   }
@@ -4961,6 +4963,14 @@ function AddPlayerSheet({
             {error}
           </p>
         ) : null}
+        {byCode ? null : (
+          <AvatarPicker
+            value={guestAvatar}
+            seed={input}
+            disabled={busy}
+            onChange={setGuestAvatar}
+          />
+        )}
         {found ? (
           <div className="profile-found">
             <div className="profile-found-head">

@@ -160,12 +160,21 @@ function mapProfile(row: ProfileRow): AccountProfile {
   };
 }
 
-/** Sets the name others see; `displayName` must come from cleanDisplayName. */
-export async function updateDisplayName(authUserId: string, displayName: string) {
+/**
+ * Sets the name others see; `displayName` must come from cleanDisplayName.
+ * A checked `avatar`, when given, is saved in the same update.
+ */
+export async function updateDisplayName(
+  authUserId: string,
+  displayName: string,
+  avatar: string | null = null,
+) {
   const [result] = await runAsAuthenticatedUser(authUserId, (sql) => [
     sql`
       UPDATE accounts
-      SET display_name = ${displayName}, updated_at = now()
+      SET display_name = ${displayName},
+        avatar = COALESCE(${avatar}::text, avatar),
+        updated_at = now()
       WHERE auth_user_id = ${authUserId}::uuid
         AND lifecycle_state = 'active'
       RETURNING user_code, display_name, currency, self_player_id, avatar

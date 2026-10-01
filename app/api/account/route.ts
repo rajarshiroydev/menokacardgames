@@ -69,6 +69,7 @@ async function handlePost(request: Request) {
     if (accessError) return json({ error: accessError }, 423);
 
     let displayName = "";
+    let avatar: string | null = null;
     if (action === "update-profile") {
       try {
         displayName = cleanDisplayName(
@@ -80,12 +81,20 @@ async function handlePost(request: Request) {
           400,
         );
       }
+      // Optional: the name screen after sign-up saves the chosen avatar too.
+      const chosen = (read.body as { avatar?: unknown }).avatar;
+      if (chosen !== undefined && chosen !== null) {
+        if (!isAvatarId(chosen)) {
+          return json({ error: "Choose an avatar from the list" }, 400);
+        }
+        avatar = chosen;
+      }
     }
 
     try {
       const profile =
         action === "update-profile"
-          ? await updateDisplayName(session.user.id, displayName)
+          ? await updateDisplayName(session.user.id, displayName, avatar)
           : await replaceUserCode(session.user.id);
       if (!profile) {
         return json({ error: "This account is locked while deletion is pending" }, 423);
