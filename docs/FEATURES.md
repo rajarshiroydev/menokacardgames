@@ -14,7 +14,7 @@ This is a plain-language list of everything Menoka Card Games can do today. It i
 
 - **Sign in with your email, no password.** Enter your email address and the app emails you a one-time sign-in link. Opening the link signs you in. Each link works once and expires after five minutes.
 - **Open the link in the same browser.** The sign-in only applies to the browser that opens the link. If you request a link on your phone but open it on your laptop, the laptop is signed in, not the phone. In app previews that keep their own browser, copy the link from the email and paste it into that browser's address bar.
-- **Staying signed in.** A sign-in lasts about a week on that device. The bottom of the home screen shows "Signed in as" your email address, with a **Sign out** button.
+- **Staying signed in.** A sign-in lasts about a week on that device. The **⋯** button at the top right of the Profile tab shows "Signed in as" your email address, with **Sign out** and **Delete my account** (section 14).
 - **Save your name first.** Right after signing in, an account without a name sees only a "What should friends call you?" screen. Type your name (1 to 40 characters; extra spaces are tidied up) and press **Save and continue** to open the app. The button stays greyed out while the name is blank. There is no skip; **Sign out** at the top is the only other way out. This happens once: afterwards you can change the name on the Profile screen (section 3).
 - **Every host has a private ledger.** The person who signs in is the *host*. Each host has their own friend list, games, history and standings. Two hosts never see each other's data, even if they both have a friend called "Rajarshi". The same friend in two hosts' lists is two separate records with separate histories.
 - **Friends don't need accounts.** Friends are just names in the host's list. Only the host signs in.
@@ -23,15 +23,20 @@ This is a plain-language list of everything Menoka Card Games can do today. It i
 
 ## 2. Home screen and getting around
 
-- **Start A Game**, a green card that opens table setup. While a game is in progress it becomes a **Continue Game Session** card instead, marked "Live", with the hand number, the stage and the pot.
-- **Four tiles:** **All Time Standings** (how many saved game sessions there are), **Existing Players** (how many players are ready to play; opens the Profile tab), **Hand Rankings** (all ten poker hands, see section 17) and **New Game**. While a game is in progress, New Game returns to it, because only one game runs at a time.
-- **Read the poker rules**: the house rules explained in the app (see section 17).
-- **Delete my account**: a small link at the bottom (see section 14).
+Home (redesigned 1 October 2026) is a summary of where things stand; the tab bar handles getting around. From the top:
+
+- **Your name**, large, under "Good morning", "Good afternoon" or "Good evening" (from your phone's clock; evening from 5 pm to 5 am), or "Game in progress" while a game is on. Long names wrap onto a second line.
+- **One game card.** With no game running it's the green **Start a game** card, which opens table setup. While a game is on it becomes a **Live** card showing the game name, hand number and stage (or "Between hands"), the **pot** (or how many hands have been dealt, between hands), the blinds (with the level, such as "L2", when they rise on a schedule), **your stack** (or how many players are at the table, if you aren't seated) and the **chip leader** with their stack. Tap anywhere on it, or **Back to the table**, to return to the game.
 - **Unassigned device data**: appears only if this device has games saved before accounts existed (see section 16).
-- **Tab bar.** A bar at the bottom of every screen has five tabs: **Home**, **Play** (the game in progress, or table setup when there isn't one), **Ranks** (standings), **Games** (saved game sessions) and **Profile** (you and your players, section 3). The current tab is highlighted in green.
-- **Every other screen** shows its title at the top left (for example **Profile** or **Hand 12**) with no line above it, and the theme button at the top right. There is no on-screen back button; use the phone's back gesture or the browser's back button.
+- **Friend request notice**: appears when someone has sent you a friend request, with their avatar and name ("Meera wants to be friends", or "Meera and 2 others want to be friends"). **Review** opens the Profile tab, where you answer it. It's checked when the app opens and each time you come back to Home.
+- **Last session**: your most recent saved game, with its date, name, number of hands and players. It shows your result and your return when you played in it (otherwise the top winner's), the top winner on the right, and a bar for every player's win or loss. Tap it to open the Games tab. Hidden until you have a saved game.
+- **Hand rankings** (all ten poker hands), see section 17.
+- There is no standings summary on Home; see the Ranks tab.
+- **Background:** behind Home, a fanned hand of glass cards (A♠ K♥ Q♣ J♦ 10♠) at the top right with a soft blue glow, in both themes. Other screens keep the green and blue lights and faint pitch lines.
+- **Tab bar.** A bar at the bottom of every screen has five tabs: **Home**, **Play** (the game in progress, or table setup when there isn't one), **Ranks** (standings), **Games** (saved game sessions) and **Profile** (you and your players, section 3; its icon is a small person, the others are card suits). The current tab is highlighted in green. A green dot on **Play** means a game is in progress; a blue dot on **Profile** means friend requests are waiting.
+- **Every other screen** shows its title at the top left (for example **Profile** or **Hand 12**) with no line above it. Profile also has the theme button and an **⋯** account button at the top right (section 14). There is no on-screen back button; use the phone's back gesture or the browser's back button.
 - **Title Case everywhere.** All text on every page (buttons, labels, notes, messages, the live link and the sign-in pages) starts each word with a capital, and headings are in capitals. The messages quoted in this list are shown that way in the app. Text boxes keep what you type, and email addresses and links keep their exact case.
-- **Dark and light themes.** A round theme button shows a **sun** in dark mode (tap for light) and a **moon** in light mode (tap for dark). It's on every page: the app's screens, the sign-in page, the name screen, the locked-account page and the live standings link. The choice is remembered on that device. Dark is the default.
+- **Dark and light themes.** A round theme button shows a **sun** in dark mode (tap for light) and a **moon** in light mode (tap for dark). In the app it's only on the **Profile** tab (since 1 October 2026); it's also on the pages outside the app: the sign-in page, the name screen, the locked-account page and the live standings link. The choice is remembered on that device. Dark is the default.
 
 ## 3. Profile (you and your players)
 
@@ -235,7 +240,7 @@ The **Profile** tab replaced the Players tab on 30 September 2026. From the top:
 
 ## 14. Deleting your account
 
-- **Delete My Account** is a small link at the bottom of the home screen. A confirmation explains exactly what happens before anything changes.
+- **Delete my account** is in the **⋯** account menu at the top right of the Profile tab, under "Signed in as" and **Sign out**. A confirmation explains exactly what happens before anything changes.
 - **Recent sign-in required.** Like permanent deletion, it only works within **10 minutes** of signing in. Otherwise the app offers to email a fresh sign-in link.
 - **What happens straight away:**
   - your players, games and standings are locked and hidden
@@ -276,8 +281,7 @@ The **Profile** tab replaced the Players tab on 30 September 2026. From the top:
 
 ## 17. Reference and help
 
-- **Hand Rankings**, from the home screen tile. All ten hands from Royal Flush to High Card, each with a short description and five example cards; cards that aren't part of the hand are faded.
-- **Poker rules**, from the home screen. They explain this table's house rules: setup, positions, turn order, minimum raises, buy-ins, splits and how to fix mistakes.
+- **Hand Rankings**, from its row on the home screen. All ten hands from Royal Flush to High Card, each with a short description and five example cards; cards that aren't part of the hand are faded.
 
 ## 18. Devices and installation
 

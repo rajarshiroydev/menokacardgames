@@ -83,6 +83,7 @@ import {
 } from "@/lib/auth/recent-sign-in";
 import {
   buildStandings,
+  sessionReturn,
   standingsKey,
   type IneligibleReason,
   type Standings,
@@ -98,9 +99,11 @@ import {
   type ImportPlan,
   type ImportPlayerMapping,
 } from "@/lib/poker/import-plan";
+import { deriveSessionAccounting } from "@/lib/poker/accounting";
 import type {
   BlindSchedule,
   GameState,
+  Player,
   PlayerAction,
   PlayerProfile,
   PokerSession,
@@ -178,9 +181,6 @@ function showsPlayerList(view: View) {
 }
 
 type ModalState =
-  | {
-      kind: "rules";
-    }
   | {
       kind: "confirm";
       message: string;
@@ -521,6 +521,10 @@ export function PokerLedger({
   );
   const [playersLoading, setPlayersLoading] = useState(true);
   const [playersError, setPlayersError] = useState("");
+  /** Friend requests waiting for an answer, for Home's notice and the tab dot. */
+  const [friendRequests, setFriendRequests] = useState<
+    FriendOverview["received"]
+  >([]);
   const [view, setView] = useState<View>("home");
   /** The standings card "View standings" opens; cleared when Ranks closes. */
   const [rankFocus, setRankFocus] = useState<string | null>(null);
@@ -580,11 +584,22 @@ export function PokerLedger({
     [],
   );
 
+  /** Quietly checks for friend requests; a failure keeps the last answer. */
+  const refreshFriendRequests = useCallback(async () => {
+    try {
+      const data = await friendsApi<{ overview: FriendOverview }>();
+      setFriendRequests(data.overview.received);
+    } catch {
+      // Home just goes without the notice until the next check.
+    }
+  }, []);
+
   const navigate = useCallback(
     (nextView: View, options: { replace?: boolean } = {}) => {
       setView(nextView);
       if (nextView !== "history") setRankFocus(null);
       if (showsPlayerList(nextView)) void refreshPlayers({ quiet: true });
+      if (nextView === "home") void refreshFriendRequests();
       const state = { ...window.history.state, menokaView: nextView };
       if (options.replace) {
         window.history.replaceState(state, "");
@@ -593,7 +608,7 @@ export function PokerLedger({
       }
       window.scrollTo(0, 0);
     },
-    [refreshPlayers],
+    [refreshFriendRequests, refreshPlayers],
   );
 
   const refreshHistory = useCallback(async () => {
@@ -648,12 +663,19 @@ export function PokerLedger({
       setReady(true);
       void refreshHistory();
       void refreshPlayers();
+      void refreshFriendRequests();
     }, 0);
     return () => {
       clearTimeout(hydrationTimer);
       if (toastTimer.current) clearTimeout(toastTimer.current);
     };
-  }, [gameStorageKey, liveTokenStorageKey, refreshHistory, refreshPlayers]);
+  }, [
+    gameStorageKey,
+    liveTokenStorageKey,
+    refreshFriendRequests,
+    refreshHistory,
+    refreshPlayers,
+  ]);
 
   useEffect(() => {
     function handleBrowserBack(event: PopStateEvent) {
@@ -662,12 +684,13 @@ export function PokerLedger({
       const view = VIEWS.includes(nextView) ? nextView : "home";
       setView(view);
       if (showsPlayerList(view)) void refreshPlayers({ quiet: true });
+      if (view === "home") void refreshFriendRequests();
       window.scrollTo(0, 0);
     }
 
     window.addEventListener("popstate", handleBrowserBack);
     return () => window.removeEventListener("popstate", handleBrowserBack);
-  }, [refreshPlayers]);
+  }, [refreshFriendRequests, refreshPlayers]);
 
   useEffect(() => {
     if (!ready) return;
@@ -1729,20 +1752,19 @@ export function PokerLedger({
   const homeView = (
     <HomeView
       game={game}
-      accountEmail={accountEmail}
-      historyCount={history.length}
+      displayName={profile.displayName}
+      selfPlayerId={profile.selfPlayerId}
+      history={history}
+      friendRequests={friendRequests}
       legacyGame={legacyGame}
       legacySessionCount={legacySessions.length}
-      playerCount={players.length}
       onAdoptLegacyGame={offerLegacyGameAdoption}
       onGame={() => navigate(game ? "game" : "setup")}
       onSetup={() => navigate("setup")}
-      onHistory={() => navigate("history")}
-      onPlayers={openPlayers}
+      onSessions={() => navigate("sessions")}
+      onReviewRequests={openPlayers}
       onOpenHands={openHands}
       onReviewLegacySessions={() => setReviewingLegacySessions(true)}
-      onRules={() => setModal({ kind: "rules" })}
-      onDeleteAccount={deleteAccount}
     />
   );
 
@@ -1766,7 +1788,13 @@ export function PokerLedger({
               {header.title}
             </h1>
           </div>
-          <ThemeToggle />
+          {/* The theme switch lives on Profile only (user decision 2026-10-01). */}
+          {view === "profile" ? (
+            <>
+              <ThemeToggle />
+              <AccountMenu email={accountEmail} onDeleteAccount={deleteAccount} />
+            </>
+          ) : null}
         </header>
       ) : null}
 
@@ -1825,6 +1853,7 @@ export function PokerLedger({
             onAsk={ask}
             seatedPlayerIds={game?.players.flatMap((player) => player.id ?? []) ?? []}
             onGamesMoved={() => void refreshHistory()}
+            onFriendRequests={setFriendRequests}
           />
         ) : view === "hands" ? (
           <PokerHandsChart />
@@ -1869,6 +1898,10 @@ export function PokerLedger({
 
       <TabBar
         view={view}
+        dots={{
+          play: Boolean(game),
+          profile: friendRequests.length > 0,
+        }}
         onSelect={(target) => {
           if (target === "play") {
             navigate(game ? "game" : "setup");
@@ -1931,12 +1964,22 @@ export function PokerLedger({
 
 type TabTarget = "home" | "play" | "history" | "sessions" | "profile";
 
-const TABS: ReadonlyArray<{ target: TabTarget; icon: string; label: string }> = [
+/** A head and shoulders, drawn at the size of the suit glyphs beside it. */
+function ProfileIcon() {
+  return (
+    <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true">
+      <circle cx="8" cy="5" r="3.2" fill="currentColor" />
+      <path d="M1.8 15a6.2 6.2 0 0 1 12.4 0Z" fill="currentColor" />
+    </svg>
+  );
+}
+
+const TABS: ReadonlyArray<{ target: TabTarget; icon: ReactNode; label: string }> = [
   { target: "home", icon: "♠", label: "Home" },
   { target: "play", icon: "♦", label: "Play" },
   { target: "history", icon: "♣", label: "Ranks" },
   { target: "sessions", icon: "♥", label: "Games" },
-  { target: "profile", icon: "●", label: "Profile" },
+  { target: "profile", icon: <ProfileIcon />, label: "Profile" },
 ];
 
 function tabForView(view: View): TabTarget {
@@ -1947,9 +1990,12 @@ function tabForView(view: View): TabTarget {
 
 function TabBar({
   view,
+  dots,
   onSelect,
 }: {
   view: View;
+  /** A game is on (Play), or friend requests are waiting (Profile). */
+  dots: Partial<Record<TabTarget, boolean>>;
   onSelect: (target: TabTarget) => void;
 }) {
   const active = tabForView(view);
@@ -1968,6 +2014,9 @@ function TabBar({
           </span>
           <span className="tab-label">{tab.label}</span>
           <span className="tab-indicator" aria-hidden="true" />
+          {dots[tab.target] ? (
+            <span className={`tab-dot tab-dot-${tab.target}`} aria-hidden="true" />
+          ) : null}
         </button>
       ))}
     </nav>
@@ -2057,76 +2106,63 @@ function Segmented<T extends string | number>({
   );
 }
 
+/** "Good evening": the greeting above your name on Home. */
+function greeting(hour: number) {
+  if (hour < 5) return "Good evening";
+  if (hour < 12) return "Good morning";
+  if (hour < 17) return "Good afternoon";
+  return "Good evening";
+}
+
+/** "Sun 28 Sep": the date beside Last Session. */
+function shortDay(timestamp: number) {
+  const date = new Date(timestamp);
+  const part = (options: Intl.DateTimeFormatOptions) =>
+    date.toLocaleDateString("en-US", options);
+  return `${part({ weekday: "short" })} ${date.getDate()} ${part({ month: "short" })}`;
+}
+
 function HomeView({
   game,
-  accountEmail,
-  historyCount,
+  displayName,
+  selfPlayerId,
+  history,
+  friendRequests,
   legacyGame,
   legacySessionCount,
-  playerCount,
   onAdoptLegacyGame,
   onGame,
   onSetup,
-  onHistory,
-  onPlayers,
+  onSessions,
+  onReviewRequests,
   onOpenHands,
   onReviewLegacySessions,
-  onRules,
-  onDeleteAccount,
 }: {
   game: GameState | null;
-  accountEmail: string;
-  historyCount: number;
+  displayName: string | null;
+  selfPlayerId: string | null;
+  history: PokerSession[];
+  friendRequests: FriendOverview["received"];
   legacyGame: GameState | null;
   legacySessionCount: number;
-  playerCount: number;
   onAdoptLegacyGame: () => void;
   onGame: () => void;
   onSetup: () => void;
-  onHistory: () => void;
-  onPlayers: () => void;
+  onSessions: () => void;
+  onReviewRequests: () => void;
   onOpenHands: () => void;
   onReviewLegacySessions: () => void;
-  onRules: () => void;
-  onDeleteAccount: () => void;
 }) {
-  const { money } = useMoney();
-  const hand = game?.hand ?? null;
-  const tiles = [
-    {
-      suit: "♣",
-      tone: "green",
-      title: "All Time Standings",
-      sub: `${historyCount} saved game session${historyCount === 1 ? "" : "s"}`,
-      onClick: onHistory,
-    },
-    {
-      suit: "♥",
-      tone: "blue",
-      title: "Existing Players",
-      sub: `${playerCount} player${playerCount === 1 ? "" : "s"} ready to play`,
-      onClick: onPlayers,
-    },
-    {
-      suit: "♠",
-      tone: "blue",
-      title: "Hand Rankings",
-      sub: "All ten hands, strongest to weakest",
-      onClick: onOpenHands,
-    },
-    {
-      suit: "♦",
-      tone: "green",
-      title: "New Game",
-      sub: game
-        ? "Finish the current game first"
-        : "Seat players, set stacks and blinds",
-      onClick: game ? onGame : onSetup,
-    },
-  ];
+  const [hour, setHour] = useState<number | null>(null);
+  useEffect(() => {
+    // The server doesn't know the phone's clock, so the greeting waits for it.
+    const timer = setTimeout(() => setHour(new Date().getHours()), 0);
+    return () => clearTimeout(timer);
+  }, []);
 
   return (
     <section className="home-view">
+      <HomeFan />
       <div className="home-top">
         <div className="brand">
           <span className="brand-chip" aria-hidden="true">
@@ -2134,134 +2170,348 @@ function HomeView({
           </span>
           <span className="brand-name">Menoka</span>
         </div>
-        <ThemeToggle />
       </div>
 
-      <div className="home-hero">
-        <h1>
-          Menoka
-          <span className="gradient-text">Card Games</span>
-        </h1>
-        <p>
-          Choose a table, keep every stack straight, and let the house ledger
-          remember the rest.
-        </p>
+      <div className="home-greeting">
+        <span className="home-greeting-kicker">
+          {game ? "Game in progress" : hour === null ? "\u00a0" : greeting(hour)}
+        </span>
+        <h1 className="literal-text">{displayName || "Menoka"}</h1>
       </div>
 
-      {legacyGame || legacySessionCount ? (
-        <section className="glass legacy-data-card" aria-labelledby="legacy-data-title">
-          <div>
-            <span className="eyebrow">Unassigned device data</span>
-            <h2 id="legacy-data-title">Review Before Adding It</h2>
-            <p>
-              Data saved before accounts stays separate until you choose which
-              account owns it.
-            </p>
-          </div>
-          <div className="legacy-data-actions">
-            {legacyGame ? (
-              <button
-                className="ghost"
-                type="button"
-                disabled={Boolean(game)}
-                onClick={onAdoptLegacyGame}
-              >
-                {game ? "Finish current game first" : "Review legacy game"}
-              </button>
-            ) : null}
-            {legacySessionCount ? (
-              <button
-                className="ghost"
-                type="button"
-                onClick={onReviewLegacySessions}
-              >
-                Review {legacySessionCount} saved session
-                {legacySessionCount === 1 ? "" : "s"}
-              </button>
-            ) : null}
-          </div>
-        </section>
-      ) : null}
-
-      {game ? (
-        <button className="glass live-card" type="button" onClick={onGame}>
-          <span className="live-card-glow" aria-hidden="true" />
-          <span className="live-card-top">
-            <span className="live-pill">
-              <span aria-hidden="true" />
-              Live
+      <div className="home-stack">
+        {game ? (
+          <HomeLiveCard game={game} selfPlayerId={selfPlayerId} onOpen={onGame} />
+        ) : (
+          <button className="home-start-card" type="button" onClick={onSetup}>
+            <span className="home-start-watermark" aria-hidden="true">
+              ♠
             </span>
-            <span className="live-meta">
-              {hand
-                ? `Hand ${hand.no} · ${STAGES[hand.stage]}`
-                : `Between hands · ${game.handNo} dealt`}
-            </span>
-          </span>
-          <span className="live-card-copy">
-            <strong>Continue Game Session</strong>
-            <small>
-              {hand ? "Return to the hand in progress" : "Deal the next hand"}
-            </small>
-          </span>
-          <span className="live-card-bottom">
-            <span>
-              <span className="label">{hand ? "Pot" : "Game"}</span>
-              <span className="live-pot">
-                {hand ? money(hand.pot) : game.sessionLabel || game.gameName}
+            <span className="home-start-kicker">No game running</span>
+            <span className="home-start-row">
+              <span>
+                <strong>Start a game</strong>
+                <small>Seat players, set stacks, deal</small>
+              </span>
+              <span className="home-start-go" aria-hidden="true">
+                ♦
               </span>
             </span>
-          </span>
-        </button>
-      ) : (
-        <button className="start-card" type="button" onClick={onSetup}>
-          <span>
-            <strong>Start A Game</strong>
-            <small>Seat players, set stacks, deal</small>
-          </span>
-        </button>
-      )}
+          </button>
+        )}
 
-      <div className="home-tiles">
-        {tiles.map((tile) => (
+        {legacyGame || legacySessionCount ? (
+          <section className="glass legacy-data-card" aria-labelledby="legacy-data-title">
+            <div>
+              <span className="eyebrow">Unassigned device data</span>
+              <h2 id="legacy-data-title">Review Before Adding It</h2>
+              <p>
+                Data saved before accounts stays separate until you choose which
+                account owns it.
+              </p>
+            </div>
+            <div className="legacy-data-actions">
+              {legacyGame ? (
+                <button
+                  className="ghost"
+                  type="button"
+                  disabled={Boolean(game)}
+                  onClick={onAdoptLegacyGame}
+                >
+                  {game ? "Finish current game first" : "Review legacy game"}
+                </button>
+              ) : null}
+              {legacySessionCount ? (
+                <button
+                  className="ghost"
+                  type="button"
+                  onClick={onReviewLegacySessions}
+                >
+                  Review {legacySessionCount} saved session
+                  {legacySessionCount === 1 ? "" : "s"}
+                </button>
+              ) : null}
+            </div>
+          </section>
+        ) : null}
+
+        {friendRequests.length ? (
           <button
-            className={`glass home-tile tone-${tile.tone}`}
-            key={tile.title}
+            className="glass home-notice"
             type="button"
-            onClick={tile.onClick}
+            onClick={onReviewRequests}
           >
-            <span className="tile-watermark" aria-hidden="true">
-              {tile.suit}
+            <span className="home-notice-avatar" aria-hidden="true">
+              <AvatarArt
+                id={friendRequests[0].avatar}
+                seed={friendRequests[0].displayName ?? "Someone"}
+              />
             </span>
-            <span className="tile-suit" aria-hidden="true">
-              {tile.suit}
+            <span className="home-notice-copy">
+              <b className="literal-text">
+                {friendRequests[0].displayName ?? "Someone"}
+              </b>
+              {friendRequests.length > 1
+                ? ` and ${friendRequests.length - 1} other${friendRequests.length === 2 ? "" : "s"} want to be friends`
+                : " wants to be friends"}
             </span>
-            <span className="tile-copy">
-              <strong>{tile.title}</strong>
-              <small>{tile.sub}</small>
+            <span className="home-notice-action">Review</span>
+          </button>
+        ) : null}
+
+        <HomeLastSession
+          history={history}
+          selfPlayerId={selfPlayerId}
+          onOpen={onSessions}
+        />
+
+        <div className="home-links-list">
+          <button className="glass home-link-row" type="button" onClick={onOpenHands}>
+            <span className="home-mini-cards" aria-hidden="true">
+              <span>A♠</span>
+              <span className="red">K♥</span>
+              <span className="red">Q♦</span>
+            </span>
+            <span className="home-link-copy">
+              <b>Hand rankings</b>
+              <small>Royal flush to high card</small>
             </span>
           </button>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/** Design 6e: Home's background, a fanned hand of glass cards. */
+const HOME_FAN = [
+  { rank: "A", suit: "♠", tone: "g", turn: -38 },
+  { rank: "K", suit: "♥", tone: "b", turn: -24 },
+  { rank: "Q", suit: "♣", tone: "g", turn: -10 },
+  { rank: "J", suit: "♦", tone: "b", turn: 4 },
+  { rank: "10", suit: "♠", tone: "g", turn: 18 },
+] as const;
+
+function HomeFan() {
+  return (
+    <div className="home-fan" aria-hidden="true">
+      <div className="home-fan-column">
+        <span className="home-fan-glow" />
+        {HOME_FAN.map((card) => (
+          <span
+            key={card.rank}
+            className={`home-fan-card tone-${card.tone}`}
+            style={{ transform: `rotate(${card.turn}deg)` }}
+          >
+            <span className="home-fan-corner">
+              <span>{card.rank}</span>
+              <span>{card.suit}</span>
+            </span>
+            <span className="home-fan-pip">{card.suit}</span>
+          </span>
         ))}
       </div>
+    </div>
+  );
+}
 
-      <footer className="home-footer">
-        <div className="account-pill">
-          <span>
-            Signed in as <strong className="literal-text">{accountEmail}</strong>
+/** Home's card while a game is on: the pot, blinds and stacks at a glance. */
+function HomeLiveCard({
+  game,
+  selfPlayerId,
+  onOpen,
+}: {
+  game: GameState;
+  selfPlayerId: string | null;
+  onOpen: () => void;
+}) {
+  const { money } = useMoney();
+  const hand = game.hand;
+  const blinds = blindStatus(game);
+  const name = game.sessionLabel || game.gameName;
+  const meta = [
+    name,
+    hand ? `Hand ${hand.no}` : "Between hands",
+    hand ? STAGES[hand.stage] : null,
+  ].filter(Boolean);
+  const me = selfPlayerId
+    ? game.players.find((player) => player.id === selfPlayerId)
+    : undefined;
+  const leader = game.players.reduce<Player | null>(
+    (best, player) => (!best || player.stack > best.stack ? player : best),
+    null,
+  );
+
+  return (
+    <button className="glass home-live-card" type="button" onClick={onOpen}>
+      <span className="home-live-glow" aria-hidden="true" />
+      <span className="home-live-top">
+        <span className="live-pill">
+          <span aria-hidden="true" />
+          Live
+        </span>
+        <span className="home-live-meta">{meta.join(" · ")}</span>
+      </span>
+      <span className="home-live-pot-row">
+        <span>
+          <span className="home-kicker">{hand ? "Pot" : "Hands dealt"}</span>
+          <span className="home-live-pot">
+            {hand ? money(hand.pot) : game.handNo}
           </span>
-          <form action={signOut}>
-            <button type="submit">Sign out</button>
-          </form>
-        </div>
-        <div className="home-links">
-          <button type="button" onClick={onRules}>
-            Read the poker rules
-          </button>
-          <button className="danger-link" type="button" onClick={onDeleteAccount}>
-            Delete my account
-          </button>
-        </div>
-      </footer>
-    </section>
+        </span>
+        <span className="home-live-blinds">
+          {money(blinds.smallBlind)} / {money(blinds.bigBlind)}
+          {blinds.schedule ? <em> L{blinds.level + 1}</em> : null}
+        </span>
+      </span>
+      <span className="home-live-stats">
+        {me ? (
+          <span>
+            <small>Your stack</small>
+            <b>{money(me.stack)}</b>
+          </span>
+        ) : (
+          <span>
+            <small>At the table</small>
+            <b>
+              {game.players.length} player{game.players.length === 1 ? "" : "s"}
+            </b>
+          </span>
+        )}
+        {leader ? (
+          <span>
+            <small>
+              Chip leader · <span className="literal-text">{leader.name}</span>
+            </small>
+            <b>{money(leader.stack)}</b>
+          </span>
+        ) : null}
+      </span>
+      <span className="home-live-cta">Back to the table</span>
+    </button>
+  );
+}
+
+/** Your most recent saved game: your result, the top winner, everyone's net. */
+function HomeLastSession({
+  history,
+  selfPlayerId,
+  onOpen,
+}: {
+  history: PokerSession[];
+  selfPlayerId: string | null;
+  onOpen: () => void;
+}) {
+  const { signedMoney } = useMoney();
+  const session = history
+    .filter((item) => !item.discardedAt)
+    .reduce<PokerSession | null>(
+      (latest, item) =>
+        !latest ||
+        item.date > latest.date ||
+        (item.date === latest.date &&
+          (item.sessionNumber ?? 0) > (latest.sessionNumber ?? 0))
+          ? item
+          : latest,
+      null,
+    );
+  if (!session || !session.results.length) return null;
+
+  let invested = new Map<string, number>();
+  try {
+    invested = new Map(
+      deriveSessionAccounting(session).results.map((result) => [
+        standingsKey(result),
+        result.invested,
+      ]),
+    );
+  } catch {
+    // An unbalanced old session still shows its nets, just without a return.
+  }
+  const results = [...session.results].sort((a, b) => b.net - a.net);
+  const mine = selfPlayerId
+    ? results.find((result) => result.playerId === selfPlayerId)
+    : undefined;
+  const winner = results[0];
+  const featured = mine ?? winner;
+  const featuredInvested = invested.get(standingsKey(featured));
+  const featuredReturn =
+    featuredInvested === undefined
+      ? null
+      : sessionReturn(featured.net, featuredInvested);
+  const largest = Math.max(1, ...results.map((result) => Math.abs(result.net)));
+  const title =
+    session.name ||
+    (session.sessionNumber ? `Game ${session.sessionNumber}` : "Game");
+  const details = [
+    title,
+    `${session.hands} hand${session.hands === 1 ? "" : "s"}`,
+    `${results.length} player${results.length === 1 ? "" : "s"}`,
+  ];
+
+  return (
+    <>
+      <div className="home-section-heading">
+        <h2>Last session</h2>
+        <span>{shortDay(session.date)}</span>
+      </div>
+      <button className="glass home-last-card" type="button" onClick={onOpen}>
+        <span className="home-last-top">
+          <span className="home-last-main">
+            <small className="literal-text">{details.join(" · ")}</small>
+            <strong className={toneClass(featured.net)}>
+              {signedMoney(featured.net)}
+            </strong>
+            <small>
+              {mine ? "Your result" : (
+                <>
+                  Top winner · <span className="literal-text">{winner.name}</span>
+                </>
+              )}
+              {featuredReturn === null
+                ? ""
+                : ` · ${formatShortPercent(featuredReturn)} return`}
+            </small>
+          </span>
+          {mine && winner !== mine ? (
+            <span className="home-last-winner">
+              <small>Top winner</small>
+              <b className="literal-text">{winner.name}</b>
+              <em className={toneClass(winner.net)}>{signedMoney(winner.net)}</em>
+            </span>
+          ) : null}
+        </span>
+        <span className="home-last-bars">
+          {results.map((result) => {
+            const share = Math.round((Math.abs(result.net) / largest) * 100);
+            const isMe = result === mine;
+            return (
+              <span
+                className={`home-last-bar${isMe ? " me" : ""}`}
+                key={standingsKey(result)}
+              >
+                <span className={isMe ? "" : "literal-text"}>
+                  {isMe ? "You" : result.name}
+                </span>
+                <span className="home-bar-track" aria-hidden="true">
+                  <span>
+                    {result.net < 0 ? (
+                      <i className="neg" style={{ width: `${share}%` }} />
+                    ) : null}
+                  </span>
+                  <span>
+                    {result.net > 0 ? (
+                      <i className="pos" style={{ width: `${share}%` }} />
+                    ) : null}
+                  </span>
+                </span>
+                <b className={toneClass(result.net)}>{signedMoney(result.net)}</b>
+              </span>
+            );
+          })}
+        </span>
+      </button>
+    </>
   );
 }
 
@@ -3402,6 +3652,7 @@ function ProfileView({
   onAsk,
   seatedPlayerIds,
   onGamesMoved,
+  onFriendRequests,
 }: {
   profile: AccountProfile;
   onProfile: (profile: AccountProfile) => void;
@@ -3425,6 +3676,8 @@ function ProfileView({
   seatedPlayerIds: string[];
   /** Saved games now belong to another player, so reload them. */
   onGamesMoved: () => void;
+  /** Keeps Home's notice and the tab dot in step with the requests shown here. */
+  onFriendRequests: (requests: FriendOverview["received"]) => void;
 }) {
   const [overview, setOverview] = useState<FriendOverview | null>(null);
   const [overviewError, setOverviewError] = useState("");
@@ -3442,9 +3695,9 @@ function ProfileView({
     games: number;
   } | null>(null);
   const [busy, setBusy] = useState("");
-  const listed = useRef({ players, onPlayersChanged });
+  const listed = useRef({ players, onPlayersChanged, onFriendRequests });
   useEffect(() => {
-    listed.current = { players, onPlayersChanged };
+    listed.current = { players, onPlayersChanged, onFriendRequests };
   });
 
   useEffect(() => {
@@ -3455,6 +3708,7 @@ function ProfileView({
         if (cancelled) return;
         setOverview(data.overview);
         setOverviewError("");
+        listed.current.onFriendRequests(data.overview.received);
         // A friend who accepted on their phone linked a player the list
         // loaded here doesn't have yet.
         const known = new Set(listed.current.players.map((p) => p.id));
@@ -3901,6 +4155,71 @@ function ProfileView({
           }}
           onClose={() => setLinking(null)}
         />
+      ) : null}
+    </div>
+  );
+}
+
+/** Profile's ⋯ button: who is signed in, Sign out and Delete my account. */
+function AccountMenu({
+  email,
+  onDeleteAccount,
+}: {
+  email: string;
+  onDeleteAccount: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    if (!open) return;
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") setOpen(false);
+    }
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [open]);
+
+  return (
+    <div className="account-menu">
+      <button
+        className="round-button"
+        type="button"
+        aria-label="Account"
+        aria-expanded={open}
+        onClick={() => setOpen((shown) => !shown)}
+      >
+        ⋯
+      </button>
+      {open ? (
+        <>
+          <button
+            className="profile-menu-scrim"
+            type="button"
+            aria-label="Close account menu"
+            onClick={() => setOpen(false)}
+          />
+          <div className="profile-menu account-menu-list" role="menu">
+            <div className="account-menu-who">
+              <small>Signed in as</small>
+              <b className="literal-text">{email}</b>
+            </div>
+            <form action={signOut}>
+              <button type="submit" role="menuitem">
+                Sign out
+              </button>
+            </form>
+            <button
+              type="button"
+              role="menuitem"
+              className="danger-text"
+              onClick={() => {
+                setOpen(false);
+                onDeleteAccount();
+              }}
+            >
+              Delete my account
+            </button>
+          </div>
+        </>
       ) : null}
     </div>
   );
@@ -7151,153 +7470,9 @@ function Modal({
   onClose: () => void;
   onConfirm: () => void;
 }) {
-  const { money } = useMoney();
   function confirm() {
-    if (state.kind === "rules") {
-      onClose();
-      return;
-    }
     state.onConfirm();
     onConfirm();
-  }
-
-  if (state.kind === "rules") {
-    return (
-      <div
-        className="modal show"
-        role="presentation"
-        onMouseDown={(event) => {
-          if (event.target === event.currentTarget) onClose();
-        }}
-      >
-        <div
-          className="sheet rules-sheet"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="poker-rules-title"
-        >
-          <div className="rules-heading">
-            <span className="rules-kicker">Menoka House Rules</span>
-            <h2 id="poker-rules-title">Poker Rules</h2>
-            <p>
-              This Is A Chip Ledger For Your Modified Poker Game. It Does Not
-              Track Cards Or Real Money.
-            </p>
-          </div>
-
-          <div className="rules-list">
-            <section>
-              <span className="rule-number">01</span>
-              <div>
-                <h3>Set Up The Table</h3>
-                <p>
-                  Choose A Starting Stack, Big Blind, And Two To Ten Players.
-                  Drag Players Into Seating Order Before Starting. One Game
-                  Session Can Contain Multiple Hands. The Small Blind Is Half
-                  The Big Blind, Rounded Down. Blinds Can Also Be Set To Rise
-                  Every Few Hands Or Minutes, Either Multiplying The Big Blind
-                  Or Adding A Fixed Amount Each Level. A New Level Takes
-                  Effect When The Next Hand Is Dealt, Never Mid-Hand.
-                </p>
-              </div>
-            </section>
-
-            <section>
-              <span className="rule-number">02</span>
-              <div>
-                <h3>Start Every Hand</h3>
-                <p>
-                  The Dealer Button, Small Blind, And Big Blind Rotate Through
-                  The Chosen Seating Order Each Hand, Skipping Players Without
-                  Chips. Deal Two Hole Cards, Post Blinds, And Complete A
-                  Pre-Flop Betting Round Before Revealing The Flop Physically.
-                </p>
-              </div>
-            </section>
-
-            <section>
-              <span className="rule-number">03</span>
-              <div>
-                <h3>Take Turns Until Bets Match</h3>
-                <p>
-                  Play pre-flop, flop, turn, then river, burning one physical
-                  card before each community-card reveal. Only the highlighted
-                  player can act. A raise reopens the action; the street ends
-                  only when every active player has called, checked, folded, or
-                  is all-in.
-                </p>
-              </div>
-            </section>
-
-            <section>
-              <span className="rule-number">04</span>
-              <div>
-                <h3>Choose An Action</h3>
-                <p>
-                  Check Only When Nothing Is Owed. Bet To Open The Action, Call
-                  The Current Bet, Raise It, Or Fold. All In Commits The
-                  Player&apos;s Entire Remaining Stack, Even If It Cannot Cover
-                  A Call. If Only One Player Remains, They Win Automatically.
-                  Between Hands, A Busted Player Can Buy Back In For The Full
-                  Starting Stack, As Many Times As Needed.
-                </p>
-              </div>
-            </section>
-
-            <section>
-              <span className="rule-number">05</span>
-              <div>
-                <h3>Minimum Bets And Raises</h3>
-                <p>
-                  The Smallest Bet Is The Big Blind. A Raise Must Add At Least
-                  As Much As The Last Bet Or Raise On This Street, So Before
-                  The Flop The First Raise Makes The Total Twice The Big
-                  Blind, And After A Raise From {money(100)} To {money(400)} The
-                  Next Raise Is To At Least {money(700)}. Each New Street Starts Again At The Big
-                  Blind. A Player May Always Go All-In For Less, But That Short
-                  All-In Doesn&apos;t Let Players Who Already Acted Raise Again:
-                  They May Only Call Or Fold.
-                </p>
-              </div>
-            </section>
-
-            <section>
-              <span className="rule-number">06</span>
-              <div>
-                <h3>Award The Pot</h3>
-                <p>
-                  After The River, Choose One Winner Or Split The Pot Between
-                  Two Or More Active Players. A Split Is Equal, With Any
-                  Leftover {money(1)} Chips Awarded In Player Order. Confirm The Winner,
-                  Then Deal The Next Hand To Rotate The Button And Post Fresh
-                  Blinds.
-                </p>
-              </div>
-            </section>
-
-            <section>
-              <span className="rule-number">07</span>
-              <div>
-                <h3>Correct Mistakes And Save</h3>
-                <p>
-                  Undo Restores A Player&apos;s Latest Action On The Current
-                  Street. Cancel Hand Refunds Every Chip From That Hand,
-                  Including Blinds. Undo Last Hand Deals It Again Exactly As
-                  Before, With The Same Stacks, Dealer And Blinds. Finish And Save Game Session Requires One Completed
-                  Hand; Any Unfinished Hand Is Refunded In The Saved Results.
-                </p>
-              </div>
-            </section>
-          </div>
-
-          <div className="rules-footer">
-            <button className="primary rules-close" onClick={onClose}>
-              Close Rules
-            </button>
-          </div>
-        </div>
-      </div>
-    );
   }
 
   return (
