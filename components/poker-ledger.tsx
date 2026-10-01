@@ -527,6 +527,20 @@ export function PokerLedger({
   const [friendRequests, setFriendRequests] = useState<
     FriendOverview["received"]
   >([]);
+  // Profile and Ranks data is kept here, not in those screens, so returning
+  // to a tab shows the last answer at once while a quiet refresh runs.
+  const [friendOverview, setFriendOverview] = useState<FriendOverview | null>(
+    null,
+  );
+  const [friendOverviewError, setFriendOverviewError] = useState("");
+  const [profileStats, setProfileStats] = useState<ProfileStats | null>(null);
+  const [profileStatsError, setProfileStatsError] = useState("");
+  const [groups, setGroups] = useState<GroupStandings[]>([]);
+  const [groupsError, setGroupsError] = useState("");
+  const playersRef = useRef(players);
+  useEffect(() => {
+    playersRef.current = players;
+  });
   const [view, setView] = useState<View>("home");
   /** The standings card "View standings" opens; cleared when Ranks closes. */
   const [rankFocus, setRankFocus] = useState<string | null>(null);
@@ -586,22 +600,83 @@ export function PokerLedger({
     [],
   );
 
-  /** Quietly checks for friend requests; a failure keeps the last answer. */
-  const refreshFriendRequests = useCallback(async () => {
+  /**
+   * Reloads friends, requests and links. A failure keeps the last answer and
+   * is only shown when there is none yet.
+   */
+  const refreshFriends = useCallback(async () => {
     try {
       const data = await friendsApi<{ overview: FriendOverview }>();
+      setFriendOverview(data.overview);
+      setFriendOverviewError("");
       setFriendRequests(data.overview.received);
-    } catch {
-      // Home just goes without the notice until the next check.
+      // A friend who accepted on their phone linked a player the list
+      // loaded here doesn't have yet.
+      const known = new Set(playersRef.current.map((p) => p.id));
+      if (
+        data.overview.friends.some(
+          (friend) => friend.myPlayer && !known.has(friend.myPlayer.id),
+        )
+      ) {
+        void refreshPlayers({ quiet: true });
+      }
+    } catch (error) {
+      setFriendOverviewError(
+        error instanceof Error ? error.message : "Could not load your friends",
+      );
+    }
+  }, [refreshPlayers]);
+
+  /** Reloads the Profile card's stats; a failure keeps the last answer. */
+  const refreshProfileStats = useCallback(async () => {
+    try {
+      setProfileStats(await profileStatsApi());
+      setProfileStatsError("");
+    } catch (error) {
+      setProfileStatsError(
+        error instanceof Error ? error.message : "Could not load your stats",
+      );
     }
   }, []);
+
+  /** Reloads friends' groups for Ranks; a failure keeps the last answer. */
+  const refreshGroups = useCallback(async () => {
+    try {
+      const response = await fetch("/api/groups");
+      const data = (await response.json().catch(() => ({}))) as {
+        groups?: GroupStandings[];
+        error?: string;
+      };
+      if (!response.ok) {
+        throw new Error(
+          apiErrorMessage(response.status, data.error, "Could not load your groups"),
+        );
+      }
+      setGroups(data.groups ?? []);
+      setGroupsError("");
+    } catch (error) {
+      setGroupsError(
+        error instanceof Error ? error.message : "Could not load your groups",
+      );
+    }
+  }, []);
+
+  /** Quietly refreshes what the screen being opened shows. */
+  const refreshForView = useCallback(
+    (nextView: View) => {
+      if (showsPlayerList(nextView)) void refreshPlayers({ quiet: true });
+      if (nextView === "home" || nextView === "profile") void refreshFriends();
+      if (nextView === "profile") void refreshProfileStats();
+      if (nextView === "history") void refreshGroups();
+    },
+    [refreshFriends, refreshGroups, refreshPlayers, refreshProfileStats],
+  );
 
   const navigate = useCallback(
     (nextView: View, options: { replace?: boolean } = {}) => {
       setView(nextView);
       if (nextView !== "history") setRankFocus(null);
-      if (showsPlayerList(nextView)) void refreshPlayers({ quiet: true });
-      if (nextView === "home") void refreshFriendRequests();
+      refreshForView(nextView);
       const state = { ...window.history.state, appView: nextView };
       if (options.replace) {
         window.history.replaceState(state, "");
@@ -610,7 +685,7 @@ export function PokerLedger({
       }
       window.scrollTo(0, 0);
     },
-    [refreshFriendRequests, refreshPlayers],
+    [refreshForView],
   );
 
   const refreshHistory = useCallback(async () => {
@@ -665,7 +740,8 @@ export function PokerLedger({
       setReady(true);
       void refreshHistory();
       void refreshPlayers();
-      void refreshFriendRequests();
+      void refreshFriends();
+      void refreshGroups();
     }, 0);
     return () => {
       clearTimeout(hydrationTimer);
@@ -674,10 +750,17 @@ export function PokerLedger({
   }, [
     gameStorageKey,
     liveTokenStorageKey,
-    refreshFriendRequests,
+    refreshFriends,
+    refreshGroups,
     refreshHistory,
     refreshPlayers,
   ]);
+
+  // Stats follow the currency and your own player, and load at start.
+  useEffect(() => {
+    const timer = setTimeout(() => void refreshProfileStats(), 0);
+    return () => clearTimeout(timer);
+  }, [profile.currency, profile.selfPlayerId, refreshProfileStats]);
 
   useEffect(() => {
     function handleBrowserBack(event: PopStateEvent) {
@@ -685,14 +768,13 @@ export function PokerLedger({
       setModal(null);
       const view = VIEWS.includes(nextView) ? nextView : "home";
       setView(view);
-      if (showsPlayerList(view)) void refreshPlayers({ quiet: true });
-      if (view === "home") void refreshFriendRequests();
+      refreshForView(view);
       window.scrollTo(0, 0);
     }
 
     window.addEventListener("popstate", handleBrowserBack);
     return () => window.removeEventListener("popstate", handleBrowserBack);
-  }, [refreshFriendRequests, refreshPlayers]);
+  }, [refreshForView]);
 
   useEffect(() => {
     if (!ready) return;
@@ -1786,6 +1868,8 @@ export function PokerLedger({
           homeView
         ) : view === "history" ? (
           <RanksView
+            groups={groups}
+            groupsError={groupsError}
             history={history}
             players={[...players, ...discardedPlayers]}
             selfPlayerId={profile.selfPlayerId}
@@ -1838,7 +1922,11 @@ export function PokerLedger({
             onAsk={ask}
             seatedPlayerIds={game?.players.flatMap((player) => player.id ?? []) ?? []}
             onGamesMoved={() => void refreshHistory()}
-            onFriendRequests={setFriendRequests}
+            friendOverview={friendOverview}
+            friendOverviewError={friendOverviewError}
+            onReloadFriends={() => void refreshFriends()}
+            stats={profileStats}
+            statsError={profileStatsError}
           />
         ) : view === "hands" ? (
           <PokerHandsChart />
@@ -3633,7 +3721,11 @@ function ProfileView({
   onAsk,
   seatedPlayerIds,
   onGamesMoved,
-  onFriendRequests,
+  friendOverview: overview,
+  friendOverviewError: overviewError,
+  onReloadFriends: reloadOverview,
+  stats,
+  statsError,
 }: {
   profile: AccountProfile;
   accountEmail: string;
@@ -3659,12 +3751,14 @@ function ProfileView({
   seatedPlayerIds: string[];
   /** Saved games now belong to another player, so reload them. */
   onGamesMoved: () => void;
-  /** Keeps Home's notice and the tab dot in step with the requests shown here. */
-  onFriendRequests: (requests: FriendOverview["received"]) => void;
+  /** Friends, requests and links, kept by the app between visits. */
+  friendOverview: FriendOverview | null;
+  friendOverviewError: string;
+  onReloadFriends: () => void;
+  /** The Profile card's stats, kept by the app between visits. */
+  stats: ProfileStats | null;
+  statsError: string;
 }) {
-  const [overview, setOverview] = useState<FriendOverview | null>(null);
-  const [overviewError, setOverviewError] = useState("");
-  const [overviewAttempt, setOverviewAttempt] = useState(0);
   const [filter, setFilter] = useState<PlayerFilter>("all");
   const [menu, setMenu] = useState<string | null>(null);
   /** Near the bottom of the screen, a row's options open upwards, clear of the tab bar. */
@@ -3678,42 +3772,6 @@ function ProfileView({
     games: number;
   } | null>(null);
   const [busy, setBusy] = useState("");
-  const listed = useRef({ players, onPlayersChanged, onFriendRequests });
-  useEffect(() => {
-    listed.current = { players, onPlayersChanged, onFriendRequests };
-  });
-
-  useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      try {
-        const data = await friendsApi<{ overview: FriendOverview }>();
-        if (cancelled) return;
-        setOverview(data.overview);
-        setOverviewError("");
-        listed.current.onFriendRequests(data.overview.received);
-        // A friend who accepted on their phone linked a player the list
-        // loaded here doesn't have yet.
-        const known = new Set(listed.current.players.map((p) => p.id));
-        if (
-          data.overview.friends.some(
-            (friend) => friend.myPlayer && !known.has(friend.myPlayer.id),
-          )
-        ) {
-          listed.current.onPlayersChanged();
-        }
-      } catch (error) {
-        if (cancelled) return;
-        setOverviewError(
-          error instanceof Error ? error.message : "Could not load your friends",
-        );
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [overviewAttempt]);
-
   useEffect(() => {
     if (menu === null) return;
     function closeOnEscape(event: KeyboardEvent) {
@@ -3723,7 +3781,6 @@ function ProfileView({
     return () => window.removeEventListener("keydown", closeOnEscape);
   }, [menu]);
 
-  const reloadOverview = () => setOverviewAttempt((count) => count + 1);
   const openMenu = (key: string, element: Element) => {
     setMenuAbove(element.getBoundingClientRect().bottom > window.innerHeight - 340);
     setMenu(key);
@@ -3934,6 +3991,8 @@ function ProfileView({
         onDeleteAccount={onDeleteAccount}
         onProfile={onProfile}
         onToast={onToast}
+        stats={stats}
+        statsError={statsError}
       />
 
       {overview?.received.map((request) => (
@@ -4267,16 +4326,18 @@ function ProfileCard({
   onDeleteAccount,
   onProfile,
   onToast,
+  stats,
+  statsError,
 }: {
   profile: AccountProfile;
   accountEmail: string;
   onDeleteAccount: () => void;
   onProfile: (profile: AccountProfile) => void;
   onToast: (message: string) => void;
+  stats: ProfileStats | null;
+  statsError: string;
 }) {
   const { signedMoney } = useMoney();
-  const [stats, setStats] = useState<ProfileStats | null>(null);
-  const [statsError, setStatsError] = useState("");
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
   const [nameError, setNameError] = useState("");
@@ -4286,26 +4347,6 @@ function ProfileCard({
   const [replacing, setReplacing] = useState(false);
   const [choosingAvatar, setChoosingAvatar] = useState(false);
   const copiedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      try {
-        const next = await profileStatsApi();
-        if (cancelled) return;
-        setStats(next);
-        setStatsError("");
-      } catch (error) {
-        if (cancelled) return;
-        setStatsError(
-          error instanceof Error ? error.message : "Could not load your stats",
-        );
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [profile.currency, profile.selfPlayerId]);
 
   useEffect(
     () => () => {
@@ -6701,39 +6742,16 @@ function StandingCard({
  * The Ranks screen: your own standings, plus the standings of every group
  * whose host has you as a linked friend.
  */
-function RanksView(props: Parameters<typeof StandingsView>[0]) {
-  const [groups, setGroups] = useState<GroupStandings[]>([]);
-  const [groupsError, setGroupsError] = useState("");
+function RanksView({
+  groups,
+  groupsError,
+  ...props
+}: Parameters<typeof StandingsView>[0] & {
+  /** Friends' groups, kept by the app so the picker shows at once. */
+  groups: GroupStandings[];
+  groupsError: string;
+}) {
   const [selected, setSelected] = useState("mine");
-
-  useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      try {
-        const response = await fetch("/api/groups");
-        const data = (await response.json().catch(() => ({}))) as {
-          groups?: GroupStandings[];
-          error?: string;
-        };
-        if (!response.ok) {
-          throw new Error(
-            apiErrorMessage(response.status, data.error, "Could not load your groups"),
-          );
-        }
-        if (cancelled) return;
-        setGroups(data.groups ?? []);
-        setGroupsError("");
-      } catch (error) {
-        if (cancelled) return;
-        setGroupsError(
-          error instanceof Error ? error.message : "Could not load your groups",
-        );
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   const group = groups.find((item) => item.hostAccountId === selected);
   const gameCount = (count: number) => `${count} game${count === 1 ? "" : "s"}`;
