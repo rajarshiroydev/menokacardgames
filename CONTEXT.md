@@ -1,4 +1,4 @@
-# Menoka card games
+# Pokerize (formerly Menoka card games)
 
 A host's record of casual poker sessions, player investments and results. Each signed-in host has a private ledger; implementation status lives in the feature plan.
 

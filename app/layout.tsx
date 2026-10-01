@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Barlow, Big_Shoulders } from "next/font/google";
 
+import { APP_NAME } from "@/lib/brand";
 import { THEME_STORAGE_KEY } from "@/lib/theme";
 
 import "./globals.css";
@@ -27,14 +28,14 @@ const themeScript = `try{var t=localStorage.getItem(${JSON.stringify(
 )});if(t==="light"||t==="dark")document.documentElement.dataset.theme=t}catch(e){}`;
 
 export const metadata: Metadata = {
-  title: "Menoka Card Games",
+  title: APP_NAME,
   description:
     "A mobile-friendly poker session tracker with shared history and leaderboards.",
-  applicationName: "Menoka Card Games",
+  applicationName: APP_NAME,
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "Menoka Card Games",
+    title: APP_NAME,
   },
 };
 

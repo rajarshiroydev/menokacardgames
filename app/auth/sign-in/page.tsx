@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { DELETION_GRACE_PERIOD_DAYS } from "@/lib/accounts/lifecycle";
 import { getHostSession } from "@/lib/auth/server";
+import { APP_NAME } from "@/lib/brand";
 import { testbedMode } from "@/lib/testbed/server";
 
 import { MagicLinkForm } from "./magic-link-form";
@@ -28,7 +29,7 @@ export default async function SignInPage({
         <div className="auth-mark" aria-hidden="true">
           ♠
         </div>
-        <p className="eyebrow">Menoka Card Games</p>
+        <p className="eyebrow">{APP_NAME}</p>
         <h1 id="sign-in-title">Your private poker ledger</h1>
         <p className="auth-intro">
           Sign in with your email to manage your friend list, games, and

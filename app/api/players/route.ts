@@ -249,7 +249,7 @@ async function renamePlayer(
     const rows = result as PlayerRow[];
     if (!rows.length) {
       return json(
-        { error: "Only guests can be renamed. People on Menoka choose their own name" },
+        { error: "Only guests can be renamed. People on Pokerize choose their own name" },
         409,
       );
     }
@@ -294,7 +294,7 @@ async function setGuestAvatar(
     const rows = result as PlayerRow[];
     if (!rows.length) {
       return json(
-        { error: "Only guests' avatars can be changed. People on Menoka choose their own" },
+        { error: "Only guests' avatars can be changed. People on Pokerize choose their own" },
         409,
       );
     }

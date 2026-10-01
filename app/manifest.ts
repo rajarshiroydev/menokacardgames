@@ -1,9 +1,11 @@
 import type { MetadataRoute } from "next";
 
+import { APP_NAME } from "@/lib/brand";
+
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "Menoka Card Games",
-    short_name: "Menoka",
+    name: APP_NAME,
+    short_name: APP_NAME,
     description:
       "Track casual poker games, finished sessions, and the all-time leaderboard.",
     start_url: "/",

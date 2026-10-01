@@ -2325,7 +2325,7 @@ textarea::placeholder {
   box-shadow: 0 0 0 1px var(--gb);
 }
 
-/* People on Menoka get a green-to-blue ring around their avatar. */
+/* People on Pokerize get a green-to-blue ring around their avatar. */
 .profile-avatar.on-app {
   padding: 2px;
   background: linear-gradient(135deg, var(--g), var(--b));

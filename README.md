@@ -1,4 +1,6 @@
-# Menoka Card Games
+# Pokerize
+
+Formerly Menoka Card Games. Database roles (`menoka_app`, `menoka_purge`), Neon project names and two browser storage keys keep the old name on purpose.
 
 A mobile-first card-game tracker built with Next.js 16 and React 19. Poker is
 the first supported game.

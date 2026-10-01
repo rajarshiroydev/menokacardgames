@@ -35,6 +35,6 @@ if (action === "get") {
 } else if (action === "harden") {
   await call("PATCH", "/email_and_password", { enabled: false, disable_sign_up: true });
   await call("PATCH", "/plugins/magic-link", { enabled: true, expires_in: 5, disable_sign_up: false });
-  await call("PATCH", "/config", { name: "Menoka Card Games" });
+  await call("PATCH", "/config", { name: "Pokerize" });
   await call("GET", "/plugins");
 }

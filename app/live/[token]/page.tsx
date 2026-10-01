@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
 
 import { LiveStandings } from "@/components/live-standings";
+import { APP_NAME } from "@/lib/brand";
 
 export const metadata: Metadata = {
-  title: "Live standings · Menoka Card Games",
+  title: `Live standings · ${APP_NAME}`,
   // The link itself is the credential, so keep it out of search results and
   // out of the Referer header sent to other sites.
   robots: { index: false, follow: false },

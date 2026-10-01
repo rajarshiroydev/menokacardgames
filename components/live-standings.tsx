@@ -20,6 +20,7 @@ type LoadState =
   | { kind: "ended" }
   | { kind: "live"; view: LiveResponse; failed: boolean };
 
+// Keeps the pre-Pokerize prefix so a viewer's saved "this is me" survives the rename.
 function meKey(token: string) {
   return `menoka-live-me.${token.slice(0, 12)}`;
 }

@@ -1,5 +1,6 @@
 export type Theme = "dark" | "light";
 
+// Keeps the pre-Pokerize key so saved themes survive the rename.
 export const THEME_STORAGE_KEY = "menoka-theme";
 
 export function currentTheme(): Theme {

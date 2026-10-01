@@ -66,6 +66,7 @@ import { signOut } from "@/app/auth/sign-in/actions";
 import { AvatarArt } from "@/components/avatar-art";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { AVATARS } from "@/lib/avatars";
+import { APP_NAME } from "@/lib/brand";
 import {
   type AccountProfile,
   cleanDisplayName,
@@ -600,7 +601,7 @@ export function PokerLedger({
       if (nextView !== "history") setRankFocus(null);
       if (showsPlayerList(nextView)) void refreshPlayers({ quiet: true });
       if (nextView === "home") void refreshFriendRequests();
-      const state = { ...window.history.state, menokaView: nextView };
+      const state = { ...window.history.state, appView: nextView };
       if (options.replace) {
         window.history.replaceState(state, "");
       } else {
@@ -650,12 +651,12 @@ export function PokerLedger({
       setLegacyGame(readStoredGame(LEGACY_GAME_STORAGE_KEY));
       setLegacySessions(readStoredHistory(LEGACY_HISTORY_STORAGE_KEY));
       window.history.replaceState(
-        { ...window.history.state, menokaView: "home" },
+        { ...window.history.state, appView: "home" },
         "",
       );
       if (storedGame) {
         window.history.pushState(
-          { ...window.history.state, menokaView: "game" },
+          { ...window.history.state, appView: "game" },
           "",
         );
         setView("game");
@@ -679,7 +680,7 @@ export function PokerLedger({
 
   useEffect(() => {
     function handleBrowserBack(event: PopStateEvent) {
-      const nextView = event.state?.menokaView;
+      const nextView = event.state?.appView;
       setModal(null);
       const view = VIEWS.includes(nextView) ? nextView : "home";
       setView(view);
@@ -2150,7 +2151,7 @@ function HomeView({
           <span className="brand-chip" aria-hidden="true">
             <span>♠</span>
           </span>
-          <span className="brand-name">Menoka</span>
+          <span className="brand-name">{APP_NAME}</span>
         </div>
       </div>
 
@@ -2158,7 +2159,7 @@ function HomeView({
         <span className="home-greeting-kicker">
           {game ? "Game in progress" : hour === null ? "\u00a0" : greeting(hour)}
         </span>
-        <h1 className="literal-text">{displayName || "Menoka"}</h1>
+        <h1 className="literal-text">{displayName || APP_NAME}</h1>
       </div>
 
       <div className="home-stack">
@@ -3823,11 +3824,11 @@ function ProfileView({
       b.games - a.games ||
       a.name.localeCompare(b.name),
   );
-  const onMenoka = (row: ProfileRow) => row.kind !== "guest";
+  const hasAccount = (row: ProfileRow) => row.kind !== "guest";
   const counts: Record<PlayerFilter, number> = {
     all: liveRows.length,
-    app: liveRows.filter(onMenoka).length,
-    guest: liveRows.filter((row) => !onMenoka(row)).length,
+    app: liveRows.filter(hasAccount).length,
+    guest: liveRows.filter((row) => !hasAccount(row)).length,
   };
   const removedRows: ProfileRow[] = discardedPlayers.map((player) => ({
     key: player.id,
@@ -3840,7 +3841,7 @@ function ProfileView({
   const rows = [
     ...liveRows.filter(
       (row) =>
-        filter === "all" || (filter === "app" ? onMenoka(row) : !onMenoka(row)),
+        filter === "all" || (filter === "app" ? hasAccount(row) : !hasAccount(row)),
     ),
     ...(showRemoved ? removedRows : []),
   ];
@@ -4112,7 +4113,7 @@ function ProfileView({
       {choosingAvatar ? (
         <AvatarSheet
           title={`Avatar for ${choosingAvatar.name}`}
-          note="People on Menoka choose their own. You choose for your guests."
+          note={`People on ${APP_NAME} choose their own. You choose for your guests.`}
           current={choosingAvatar.avatar}
           seed={choosingAvatar.name}
           onPick={(avatar) => onGuestAvatar(choosingAvatar, avatar)}
@@ -4749,7 +4750,7 @@ function FriendRequestCard({
   );
 }
 
-/** The Add sheet: a friend on Menoka by user code, or a guest by name. */
+/** The Add sheet: a friend on Pokerize by user code, or a guest by name. */
 function AddPlayerSheet({
   players,
   onAdd,
@@ -4929,7 +4930,7 @@ function AddPlayerSheet({
               <span className="profile-row-copy">
                 <b>{found.displayName ?? "Someone without a name yet"}</b>
                 <small>
-                  {found.relation === "none" ? "On Menoka" : relationNote[found.relation]}
+                  {found.relation === "none" ? `On ${APP_NAME}` : relationNote[found.relation]}
                 </small>
               </span>
               {found.relation === "none" ? (
@@ -5066,7 +5067,7 @@ function LinkGuestSheet({
   );
 }
 
-/** Renames a guest. People on Menoka choose their own name. */
+/** Renames a guest. People on Pokerize choose their own name. */
 /** Picks an avatar; tapping one saves it. */
 function AvatarSheet({
   title,
