@@ -994,6 +994,8 @@ export function PokerLedger({
       smallBlind: number | null;
       blinds: BlindSchedule | null;
       players: PlayerProfile[];
+      /** Draw the first dealer now; otherwise seat 1 deals first. */
+      randomDealer: boolean;
     }) => {
       if (input.ante <= 0) {
         showToast("Big blind must be greater than 0");
@@ -1022,6 +1024,9 @@ export function PokerLedger({
       }
       const gameName = input.name.trim();
       const startedAt = Date.now();
+      const firstDealer = input.randomDealer
+        ? Math.floor(Math.random() * input.players.length)
+        : 0;
       const nextGame: GameState = {
         ...(gameName ? { gameName } : {}),
         sessionLabel: gameName || `Game ${nextSessionNumber}`,
@@ -1052,7 +1057,8 @@ export function PokerLedger({
         })),
         hand: null,
         handNo: 0,
-        dealerIndex: -1,
+        // The first hand deals from the seat after this one.
+        dealerIndex: firstDealer - 1,
         log: [],
         _setupCount: input.players.length,
       };
@@ -1955,7 +1961,6 @@ export function PokerLedger({
             error={playersError}
             onRetry={() => void refreshPlayers()}
             suggestedName={`Game ${nextSessionNumber}`}
-            onManagePlayers={openPlayers}
             onStart={startGame}
           />
         ) : game ? (
@@ -2847,7 +2852,6 @@ function SetupView({
   error,
   onRetry,
   suggestedName,
-  onManagePlayers,
   onStart,
 }: {
   players: PlayerProfile[];
@@ -2857,7 +2861,6 @@ function SetupView({
   error: string;
   onRetry: () => void;
   suggestedName: string;
-  onManagePlayers: () => void;
   onStart: (input: {
     name: string;
     stack: number;
@@ -2865,6 +2868,7 @@ function SetupView({
     smallBlind: number | null;
     blinds: BlindSchedule | null;
     players: PlayerProfile[];
+    randomDealer: boolean;
   }) => void;
 }) {
   const { money, symbol } = useMoney();
@@ -2893,6 +2897,9 @@ function SetupView({
   // Tapping players seats them in tap order; the list below reorders them.
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const playerCount = selectedIds.length;
+  // On, the first dealer is drawn only when the game starts, so nobody
+  // sees it during setup; off, seat 1 deals first.
+  const [randomDealer, setRandomDealer] = useState(true);
   const seatListRef = useRef<HTMLDivElement>(null);
   const seatDragRef = useRef<{
     pointerId: number;
@@ -2916,7 +2923,7 @@ function SetupView({
   const [draggingSeat, setDraggingSeat] = useState<number | null>(null);
   const [dropSeat, setDropSeat] = useState<number | null>(null);
   const [seatDragStep, setSeatDragStep] = useState(0);
-  const [showSeatingHelp, setShowSeatingHelp] = useState(false);
+  const [showDealerHelp, setShowDealerHelp] = useState(false);
   const [showOddBlindsHelp, setShowOddBlindsHelp] = useState(false);
 
   useEffect(() => () => {
@@ -3210,6 +3217,7 @@ function SetupView({
       smallBlind,
       blinds: schedule,
       players: selectedPlayers,
+      randomDealer,
     });
   }
 
@@ -3315,25 +3323,41 @@ function SetupView({
         ) : null}
         {playerCount > 1 ? (
           <>
-            <div className="heading-with-info">
+            <div className="card-row seat-order-heading">
               <span className="label">Seating Order</span>
-              <button
-                className="info-button"
-                type="button"
-                aria-label="About the seating order"
-                onClick={() => setShowSeatingHelp(true)}
-              >
-                i
-              </button>
+              <div className="heading-with-info">
+                <label className="switch-row">
+                  <span>Randomize dealer</span>
+                  <button
+                    className="switch"
+                    type="button"
+                    role="switch"
+                    aria-checked={randomDealer}
+                    aria-label="Randomize dealer"
+                    onClick={() => setRandomDealer((on) => !on)}
+                  />
+                </label>
+                <button
+                  className="info-button"
+                  type="button"
+                  aria-label="About randomize dealer"
+                  onClick={() => setShowDealerHelp(true)}
+                >
+                  i
+                </button>
+              </div>
             </div>
-            {showSeatingHelp ? (
+            {showDealerHelp ? (
               <InfoSheet
-                label="About the seating order"
-                onClose={() => setShowSeatingHelp(false)}
+                label="About randomize dealer"
+                onClose={() => setShowDealerHelp(false)}
               >
                 <p>
-                  Seat 1 deals first; the dealer moves to the next active
-                  player each hand. Drag a grip to change seats.
+                  <b>Randomize Dealer On:</b> the first dealer is chosen at
+                  random when the game starts.
+                </p>
+                <p>
+                  <b>Randomize Dealer Off:</b> seat 1 deals first.
                 </p>
               </InfoSheet>
             ) : null}
@@ -3409,9 +3433,6 @@ function SetupView({
             </div>
           </>
         ) : null}
-        <button type="button" className="text-button" onClick={onManagePlayers}>
-          Manage players
-        </button>
       </section>
 
       <section className="glass card">

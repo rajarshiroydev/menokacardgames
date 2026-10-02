@@ -1622,6 +1622,11 @@ textarea::placeholder {
   color: var(--onacc);
 }
 
+/* Seating Order's heading row: the label, then the Random dealer switch and i. */
+.seat-order-heading {
+  align-items: center;
+}
+
 .seat-order-list {
   display: flex;
   flex-direction: column;

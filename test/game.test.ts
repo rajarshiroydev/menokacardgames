@@ -710,3 +710,18 @@ describe("sessionBlindHistory", () => {
     });
   });
 });
+
+describe("first dealer", () => {
+  test("a random first dealer deals hand 1, then the button moves on", () => {
+    const game = gameState();
+    // Setup stores the seat before the chosen dealer (C, seat 3).
+    game.dealerIndex = 1;
+    dealNewHand(game);
+    const first = dealtHand(game);
+    assert.equal(first.dealerIndex, 2);
+    assert.equal(first.smallBlindIndex, 0);
+    assert.equal(first.bigBlindIndex, 1);
+    playHands(game, 1);
+    assert.equal(dealtHand(game).dealerIndex, 0);
+  });
+});
