@@ -3213,6 +3213,7 @@ textarea::placeholder {
   font-style: italic;
   font-weight: 700;
   line-height: 1;
+  text-transform: none;
 }
 
 .info-sheet p {
