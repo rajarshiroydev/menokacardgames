@@ -88,7 +88,7 @@ const FRIEND_ERRORS = {
   "player-unavailable": [409, "That player can't be linked. Pick another one"],
   "request-not-found": [404, "That request is no longer waiting"],
   "invalid-name": [400, "Player names must be 1 to 80 characters"],
-  "name-taken": [409, "You already have a player with that name. Pick them, or choose another name"],
+  "name-taken": [409, "You already have a player with that name. Choose another name"],
   "not-friends": [404, "You're not friends with this person"],
   "same-game": [
     409,

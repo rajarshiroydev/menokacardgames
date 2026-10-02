@@ -103,6 +103,7 @@ import {
   type ImportPlayerMapping,
 } from "@/lib/poker/import-plan";
 import { deriveSessionAccounting } from "@/lib/poker/accounting";
+import { playerNameKey } from "@/lib/poker/player-validation";
 import type {
   BlindSchedule,
   GameState,
@@ -4008,6 +4009,7 @@ function ProfileView({
         <FriendRequestCard
           key={request.requestId}
           request={request}
+          guests={freePlayers}
           busy={busy}
           onAnswered={(accepted) => {
             reloadOverview();
@@ -4705,25 +4707,30 @@ function ProfileCard({
 /** A friend request sent to you, answered right on the Profile tab. */
 function FriendRequestCard({
   request,
+  guests,
   busy,
   run,
   onAnswered,
   onToast,
 }: {
   request: FriendOverview["received"][number];
+  /** Your guests that could be linked to them instead. */
+  guests: PlayerProfile[];
   busy: string;
   run: (key: string, action: () => Promise<void>) => Promise<void>;
   onAnswered: (accepted: boolean) => void;
   onToast: (message: string) => void;
 }) {
-  // Accepting always adds them as a new player; a guest who is the same
-  // person is linked afterwards with "Link to guest…" (user decision).
+  // Accepting adds them as a new player. If that name is taken by one of
+  // your guests, the card offers to link that guest instead (2026-10-02,
+  // user decision); otherwise "Link to guest…" does it afterwards.
   const [newName, setNewName] = useState(request.displayName ?? "");
   const [error, setError] = useState("");
   const [nameTaken, setNameTaken] = useState(false);
+  const [clashingGuest, setClashingGuest] = useState<PlayerProfile | null>(null);
   const name = request.displayName ?? "Someone";
 
-  function answer(action: "accept" | "decline") {
+  function answer(action: "accept" | "decline", linkGuest?: PlayerProfile) {
     void run(request.requestId, async () => {
       setError("");
       try {
@@ -4732,16 +4739,33 @@ function FriendRequestCard({
             ? {
                 action,
                 requestId: request.requestId,
-                myPlayerId: null,
-                newPlayerName: newName,
+                myPlayerId: linkGuest?.id ?? null,
+                newPlayerName: linkGuest ? null : newName,
               }
             : { action, requestId: request.requestId },
         );
-        onToast(action === "accept" ? "Friend Added" : "Request Declined");
+        onToast(
+          action === "decline"
+            ? "Request Declined"
+            : linkGuest
+              ? "Friend Added · Guest Linked"
+              : "Friend Added",
+        );
         onAnswered(action === "accept");
       } catch (error) {
         if (error instanceof ApiError && error.code === "friend-name-taken") {
           setNameTaken(true);
+          // An empty box means their own name, as on the server.
+          const key = playerNameKey(newName.trim() || name);
+          const guest =
+            guests.find((player) => playerNameKey(player.name) === key) ?? null;
+          setClashingGuest(guest);
+          if (guest) {
+            setError(
+              `${guest.name} is already one of your guests. Link them to keep their games, or choose another name`,
+            );
+            return;
+          }
         }
         setError(
           error instanceof Error ? error.message : "Could not answer the request",
@@ -4777,9 +4801,19 @@ function FriendRequestCard({
           {error}
         </p>
       ) : null}
+      {clashingGuest ? (
+        <button
+          className="accent-button friend-link-guest"
+          type="button"
+          disabled={busy !== ""}
+          onClick={() => answer("accept", clashingGuest)}
+        >
+          Link to Guest {clashingGuest.name}
+        </button>
+      ) : null}
       <div className="friend-actions">
         <button
-          className="accent-button"
+          className={clashingGuest ? "ghost" : "accent-button"}
           type="button"
           disabled={busy !== ""}
           onClick={() => answer("accept")}

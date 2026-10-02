@@ -1730,6 +1730,12 @@ textarea::placeholder {
   min-height: 40px;
 }
 
+/* Shown above Accept and Decline when the name is one of your guests'. */
+.friend-link-guest {
+  width: 100%;
+  min-height: 40px;
+}
+
 .profile-card {
   position: relative;
   display: flex;
