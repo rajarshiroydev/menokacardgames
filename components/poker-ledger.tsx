@@ -78,7 +78,11 @@ import {
 import { DELETION_GRACE_PERIOD_DAYS } from "@/lib/accounts/lifecycle";
 import type { GroupStandings } from "@/lib/friends/group-standings";
 import { linkableFriends } from "@/lib/friends/link-guest";
-import type { FoundAccount, FriendOverview } from "@/lib/friends/requests";
+import {
+  parseCodeInput,
+  type FoundAccount,
+  type FriendOverview,
+} from "@/lib/friends/requests";
 import { authClient } from "@/lib/auth/client";
 import { apiErrorMessage } from "@/lib/security/rate-limit-message";
 import {
@@ -3779,6 +3783,8 @@ function ProfileView({
   const [menuAbove, setMenuAbove] = useState(false);
   const [showRemoved, setShowRemoved] = useState(false);
   const [adding, setAdding] = useState(false);
+  // A code read with Scan Code on the profile card, looked up on opening.
+  const [scannedCode, setScannedCode] = useState<string | null>(null);
   const [renaming, setRenaming] = useState<PlayerProfile | null>(null);
   const [choosingAvatar, setChoosingAvatar] = useState<PlayerProfile | null>(null);
   const [linking, setLinking] = useState<PlayerProfile | null>(null);
@@ -4009,6 +4015,10 @@ function ProfileView({
         accountEmail={accountEmail}
         onDeleteAccount={onDeleteAccount}
         onProfile={onProfile}
+        onScannedCode={(code) => {
+          setScannedCode(code);
+          setAdding(true);
+        }}
         onToast={onToast}
         stats={stats}
         statsError={statsError}
@@ -4170,13 +4180,17 @@ function ProfileView({
       {adding ? (
         <AddPlayerSheet
           players={players}
+          initialCode={scannedCode}
           onAdd={onAdd}
           onRequestSent={() => {
             reloadOverview();
             setFilter("all");
           }}
           onToast={onToast}
-          onClose={() => setAdding(false)}
+          onClose={() => {
+            setAdding(false);
+            setScannedCode(null);
+          }}
         />
       ) : null}
       {renaming ? (
@@ -4343,6 +4357,7 @@ function ProfileCard({
   accountEmail,
   onDeleteAccount,
   onProfile,
+  onScannedCode,
   onToast,
   stats,
   statsError,
@@ -4351,6 +4366,8 @@ function ProfileCard({
   accountEmail: string;
   onDeleteAccount: () => void;
   onProfile: (profile: AccountProfile) => void;
+  /** A friend's user code read with Scan Code. */
+  onScannedCode: (code: string) => void;
   onToast: (message: string) => void;
   stats: ProfileSummary | null;
   statsError: string;
@@ -4364,6 +4381,7 @@ function ProfileCard({
   const [codeMenu, setCodeMenu] = useState(false);
   const [replacing, setReplacing] = useState(false);
   const [choosingAvatar, setChoosingAvatar] = useState(false);
+  const [showingCode, setShowingCode] = useState(false);
   const copiedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(
@@ -4648,6 +4666,15 @@ function ProfileCard({
             )}
           </svg>
         </button>
+        <button
+          className="profile-more bordered profile-copy"
+          type="button"
+          aria-label="Show your QR code or scan a friend's"
+          title="QR code"
+          onClick={() => setShowingCode(true)}
+        >
+          {QR_ICON}
+        </button>
         <div className="profile-code-more">
           <button
             className="profile-more bordered"
@@ -4705,6 +4732,16 @@ function ProfileCard({
         seed={name}
         onPick={changeAvatar}
         onClose={() => setChoosingAvatar(false)}
+      />
+    ) : null}
+    {showingCode ? (
+      <UserCodeSheet
+        userCode={profile.userCode}
+        onScanned={(code) => {
+          setShowingCode(false);
+          onScannedCode(code);
+        }}
+        onClose={() => setShowingCode(false)}
       />
     ) : null}
     </>
@@ -4843,19 +4880,25 @@ function FriendRequestCard({
 /** The Add sheet: a friend on Pokerize by user code, or a guest by name. */
 function AddPlayerSheet({
   players,
+  initialCode,
   onAdd,
   onRequestSent,
   onToast,
   onClose,
 }: {
   players: PlayerProfile[];
+  /** A user code already scanned, looked up as the sheet opens. */
+  initialCode: string | null;
   onAdd: (name: string, avatar: string) => Promise<PlayerProfile | null>;
   onRequestSent: () => void;
   onToast: (message: string) => void;
   onClose: () => void;
 }) {
   const [mode, setMode] = useState<"code" | "name">("code");
-  const [input, setInput] = useState("");
+  const [input, setInput] = useState(
+    initialCode ? formatUserCode(initialCode) : "",
+  );
+  const [scanning, setScanning] = useState(false);
   const [guestAvatar, setGuestAvatar] = useState(randomAvatarId);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -4880,6 +4923,39 @@ function AddPlayerSheet({
     none: "",
   };
 
+  async function findCode(value: string) {
+    setError("");
+    setFound(null);
+    setBusy(true);
+    try {
+      const data = await friendsApi<{ found: FoundAccount }>({
+        action: "find",
+        code: value,
+      });
+      setFound({ ...data.found, code: value });
+    } catch (error) {
+      setError(
+        error instanceof Error ? error.message : "Could not look up that code",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // Look up a code scanned on the profile card once, as the sheet opens.
+  const lookedUpInitial = useRef(false);
+  useEffect(() => {
+    if (!initialCode || lookedUpInitial.current) return;
+    lookedUpInitial.current = true;
+    void findCode(initialCode);
+  }, [initialCode]);
+
+  function scanned(code: string) {
+    setScanning(false);
+    setInput(formatUserCode(code));
+    void findCode(code);
+  }
+
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (busy) return;
@@ -4891,20 +4967,7 @@ function AddPlayerSheet({
         setError("Enter their user code");
         return;
       }
-      setBusy(true);
-      try {
-        const data = await friendsApi<{ found: FoundAccount }>({
-          action: "find",
-          code: value,
-        });
-        setFound({ ...data.found, code: value });
-      } catch (error) {
-        setError(
-          error instanceof Error ? error.message : "Could not look up that code",
-        );
-      } finally {
-        setBusy(false);
-      }
+      await findCode(value);
       return;
     }
     if (!value) {
@@ -4976,6 +5039,7 @@ function AddPlayerSheet({
                 setInput("");
                 setError("");
                 setFound(null);
+                setScanning(false);
               }}
             >
               {label}
@@ -4984,16 +5048,28 @@ function AddPlayerSheet({
         </div>
         <p className="muted small-note">
           {byCode
-            ? "Enter their user code to add them as a friend."
+            ? "Enter or scan their user code to add them as a friend."
             : "Add someone who doesn't use the app."}
         </p>
+        {scanning ? (
+          <>
+            <QrScanner onCode={scanned} />
+            <button
+              className="ghost full"
+              type="button"
+              onClick={() => setScanning(false)}
+            >
+              Type code instead
+            </button>
+          </>
+        ) : (
         <form className="add-player-row" onSubmit={submit}>
           <input
             className={`field${byCode ? " code-field" : ""}`}
             aria-label={byCode ? "Their user code" : "Their name"}
             autoCapitalize={byCode ? "characters" : "words"}
             autoComplete="off"
-            autoFocus
+            autoFocus={!initialCode}
             maxLength={byCode ? 12 : 80}
             placeholder={byCode ? "XXXX-XXXX" : "Their name"}
             value={input}
@@ -5003,10 +5079,27 @@ function AddPlayerSheet({
               setFound(null);
             }}
           />
+          {byCode ? (
+            <button
+              className="profile-more bordered add-player-scan"
+              type="button"
+              aria-label="Scan their QR code"
+              title="Scan QR code"
+              disabled={busy}
+              onClick={() => {
+                setError("");
+                setFound(null);
+                setScanning(true);
+              }}
+            >
+              {SCAN_ICON}
+            </button>
+          ) : null}
           <button className="accent-button" type="submit" disabled={busy}>
             {busy && !found ? (byCode ? "Finding…" : "Adding…") : byCode ? "Find" : "Add"}
           </button>
         </form>
+        )}
         {error ? (
           <p className="field-error" role="alert">
             {error}
@@ -5892,7 +5985,7 @@ function BlindEditor({
 }
 
 /** QR code as SVG squares, so no generated markup is injected. */
-function QrCode({ text }: { text: string }) {
+function QrCode({ text, label }: { text: string; label: string }) {
   const path = useMemo(() => {
     const code = qrcode(0, "M");
     code.addData(text);
@@ -5911,12 +6004,249 @@ function QrCode({ text }: { text: string }) {
       className="live-qr"
       viewBox={`0 0 ${path.size} ${path.size}`}
       role="img"
-      aria-label="QR code for the live standings link"
+      aria-label={label}
       shapeRendering="crispEdges"
     >
       <rect width={path.size} height={path.size} fill="#fff" />
       <path d={path.d} fill="#000" />
     </svg>
+  );
+}
+
+const QR_ICON = (
+  <svg
+    viewBox="0 0 24 24"
+    width="16"
+    height="16"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden="true"
+  >
+    <rect x="4" y="4" width="6" height="6" rx="1" />
+    <rect x="14" y="4" width="6" height="6" rx="1" />
+    <rect x="4" y="14" width="6" height="6" rx="1" />
+    <path d="M14 14h3v3M20 14v.01M14 20h.01M17 20h3v-3" />
+  </svg>
+);
+
+const SCAN_ICON = (
+  <svg
+    viewBox="0 0 24 24"
+    width="16"
+    height="16"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden="true"
+  >
+    <path d="M4 8V5.5A1.5 1.5 0 0 1 5.5 4H8M16 4h2.5A1.5 1.5 0 0 1 20 5.5V8M20 16v2.5a1.5 1.5 0 0 1-1.5 1.5H16M8 20H5.5A1.5 1.5 0 0 1 4 18.5V16M4 12h16" />
+  </svg>
+);
+
+type ScannerStatus = "starting" | "scanning" | "blocked" | "unavailable";
+
+/**
+ * Reads a user code from the camera. Frames are decoded with jsQR, loaded
+ * only when scanning, so it works the same on iPhones, which have no
+ * BarcodeDetector. Other QR codes (a live standings link, say) are skipped
+ * with a note and scanning carries on.
+ */
+function QrScanner({ onCode }: { onCode: (code: string) => void }) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const onCodeRef = useRef(onCode);
+  const [status, setStatus] = useState<ScannerStatus>("starting");
+  const [otherCode, setOtherCode] = useState(false);
+
+  useEffect(() => {
+    onCodeRef.current = onCode;
+  }, [onCode]);
+
+  useEffect(() => {
+    let stopped = false;
+    let stream: MediaStream | null = null;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+
+    function stop() {
+      stopped = true;
+      if (timer) clearTimeout(timer);
+      stream?.getTracks().forEach((track) => track.stop());
+    }
+
+    async function start() {
+      if (!navigator.mediaDevices?.getUserMedia) {
+        setStatus("unavailable");
+        return;
+      }
+      try {
+        const [media, { default: jsQR }] = await Promise.all([
+          navigator.mediaDevices.getUserMedia({
+            video: { facingMode: "environment" },
+            audio: false,
+          }),
+          import("jsqr"),
+        ]);
+        stream = media;
+        const video = videoRef.current;
+        if (stopped || !video) {
+          stop();
+          return;
+        }
+        video.srcObject = media;
+        await video.play();
+        if (stopped) return;
+        setStatus("scanning");
+
+        const canvas = document.createElement("canvas");
+        const context = canvas.getContext("2d", { willReadFrequently: true });
+        const scan = () => {
+          if (stopped || !context) return;
+          if (video.videoWidth) {
+            // Phones film at 1080p or more; 640px is plenty for a code
+            // held up close and keeps each decode quick.
+            const scale = Math.min(
+              1,
+              640 / Math.max(video.videoWidth, video.videoHeight),
+            );
+            const width = Math.round(video.videoWidth * scale);
+            const height = Math.round(video.videoHeight * scale);
+            canvas.width = width;
+            canvas.height = height;
+            context.drawImage(video, 0, 0, width, height);
+            const frame = context.getImageData(0, 0, width, height);
+            const found = jsQR(frame.data, width, height, {
+              inversionAttempts: "dontInvert",
+            });
+            if (found) {
+              const parsed = parseCodeInput(found.data);
+              if (parsed?.kind === "user") {
+                stop();
+                onCodeRef.current(parsed.code);
+                return;
+              }
+              setOtherCode(true);
+            }
+          }
+          timer = setTimeout(scan, 150);
+        };
+        scan();
+      } catch (error) {
+        if (stopped) return;
+        stop();
+        setStatus(
+          error instanceof DOMException &&
+            (error.name === "NotAllowedError" || error.name === "SecurityError")
+            ? "blocked"
+            : "unavailable",
+        );
+      }
+    }
+
+    void start();
+    return stop;
+  }, []);
+
+  const note: Record<ScannerStatus, string> = {
+    starting: "Starting the camera…",
+    scanning: otherCode
+      ? "That QR code isn't a user code. Point the camera at theirs."
+      : "Point the camera at their code. It's on their Profile, under the QR button.",
+    blocked:
+      "Camera access is off. Allow it for this site in your browser settings, or type their code.",
+    unavailable: "The camera isn't available here. Type their code instead.",
+  };
+  const failed = status === "blocked" || status === "unavailable";
+
+  return (
+    <div className="qr-scanner">
+      {failed ? null : (
+        <div className="qr-scanner-view">
+          <video ref={videoRef} muted playsInline aria-label="Camera view" />
+          <span className="qr-scanner-frame" aria-hidden="true" />
+        </div>
+      )}
+      <p className={failed ? "field-error" : "muted small-note"} role="status">
+        {note[status]}
+      </p>
+    </div>
+  );
+}
+
+/** Your user code as a QR for a friend to scan, or the camera to scan theirs. */
+function UserCodeSheet({
+  userCode,
+  onScanned,
+  onClose,
+}: {
+  userCode: string;
+  onScanned: (code: string) => void;
+  onClose: () => void;
+}) {
+  const [mode, setMode] = useState<"mine" | "scan">("mine");
+
+  useEffect(() => {
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") onClose();
+    }
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [onClose]);
+
+  return (
+    <div
+      className="modal show"
+      role="presentation"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <div
+        className="sheet profile-sheet"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="user-code-title"
+      >
+        <span className="sheet-grabber" aria-hidden="true" />
+        <h2 id="user-code-title">User code</h2>
+        <div className="profile-modes" role="group" aria-label="Show or scan">
+          {(
+            [
+              ["mine", "My Code"],
+              ["scan", "Scan Code"],
+            ] as const
+          ).map(([key, label]) => (
+            <button
+              key={key}
+              type="button"
+              className={mode === key ? "selected" : ""}
+              aria-pressed={mode === key}
+              onClick={() => setMode(key)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        {mode === "mine" ? (
+          <>
+            <p className="muted small-note">
+              A friend scans this with Scan Code in the app to send you a
+              friend request.
+            </p>
+            <QrCode
+              text={formatUserCode(userCode)}
+              label="QR code for your user code"
+            />
+            <p className="user-code-text">{formatUserCode(userCode)}</p>
+          </>
+        ) : (
+          <QrScanner onCode={onScanned} />
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -5979,7 +6309,7 @@ function LiveShareSheet({
               seconds after each change and ends when you save or discard the
               game.
             </p>
-            <QrCode text={url} />
+            <QrCode text={url} label="QR code for the live standings link" />
             <p className="live-link">{url}</p>
             {failing ? (
               <p className="field-error">
