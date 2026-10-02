@@ -4637,7 +4637,6 @@ textarea::placeholder {
   flex-direction: column;
   gap: 20px;
   min-width: 0;
-  max-width: 1480px;
 }
 
 .admin-topbar {
@@ -5356,6 +5355,77 @@ td > .admin-badge:first-child,
 
 .admin-drawer-note {
   text-align: center;
+}
+
+/* Big monitors: the content fills the window instead of stopping at a
+   fixed width, with more room around it and every KPI tile in one row. */
+@media (min-width: 1700px) {
+  .admin-shell {
+    --admin-side: 252px;
+    gap: 28px;
+    padding: 28px;
+  }
+
+  .admin-sidebar {
+    top: 28px;
+    height: calc(100dvh - 56px);
+  }
+
+  .admin-main,
+  .admin-content,
+  .admin-stack,
+  .admin-grid-2,
+  .admin-grid-3 {
+    gap: 24px;
+  }
+
+  .admin-kpis {
+    gap: 18px;
+  }
+
+  .admin-panel {
+    padding: 22px;
+  }
+
+  .admin-panel.is-flush {
+    padding: 22px 0 8px;
+  }
+
+  .admin-panel.is-flush > .admin-panel-head {
+    padding: 0 22px;
+  }
+
+  .admin-table {
+    font-size: 14px;
+  }
+
+  .admin-table th:first-child,
+  .admin-table td:first-child {
+    padding-left: 22px;
+  }
+
+  .admin-table th:last-child,
+  .admin-table td:last-child {
+    padding-right: 22px;
+  }
+}
+
+@media (min-width: 2200px) {
+  .admin-kpis {
+    grid-template-columns: repeat(8, minmax(0, 1fr));
+  }
+
+  .admin-kpis-3 {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .admin-kpi-value {
+    font-size: 44px;
+  }
+
+  .admin-topbar h1 {
+    font-size: 40px;
+  }
 }
 
 /* Smaller laptops and tablets: the sidebar shows icons only. */
