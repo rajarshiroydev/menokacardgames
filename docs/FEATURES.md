@@ -67,7 +67,7 @@ The **Profile** tab replaced the Players tab on 30 September 2026. From the top:
   - **Friend · Played 21 games together**, for a friend, with a green-and-blue ring around their avatar (your own avatar has the same ring);
   - **Request sent · waiting**, for someone you've sent a friend request;
   - **Guest · Played 26 games together**, for everyone else.
-  The count is only the games you hosted that they played in ("Played 1 game together" for one).
+  The count is every saved game you both played in, whoever hosted it ("Played 1 game together" for one): your own games, a friend's games and games hosted by someone else. A game hosted by someone else counts only while that host has each of you linked as a friend (not as a guest). It is worked out again each time Profile opens, so when a host links you later, their earlier games count too, and removing a friend or link takes them out. For guests it counts your own games where you both sat. Until the counts load, rows show just Friend or Guest.
   The list starts with you, then friends, then waiting requests, then guests; within each group, most games first.
 - **Names.** People with an account go by the name they chose themselves: a friend shows as their own saved name, and your own player as your name. Only guests can be renamed.
 - **Options.** Tap **⋯** on a row, or press and hold it (about half a second), for its options. Near the bottom of the screen they open upwards. Tap outside or press Escape to close them.

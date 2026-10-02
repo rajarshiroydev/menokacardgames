@@ -91,7 +91,7 @@ import {
   type IneligibleReason,
   type Standings,
 } from "@/lib/poker/standings";
-import type { ProfileStats } from "@/lib/profile/stats";
+import type { ProfileSummary } from "@/lib/profile/stats";
 import {
   buildLiveSnapshot,
   LIVE_VIEW_HEARTBEAT_MS,
@@ -537,7 +537,7 @@ export function PokerLedger({
     null,
   );
   const [friendOverviewError, setFriendOverviewError] = useState("");
-  const [profileStats, setProfileStats] = useState<ProfileStats | null>(null);
+  const [profileStats, setProfileStats] = useState<ProfileSummary | null>(null);
   const [profileStatsError, setProfileStatsError] = useState("");
   const [groups, setGroups] = useState<GroupStandings[]>([]);
   const [groupsError, setGroupsError] = useState("");
@@ -3668,7 +3668,10 @@ type ProfileRow = {
   player?: PlayerProfile;
   friend?: FriendOverview["friends"][number];
   requestId?: string;
+  /** Games in your own ledger (for the merge warning when linking). */
   games: number;
+  /** Games you both played in, whoever hosted; unknown until stats load. */
+  together?: number;
 };
 
 type RowAction = { label: string; danger?: boolean; run: () => void };
@@ -3676,7 +3679,7 @@ type RowAction = { label: string; danger?: boolean; run: () => void };
 async function profileStatsApi() {
   const response = await fetch("/api/profile");
   const data = (await response.json().catch(() => ({}))) as {
-    stats?: ProfileStats;
+    stats?: ProfileSummary;
     error?: string;
   };
   if (!response.ok || !data.stats) {
@@ -3766,7 +3769,7 @@ function ProfileView({
   friendOverviewError: string;
   onReloadFriends: () => void;
   /** The Profile card's stats, kept by the app between visits. */
-  stats: ProfileStats | null;
+  stats: ProfileSummary | null;
   statsError: string;
 }) {
   const [filter, setFilter] = useState<PlayerFilter>("all");
@@ -3851,7 +3854,10 @@ function ProfileView({
     const entry = standings.entries.find(
       (item) => item.key === standingsKey({ playerId: player.id, name: player.name }),
     );
-    return { games: entry?.totalSessions ?? 0 };
+    return {
+      games: entry?.totalSessions ?? 0,
+      together: stats ? (stats.gamesTogether[player.id] ?? 0) : undefined,
+    };
   };
   const liveRows: ProfileRow[] = [
     ...players.map((player): ProfileRow => ({
@@ -3887,7 +3893,7 @@ function ProfileView({
   liveRows.sort(
     (a, b) =>
       order[a.kind] - order[b.kind] ||
-      b.games - a.games ||
+      (b.together ?? b.games) - (a.together ?? a.games) ||
       a.name.localeCompare(b.name),
   );
   const hasAccount = (row: ProfileRow) => row.kind !== "guest";
@@ -3969,19 +3975,23 @@ function ProfileView({
   }
 
   function subtitle(row: ProfileRow) {
-    // Counts only this host's games, so it says "together" (user request).
-    const games = `Played ${row.games} game${row.games === 1 ? "" : "s"} together`;
+    // Any host's games you both played in (user request, 2026-10-02).
+    const count = row.together;
+    const games =
+      count === undefined
+        ? ""
+        : ` · Played ${count} game${count === 1 ? "" : "s"} together`;
     switch (row.kind) {
       case "self":
         return "You";
       case "friend":
-        return `Friend · ${games}`;
+        return `Friend${games}`;
       case "pending":
         return "Request sent · waiting";
       case "removed":
         return row.games ? "Removed · history kept" : "Removed";
       default:
-        return `Guest · ${games}`;
+        return `Guest${games}`;
     }
   }
 
@@ -4345,7 +4355,7 @@ function ProfileCard({
   onDeleteAccount: () => void;
   onProfile: (profile: AccountProfile) => void;
   onToast: (message: string) => void;
-  stats: ProfileStats | null;
+  stats: ProfileSummary | null;
   statsError: string;
 }) {
   const { signedMoney } = useMoney();

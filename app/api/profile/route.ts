@@ -4,6 +4,7 @@ import { friendErrorFromDatabase } from "@/lib/friends/requests";
 import { runAsAuthenticatedUser } from "@/lib/poker/database";
 import { DEFAULT_CURRENCY } from "@/lib/poker/money";
 import { buildProfileStats, type ProfileLedger } from "@/lib/profile/stats";
+import { buildGamesTogether } from "@/lib/profile/together";
 import { withServerTiming } from "@/lib/server-timing";
 
 export const dynamic = "force-dynamic";
@@ -18,7 +19,8 @@ function json(body: object, status = 200) {
 /**
  * The signed-in person's own record: their games as the player they marked
  * as themselves in their own list, plus every friend's games where that
- * friend linked them. The server works the numbers out and sends only those.
+ * friend linked them. The server works the numbers out and sends only those,
+ * with the number of games played together with each player in their list.
  */
 async function handleGet() {
   const authResult = await requireHostAccount();
@@ -28,7 +30,7 @@ async function handleGet() {
   const { currency, selfPlayerId } = authResult.profile;
 
   try {
-    const [ownRows, groupRows] = await runAsAuthenticatedUser(authUserId, (sql) => [
+    const [ownRows, groupRows, linkedRows] = await runAsAuthenticatedUser(authUserId, (sql) => [
       // The same shape as friend_group_sessions(), for the owner's own saved
       // games that the owner played in.
       sql`
@@ -78,6 +80,12 @@ async function handleGet() {
           )
       `,
       sql`SELECT public.friend_group_sessions() AS result`,
+      sql`
+        SELECT id, linked_account_id
+        FROM players
+        WHERE owner_id = ${ownerId}::uuid
+          AND linked_account_id IS NOT NULL
+      `,
     ]);
 
     const ownSessions =
@@ -94,7 +102,21 @@ async function handleGet() {
         sessions: group.sessions,
       })),
     ];
-    return json({ stats: buildProfileStats(ledgers, currency) });
+    const linkedPlayers = new Map(
+      (linkedRows as Array<{ id: string; linked_account_id: string }>).map(
+        (row) => [row.linked_account_id, row.id] as const,
+      ),
+    );
+    return json({
+      stats: {
+        ...buildProfileStats(ledgers, currency),
+        gamesTogether: buildGamesTogether(
+          { myPlayerId: selfPlayerId, sessions: ownSessions },
+          groups,
+          linkedPlayers,
+        ),
+      },
+    });
   } catch (error) {
     const known = friendErrorFromDatabase(error);
     if (known) {

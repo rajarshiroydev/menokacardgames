@@ -32,6 +32,12 @@ export type ProfileStats = {
   firstPlayed: number | null;
 };
 
+/** What `GET /api/profile` sends: the stats, plus games played together. */
+export type ProfileSummary = ProfileStats & {
+  /** Games played together with each player in the person's list, by player id. */
+  gamesTogether: Record<string, number>;
+};
+
 type Game = { date: number; net: number; return: number; currency: string };
 
 /** Mean of sorted values, so equal sets of returns give identical means. */

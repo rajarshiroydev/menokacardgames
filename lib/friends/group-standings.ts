@@ -20,9 +20,14 @@ export type GroupSessions = {
     date: number;
     startStack: number;
     hands: number;
-    /** `avatar` is what the player shows as in the host's list (migration 0015). */
+    /**
+     * `avatar` is what the player shows as in the host's list (migration
+     * 0015). `accountId` is the account that player is, if any (migration
+     * 0016); it stays on the server.
+     */
     results: Array<
-      Required<Pick<SessionResult, "playerId">> & SessionResult & { avatar?: string }
+      Required<Pick<SessionResult, "playerId">> &
+        SessionResult & { avatar?: string; accountId?: string | null }
     >;
   }>;
 };
