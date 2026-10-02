@@ -203,7 +203,7 @@ The **Profile** tab replaced the Players tab on 30 September 2026. From the top:
   - The dealer isn't saved with a game, so the next dealer is drawn at random.
   - Blinds carry on from where the game finished. Blinds that go up every few hands keep counting hands. Blinds that go up every few minutes restart their clock at the current blinds, so time away from the table doesn't raise them.
   - Until it's saved again, the saved game stays exactly as it was. **Discard Game** on a continued game throws away only the hands played since.
-  - **Finish And Save Session** updates the same game: same number, name and date, with the new end time, hands, results and blind history; standings and friends' groups follow. It needs at least one new hand ("No new hands to save"). If the saved game was changed or discarded since it was continued (for example from another device), nothing is saved: "This game changed since you continued it".
+  - **Finish And Save Session** updates the same game: same number, name and date, with the new end time, hands, results and blind history; standings and friends' groups follow. If no new hand was completed, it offers **Close game** instead, which ends the continued game and leaves the saved game exactly as it was. If the saved game was changed or discarded since it was continued (for example from another device), nothing is saved: "This game changed since you continued it".
 
 ## 12. Standings and ranking
 

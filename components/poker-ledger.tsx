@@ -1715,10 +1715,23 @@ export function PokerLedger({
     if (!game) return;
     const completedHands = game.hand ? game.handNo - 1 : game.handNo;
     const newHands = completedHands - (game.continues?.hands ?? 0);
-    if (newHands < 1) {
-      showToast(
-        game.continues ? "No new hands to save" : "No completed hands to save",
+    if (newHands < 1 && game.continues) {
+      // Nothing new to save: closing leaves the saved game as it was.
+      const label = game.sessionLabel || "the saved game";
+      ask(
+        `No new hands were played. Close ${label}? It stays exactly as it was saved.`,
+        "Close game",
+        () => {
+          endLiveSharing();
+          setGame(null);
+          navigate("sessions", { replace: true });
+          showToast(`${label} closed; nothing changed`);
+        },
       );
+      return;
+    }
+    if (newHands < 1) {
+      showToast("No completed hands to save");
       return;
     }
     ask(
