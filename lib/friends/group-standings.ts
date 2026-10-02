@@ -62,6 +62,17 @@ export type GroupStandings = {
   chart: GroupChartLine[];
 };
 
+/**
+ * Whether the friend has played in at least one of this host's games. A host
+ * who has the friend linked but never seated them has nothing to show on
+ * Ranks, so the API leaves that group out (user request, 2026-10-02).
+ */
+export function playedInGroup(group: GroupSessions): boolean {
+  return group.sessions.some((session) =>
+    session.results.some((result) => result.playerId === group.myPlayerId),
+  );
+}
+
 const twoDecimals = (value: number) => Math.round(value * 100) / 100;
 
 /**

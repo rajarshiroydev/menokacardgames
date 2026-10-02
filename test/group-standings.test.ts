@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 
 import {
   buildGroupStandings,
+  playedInGroup,
   type GroupSessions,
 } from "../lib/friends/group-standings.ts";
 import { buildStandings } from "../lib/poker/standings.ts";
@@ -37,6 +38,12 @@ const group: GroupSessions = {
 };
 
 describe("group standings for a linked friend", () => {
+  it("keeps only hosts who have seated the friend in a game", () => {
+    assert.equal(playedInGroup(group), true);
+    assert.equal(playedInGroup({ ...group, sessions: [] }), false);
+    assert.equal(playedInGroup({ ...group, myPlayerId: "p-unseated" }), false);
+  });
+
   it("ranks the host's games exactly as the host's own standings do", () => {
     const result = buildGroupStandings(group);
     const own = buildStandings(

@@ -1,6 +1,7 @@
 import { requireHostAccount } from "@/lib/auth/server";
 import {
   buildGroupStandings,
+  playedInGroup,
   type GroupSessions,
 } from "@/lib/friends/group-standings";
 import { friendErrorFromDatabase } from "@/lib/friends/requests";
@@ -18,7 +19,8 @@ function json(body: object, status = 200) {
 
 /**
  * The standings of every host who has the signed-in person as a linked
- * friend. The server ranks each host's games and returns only the rows.
+ * friend and has seated them in at least one game. The server ranks each
+ * host's games and returns only the rows.
  */
 async function handleGet() {
   const authResult = await requireHostAccount();
@@ -31,7 +33,7 @@ async function handleGet() {
     ]);
     const groups =
       (rows as Array<{ result: GroupSessions[] | null }>)[0]?.result ?? [];
-    return json({ groups: groups.map(buildGroupStandings) });
+    return json({ groups: groups.filter(playedInGroup).map(buildGroupStandings) });
   } catch (error) {
     const known = friendErrorFromDatabase(error);
     if (known) {
