@@ -7139,7 +7139,7 @@ function StandingCard({
     ["Net", signedMoney(entry.net), entry.net],
   ];
   return (
-    <section id={id} className={`glass standing-card${entry.isMe ? " is-me" : ""}`}>
+    <section id={id} className="glass standing-card">
       <button
         className="standing-toggle"
         type="button"
