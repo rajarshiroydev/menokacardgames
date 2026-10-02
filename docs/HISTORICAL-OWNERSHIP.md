@@ -2,7 +2,7 @@
 
 Updated: 2026-09-25. Source: inventory of the isolated Neon branch `multi-user-auth` (2026-09-20), extended on 2026-09-24 from `vercel-preview`, a same-day copy of production (32 games, 15 players).
 
-This manifest records who owns each game from the old shared ledger. Every decision below was made by the user; player names, stakes and overlap were context only and must never decide ownership automatically. **Status:** Rajarshi's 27 games were claimed in production on 2026-09-25. The Emon-led group's and Rahul Basak's games stay unowned and hidden until those hosts sign in.
+This manifest records who owns each game from the old shared ledger. Every decision below was made by the user; player names, stakes and overlap were context only and must never decide ownership automatically. **Status:** Rajarshi's 27 games were claimed in production on 2026-09-25. Rahul Basak's 2 games were claimed on 2026-10-02. The Emon-led group's games stay unowned and hidden until that host signs in.
 
 ## Session cohorts and owners
 
@@ -58,7 +58,7 @@ For each target host ledger, create independent player profiles from the session
 | --- | --- | --- | --- |
 | Rajarshi | 5–23, 26–29, 31, 34–36 | Rajarshi, Debraj, Pratik, Rahul Basak, Ratan, Shubhankar, Soham, Utsav, Abhirup | Done 2026-09-25: 27 games, account `4db9f3e6-9b4b-445b-8ca3-831773acdb3c` |
 | Emon-led group | 32, 33, 37 | Emon, Abhirup, Supratik, Ashish | After the host signs in; the user supplies the email. Then make the claimed "Emon" his own player with `adopt_self_player` (migration 0013), with his confirmation |
-| Rahul Basak | 24, 25 | Rahul Basak, Ashit, Rana | After Rahul signs in; the user supplies the email. Then make the claimed "Rahul Basak" his own player with `adopt_self_player`, with his confirmation |
+| Rahul Basak | 24, 25 | Rahul Basak, Ashit, Rana | Done 2026-10-02 (user's go-ahead; email supplied by the user): 2 games, account `adf27da9-d3ac-44cf-bee0-47b0b6031cfa`. His account name "RAHUL BASAK" matched by name, so the results went straight onto his own player; no `adopt_self_player` needed |
 
 ## Review status
 
@@ -66,4 +66,4 @@ For each target host ledger, create independent player profiles from the session
 - Ownership decisions: complete (2026-09-24). Cohorts A–G, J–L and N for Rajarshi; M and O for the Emon-led group; H–I for Rahul Basak.
 - Friend-list decisions: complete. Abhirup has profiles in Rajarshi's and Emon's ledgers, Rahul Basak in Rajarshi's and his own; Aiush is in no list.
 - Development branch: cohorts A–G and J–L cloned into Rajarshi's ledger by `data/0003` (9 friend profiles, 24 sessions, 72 results reconciled).
-- Production: Rajarshi's claim done on 2026-09-25 (27 games, 9 friends; standings matched the rehearsal). Waiting: the Emon-led group (32, 33, 37) and Rahul Basak (24, 25), each once the host signs in and the user supplies the email. Aiush stays in the unclaimed archive. Legacy source rows remain intact.
+- Production: Rajarshi's claim done on 2026-09-25 (27 games, 9 friends; standings matched the rehearsal). Rahul Basak's claim done on 2026-10-02 (2 games; Ashit and Rana added to his list; his net +10,400; rolled-back rehearsal first). Waiting: the Emon-led group (32, 33, 37), once the host signs in and the user supplies the email. Aiush stays in the unclaimed archive. Legacy source rows remain intact.
