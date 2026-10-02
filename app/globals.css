@@ -3216,6 +3216,16 @@ textarea::placeholder {
   text-transform: none;
 }
 
+/* An "i" inside a line of text, such as the betting panel's minimum. */
+.info-button.inline {
+  display: inline-grid;
+  width: 18px;
+  height: 18px;
+  margin-left: 6px;
+  font-size: 11px;
+  vertical-align: middle;
+}
+
 .info-sheet p {
   color: var(--ink2);
   font-size: 15px;

@@ -33,6 +33,7 @@ import {
   applyRaiseRules,
   mayRaise,
   minimumRaise,
+  raiseSize,
   undoRaiseRules,
   nextBuyIn,
   nextPlayerToAct,
@@ -6524,6 +6525,7 @@ function PlayerRow({
 }) {
   const { money, symbol } = useMoney();
   const [amount, setAmount] = useState("");
+  const [showRaiseHelp, setShowRaiseHelp] = useState(false);
   const hand = game.hand;
   if (!hand) return null;
   const player = game.players[playerIndex];
@@ -6684,7 +6686,23 @@ function PlayerRow({
                 Min bet <b>{money(minimum)}</b>
               </>
             )}
+            {raiseClosed ? null : (
+              <button
+                className="info-button inline"
+                type="button"
+                aria-label="About the raise amount"
+                onClick={() => setShowRaiseHelp(true)}
+              >
+                i
+              </button>
+            )}
           </p>
+          {showRaiseHelp ? (
+            <RaiseHelp
+              game={game}
+              onClose={() => setShowRaiseHelp(false)}
+            />
+          ) : null}
           {raiseClosed ? null : (
             <label className="bet-input">
               <span>{symbol.trim()}</span>
@@ -7462,6 +7480,40 @@ function RankingHelp({
         they won or lost in each game as a percentage of the chips they put
         in, averaged over their games.
       </p>
+    </InfoSheet>
+  );
+}
+
+/**
+ * Explains the betting panel's minimum with this hand's numbers: the
+ * standard rule that a raise adds at least the last bet or raise.
+ */
+function RaiseHelp({
+  game,
+  onClose,
+}: {
+  game: GameState;
+  onClose: () => void;
+}) {
+  const { money } = useMoney();
+  const hand = game.hand!;
+  const step = raiseSize(game);
+
+  return (
+    <InfoSheet label="About the raise amount" onClose={onClose}>
+      {hand.roundHigh > 0 ? (
+        <p>
+          Standard poker rule: a raise must go up by at least the last bet or
+          raise. <b>Min raise = current bet + last raise</b>, so here{" "}
+          {money(hand.roundHigh)} + {money(step)} ={" "}
+          <b>{money(hand.roundHigh + step)}</b>.
+        </p>
+      ) : (
+        <p>
+          Standard poker rule: with no bet yet this round, the smallest bet is
+          the big blind, <b>{money(step)}</b>.
+        </p>
+      )}
     </InfoSheet>
   );
 }
