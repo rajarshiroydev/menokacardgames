@@ -1,6 +1,6 @@
 # Feature list
 
-Updated: 1 October 2026
+Updated: 2 October 2026
 
 This is a plain-language list of everything Pokerize can do today. It is written for anyone, technical or not. It describes how the app behaves right now; plans and future ideas live in the [feature plan](./FEATURE-PLAN.md).
 
@@ -150,10 +150,18 @@ The **Profile** tab replaced the Players tab on 30 September 2026. From the top:
 - **All-in run-out:** once betting can't continue (for example, everyone else is all in), the host can deal the remaining stages straight to the showdown without more betting.
 - **Action log:** a running list of what happened (bets, calls, folds, wins, buy-ins, blind changes), newest first, keeping the latest 80 entries. The 6 newest are shown; "Show all" opens the rest.
 - **In-game standings:** every player's current stack, total invested and running profit or loss, sorted by stack.
+- **List or Table view.** During a hand, a **List | Table** switch sits top right. List is the seat cards described above. Table draws the hand as an oval poker table (seat 1 at the top, the rest clockwise), with everything else on the screen unchanged:
+  - in the middle: the four stages as small bars, "Pot · Flop" (or "Pick the winner" / "Split the pot" at the showdown), the pot and the blinds (with the level, for example "₹50 / ₹100 · L2"). A blind schedule note shows under the table
+  - each seat shows the player's avatar with its D/SB/BB badge, first name, stack and status (on the table the blinds read "SB ₹50" and "BB ₹100"). The player to act has a green glowing ring and "To act"; folded players are faded
+  - chips in front of a seat show what that player has put in this street
+  - the acting player's betting panel (the same as in List, headed "Name to act" with their stack behind) is docked under the table. When the round ends it gives way to the Deal button
+  - **Undo** on the table: tap a player who has acted this street and a bar with their last action and an **Undo** button appears under the table. A dashed box under **Cancel hand** says "Tap on player to undo their action." (hidden at the showdown)
+  - the choice is remembered on this device; it starts on List. Between hands both views show the same Between Hands card, so the switch is hidden
 
 ## 7. Winning the pot
 
 - **Showdown.** Once the river betting is finished, the screen title changes to "Showdown" and a **Pick the winner** card lists everyone still in as "Name wins" with the pot. A confirmation asks before the pot is given.
+- **On the Table view** the seats of everyone still in turn blue and read "Tap to award"; tapping a seat asks the same confirmation as the Pick the winner card, which stays under the table. In a split, tapped seats turn green ("In split"), the others read "Tap to add".
 - **Split pot.** Choose "Split between two or more", then tap everyone who ties; untapped players say "Tap to include". The screen shows each player's share, and once at least 2 are chosen a "Split ₹X N ways" button appears. Splits are equal; any leftover single chips go to the tied players in seat order. "Back to one winner" leaves split mode.
 - **Winner celebration.** A card with confetti shows who won, the hand number and the pot size. Press **Next** to continue.
 
