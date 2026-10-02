@@ -507,8 +507,8 @@ REVOKE ALL ON ALL SEQUENCES IN SCHEMA public FROM menoka_app;
 GRANT SELECT, INSERT, UPDATE ON accounts TO menoka_app;
 GRANT SELECT, INSERT, UPDATE, DELETE ON players TO menoka_app;
 GRANT SELECT, INSERT, UPDATE, DELETE ON poker_sessions TO menoka_app;
-GRANT SELECT, INSERT ON session_results TO menoka_app;
-GRANT SELECT, INSERT ON buy_in_events TO menoka_app;
+GRANT SELECT, INSERT, DELETE ON session_results TO menoka_app;
+GRANT SELECT, INSERT, DELETE ON buy_in_events TO menoka_app;
 GRANT SELECT, INSERT ON audit_events TO menoka_app;
 
 -- The runtime role may only request deletion or cancel it inside the

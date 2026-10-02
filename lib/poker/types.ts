@@ -131,6 +131,14 @@ export type BlindHistory = {
   smallBlindRatio?: SmallBlindRatio;
 };
 
+/** The saved game a continued game updates, as it was when reopened. */
+export type ContinuedSession = {
+  id: string;
+  sessionNumber: number;
+  ended: number;
+  hands: number;
+};
+
 export type GameState = {
   /** The host's currency when the game started; older games lack it (INR). */
   currency?: string;
@@ -155,6 +163,8 @@ export type GameState = {
   log: string[];
   winnerAnnouncement?: WinnerAnnouncement | null;
   lastHand?: CompletedHand | null;
+  /** A saved game reopened to play on; saving updates that game. */
+  continues?: ContinuedSession;
   _setupCount: number;
 };
 

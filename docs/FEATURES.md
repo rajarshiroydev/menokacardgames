@@ -181,7 +181,7 @@ The **Profile** tab replaced the Players tab on 30 September 2026. From the top:
 
 - **Games in progress survive a refresh.** The current game is kept on the device, so closing or reloading the page doesn't lose it.
 - **Tied to your account.** A game in progress is saved on the device for the signed-in host only. Another host signing in on the same device doesn't see it.
-- **One device per game.** A game in progress lives on the device where it was started. It isn't synced to other devices until it's saved. Players can still follow it on their own phones through a live standings link (see section 19).
+- **One device per game.** A game in progress (including a continued saved game, section 11) lives on the device where it was started. It isn't synced to other devices until it's saved. Players can still follow it on their own phones through a live standings link (see section 19).
 - **Back button works.** The phone's back gesture or the browser's back button moves back through the app's screens.
 
 ## 11. Saving a game and game history
@@ -198,6 +198,12 @@ The **Profile** tab replaced the Players tab on 30 September 2026. From the top:
 - **No Discard button for now.** Since 1 October 2026 game cards have no **Discard** button (it may come back if people ask). Games discarded before then stay in a faded "Discarded" list under the saved games.
 - **Restore a game** to count it again. Standings and graph update straight away.
 - **Permanently delete a game** only after it has been discarded, and only within 10 minutes of signing in (see section 13).
+- **Continue a saved game.** Every saved game card (not discarded ones) has a **Continue game** button, for any game, however long ago it was saved. It asks for confirmation first, and isn't allowed while another game is in progress ("Finish or discard the game in progress first").
+  - The game opens between hands, so busted players can buy in before the next deal. Everyone keeps their seat, the chips they finished with and their buy-ins, under their current name. Hand numbers carry on (after 95 hands the next is hand 96), and the log starts with "Continued from Game 6 after 95 hands".
+  - The dealer isn't saved with a game, so the next dealer is drawn at random.
+  - Blinds carry on from where the game finished. Blinds that go up every few hands keep counting hands. Blinds that go up every few minutes restart their clock at the current blinds, so time away from the table doesn't raise them.
+  - Until it's saved again, the saved game stays exactly as it was. **Discard Game** on a continued game throws away only the hands played since.
+  - **Finish And Save Session** updates the same game: same number, name and date, with the new end time, hands, results and blind history; standings and friends' groups follow. It needs at least one new hand ("No new hands to save"). If the saved game was changed or discarded since it was continued (for example from another device), nothing is saved: "This game changed since you continued it".
 
 ## 12. Standings and ranking
 

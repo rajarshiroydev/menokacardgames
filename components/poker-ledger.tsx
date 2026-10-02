@@ -47,6 +47,7 @@ import {
   totalBuyIns,
   undoLastHand,
 } from "@/lib/poker/game";
+import { gameFromSession } from "@/lib/poker/continue-session";
 import {
   CURRENCIES,
   currencySymbol,
@@ -1069,6 +1070,30 @@ export function PokerLedger({
     [currency, navigate, nextSessionNumber, showToast],
   );
 
+  function continueSession(id: string) {
+    const session = history.find((item) => item.id === id);
+    if (!session?.sessionNumber) return;
+    if (game) {
+      showToast("Finish or discard the game in progress first");
+      return;
+    }
+    const label = session.name || `Game ${session.sessionNumber}`;
+    ask(
+      `Continue ${label}? Everyone starts with the chips they finished with, and saving updates this game. Until then it stays as saved.`,
+      "Continue Game",
+      () => {
+        setGame(
+          gameFromSession(
+            { ...session, sessionNumber: session.sessionNumber! },
+            [...players, ...discardedPlayers],
+            currency,
+          ),
+        );
+        navigate("game");
+      },
+    );
+  }
+
   const addPlayer = useCallback(
     async (name: string, avatar: string) => {
       try {
@@ -1601,7 +1626,9 @@ export function PokerLedger({
 
   function discardGame() {
     ask(
-      "Reset everything and start a new game? All current stacks are lost.",
+      game?.continues
+        ? `Stop continuing ${game.sessionLabel || "this game"}? Hands played since are lost; the saved game stays as it was.`
+        : "Reset everything and start a new game? All current stacks are lost.",
       "Reset game",
       () => {
         endLiveSharing();
@@ -1617,7 +1644,8 @@ export function PokerLedger({
       ? [...game.hand.stacksBeforeHand]
       : game.players.map((player) => player.stack);
     const session: PokerSession = {
-      id: `s${game.startedAt}`,
+      // Imported and older games don't always have an ID from their start.
+      id: game.continues?.id ?? `s${game.startedAt}`,
       ...(game.gameName ? { name: game.gameName } : {}),
       date: game.startedAt,
       ended: Date.now(),
@@ -1652,10 +1680,25 @@ export function PokerLedger({
 
     showToast("Saving to shared ledger…");
     try {
-      await sessionsApi("", {
-        method: "POST",
-        body: JSON.stringify({ sessions: [session] }),
-      });
+      // A continued game updates the saved game it was reopened from.
+      await sessionsApi(
+        "",
+        game.continues
+          ? {
+              method: "PUT",
+              body: JSON.stringify({
+                session,
+                basedOn: {
+                  ended: game.continues.ended,
+                  hands: game.continues.hands,
+                },
+              }),
+            }
+          : {
+              method: "POST",
+              body: JSON.stringify({ sessions: [session] }),
+            },
+      );
       endLiveSharing();
       setGame(null);
       navigate("history", { replace: true });
@@ -1671,14 +1714,23 @@ export function PokerLedger({
   function endSession() {
     if (!game) return;
     const completedHands = game.hand ? game.handNo - 1 : game.handNo;
-    if (completedHands < 1) {
-      showToast("No completed hands to save");
+    const newHands = completedHands - (game.continues?.hands ?? 0);
+    if (newHands < 1) {
+      showToast(
+        game.continues ? "No new hands to save" : "No completed hands to save",
+      );
       return;
     }
     ask(
-      `Save this session? ${completedHands} hand${
-        completedHands === 1 ? "" : "s"
-      } played — it goes to History and counts towards the leaderboard.`,
+      game.continues
+        ? `Save this game? ${newHands} more hand${
+            newHands === 1 ? "" : "s"
+          } played (${completedHands} in all) — it updates ${
+            game.sessionLabel || "the saved game"
+          } and the leaderboard.`
+        : `Save this session? ${completedHands} hand${
+            completedHands === 1 ? "" : "s"
+          } played — it goes to History and counts towards the leaderboard.`,
       "Save session",
       () => void finishSession(completedHands),
     );
@@ -1909,6 +1961,7 @@ export function PokerLedger({
             error={historyError}
             onRetry={() => void refreshHistory()}
             onDiscard={discardSession}
+            onContinue={continueSession}
             onRestore={(id) => void updateSessionState(id, "restore")}
             onDeletePermanently={deleteSessionPermanently}
             onExport={exportData}
@@ -6977,11 +7030,13 @@ function ExpandingList<T>({
 function SessionCard({
   session,
   discarded = false,
+  onContinue,
   onRestore,
   onDeletePermanently,
 }: {
   session: PokerSession;
   discarded?: boolean;
+  onContinue?: (id: string) => void;
   /** Not shown for now: the Discard button is hidden (user decision 2026-10-01). */
   onDiscard?: (id: string) => void;
   onRestore?: (id: string) => void;
@@ -7022,6 +7077,14 @@ function SessionCard({
                 Delete
               </button>
             </>
+          ) : onContinue ? (
+            <button
+              className="pill-button"
+              type="button"
+              onClick={() => onContinue(session.id)}
+            >
+              Continue game
+            </button>
           ) : null}
           {/* Discard is hidden until users ask for it back (user decision
               2026-10-01); onDiscard and discardSession stay for that. */}
@@ -7593,6 +7656,7 @@ function SessionsView({
   error,
   onRetry,
   onDiscard,
+  onContinue,
   onRestore,
   onDeletePermanently,
   onExport,
@@ -7604,6 +7668,7 @@ function SessionsView({
   error: string;
   onRetry: () => void;
   onDiscard: (id: string) => void;
+  onContinue: (id: string) => void;
   onRestore: (id: string) => void;
   onDeletePermanently: (id: string) => void;
   onExport: () => void;
@@ -7632,7 +7697,12 @@ function SessionsView({
         <ExpandingList
           items={latestSessions}
           render={(session) => (
-            <SessionCard key={session.id} session={session} onDiscard={onDiscard} />
+            <SessionCard
+              key={session.id}
+              session={session}
+              onDiscard={onDiscard}
+              onContinue={onContinue}
+            />
           )}
           more={(count) => `Show ${count} more game${count === 1 ? "" : "s"}`}
           all="Show all games"
