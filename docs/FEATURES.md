@@ -100,7 +100,7 @@ The **Profile** tab replaced the Players tab on 30 September 2026. From the top:
 - **Seating Order.** Once two or more are seated, a **Seating Order** list shows the seats in order. Its **i** button opens a sheet explaining that seat 1 deals first, the dealer moves to the next active player each hand, and a grip changes seats. The sheet closes with **Got it**, a tap outside it or Escape, like the other **i** sheets. Drag a player by the grip (⠿) to change seats, or use the arrow keys on the grip. Seat 1 deals first, and the dealer moves round the table in seat order.
 - **Starting stack / first buy-in.** Quick choices of 5K, 10K (the default), 20K and 50K chips, or **Other** to type any amount of at least 1.
 - **Big blind.** Quick choices of 50, 100 (the default), 200, 500 and 1K, shown with your currency's sign (₹50 for rupees), or **Other** to type any amount of at least 1.
-- **Odd blinds.** A switch beside the Big Blind heading, off by default.
+- **Odd blinds.** A switch beside the Big Blind heading, off by default. An **i** button beside it explains briefly what odd blinds are and that the small blind is otherwise half the big blind.
   - **Off:** the small blind is half the big blind, rounded down.
   - **On:** a **Small Blind** row appears with quick choices worked out from the big blind (25%, 40%, 60%, 75% and 100% of it; for ₹100 that's ₹25, ₹40, ₹60, ₹75 and ₹100, with ₹40 picked) or **Other** to type any amount. It must be from ₹1 up to the big blind; otherwise a message shows and Deal First Hand stays unavailable.
   - **Rising blinds keep the share:** ₹40/₹100 becomes ₹80/₹200, then ₹160/₹400, rounded to whole rupees.

@@ -14,6 +14,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { createPortal } from "react-dom";
 
 import {
   activeIndexes,
@@ -2915,6 +2916,7 @@ function SetupView({
   const [dropSeat, setDropSeat] = useState<number | null>(null);
   const [seatDragStep, setSeatDragStep] = useState(0);
   const [showSeatingHelp, setShowSeatingHelp] = useState(false);
+  const [showOddBlindsHelp, setShowOddBlindsHelp] = useState(false);
 
   useEffect(() => () => {
     if (seatScrollFrameRef.current !== null) {
@@ -3446,18 +3448,40 @@ function SetupView({
       <section className="glass card">
         <div className="card-row">
           <span className="label">Big blind</span>
-          <label className="switch-row">
-            <span>Odd blinds</span>
+          <div className="heading-with-info">
+            <label className="switch-row">
+              <span>Odd blinds</span>
+              <button
+                className="switch"
+                type="button"
+                role="switch"
+                aria-checked={oddBlinds}
+                aria-label="Odd blinds"
+                onClick={() => setOddBlinds((on) => !on)}
+              />
+            </label>
             <button
-              className="switch"
+              className="info-button"
               type="button"
-              role="switch"
-              aria-checked={oddBlinds}
-              aria-label="Odd blinds"
-              onClick={() => setOddBlinds((on) => !on)}
-            />
-          </label>
+              aria-label="About odd blinds"
+              onClick={() => setShowOddBlindsHelp(true)}
+            >
+              i
+            </button>
+          </div>
         </div>
+        {showOddBlindsHelp ? (
+          <InfoSheet
+            label="About odd blinds"
+            onClose={() => setShowOddBlindsHelp(false)}
+          >
+            <p>
+              By default the small blind is <b>half the big blind</b>, rounded
+              down. Turn on odd blinds to pick a different small blind, such
+              as {money(40)} with a {money(100)} big blind.
+            </p>
+          </InfoSheet>
+        ) : null}
         <Segmented
           label="Big blind"
           options={[
@@ -7444,7 +7468,9 @@ function RankingHelp({
 
 /**
  * The sheet an "i" button opens: closes with Got it, a tap outside it or the
- * Escape key.
+ * Escape key. It renders into the page body because the glass cards that hold
+ * the "i" buttons blur their backdrop, which would otherwise pin the sheet
+ * inside the card instead of the bottom of the screen.
  */
 function InfoSheet({
   label,
@@ -7463,7 +7489,7 @@ function InfoSheet({
     return () => window.removeEventListener("keydown", closeOnEscape);
   }, [onClose]);
 
-  return (
+  return createPortal(
     <div
       className="modal show"
       role="presentation"
@@ -7482,7 +7508,8 @@ function InfoSheet({
           Got it
         </button>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
