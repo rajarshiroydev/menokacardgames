@@ -3969,10 +3969,11 @@ function ProfileView({
   }
 
   function subtitle(row: ProfileRow) {
-    const games = `${row.games} game${row.games === 1 ? "" : "s"}`;
+    // Counts only this host's games, so it says "together" (user request).
+    const games = `Played ${row.games} game${row.games === 1 ? "" : "s"} together`;
     switch (row.kind) {
       case "self":
-        return `You · ${games}`;
+        return "You";
       case "friend":
         return `Friend · ${games}`;
       case "pending":
@@ -4080,7 +4081,6 @@ function ProfileView({
                     aria-hidden="true"
                   >
                     <AvatarArt id={row.avatar} seed={row.name} />
-                    {onApp ? <span className="profile-avatar-dot" /> : null}
                   </span>
                   <span className="profile-row-copy">
                     <b>{row.name}</b>

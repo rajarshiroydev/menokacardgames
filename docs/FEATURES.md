@@ -63,10 +63,11 @@ The **Profile** tab replaced the Players tab on 30 September 2026. From the top:
 - **The heading** says how many active players you have, with a green **+ Add** button.
 - **Filters:** **All**, **Friends** (you, your friends and requests you've sent) and **Guests** (players without an account), each with its count.
 - **Each row** shows the player's avatar, name and a short line (no money amounts; wins and losses are on the Ranks tab):
-  - **You · 12 games**, for your own player;
-  - **Friend · 21 games**, for a friend, with a green-and-blue ring around their avatar and a green dot;
+  - **You**, for your own player (no game count);
+  - **Friend · Played 21 games together**, for a friend, with a green-and-blue ring around their avatar (your own avatar has the same ring);
   - **Request sent · waiting**, for someone you've sent a friend request;
-  - **Guest · 26 games**, for everyone else.
+  - **Guest · Played 26 games together**, for everyone else.
+  The count is only the games you hosted that they played in ("Played 1 game together" for one).
   The list starts with you, then friends, then waiting requests, then guests; within each group, most games first.
 - **Names.** People with an account go by the name they chose themselves: a friend shows as their own saved name, and your own player as your name. Only guests can be renamed.
 - **Options.** Tap **⋯** on a row, or press and hold it (about half a second), for its options. Near the bottom of the screen they open upwards. Tap outside or press Escape to close them.
