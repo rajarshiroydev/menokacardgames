@@ -3,6 +3,7 @@ import {
   requireRecentHostAccount,
 } from "@/lib/auth/server";
 import { deriveSessionAccounting } from "@/lib/poker/accounting";
+import { continuationError } from "@/lib/poker/continue-session";
 import { runAsAuthenticatedUser } from "@/lib/poker/database";
 import { playerNameKey } from "@/lib/poker/player-validation";
 import {
@@ -508,6 +509,214 @@ async function handlePost(request: Request) {
   }
 }
 
+const SESSION_CHANGED = "session-changed";
+
+function sessionChangedResponse() {
+  return json(
+    {
+      error:
+        "This game changed since you continued it. Nothing was saved.",
+      code: SESSION_CHANGED,
+    },
+    409,
+  );
+}
+
+/**
+ * Saves a continued game over the saved game it was reopened from. `basedOn`
+ * is the saved game's end time and hands when it was reopened; if it has
+ * changed since, nothing is saved. A retry of a save that already went
+ * through changes nothing.
+ */
+async function handlePut(request: Request) {
+  const authResult = await requireHostAccount();
+  if ("response" in authResult) return authResult.response;
+  const ownerId = authResult.account.id;
+  const authUserId = authResult.session.user.id;
+
+  const read = await readJsonBody(request, SESSION_BATCH_BODY_LIMIT);
+  if (!read.ok) return json({ error: read.error }, read.status);
+
+  try {
+    const body = (read.body ?? {}) as {
+      session?: unknown;
+      basedOn?: { ended?: unknown; hands?: unknown } | null;
+    };
+    let session: PokerSession;
+    try {
+      session = validateSession(body.session);
+    } catch (error) {
+      return json(
+        {
+          error: error instanceof Error ? error.message : "Invalid session",
+        },
+        400,
+      );
+    }
+    const basedOnEnded = Number(body.basedOn?.ended);
+    const basedOnHands = Number(body.basedOn?.hands);
+    if (
+      !Number.isSafeInteger(basedOnEnded) ||
+      !Number.isSafeInteger(basedOnHands)
+    ) {
+      return json({ error: "Invalid continued game" }, 400);
+    }
+
+    const [playersResult, savedResult] = await runAsAuthenticatedUser(
+      authUserId,
+      (sql) => [
+        selectPlayerRecords(sql, ownerId),
+        selectSessions(sql, ownerId, [session.id]),
+      ],
+    );
+    const existing = savedSessionMap(savedResult as SessionRow[]).get(
+      session.id,
+    );
+    if (!existing) return json({ error: "Saved game not found" }, 404);
+    const resolved = resolveSession(
+      session,
+      playerDirectory(playersResult as PlayerRecord[]),
+    );
+    if (!resolved) return sessionChangedResponse();
+    if (isSameSession(existing, resolved)) {
+      return existing.discardedAt
+        ? sessionChangedResponse()
+        : json({ saved: 0 });
+    }
+    if (
+      existing.discardedAt ||
+      existing.ended !== basedOnEnded ||
+      existing.hands !== basedOnHands
+    ) {
+      return sessionChangedResponse();
+    }
+    const invalid = continuationError(existing, resolved);
+    if (invalid) return json({ error: invalid }, 400);
+
+    const accounting = deriveSessionAccounting(resolved);
+    const basedOnEndedAt = new Date(basedOnEnded).toISOString();
+    const results = await runAsAuthenticatedUser(authUserId, (sql) => [
+      sql`SELECT pg_advisory_xact_lock(hashtextextended(${ownerId}, 0))`,
+      // Kept for debugging and manual recovery: the game as it was before.
+      sql`
+        INSERT INTO audit_events (
+          owner_id, actor_auth_user_id, action, target_kind, target_id, details
+        )
+        SELECT
+          ${ownerId}::uuid,
+          ${authUserId}::uuid,
+          'session.continued',
+          'session',
+          session.id,
+          jsonb_build_object(
+            'previousEndedAt', session.ended_at,
+            'previousHands', session.hands,
+            'previousBlindHistory', session.blind_history,
+            'previousResults', session.results,
+            'hands', ${resolved.hands}::bigint
+          )
+        FROM poker_sessions AS session
+        WHERE session.owner_id = ${ownerId}::uuid
+          AND session.id = ${resolved.id}
+          AND session.discarded_at IS NULL
+          AND session.ended_at = ${basedOnEndedAt}::timestamptz
+          AND session.hands = ${basedOnHands}
+      `,
+      sql`
+        WITH updated AS (
+          UPDATE poker_sessions
+          SET
+            ended_at = ${new Date(resolved.ended).toISOString()},
+            hands = ${resolved.hands},
+            blind_history = ${resolved.blindHistory ? JSON.stringify(resolved.blindHistory) : null}::jsonb,
+            results = ${JSON.stringify(resolved.results)}::jsonb
+          WHERE owner_id = ${ownerId}::uuid
+            AND id = ${resolved.id}
+            AND discarded_at IS NULL
+            AND ended_at = ${basedOnEndedAt}::timestamptz
+            AND hands = ${basedOnHands}
+          RETURNING record_id
+        )
+        SELECT
+          record_id,
+          set_config('app.continued_record', record_id::text, true)
+        FROM updated
+      `,
+      // The statements below act on the updated game's record, set by the
+      // update; when it matched no row the setting is unset and they change
+      // nothing.
+      sql`
+        DELETE FROM buy_in_events
+        WHERE owner_id = ${ownerId}::uuid
+          AND session_record_id = NULLIF(current_setting('app.continued_record', true), '')::uuid
+      `,
+      sql`
+        DELETE FROM session_results
+        WHERE owner_id = ${ownerId}::uuid
+          AND session_record_id = NULLIF(current_setting('app.continued_record', true), '')::uuid
+      `,
+      sql`
+        WITH source_results AS MATERIALIZED (
+          SELECT result.value, result.position
+          FROM jsonb_array_elements(
+            ${JSON.stringify(accounting.results)}::jsonb
+          ) WITH ORDINALITY AS result(value, position)
+          WHERE NULLIF(current_setting('app.continued_record', true), '')::uuid IS NOT NULL
+        ),
+        inserted_results AS (
+          INSERT INTO session_results (
+            owner_id,
+            session_record_id,
+            player_id,
+            position,
+            player_name,
+            invested,
+            ending_stack,
+            accounting_status
+          )
+          SELECT
+            ${ownerId}::uuid,
+            NULLIF(current_setting('app.continued_record', true), '')::uuid,
+            source.value->>'playerId',
+            source.position,
+            source.value->>'name',
+            (source.value->>'invested')::bigint,
+            (source.value->>'end')::bigint,
+            'verified'
+          FROM source_results AS source
+          RETURNING owner_id, session_record_id, player_id
+        )
+        INSERT INTO buy_in_events (
+          owner_id,
+          session_record_id,
+          player_id,
+          sequence,
+          kind,
+          amount
+        )
+        SELECT
+          inserted.owner_id,
+          inserted.session_record_id,
+          inserted.player_id,
+          buy_in.position,
+          CASE WHEN buy_in.position = 1 THEN 'initial' ELSE 'rebuy' END,
+          buy_in.value::bigint
+        FROM inserted_results AS inserted
+        JOIN source_results AS source
+          ON source.value->>'playerId' = inserted.player_id
+        CROSS JOIN LATERAL jsonb_array_elements_text(
+          source.value->'buyIns'
+        ) WITH ORDINALITY AS buy_in(value, position)
+      `,
+    ]);
+    if (!results[2].length) return sessionChangedResponse();
+    return json({ saved: 1 });
+  } catch (error) {
+    console.error("sessions PUT error", error);
+    return json({ error: "Could not reach the ledger database" }, 500);
+  }
+}
+
 async function handlePatch(request: Request) {
   const authResult = await requireHostAccount();
   if ("response" in authResult) return authResult.response;
@@ -603,5 +812,6 @@ async function handleDelete(request: Request) {
 
 export const GET = withServerTiming("GET /api/sessions", handleGet);
 export const POST = withServerTiming("POST /api/sessions", handlePost);
+export const PUT = withServerTiming("PUT /api/sessions", handlePut);
 export const PATCH = withServerTiming("PATCH /api/sessions", handlePatch);
 export const DELETE = withServerTiming("DELETE /api/sessions", handleDelete);

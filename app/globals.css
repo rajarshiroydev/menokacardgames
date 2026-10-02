@@ -23,6 +23,10 @@
   --orb: 0.55;
   --scrim: rgba(2, 4, 5, 0.72);
   --sheet: rgba(14, 19, 22, 0.92);
+  --felt1: oklch(0.42 0.11 160);
+  --felt2: oklch(0.2 0.06 170);
+  --rim: rgba(255, 255, 255, 0.08);
+  --seat: rgba(10, 14, 16, 0.88);
   --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='rgba(243,246,244,0.64)' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
   color-scheme: dark;
 }
@@ -45,6 +49,10 @@
   --orb: 0.6;
   --scrim: rgba(40, 55, 62, 0.4);
   --sheet: rgba(240, 244, 246, 0.94);
+  --felt1: oklch(0.62 0.14 158);
+  --felt2: oklch(0.4 0.1 165);
+  --rim: rgba(255, 255, 255, 0.75);
+  --seat: rgba(255, 255, 255, 0.94);
   --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='rgba(7,10,12,0.64)' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
   color-scheme: light;
 }
@@ -2881,6 +2889,331 @@ textarea::placeholder {
 .contender-amount.muted {
   color: var(--ink2);
   font-weight: 500;
+}
+
+/* ------------------------------------------------------------------
+   Live hand as a table (design 7a): the oval with the action docked below
+   ------------------------------------------------------------------ */
+
+/* The List/Table switch takes more room than a round button. */
+.screen-header.with-toggle .screen-heading h1 {
+  font-size: min(
+    46px,
+    calc((min(100vw, 480px) - 190px) / (var(--chars, 8) * 0.52))
+  );
+}
+
+.layout-toggle {
+  display: flex;
+  flex: none;
+  gap: 3px;
+  padding: 3px;
+  border: 1px solid var(--gb);
+  border-radius: 999px;
+  background: var(--glass);
+  backdrop-filter: var(--blur);
+  -webkit-backdrop-filter: var(--blur);
+}
+
+.layout-toggle button {
+  height: 32px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink2);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.layout-toggle button.selected {
+  background: var(--g);
+  color: var(--onacc);
+}
+
+.poker-table {
+  position: relative;
+  height: 380px;
+}
+
+.poker-table.crowded {
+  height: 440px;
+}
+
+.table-rim {
+  position: absolute;
+  inset: 56px 22px;
+  padding: 9px;
+  border: 1px solid var(--gb);
+  border-radius: 999px;
+  background: var(--rim);
+  box-shadow: 0 30px 60px -30px rgba(0, 0, 0, 0.6);
+  backdrop-filter: var(--blur);
+  -webkit-backdrop-filter: var(--blur);
+}
+
+.table-felt {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  border-radius: 999px;
+  background: radial-gradient(ellipse at 50% 38%, var(--felt1), var(--felt2) 78%);
+  box-shadow:
+    inset 0 0 0 2px rgba(255, 255, 255, 0.08),
+    inset 0 18px 40px rgba(0, 0, 0, 0.35);
+}
+
+.table-line {
+  position: absolute;
+  inset: 14px;
+  border: 1.5px dashed rgba(255, 255, 255, 0.16);
+  border-radius: 999px;
+}
+
+.table-center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  color: #f3f6f4;
+  text-align: center;
+  pointer-events: none;
+}
+
+.table-pips {
+  display: flex;
+  gap: 4px;
+}
+
+.table-pips span {
+  width: 18px;
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.table-pips .past {
+  background: #fff;
+}
+
+.table-pips .current {
+  background: var(--g);
+}
+
+.table-label {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.24em;
+  opacity: 0.75;
+  text-transform: uppercase;
+}
+
+.table-pot {
+  max-width: 46%;
+  font-family: var(--fd);
+  /* Long pots shrink so they stay inside the felt. */
+  font-size: min(52px, calc((min(100vw, 480px) * 0.46) / (var(--chars, 6) * 0.5)));
+  font-weight: 900;
+  font-variation-settings: "opsz" 72;
+  line-height: 0.9;
+  white-space: nowrap;
+}
+
+.table-blinds {
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.28);
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.table-chips {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px 2px 2px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.42);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.chip-icon {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: repeating-conic-gradient(var(--g) 0 30deg, #fff 30deg 60deg);
+  box-shadow: inset 0 0 0 3px var(--g);
+}
+
+.table-seat {
+  position: absolute;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  transform: translate(-50%, -50%);
+  transition: opacity 0.18s ease-out;
+}
+
+.table-seat:active:not(:disabled) {
+  transform: translate(-50%, -50%) scale(0.96);
+}
+
+.table-seat:disabled {
+  cursor: default;
+  opacity: 1;
+}
+
+.table-seat.folded {
+  opacity: 0.45;
+}
+
+.table-seat-ring {
+  display: block;
+  padding: 2.5px;
+  border-radius: 50%;
+  background: var(--gb);
+  transition: box-shadow 0.18s ease-out;
+}
+
+.table-seat.turn .table-seat-ring {
+  background: var(--g);
+  box-shadow:
+    0 0 0 6px color-mix(in oklch, var(--g) 25%, transparent),
+    0 0 24px var(--g);
+}
+
+.table-seat.contender .table-seat-ring,
+.table-seat.picked .table-seat-ring {
+  background: var(--b);
+  box-shadow: 0 0 0 5px color-mix(in oklch, var(--b) 22%, transparent);
+}
+
+.table-seat.in-split .table-seat-ring {
+  background: var(--g);
+  box-shadow: 0 0 0 5px color-mix(in oklch, var(--g) 25%, transparent);
+}
+
+.table-seat .avatar {
+  box-shadow: none;
+}
+
+.table-seat-pill {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 62px;
+  max-width: 84px;
+  padding: 3px 8px;
+  border: 1px solid var(--gb);
+  border-radius: 10px;
+  background: var(--seat);
+  line-height: 1.2;
+}
+
+.table-seat.turn .table-seat-pill {
+  border-color: var(--g);
+}
+
+.table-seat-pill b {
+  max-width: 100%;
+  overflow: hidden;
+  font-size: 11px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.table-seat-stack {
+  font-family: var(--fd);
+  font-size: 14px;
+  font-weight: 800;
+  font-variation-settings: "opsz" 72;
+  line-height: 1.05;
+  white-space: nowrap;
+}
+
+.table-seat.turn .table-seat-stack {
+  color: var(--g);
+}
+
+.table-seat.folded .table-seat-stack {
+  color: var(--ink3);
+}
+
+.table-seat-pill small {
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--ink3);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.table-seat.turn .table-seat-pill small,
+.table-seat.in-split .table-seat-pill small {
+  color: var(--g);
+}
+
+.table-seat.contender .table-seat-pill small {
+  color: var(--b);
+}
+
+.poker-table.crowded .table-pot {
+  max-width: 38%;
+  font-size: min(42px, calc((min(100vw, 480px) * 0.38) / (var(--chars, 6) * 0.5)));
+}
+
+.poker-table.crowded .table-seat-pill {
+  min-width: 54px;
+  max-width: 76px;
+  padding: 2px 6px;
+}
+
+.table-schedule {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: -6px;
+}
+
+.table-undo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-color: var(--b);
+}
+
+.table-hint {
+  margin: 0;
+}
+
+.seat-card.dock .seat-copy b {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.seat-card.dock .seat-copy small {
+  font-size: 12px;
 }
 
 .between-card .card-title {

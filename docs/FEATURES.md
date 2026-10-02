@@ -1,6 +1,6 @@
 # Feature list
 
-Updated: 1 October 2026
+Updated: 2 October 2026
 
 This is a plain-language list of everything Pokerize can do today. It is written for anyone, technical or not. It describes how the app behaves right now; plans and future ideas live in the [feature plan](./FEATURE-PLAN.md).
 
@@ -150,10 +150,18 @@ The **Profile** tab replaced the Players tab on 30 September 2026. From the top:
 - **All-in run-out:** once betting can't continue (for example, everyone else is all in), the host can deal the remaining stages straight to the showdown without more betting.
 - **Action log:** a running list of what happened (bets, calls, folds, wins, buy-ins, blind changes), newest first, keeping the latest 80 entries. The 6 newest are shown; "Show all" opens the rest.
 - **In-game standings:** every player's current stack, total invested and running profit or loss, sorted by stack.
+- **List or Table view.** During a hand, a **List | Table** switch sits top right. List is the seat cards described above. Table draws the hand as an oval poker table (seat 1 at the top, the rest clockwise), with everything else on the screen unchanged:
+  - in the middle: the four stages as small bars, "Pot · Flop" (or "Pick the winner" / "Split the pot" at the showdown), the pot and the blinds (with the level, for example "₹50 / ₹100 · L2"). A blind schedule note shows under the table
+  - each seat shows the player's avatar with its D/SB/BB badge, first name, stack and status (on the table the blinds read "SB ₹50" and "BB ₹100"). The player to act has a green glowing ring and "To act"; folded players are faded
+  - chips in front of a seat show what that player has put in this street
+  - the acting player's betting panel (the same as in List, headed "Name to act" with their stack behind) is docked under the table. When the round ends it gives way to the Deal button
+  - **Undo** on the table: tap a player who has acted this street and a bar with their last action and an **Undo** button appears under the table. A dashed box under **Cancel hand** says "Tap on player to undo their action." (hidden at the showdown)
+  - the choice is remembered on this device; it starts on List. Between hands both views show the same Between Hands card, so the switch is hidden
 
 ## 7. Winning the pot
 
 - **Showdown.** Once the river betting is finished, the screen title changes to "Showdown" and a **Pick the winner** card lists everyone still in as "Name wins" with the pot. A confirmation asks before the pot is given.
+- **On the Table view** the seats of everyone still in turn blue and read "Tap to award"; tapping a seat asks the same confirmation as the Pick the winner card, which stays under the table. In a split, tapped seats turn green ("In split"), the others read "Tap to add".
 - **Split pot.** Choose "Split between two or more", then tap everyone who ties; untapped players say "Tap to include". The screen shows each player's share, and once at least 2 are chosen a "Split ₹X N ways" button appears. Splits are equal; any leftover single chips go to the tied players in seat order. "Back to one winner" leaves split mode.
 - **Winner celebration.** A card with confetti shows who won, the hand number and the pot size. Press **Next** to continue.
 
@@ -181,7 +189,7 @@ The **Profile** tab replaced the Players tab on 30 September 2026. From the top:
 
 - **Games in progress survive a refresh.** The current game is kept on the device, so closing or reloading the page doesn't lose it.
 - **Tied to your account.** A game in progress is saved on the device for the signed-in host only. Another host signing in on the same device doesn't see it.
-- **One device per game.** A game in progress lives on the device where it was started. It isn't synced to other devices until it's saved. Players can still follow it on their own phones through a live standings link (see section 19).
+- **One device per game.** A game in progress (including a continued saved game, section 11) lives on the device where it was started. It isn't synced to other devices until it's saved. Players can still follow it on their own phones through a live standings link (see section 19).
 - **Back button works.** The phone's back gesture or the browser's back button moves back through the app's screens.
 
 ## 11. Saving a game and game history
@@ -198,6 +206,12 @@ The **Profile** tab replaced the Players tab on 30 September 2026. From the top:
 - **No Discard button for now.** Since 1 October 2026 game cards have no **Discard** button (it may come back if people ask). Games discarded before then stay in a faded "Discarded" list under the saved games.
 - **Restore a game** to count it again. Standings and graph update straight away.
 - **Permanently delete a game** only after it has been discarded, and only within 10 minutes of signing in (see section 13).
+- **Continue a saved game.** Every saved game card (not discarded ones) has a **Continue game** button, for any game, however long ago it was saved. It asks for confirmation first, and isn't allowed while another game is in progress ("Finish or discard the game in progress first").
+  - The game opens between hands, so busted players can buy in before the next deal. Everyone keeps their seat, the chips they finished with and their buy-ins, under their current name. Hand numbers carry on (after 95 hands the next is hand 96), and the log starts with "Continued from Game 6 after 95 hands".
+  - The dealer isn't saved with a game, so the next dealer is drawn at random.
+  - Blinds carry on from where the game finished. Blinds that go up every few hands keep counting hands. Blinds that go up every few minutes restart their clock at the current blinds, so time away from the table doesn't raise them.
+  - Until it's saved again, the saved game stays exactly as it was. **Discard Game** on a continued game throws away only the hands played since.
+  - **Finish And Save Session** updates the same game: same number, name and date, with the new end time, hands, results and blind history; standings and friends' groups follow. If no new hand was completed, it offers **Close game** instead, which ends the continued game and leaves the saved game exactly as it was. If the saved game was changed or discarded since it was continued (for example from another device), nothing is saved: "This game changed since you continued it".
 
 ## 12. Standings and ranking
 

@@ -47,6 +47,7 @@ import {
   totalBuyIns,
   undoLastHand,
 } from "@/lib/poker/game";
+import { gameFromSession } from "@/lib/poker/continue-session";
 import {
   CURRENCIES,
   currencySymbol,
@@ -60,6 +61,9 @@ import {
   LEGACY_GAME_STORAGE_KEY,
   LEGACY_HISTORY_STORAGE_KEY,
   prepareLegacySessionsForAdoption,
+  readHandLayout,
+  storeHandLayout,
+  type HandLayout,
 } from "@/lib/poker/storage";
 import { useRouter } from "next/navigation";
 import qrcode from "qrcode-generator";
@@ -568,6 +572,7 @@ export function PokerLedger({
   const [sharingLive, setSharingLive] = useState(false);
   const [liveBusy, setLiveBusy] = useState(false);
   const [liveFailing, setLiveFailing] = useState(false);
+  const [handLayout, setHandLayout] = useState<HandLayout>("list");
   const liveSync = useRef({ lastSent: 0, failures: 0 });
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -737,6 +742,7 @@ export function PokerLedger({
       setLiveToken(readStoredLiveToken(liveTokenStorageKey));
       setLegacyGame(readStoredGame(LEGACY_GAME_STORAGE_KEY));
       setLegacySessions(readStoredHistory(LEGACY_HISTORY_STORAGE_KEY));
+      setHandLayout(readHandLayout());
       window.history.replaceState(
         { ...window.history.state, appView: "home" },
         "",
@@ -1068,6 +1074,30 @@ export function PokerLedger({
     },
     [currency, navigate, nextSessionNumber, showToast],
   );
+
+  function continueSession(id: string) {
+    const session = history.find((item) => item.id === id);
+    if (!session?.sessionNumber) return;
+    if (game) {
+      showToast("Finish or discard the game in progress first");
+      return;
+    }
+    const label = session.name || `Game ${session.sessionNumber}`;
+    ask(
+      `Continue ${label}? Everyone starts with the chips they finished with, and saving updates this game. Until then it stays as saved.`,
+      "Continue Game",
+      () => {
+        setGame(
+          gameFromSession(
+            { ...session, sessionNumber: session.sessionNumber! },
+            [...players, ...discardedPlayers],
+            currency,
+          ),
+        );
+        navigate("game");
+      },
+    );
+  }
 
   const addPlayer = useCallback(
     async (name: string, avatar: string) => {
@@ -1601,7 +1631,9 @@ export function PokerLedger({
 
   function discardGame() {
     ask(
-      "Reset everything and start a new game? All current stacks are lost.",
+      game?.continues
+        ? `Stop continuing ${game.sessionLabel || "this game"}? Hands played since are lost; the saved game stays as it was.`
+        : "Reset everything and start a new game? All current stacks are lost.",
       "Reset game",
       () => {
         endLiveSharing();
@@ -1617,7 +1649,8 @@ export function PokerLedger({
       ? [...game.hand.stacksBeforeHand]
       : game.players.map((player) => player.stack);
     const session: PokerSession = {
-      id: `s${game.startedAt}`,
+      // Imported and older games don't always have an ID from their start.
+      id: game.continues?.id ?? `s${game.startedAt}`,
       ...(game.gameName ? { name: game.gameName } : {}),
       date: game.startedAt,
       ended: Date.now(),
@@ -1652,10 +1685,25 @@ export function PokerLedger({
 
     showToast("Saving to shared ledger…");
     try {
-      await sessionsApi("", {
-        method: "POST",
-        body: JSON.stringify({ sessions: [session] }),
-      });
+      // A continued game updates the saved game it was reopened from.
+      await sessionsApi(
+        "",
+        game.continues
+          ? {
+              method: "PUT",
+              body: JSON.stringify({
+                session,
+                basedOn: {
+                  ended: game.continues.ended,
+                  hands: game.continues.hands,
+                },
+              }),
+            }
+          : {
+              method: "POST",
+              body: JSON.stringify({ sessions: [session] }),
+            },
+      );
       endLiveSharing();
       setGame(null);
       navigate("history", { replace: true });
@@ -1671,14 +1719,36 @@ export function PokerLedger({
   function endSession() {
     if (!game) return;
     const completedHands = game.hand ? game.handNo - 1 : game.handNo;
-    if (completedHands < 1) {
+    const newHands = completedHands - (game.continues?.hands ?? 0);
+    if (newHands < 1 && game.continues) {
+      // Nothing new to save: closing leaves the saved game as it was.
+      const label = game.sessionLabel || "the saved game";
+      ask(
+        `No new hands were played. Close ${label}? It stays exactly as it was saved.`,
+        "Close game",
+        () => {
+          endLiveSharing();
+          setGame(null);
+          navigate("sessions", { replace: true });
+          showToast(`${label} closed; nothing changed`);
+        },
+      );
+      return;
+    }
+    if (newHands < 1) {
       showToast("No completed hands to save");
       return;
     }
     ask(
-      `Save this session? ${completedHands} hand${
-        completedHands === 1 ? "" : "s"
-      } played — it goes to History and counts towards the leaderboard.`,
+      game.continues
+        ? `Save this game? ${newHands} more hand${
+            newHands === 1 ? "" : "s"
+          } played (${completedHands} in all) — it updates ${
+            game.sessionLabel || "the saved game"
+          } and the leaderboard.`
+        : `Save this session? ${completedHands} hand${
+            completedHands === 1 ? "" : "s"
+          } played — it goes to History and counts towards the leaderboard.`,
       "Save session",
       () => void finishSession(completedHands),
     );
@@ -1870,7 +1940,11 @@ export function PokerLedger({
       </div>
 
       {header ? (
-        <header className="screen-header">
+        <header
+          className={`screen-header ${
+            view === "game" && game?.hand ? "with-toggle" : ""
+          }`}
+        >
           {/* No back button: the phone's back gesture walks the screen history. */}
           <div className="screen-heading">
             <h1
@@ -1883,6 +1957,25 @@ export function PokerLedger({
           </div>
           {/* The theme switch lives on Profile only (user decision 2026-10-01). */}
           {view === "profile" ? <ThemeToggle /> : null}
+          {view === "game" && game?.hand ? (
+            <div className="layout-toggle" role="radiogroup" aria-label="Show the hand as">
+              {(["list", "table"] as const).map((layout) => (
+                <button
+                  key={layout}
+                  type="button"
+                  role="radio"
+                  aria-checked={handLayout === layout}
+                  className={handLayout === layout ? "selected" : ""}
+                  onClick={() => {
+                    setHandLayout(layout);
+                    storeHandLayout(layout);
+                  }}
+                >
+                  {layout === "list" ? "List" : "Table"}
+                </button>
+              ))}
+            </div>
+          ) : null}
         </header>
       ) : null}
 
@@ -1909,6 +2002,7 @@ export function PokerLedger({
             error={historyError}
             onRetry={() => void refreshHistory()}
             onDiscard={discardSession}
+            onContinue={continueSession}
             onRestore={(id) => void updateSessionState(id, "restore")}
             onDeletePermanently={deleteSessionPermanently}
             onExport={exportData}
@@ -1966,6 +2060,7 @@ export function PokerLedger({
         ) : game ? (
           <GameView
             game={game}
+            layout={handLayout}
             onAct={act}
             onUndoAction={undoAction}
             onNextStage={nextStage}
@@ -5490,6 +5585,7 @@ function RenameSheet({
 
 type GameViewProps = {
   game: GameState;
+  layout: HandLayout;
   onAct: (
     playerIndex: number,
     type: PlayerAction["type"],
@@ -5537,19 +5633,8 @@ function GameView(props: GameViewProps) {
             blinds.handsLeft === 1 ? "" : "s"
           }`
         : `${nextBlinds} in ${formatCountdown(blinds.msLeft)}`;
-  const blindsDisplay = (
-    <div className="blinds-display" aria-label="Current blinds">
-      <div className="blinds-pill">
-        <span className="blinds-label">Blinds</span>
-        <span className="blinds-value">
-          {money(blinds.smallBlind)}
-          <span className="blinds-separator"> / </span>
-          {money(blinds.bigBlind)}
-        </span>
-        {blinds.schedule ? (
-          <span className="blinds-level">L{blinds.level + 1}</span>
-        ) : null}
-      </div>
+  const blindSchedule = (
+    <>
       {blinds.schedule && !pendingPlan ? (
         <div
           className={`blind-timer ${blinds.dueNow ? "due" : ""}`}
@@ -5564,6 +5649,22 @@ function GameView(props: GameViewProps) {
           {describeBlindSchedule(pendingPlan.schedule, currency)}
         </div>
       ) : null}
+    </>
+  );
+  const blindsDisplay = (
+    <div className="blinds-display" aria-label="Current blinds">
+      <div className="blinds-pill">
+        <span className="blinds-label">Blinds</span>
+        <span className="blinds-value">
+          {money(blinds.smallBlind)}
+          <span className="blinds-separator"> / </span>
+          {money(blinds.bigBlind)}
+        </span>
+        {blinds.schedule ? (
+          <span className="blinds-level">L{blinds.level + 1}</span>
+        ) : null}
+      </div>
+      {blindSchedule}
     </div>
   );
 
@@ -5616,6 +5717,14 @@ function GameView(props: GameViewProps) {
             </>
           ) : null}
         </section>
+      ) : props.layout === "table" ? (
+        <TableHand
+          blindsText={`${money(blinds.smallBlind)} / ${money(blinds.bigBlind)}${
+            blinds.schedule ? ` · L${blinds.level + 1}` : ""
+          }`}
+          blindSchedule={blinds.schedule || pendingPlan ? blindSchedule : null}
+          {...props}
+        />
       ) : (
         <>
           <section className="glass card scoreboard">
@@ -5689,48 +5798,12 @@ function GameView(props: GameViewProps) {
                   Deal {STAGES[hand.stage + 1]}
                 </button>
               ) : (
-                <section className="glass card winner-picker">
-                  <div className="card-row">
-                    <span className="label">Pick the winner</span>
-                    <span className="accent-amount">{money(hand.pot)}</span>
-                  </div>
-                  {pending ? (
-                    <p className="muted small-note">
-                      Finish the river betting before picking a winner.
-                    </p>
-                  ) : null}
-                  {activeIndexes(game).map((playerIndex) => (
-                    <button
-                      className="contender"
-                      type="button"
-                      disabled={pending}
-                      key={playerIndex}
-                      onClick={() => props.onPickWinner(playerIndex)}
-                    >
-                      <Avatar
-                        name={game.players[playerIndex].name}
-                        playerId={game.players[playerIndex].id}
-                        size="small"
-                      />
-                      <span className="contender-name">
-                        {game.players[playerIndex].name} wins
-                      </span>
-                      <span className="contender-amount">
-                        {money(hand.pot)}
-                      </span>
-                    </button>
-                  ))}
-                  {activeIndexes(game).length > 1 ? (
-                    <button
-                      className="dashed-button"
-                      type="button"
-                      disabled={pending}
-                      onClick={props.onBeginSplit}
-                    >
-                      Split between two or more
-                    </button>
-                  ) : null}
-                </section>
+                <WinnerPicker
+                  game={game}
+                  pending={pending}
+                  onPickWinner={props.onPickWinner}
+                  onBeginSplit={props.onBeginSplit}
+                />
               )}
             </>
           )}
@@ -6484,6 +6557,335 @@ function WinnerCard({
   );
 }
 
+function WinnerPicker({
+  game,
+  pending,
+  hint,
+  onPickWinner,
+  onBeginSplit,
+}: {
+  game: GameState;
+  pending: boolean;
+  /** A line under the heading, like where else the winner can be picked. */
+  hint?: string;
+  onPickWinner: (playerIndex: number) => void;
+  onBeginSplit: () => void;
+}) {
+  const { money } = useMoney();
+  const hand = game.hand;
+  if (!hand) return null;
+
+  return (
+    <section className="glass card winner-picker">
+      <div className="card-row">
+        <span className="label">Pick the winner</span>
+        <span className="accent-amount">{money(hand.pot)}</span>
+      </div>
+      {pending ? (
+        <p className="muted small-note">
+          Finish the river betting before picking a winner.
+        </p>
+      ) : hint ? (
+        <p className="muted small-note">{hint}</p>
+      ) : null}
+      {activeIndexes(game).map((playerIndex) => (
+        <button
+          className="contender"
+          type="button"
+          disabled={pending}
+          key={playerIndex}
+          onClick={() => onPickWinner(playerIndex)}
+        >
+          <Avatar
+            name={game.players[playerIndex].name}
+            playerId={game.players[playerIndex].id}
+            size="small"
+          />
+          <span className="contender-name">
+            {game.players[playerIndex].name} wins
+          </span>
+          <span className="contender-amount">{money(hand.pot)}</span>
+        </button>
+      ))}
+      {activeIndexes(game).length > 1 ? (
+        <button
+          className="dashed-button"
+          type="button"
+          disabled={pending}
+          onClick={onBeginSplit}
+        >
+          Split between two or more
+        </button>
+      ) : null}
+    </section>
+  );
+}
+
+/**
+ * Where a seat sits around the oval, in percent of the table area. Seat 0 is
+ * at the top and the rest follow clockwise, the order the deal goes round.
+ */
+function seatPosition(index: number, count: number, reach = 1) {
+  const angle = ((-90 + (index * 360) / count) * Math.PI) / 180;
+  return {
+    x: 50 + 38 * reach * Math.cos(angle),
+    y: 50 + 38 * reach * Math.sin(angle),
+  };
+}
+
+/** The live hand drawn as a table, with the action docked below it. */
+function TableHand({
+  game,
+  blindsText,
+  blindSchedule,
+  onAct,
+  onUndoAction,
+  onNextStage,
+  onPickWinner,
+  onBeginSplit,
+  onEndSplit,
+  onToggleSplit,
+  onSplitPot,
+  onCancelHand,
+}: GameViewProps & {
+  blindsText: string;
+  blindSchedule: ReactNode;
+}) {
+  const { money } = useMoney();
+  // The seat tapped for its Undo; it clears once that seat can't undo.
+  const [picked, setPicked] = useState<number | null>(null);
+  const hand = game.hand;
+  if (!hand) return null;
+  const lastStage = STAGES.length - 1;
+  const pending = pendingIndexes(game).length > 0;
+  const showdown = hand.stage === lastStage && !pending;
+  const splitting = Boolean(hand.splitSel);
+  const crowded = game.players.length > 6;
+  const current = hand.currentPlayer;
+  const undoSeat =
+    picked !== null && hand.last[picked] && !splitting ? picked : null;
+
+  function tapSeat(index: number) {
+    if (showdown) {
+      if (!hand?.in[index]) return;
+      if (splitting) onToggleSplit(index);
+      else onPickWinner(index);
+      return;
+    }
+    if (!hand?.last[index]) return;
+    setPicked((seat) => (seat === index ? null : index));
+  }
+
+  return (
+    <>
+      <section
+        className={`poker-table ${crowded ? "crowded" : ""}`}
+        aria-label={`Table, hand ${hand.no}`}
+      >
+        <div className="table-rim" aria-hidden="true">
+          <div className="table-felt">
+            <span className="table-line" />
+          </div>
+        </div>
+        <div className="table-center">
+          <div className="table-pips" aria-label={`Street: ${STAGES[hand.stage]}`}>
+            {STAGES.map((stage, index) => (
+              <span
+                key={stage}
+                className={
+                  showdown || index < hand.stage
+                    ? "past"
+                    : index === hand.stage
+                      ? "current"
+                      : ""
+                }
+              />
+            ))}
+          </div>
+          <span className="table-label">
+            {showdown
+              ? splitting
+                ? "Split the pot"
+                : "Pick the winner"
+              : `Pot · ${STAGES[hand.stage]}`}
+          </span>
+          <span
+            className="table-pot"
+            style={
+              { "--chars": money(hand.pot).length } as React.CSSProperties
+            }
+          >
+            {money(hand.pot)}
+          </span>
+          <span className="table-blinds">{blindsText}</span>
+        </div>
+        {showdown
+          ? null
+          : game.players.map((_, index) => {
+              const chips = hand.committed[index];
+              if (!(chips > 0)) return null;
+              // Chips sit in front of the seat, clear of the pot: under the
+              // name for seats along the top, over the avatar for the rest.
+              const spot = seatPosition(index, game.players.length);
+              const upper = spot.y < 40;
+              // On a full table, chips over a side seat would touch the seat
+              // above it, so they go beside the avatar, towards the pot.
+              const beside = crowded && !upper && Math.abs(spot.x - 50) > 23;
+              const dx = beside
+                ? Math.sign(50 - spot.x) * 52
+                : Math.round((50 - spot.x) * 0.5);
+              // A seat is centred on its avatar and name together.
+              const dy = beside ? -18 : (upper ? 1 : -1) * (crowded ? 54 : 62);
+              return (
+                <span
+                  className="table-chips"
+                  key={index}
+                  style={{
+                    left: `calc(${spot.x}% + ${dx}px)`,
+                    top: `calc(${spot.y}% + ${dy}px)`,
+                  }}
+                >
+                  <span className="chip-icon" aria-hidden="true" />
+                  {money(chips)}
+                </span>
+              );
+            })}
+        {game.players.map((player, index) => {
+          const spot = seatPosition(index, game.players.length);
+          const folded = !hand.in[index];
+          const isTurn = !showdown && current === index;
+          const contender = showdown && !folded;
+          const inSplit = hand.splitSel?.includes(index) ?? false;
+          const tappable = showdown
+            ? contender
+            : Boolean(hand.last[index]) && !splitting;
+          const status = folded
+            ? "Folded"
+            : isTurn
+              ? "To act"
+              : showdown
+                ? splitting
+                  ? inSplit
+                    ? "In split"
+                    : "Tap to add"
+                  : "Tap to award"
+                : seatStatus(game, index, money)
+                    .replace("Small blind", "SB")
+                    .replace("Big blind", "BB");
+          const state = [
+            folded ? "folded" : "",
+            isTurn ? "turn" : "",
+            contender ? (inSplit ? "in-split" : "contender") : "",
+            undoSeat === index ? "picked" : "",
+          ]
+            .filter(Boolean)
+            .join(" ");
+          return (
+            <button
+              className={`table-seat ${state}`}
+              type="button"
+              key={player.id || index}
+              disabled={!tappable}
+              aria-pressed={splitting && contender ? inSplit : undefined}
+              aria-label={`${player.name}, ${money(player.stack)}, ${status}`}
+              style={{ left: `${spot.x}%`, top: `${spot.y}%` }}
+              onClick={() => tapSeat(index)}
+            >
+              <span className="table-seat-ring">
+                <Avatar
+                  name={player.name}
+                  playerId={player.id}
+                  role={seatRole(game, index)}
+                  size={crowded ? "small" : "large"}
+                />
+              </span>
+              <span className="table-seat-pill">
+                <b>{player.name.split(" ")[0]}</b>
+                <span className="table-seat-stack">{money(player.stack)}</span>
+                <small>{status}</small>
+              </span>
+            </button>
+          );
+        })}
+      </section>
+
+      {blindSchedule ? <div className="table-schedule">{blindSchedule}</div> : null}
+
+      {undoSeat !== null ? (
+        <div className="glass table-undo">
+          <Avatar
+            name={game.players[undoSeat].name}
+            playerId={game.players[undoSeat].id}
+            size="small"
+          />
+          <span className="seat-copy">
+            <b>{game.players[undoSeat].name}</b>
+            <small>{seatStatus(game, undoSeat, money)}</small>
+          </span>
+          <button
+            className="pill-button"
+            type="button"
+            onClick={() => {
+              setPicked(null);
+              onUndoAction(undoSeat);
+            }}
+          >
+            Undo
+          </button>
+        </div>
+      ) : null}
+
+      {splitting ? (
+        <SplitView
+          game={game}
+          onToggle={onToggleSplit}
+          onSplit={onSplitPot}
+          onBack={onEndSplit}
+        />
+      ) : showdown ? (
+        <WinnerPicker
+          game={game}
+          pending={false}
+          hint="Tap a seat on the table or a name below."
+          onPickWinner={onPickWinner}
+          onBeginSplit={onBeginSplit}
+        />
+      ) : current !== null && hand.in[current] ? (
+        <PlayerRow
+          key={`${hand.no}-${hand.stage}-${current}`}
+          game={game}
+          playerIndex={current}
+          dock
+          onAct={onAct}
+          onUndo={onUndoAction}
+        />
+      ) : null}
+
+      {!splitting && !pending && hand.stage < lastStage ? (
+        <button
+          className="blue-button full tall"
+          type="button"
+          onClick={onNextStage}
+        >
+          Deal {STAGES[hand.stage + 1]}
+        </button>
+      ) : null}
+      <button
+        className="glass-button full tall danger-text"
+        type="button"
+        onClick={onCancelHand}
+      >
+        Cancel hand
+      </button>
+      {!showdown && !splitting ? (
+        <p className="dashed-button full tall table-hint">
+          Tap on player to undo their action.
+        </p>
+      ) : null}
+    </>
+  );
+}
+
 function seatStatus(
   game: GameState,
   playerIndex: number,
@@ -6536,6 +6938,7 @@ function PlayerRow({
   onAct,
   onUndo,
   roundClosed = false,
+  dock = false,
 }: {
   game: GameState;
   playerIndex: number;
@@ -6543,6 +6946,8 @@ function PlayerRow({
   onUndo: (playerIndex: number) => void;
   /** This player's action closed the round; keep the card open but locked. */
   roundClosed?: boolean;
+  /** The table's action dock under the oval, which names who is to act. */
+  dock?: boolean;
 }) {
   const { money, symbol } = useMoney();
   const [amount, setAmount] = useState("");
@@ -6678,14 +7083,16 @@ function PlayerRow({
         : `Bet ${money(betAmount)}`;
 
   return (
-    <div className="glass seat-card active">
+    <div className={`glass seat-card active ${dock ? "dock" : ""}`}>
       <div className="seat-main">
         <Avatar name={player.name} playerId={player.id} role={role} />
         <div className="seat-copy">
-          <b>{player.name}</b>
-          <small>{stackLine}</small>
+          <b>{dock ? `${player.name} to act` : player.name}</b>
+          <small>
+            {dock ? `${money(player.stack)} behind · in ${money(committed)}` : stackLine}
+          </small>
         </div>
-        <span className="turn-pill">Your turn</span>
+        {dock ? null : <span className="turn-pill">Your turn</span>}
       </div>
       <div className="bet-panel">
         <div className="bet-summary">
@@ -6977,11 +7384,13 @@ function ExpandingList<T>({
 function SessionCard({
   session,
   discarded = false,
+  onContinue,
   onRestore,
   onDeletePermanently,
 }: {
   session: PokerSession;
   discarded?: boolean;
+  onContinue?: (id: string) => void;
   /** Not shown for now: the Discard button is hidden (user decision 2026-10-01). */
   onDiscard?: (id: string) => void;
   onRestore?: (id: string) => void;
@@ -7022,6 +7431,14 @@ function SessionCard({
                 Delete
               </button>
             </>
+          ) : onContinue ? (
+            <button
+              className="pill-button"
+              type="button"
+              onClick={() => onContinue(session.id)}
+            >
+              Continue game
+            </button>
           ) : null}
           {/* Discard is hidden until users ask for it back (user decision
               2026-10-01); onDiscard and discardSession stay for that. */}
@@ -7593,6 +8010,7 @@ function SessionsView({
   error,
   onRetry,
   onDiscard,
+  onContinue,
   onRestore,
   onDeletePermanently,
   onExport,
@@ -7604,6 +8022,7 @@ function SessionsView({
   error: string;
   onRetry: () => void;
   onDiscard: (id: string) => void;
+  onContinue: (id: string) => void;
   onRestore: (id: string) => void;
   onDeletePermanently: (id: string) => void;
   onExport: () => void;
@@ -7632,7 +8051,12 @@ function SessionsView({
         <ExpandingList
           items={latestSessions}
           render={(session) => (
-            <SessionCard key={session.id} session={session} onDiscard={onDiscard} />
+            <SessionCard
+              key={session.id}
+              session={session}
+              onDiscard={onDiscard}
+              onContinue={onContinue}
+            />
           )}
           more={(count) => `Show ${count} more game${count === 1 ? "" : "s"}`}
           all="Show all games"
