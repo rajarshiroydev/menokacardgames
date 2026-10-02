@@ -343,6 +343,17 @@ Everyone who signs in has their own account and can host their own games. Friend
 - **When it updates:** each time you open the Ranks screen.
 - **When a group disappears:** as soon as either of you removes the friendship, or while the host's account is locked for deletion. There is no combined score across groups.
 
+## 21. Admin dashboard
+
+- **Who can open it:** only accounts the app's owner has added as admins, directly in the database. For everyone else `/admin` is an ordinary "page not found"; signed-out visitors go to sign-in.
+- **Read only:** nothing on the dashboard changes anyone's data.
+- **Overview:** number of signed-up users (new in the last 7 and 30 days), people who signed in during the last 7 days, guests, linked friends, games (last 7 and 30 days), hands dealt, total time at the table, hosts who played in the last 30 days, friendships, pending friend requests and live standings links in use; bar charts of sign-ups and games for each of the last 12 weeks; the newest users, the top 5 hosts by games hosted and the latest games.
+- **Users:** every account with name, email, user code, join date, last sign-in, games hosted, games played as someone's friend, last game, guests, friends and status (Active, No name, Deleting, Purging). Search by name, email or code; filter All, Hosts, No name yet or Deleting; sort by any column. Selecting a user opens their detail: every player in their ledger with games, net and last played; their latest 50 games with each player's buy-in, rebuys, cash-out and net; friends; and pending requests. Each time a user's detail is opened it is recorded in the admin's audit log.
+- **Guests:** every guest (a player who is neither a host's own player nor linked to an account) with code, the host who added them, date added, games, net and last played. Filter by host; removed guests are hidden unless **Show removed** is on.
+- **Games:** the latest 300 games across all hosts with host, time, length, players, hands, big blind, chips won and winner; select a game to see every player's result.
+- **System:** accounts waiting out their 30-day deletion period, the purge job's records, the 40 most recent audit events and the database migrations applied.
+- Times are shown in India time. **Updated** reloads the data.
+
 ---
 
 ## Known gaps
