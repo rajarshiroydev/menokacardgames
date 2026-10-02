@@ -77,6 +77,7 @@ import {
 } from "@/lib/accounts/identity-code";
 import { DELETION_GRACE_PERIOD_DAYS } from "@/lib/accounts/lifecycle";
 import type { GroupStandings } from "@/lib/friends/group-standings";
+import { linkableFriends } from "@/lib/friends/link-guest";
 import type { FoundAccount, FriendOverview } from "@/lib/friends/requests";
 import { authClient } from "@/lib/auth/client";
 import { apiErrorMessage } from "@/lib/security/rate-limit-message";
@@ -3780,10 +3781,7 @@ function ProfileView({
   const [adding, setAdding] = useState(false);
   const [renaming, setRenaming] = useState<PlayerProfile | null>(null);
   const [choosingAvatar, setChoosingAvatar] = useState<PlayerProfile | null>(null);
-  const [linking, setLinking] = useState<{
-    friend: FriendOverview["friends"][number];
-    games: number;
-  } | null>(null);
+  const [linking, setLinking] = useState<PlayerProfile | null>(null);
   const [busy, setBusy] = useState("");
   useEffect(() => {
     if (menu === null) return;
@@ -3952,22 +3950,15 @@ function ProfileView({
       return [
         ...standingsAction,
         ...(friend
-          ? [
-              ...(freePlayers.length
-                ? [
-                    {
-                      label: "Link to guest…",
-                      run: () => setLinking({ friend, games: row.games }),
-                    },
-                  ]
-                : []),
-              { label: "Unfriend", danger: true, run: () => unfriend(friend) },
-            ]
+          ? [{ label: "Unfriend", danger: true, run: () => unfriend(friend) }]
           : []),
       ];
     }
     return [
       ...standingsAction,
+      ...(friendsFor(player).length
+        ? [{ label: "Link to friend…", run: () => setLinking(player) }]
+        : []),
       { label: "Rename", run: () => setRenaming(player) },
       { label: "Change avatar", run: () => setChoosingAvatar(player) },
       { label: "Remove player", danger: true, run: () => onDiscard(player) },
@@ -3998,6 +3989,13 @@ function ProfileView({
   const freePlayers = players.filter(
     (player) => !player.linked && player.id !== profile.selfPlayerId,
   );
+  const playersById = new Map(players.map((player) => [player.id, player]));
+  const friendsFor = (guest: PlayerProfile) =>
+    linkableFriends(guest, overview?.friends ?? [], playersById);
+  const gamesOf = (playerId: string | undefined) => {
+    const player = playerId ? playersById.get(playerId) : undefined;
+    return player ? record(player).games : 0;
+  };
   const filters: Array<[PlayerFilter, string]> = [
     ["all", "All"],
     ["app", "Friends"],
@@ -4200,14 +4198,13 @@ function ProfileView({
         />
       ) : null}
       {linking ? (
-        <LinkGuestSheet
-          friend={linking.friend}
-          games={linking.games}
-          seated={
-            !!linking.friend.myPlayer &&
-            seatedPlayerIds.includes(linking.friend.myPlayer.id)
-          }
-          freePlayers={freePlayers}
+        <LinkFriendSheet
+          guest={linking}
+          friends={friendsFor(linking).map((friend) => ({
+            friend,
+            games: gamesOf(friend.myPlayer?.id),
+            seated: !!friend.myPlayer && seatedPlayerIds.includes(friend.myPlayer.id),
+          }))}
           onLinked={(merged) => {
             onToast(merged ? "Games Merged" : "Guest Linked");
             onPlayersChanged();
@@ -5054,31 +5051,34 @@ function AddPlayerSheet({
 }
 
 /**
- * Links one of your guests to a friend, so the guest's games count as theirs.
- * The player made for them when the request was accepted is deleted; any
- * games it has move to the guest first, which can't be undone.
+ * Links a guest to one of your friends, so the guest's games count as theirs.
+ * The player made for the friend when the request was accepted is deleted;
+ * any games it has move to the guest first, which can't be undone.
  */
-function LinkGuestSheet({
-  friend,
-  games,
-  seated,
-  freePlayers,
+function LinkFriendSheet({
+  guest,
+  friends,
   onLinked,
   onClose,
 }: {
-  friend: FriendOverview["friends"][number];
-  /** Saved games the friend's current player has, which would be merged. */
-  games: number;
-  /** The friend's current player is in the game in progress. */
-  seated: boolean;
-  freePlayers: PlayerProfile[];
+  guest: PlayerProfile;
+  /** Friends this guest may be (lib/friends/link-guest.ts), with their
+   * player's saved games (which would be merged) and whether that player is
+   * in the game in progress. */
+  friends: Array<{
+    friend: FriendOverview["friends"][number];
+    games: number;
+    seated: boolean;
+  }>;
   onLinked: (merged: boolean) => void;
   onClose: () => void;
 }) {
-  const [playerId, setPlayerId] = useState(freePlayers[0]?.id ?? "");
+  const [accountId, setAccountId] = useState(friends[0]?.friend.accountId ?? "");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
-  const name = friend.displayName ?? "your friend";
+  const chosen = friends.find((item) => item.friend.accountId === accountId);
+  const games = chosen?.games ?? 0;
+  const friendName = chosen?.friend.displayName ?? "This friend";
 
   useEffect(() => {
     function closeOnEscape(event: KeyboardEvent) {
@@ -5090,11 +5090,11 @@ function LinkGuestSheet({
 
   async function link(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (saving || !playerId || seated) return;
+    if (saving || !chosen || chosen.seated) return;
     setSaving(true);
     setError("");
     try {
-      await friendsApi({ action: "link-guest", accountId: friend.accountId, playerId });
+      await friendsApi({ action: "link-guest", accountId, playerId: guest.id });
       onLinked(games > 0);
       onClose();
     } catch (error) {
@@ -5116,49 +5116,54 @@ function LinkGuestSheet({
         className="sheet profile-sheet"
         role="dialog"
         aria-modal="true"
-        aria-labelledby="link-guest-title"
+        aria-labelledby="link-friend-title"
         onSubmit={link}
       >
         <span className="sheet-grabber" aria-hidden="true" />
-        <h2 id="link-guest-title">Link to guest</h2>
+        <h2 id="link-friend-title">Link to friend</h2>
         <p className="muted small-note">
-          Pick the guest who is {name}. Their games will count as {name}&apos;s.
+          Pick the friend {guest.name} really is; their games will count as
+          that friend&apos;s.
         </p>
-        {games > 0 ? (
-          <p className="field-error" role="note">
-            {name} already has {games} game{games === 1 ? "" : "s"} in your
-            list. They&apos;ll be merged into the guest you pick. This
-            can&apos;t be undone.
-          </p>
-        ) : null}
-        {seated ? (
-          <p className="field-error" role="alert">
-            {name} is in the game in progress. End or discard it first.
-          </p>
-        ) : freePlayers.length ? (
+        {friends.length ? (
           <div className="add-player-row">
             <select
               className="select-control"
-              aria-label="Guest"
-              value={playerId}
+              aria-label="Friend"
+              value={accountId}
               onChange={(event) => {
-                setPlayerId(event.target.value);
+                setAccountId(event.target.value);
                 setError("");
               }}
             >
-              {freePlayers.map((player) => (
-                <option key={player.id} value={player.id}>
-                  {player.name}
+              {friends.map(({ friend }) => (
+                <option key={friend.accountId} value={friend.accountId}>
+                  {friend.displayName ?? "Unnamed friend"}
                 </option>
               ))}
             </select>
-            <button className="accent-button" type="submit" disabled={saving}>
+            <button
+              className="accent-button"
+              type="submit"
+              disabled={saving || !!chosen?.seated}
+            >
               {saving ? "Linking…" : games > 0 ? "Merge" : "Link"}
             </button>
           </div>
         ) : (
-          <p className="muted small-note">You have no guests to link.</p>
+          <p className="muted small-note">You have no friends to link.</p>
         )}
+        {chosen?.seated ? (
+          <p className="field-error" role="alert">
+            {friendName} is in the game in progress. End or discard it first.
+          </p>
+        ) : games > 0 ? (
+          <p className="field-error" role="note">
+            {friendName} already has {games} game{games === 1 ? "" : "s"} in
+            your list. They&apos;ll be merged into {guest.name}. This
+            can&apos;t be undone.
+          </p>
+        ) : null}
         {error ? (
           <p className="field-error" role="alert">
             {error}
