@@ -1,5 +1,9 @@
 import { deriveSessionAccounting } from "./accounting.ts";
-import { isValidRebuy, MAX_BUY_INS } from "./buy-ins.ts";
+import {
+  isValidRebuy,
+  MAX_BUY_INS,
+  parseRebuyRules,
+} from "./buy-ins.ts";
 import type {
   BlindHistory,
   BlindSchedule,
@@ -159,6 +163,7 @@ export function validateSession(input: unknown): PokerSession {
     candidate.blindHistory === undefined || candidate.blindHistory === null
       ? undefined
       : validateBlindHistory(candidate.blindHistory, hands, ante, date, ended);
+  const rebuyRules = parseRebuyRules(candidate.rebuyRules);
   const name = String(candidate.name || "").trim();
   if (name.length > MAX_GAME_NAME_LENGTH) {
     throw new Error(
@@ -218,6 +223,11 @@ export function validateSession(input: unknown): PokerSession {
       if (!Number.isSafeInteger(invested) || net !== end - invested) {
         throw new Error("Buy-ins do not match the net result");
       }
+      // The closing big blind isn't checked: buy-ins don't record their hand.
+      const maxRebuys = rebuyRules?.maxRebuys ?? null;
+      if (maxRebuys !== null && parsedBuyIns.length - 1 > maxRebuys) {
+        throw new Error("More rebuys than the game's rebuy limit");
+      }
       buyIns = parsedBuyIns;
     }
     return {
@@ -237,6 +247,7 @@ export function validateSession(input: unknown): PokerSession {
     ante,
     ...(blindHistory ? { blindHistory } : {}),
     startStack,
+    ...(rebuyRules ? { rebuyRules } : {}),
     hands,
     results,
   };

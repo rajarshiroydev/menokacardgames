@@ -78,6 +78,13 @@ ALTER TABLE poker_sessions
 ALTER TABLE poker_sessions
   ADD COLUMN IF NOT EXISTS blind_history jsonb;
 
+-- Rebuy limits the host chose (0019); NULL means none.
+ALTER TABLE poker_sessions
+  ADD COLUMN IF NOT EXISTS rebuy_rules jsonb
+  CONSTRAINT poker_sessions_rebuy_rules_object CHECK (
+    rebuy_rules IS NULL OR jsonb_typeof(rebuy_rules) = 'object'
+  );
+
 ALTER TABLE poker_sessions
   ADD COLUMN IF NOT EXISTS owner_id uuid REFERENCES accounts(id) ON DELETE CASCADE;
 

@@ -131,6 +131,17 @@ export type BlindHistory = {
   smallBlindRatio?: SmallBlindRatio;
 };
 
+/**
+ * Rebuy limits the host chose for a game; null means no limit. Games without
+ * them allow up to MAX_BUY_INS - 1 rebuys at any time (lib/poker/buy-ins.ts).
+ */
+export type RebuyRules = {
+  /** Rebuys each player may make, not counting their first buy-in. */
+  maxRebuys: number | null;
+  /** Rebuys close once the big blind reaches this amount. */
+  closeAtBigBlind: number | null;
+};
+
 /** The saved game a continued game updates, as it was when reopened. */
 export type ContinuedSession = {
   id: string;
@@ -155,6 +166,8 @@ export type GameState = {
   blindPlans?: BlindPlan[];
   blindLevels?: BlindLevelRecord[];
   startStack: number;
+  /** Rebuy limits chosen at setup or edited between hands; absent is none. */
+  rebuyRules?: RebuyRules;
   startedAt: number;
   players: Player[];
   hand: Hand | null;
@@ -186,6 +199,8 @@ export type PokerSession = {
   ante: number;
   blindHistory?: BlindHistory;
   startStack: number;
+  /** Rebuy limits the game finished with; absent when there were none. */
+  rebuyRules?: RebuyRules;
   hands: number;
   results: SessionResult[];
 };

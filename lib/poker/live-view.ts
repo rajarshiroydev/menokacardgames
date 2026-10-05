@@ -1,9 +1,9 @@
 import { isAvatarId } from "../avatars.ts";
 import { deriveSessionAccounting } from "./accounting.ts";
-import { isValidRebuy, MAX_BUY_INS } from "./buy-ins.ts";
+import { isValidRebuy, MAX_BUY_INS, parseRebuyRules } from "./buy-ins.ts";
 import { smallBlindFor } from "./game.ts";
 import { cleanPlayerName } from "./player-validation.ts";
-import type { GameState } from "./types";
+import type { GameState, RebuyRules } from "./types";
 
 /**
  * Live standings shared with players through a link. The host's device sends
@@ -44,6 +44,8 @@ export type LiveSnapshot = {
   bigBlind: number;
   /** Absent from older devices; the page then shows half the big blind. */
   smallBlind?: number;
+  /** The host's rebuy limits; absent when there are none. */
+  rebuyRules?: RebuyRules;
   players: LiveSnapshotPlayer[];
 };
 
@@ -65,6 +67,7 @@ export type LiveView = {
   handInProgress: boolean;
   bigBlind: number;
   smallBlind?: number;
+  rebuyRules?: RebuyRules;
   standings: LiveStanding[];
 };
 
@@ -82,6 +85,7 @@ export function buildLiveSnapshot(
     handInProgress: Boolean(hand),
     bigBlind: game.ante,
     smallBlind: smallBlindFor(game.ante, game.smallBlindRatio),
+    ...(game.rebuyRules ? { rebuyRules: game.rebuyRules } : {}),
     players: game.players.map((player, index) => {
       const buyIns = player.buyIns?.length ? [...player.buyIns] : [game.startStack];
       const before = hand?.stacksBeforeHand[index];
@@ -131,6 +135,7 @@ export function validateLiveSnapshot(input: unknown): LiveSnapshot {
   if (smallBlind !== undefined && smallBlind > bigBlind) {
     throw new Error("The small blind can't be bigger than the big blind");
   }
+  const rebuyRules = parseRebuyRules(snapshot.rebuyRules);
   if (typeof snapshot.handInProgress !== "boolean") {
     throw new Error("Invalid hand status");
   }
@@ -183,6 +188,7 @@ export function validateLiveSnapshot(input: unknown): LiveSnapshot {
     handInProgress: snapshot.handInProgress,
     bigBlind,
     ...(smallBlind === undefined ? {} : { smallBlind }),
+    ...(rebuyRules ? { rebuyRules } : {}),
     players,
   };
 }
@@ -231,6 +237,7 @@ export function deriveLiveView(snapshot: LiveSnapshot): LiveView {
     handInProgress: snapshot.handInProgress,
     bigBlind: snapshot.bigBlind,
     ...(snapshot.smallBlind === undefined ? {} : { smallBlind: snapshot.smallBlind }),
+    ...(snapshot.rebuyRules ? { rebuyRules: snapshot.rebuyRules } : {}),
     standings,
   };
 }
