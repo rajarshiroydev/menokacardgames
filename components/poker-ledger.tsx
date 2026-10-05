@@ -8899,6 +8899,12 @@ function chartLinesFromGroup(group: GroupStandings): ChartLine[] {
   });
 }
 
+/** Smallest of 1, 2 or 5 × 10ⁿ that is at least `raw`. */
+function niceChartStep(raw: number) {
+  const power = 10 ** Math.floor(Math.log10(raw));
+  return [1, 2, 5, 10].map((factor) => factor * power).find((step) => step >= raw) ?? 10 * power;
+}
+
 function LeaderboardChart({
   sessionCount,
   lines,
@@ -8908,8 +8914,8 @@ function LeaderboardChart({
 }) {
   const [highlight, setHighlight] = useState<string | null>(null);
   const chartWidth = 320;
-  const chartHeight = 200;
-  const plot = { top: 8, right: 6, bottom: 24, left: 40 };
+  const chartHeight = 212;
+  const plot = { top: 10, right: 8, bottom: 36, left: 44 };
   const plotWidth = chartWidth - plot.left - plot.right;
   const plotHeight = chartHeight - plot.top - plot.bottom;
   const series = lines.map((entry) => {
@@ -8917,13 +8923,13 @@ function LeaderboardChart({
       index: point.index,
       value: point.value,
       marked: point.sessionReturn !== null,
-      label: `${entry.name}, session ${point.index}: ${
+      label: `${entry.name}, game ${point.index}: ${
         point.sessionReturn === null
           ? "did not play"
-          : `session return ${formatPercent(point.sessionReturn)}`
-      } · running average ${formatPercent(point.value)} over ${
+          : `game return ${formatPercent(point.sessionReturn)}`
+      } · average ${formatPercent(point.value)} over ${
         point.sampleCount
-      } session${point.sampleCount === 1 ? "" : "s"}`,
+      } game${point.sampleCount === 1 ? "" : "s"}`,
     }));
     return {
       color: playerColor(entry.name),
@@ -8933,24 +8939,28 @@ function LeaderboardChart({
   });
 
   const maxMagnitude = Math.max(
-    1,
+    10,
     ...series.flatMap((player) => player.points.map((point) => Math.abs(point.value))),
   );
-  const step = 25;
-  const axisMagnitude = Math.max(step, Math.ceil(maxMagnitude / step) * step);
-  const yTicks = [axisMagnitude, axisMagnitude / 2, 0, -axisMagnitude / 2, -axisMagnitude];
+  // Round gridlines (1, 2 or 5 × 10ⁿ), at most two above and two below zero.
+  const step = niceChartStep(maxMagnitude / 2);
+  const axisMagnitude = Math.ceil(maxMagnitude / step) * step;
+  const yTicks = Array.from(
+    { length: (axisMagnitude / step) * 2 + 1 },
+    (_, index) => axisMagnitude - index * step,
+  );
   const xFor = (index: number) =>
     plot.left + (index / Math.max(1, sessionCount)) * plotWidth;
   const yFor = (value: number) =>
     plot.top + ((axisMagnitude - value) / (axisMagnitude * 2)) * plotHeight;
-  const xLabelEvery = Math.max(1, Math.ceil(sessionCount / 4));
+  const xLabelEvery = Math.max(1, Math.ceil(sessionCount / 5));
   const tickLabel = (value: number) => {
     if (value === 0) return "0%";
     return `${value > 0 ? "+" : "−"}${Math.abs(value)}%`;
   };
   const title = "Average Return";
   const description =
-    "Each colored line shows one player's running average session return, starting at their first ranked session. Sessions they missed carry the previous average forward.";
+    "Each colored line shows one player's running average return after every game, starting at their first ranked game. Games they missed carry the previous average forward.";
   // Draw the highlighted line last so it sits on top.
   const drawOrder = [...series].sort(
     (a, b) =>
@@ -9000,13 +9010,21 @@ function LeaderboardChart({
                 className="chart-label"
                 key={index}
                 x={xFor(index)}
-                y={chartHeight - 6}
+                y={plot.top + plotHeight + 14}
                 textAnchor={index === 0 ? "start" : index === sessionCount ? "end" : "middle"}
               >
                 {index === 0 ? "Start" : index}
               </text>
             ) : null,
           )}
+          <text
+            className="chart-axis-title"
+            x={plot.left + plotWidth / 2}
+            y={chartHeight - 2}
+            textAnchor="middle"
+          >
+            Game
+          </text>
 
           {drawOrder.map((player) => {
             const last = player.points.at(-1);

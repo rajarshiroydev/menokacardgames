@@ -3599,7 +3599,17 @@ textarea::placeholder {
 .chart-label {
   fill: var(--ink3);
   font-family: var(--fb);
-  font-size: 9px;
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.chart-axis-title {
+  fill: var(--ink3);
+  font-family: var(--fb);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .chart-series {
