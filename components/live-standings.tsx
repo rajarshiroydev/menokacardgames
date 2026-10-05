@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 
 import { formatChipChange, smallBlindFor } from "@/lib/poker/game";
+import { describeRebuyRules } from "@/lib/poker/buy-ins";
 import { formatMoney } from "@/lib/poker/money";
 import {
   LIVE_VIEW_POLL_MS,
@@ -169,6 +170,7 @@ export function LiveStandings({ token }: { token: string }) {
   const { view, failed } = state;
   const age = now - view.updatedAt;
   const stale = failed || age > LIVE_VIEW_STALE_MS;
+  const rebuyNote = describeRebuyRules(view.rebuyRules, view.currency);
 
   return (
     <main className="ledger-shell live-shell">
@@ -189,6 +191,7 @@ export function LiveStandings({ token }: { token: string }) {
           <span className="blinds-separator"> / </span>
           {formatMoney(view.bigBlind, view.currency)}
         </span>
+        {rebuyNote ? <span className="muted small-note">{rebuyNote}</span> : null}
       </section>
 
       <section className="glass card live-list" aria-label="Standings">

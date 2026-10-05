@@ -28,6 +28,7 @@ function levelForBigBlind(plan: BlindPlan, bigBlind: number) {
  * buy-ins; hand numbers carry on. The dealer isn't saved, so the next one is
  * drawn at random. A timed blind schedule restarts its clock at the current
  * big blind on the next hand, so time away from the table doesn't raise it.
+ * Rebuy limits carry over; the host can change them between hands.
  */
 export function gameFromSession(
   session: SavedSession,
@@ -66,6 +67,7 @@ export function gameFromSession(
     blindPlans: plans,
     blindLevels: history.levels.map((level) => ({ ...level })),
     startStack: session.startStack,
+    ...(session.rebuyRules ? { rebuyRules: { ...session.rebuyRules } } : {}),
     startedAt: session.date,
     players: session.results.map((result) => ({
       ...(result.playerId ? { id: result.playerId } : {}),

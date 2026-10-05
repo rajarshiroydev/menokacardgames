@@ -49,3 +49,26 @@ export function storeHandLayout(layout: HandLayout) {
     // Private windows may refuse storage; the choice lasts this visit only.
   }
 }
+
+/** Whether this device clicks when a player acts. On unless turned off. */
+export const TURN_SOUND_STORAGE_KEY = "pokerLedger.turnSound.v1";
+// Kept here too, so the switch still works when storage is refused.
+let turnSoundThisVisit: boolean | null = null;
+
+export function readTurnSound(): boolean {
+  if (turnSoundThisVisit !== null) return turnSoundThisVisit;
+  try {
+    return window.localStorage.getItem(TURN_SOUND_STORAGE_KEY) !== "off";
+  } catch {
+    return true;
+  }
+}
+
+export function storeTurnSound(on: boolean) {
+  turnSoundThisVisit = on;
+  try {
+    window.localStorage.setItem(TURN_SOUND_STORAGE_KEY, on ? "on" : "off");
+  } catch {
+    // Private windows may refuse storage; the choice lasts this visit only.
+  }
+}

@@ -37,6 +37,7 @@ type SessionRow = {
   starting_stack: number | string;
   hands: number | string;
   blind_history: PokerSession["blindHistory"] | null;
+  rebuy_rules: PokerSession["rebuyRules"] | null;
   results: PokerSession["results"];
 };
 
@@ -60,6 +61,7 @@ function mapSession(row: SessionRow): SavedSession {
     ante: Number(row.ante),
     ...(row.blind_history ? { blindHistory: row.blind_history } : {}),
     startStack: Number(row.starting_stack),
+    ...(row.rebuy_rules ? { rebuyRules: row.rebuy_rules } : {}),
     hands: Number(row.hands),
     results: row.results,
   };
@@ -84,6 +86,7 @@ function selectSessions(
           starting_stack,
           hands,
           blind_history,
+          rebuy_rules,
           normalized.results,
           discarded_at
         FROM poker_sessions AS session
@@ -401,6 +404,7 @@ async function handlePost(request: Request) {
               starting_stack,
               hands,
               blind_history,
+              rebuy_rules,
               results
               ) SELECT
                 ${ownerId}::uuid,
@@ -413,6 +417,7 @@ async function handlePost(request: Request) {
                 ${session.startStack},
                 ${session.hands},
                 ${session.blindHistory ? JSON.stringify(session.blindHistory) : null}::jsonb,
+                ${session.rebuyRules ? JSON.stringify(session.rebuyRules) : null}::jsonb,
                 ${JSON.stringify(session.results)}::jsonb
               FROM allocated
               ON CONFLICT (owner_id, id) WHERE owner_id IS NOT NULL DO NOTHING
@@ -612,6 +617,7 @@ async function handlePut(request: Request) {
             'previousEndedAt', session.ended_at,
             'previousHands', session.hands,
             'previousBlindHistory', session.blind_history,
+            'previousRebuyRules', session.rebuy_rules,
             'previousResults', session.results,
             'hands', ${resolved.hands}::bigint
           )
@@ -629,6 +635,7 @@ async function handlePut(request: Request) {
             ended_at = ${new Date(resolved.ended).toISOString()},
             hands = ${resolved.hands},
             blind_history = ${resolved.blindHistory ? JSON.stringify(resolved.blindHistory) : null}::jsonb,
+            rebuy_rules = ${resolved.rebuyRules ? JSON.stringify(resolved.rebuyRules) : null}::jsonb,
             results = ${JSON.stringify(resolved.results)}::jsonb
           WHERE owner_id = ${ownerId}::uuid
             AND id = ${resolved.id}

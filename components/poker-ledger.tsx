@@ -18,7 +18,7 @@ import { createPortal } from "react-dom";
 
 import {
   activeIndexes,
-  belongsToHand,
+  cancelCurrentHand,
   bigBlindAtLevel,
   betStops,
   blindStatus,
@@ -46,7 +46,17 @@ import {
   startingBigBlind,
   totalBuyIns,
   undoLastHand,
+  editRebuyRules,
+  mostRebuysUsed,
+  rebuyBlockReason,
+  upcomingBigBlinds,
 } from "@/lib/poker/game";
+import {
+  describeMaxRebuys,
+  describeRebuyRules,
+  MAX_REBUYS,
+  normalizeRebuyRules,
+} from "@/lib/poker/buy-ins";
 import { gameFromSession } from "@/lib/poker/continue-session";
 import {
   CURRENCIES,
@@ -62,9 +72,12 @@ import {
   LEGACY_HISTORY_STORAGE_KEY,
   prepareLegacySessionsForAdoption,
   readHandLayout,
+  readTurnSound,
   storeHandLayout,
+  storeTurnSound,
   type HandLayout,
 } from "@/lib/poker/storage";
+import { playTurnSound } from "@/lib/turn-sound";
 import { useRouter } from "next/navigation";
 import qrcode from "qrcode-generator";
 
@@ -122,6 +135,7 @@ import type {
   PlayerAction,
   PlayerProfile,
   PokerSession,
+  RebuyRules,
   WinnerAnnouncement,
 } from "@/lib/poker/types";
 
@@ -485,7 +499,7 @@ function recordWin(game: GameState, line: string) {
 
 function awardPot(game: GameState, playerIndex: number, automatic = false) {
   const hand = game.hand;
-  if (!hand) return 0;
+  if (!hand) return;
   const pot = hand.pot;
   game.players[playerIndex].stack += pot;
   recordWin(
@@ -503,7 +517,6 @@ function awardPot(game: GameState, playerIndex: number, automatic = false) {
     split: false,
   };
   game.hand = null;
-  return pot;
 }
 
 export function PokerLedger({
@@ -563,6 +576,7 @@ export function PokerLedger({
   const [toast, setToast] = useState("");
   const [modal, setModal] = useState<ModalState | null>(null);
   const [editingBlinds, setEditingBlinds] = useState(false);
+  const [editingRebuys, setEditingRebuys] = useState(false);
   const [legacyGame, setLegacyGame] = useState<GameState | null>(null);
   const [legacySessions, setLegacySessions] = useState<PokerSession[]>([]);
   const [reviewingLegacySessions, setReviewingLegacySessions] =
@@ -573,6 +587,8 @@ export function PokerLedger({
   const [liveBusy, setLiveBusy] = useState(false);
   const [liveFailing, setLiveFailing] = useState(false);
   const [handLayout, setHandLayout] = useState<HandLayout>("list");
+  // The last action taken, so its seat can flash what it did.
+  const [lastTurn, setLastTurn] = useState<LastTurn | null>(null);
   const liveSync = useRef({ lastSent: 0, failures: 0 });
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -999,6 +1015,8 @@ export function PokerLedger({
       /** An odd small blind; null keeps the usual half. */
       smallBlind: number | null;
       blinds: BlindSchedule | null;
+      /** Rebuy limits; null or both limits off means none. */
+      rebuyRules: RebuyRules | null;
       players: PlayerProfile[];
       /** Draw the first dealer now; otherwise seat 1 deals first. */
       randomDealer: boolean;
@@ -1028,6 +1046,7 @@ export function PokerLedger({
         showToast("Blind increase must make the blinds bigger");
         return;
       }
+      const rebuyRules = normalizeRebuyRules(input.rebuyRules);
       const gameName = input.name.trim();
       const startedAt = Date.now();
       const firstDealer = input.randomDealer
@@ -1054,6 +1073,7 @@ export function PokerLedger({
         }],
         blindLevels: [],
         startStack: input.stack,
+        ...(rebuyRules ? { rebuyRules } : {}),
         startedAt,
         players: input.players.map((player) => ({
           id: player.id,
@@ -1407,12 +1427,23 @@ export function PokerLedger({
       );
     }
 
+    // Feedback that the tap registered, as the next player's card takes over.
+    if (readTurnSound()) {
+      playTurnSound(type === "check" || type === "fold" ? "tap" : "chips");
+    }
+    setLastTurn((previous) => ({
+      playerIndex,
+      handNo: hand.no,
+      stage: hand.stage,
+      seq: (previous?.seq ?? 0) + 1,
+    }));
+
     const active = activeIndexes(next);
     if (active.length === 1) {
       const winner = active[0];
-      const pot = awardPot(next, winner, true);
+      // The winner card announces it; no toast as well.
+      awardPot(next, winner, true);
       setGame(next);
-      showToast(`${next.players[winner].name} +${money(pot)}`);
       return;
     }
     hand.currentPlayer = nextPlayerToAct(next, playerIndex);
@@ -1425,6 +1456,7 @@ export function PokerLedger({
     const hand = next.hand;
     const action = hand?.last[playerIndex];
     if (!hand || !hand.acted[playerIndex] || !action) return;
+    setLastTurn(null);
 
     next.players[playerIndex].stack += action.chips;
     hand.committed[playerIndex] -= action.chips;
@@ -1473,9 +1505,8 @@ export function PokerLedger({
       `${game.players[playerIndex].name} wins`,
       () => {
         const next = structuredClone(game);
-        const pot = awardPot(next, playerIndex);
+        awardPot(next, playerIndex);
         setGame(next);
-        showToast(`${next.players[playerIndex].name} +${money(pot)}`);
       },
     );
   }
@@ -1534,7 +1565,6 @@ export function PokerLedger({
     };
     next.hand = null;
     setGame(next);
-    showToast(`Pot split ${winners.length} ways`);
   }
 
   function startNextHand() {
@@ -1594,6 +1624,15 @@ export function PokerLedger({
     showToast("Blind plan updated for the next hand");
   }
 
+  function saveRebuyRules(rules: RebuyRules) {
+    if (!game || game.hand) return;
+    const next = structuredClone(game);
+    if (!editRebuyRules(next, rules)) return;
+    setGame(next);
+    setEditingRebuys(false);
+    showToast("Rebuys updated");
+  }
+
   function cancelHand() {
     if (!game?.hand) return;
     ask(
@@ -1601,15 +1640,7 @@ export function PokerLedger({
       "Cancel hand",
       () => {
         const next = structuredClone(game);
-        const hand = next.hand;
-        if (!hand) return;
-        next.players.forEach((player, index) => {
-          player.stack = hand.stacksBeforeHand[index];
-        });
-        next.log = next.log.filter((line) => !belongsToHand(line, hand.no));
-        next.handNo = hand.no - 1;
-        next.hand = null;
-        dealNewHand(next);
+        if (!cancelCurrentHand(next)) return;
         setGame(next);
         showToast("Hand cancelled");
       },
@@ -1671,6 +1702,7 @@ export function PokerLedger({
           }
         : {}),
       startStack: game.startStack,
+      ...(game.rebuyRules ? { rebuyRules: game.rebuyRules } : {}),
       hands: completedHands,
       results: game.players.map((player, index) => ({
         ...(player.id ? { playerId: player.id } : {}),
@@ -2061,6 +2093,7 @@ export function PokerLedger({
           <GameView
             game={game}
             layout={handLayout}
+            lastTurn={lastTurn}
             onAct={act}
             onUndoAction={undoAction}
             onNextStage={nextStage}
@@ -2076,6 +2109,7 @@ export function PokerLedger({
             onUndoHand={undoHand}
             onDiscard={discardGame}
             onEditBlinds={() => setEditingBlinds(true)}
+            onEditRebuys={() => setEditingRebuys(true)}
             liveSharing={Boolean(liveToken)}
             liveFailing={liveFailing}
             onShareLive={() => setSharingLive(true)}
@@ -2118,6 +2152,13 @@ export function PokerLedger({
           game={game}
           onClose={() => setEditingBlinds(false)}
           onSave={saveBlindSchedule}
+        />
+      ) : null}
+      {editingRebuys && game && !game.hand ? (
+        <RebuyEditor
+          game={game}
+          onClose={() => setEditingRebuys(false)}
+          onSave={saveRebuyRules}
         />
       ) : null}
       {sharingLive && game ? (
@@ -2962,6 +3003,7 @@ function SetupView({
     ante: number;
     smallBlind: number | null;
     blinds: BlindSchedule | null;
+    rebuyRules: RebuyRules | null;
     players: PlayerProfile[];
     randomDealer: boolean;
   }) => void;
@@ -2989,6 +3031,10 @@ function SetupView({
   const [smallBlindShare, setSmallBlindShare] = useState(40);
   const [customSmallBlind, setCustomSmallBlind] = useState(false);
   const [smallBlindAmount, setSmallBlindAmount] = useState(40);
+  const [rebuyRules, setRebuyRules] = useState<RebuyRules>({
+    maxRebuys: null,
+    closeAtBigBlind: null,
+  });
   // Tapping players seats them in tap order; the list below reorders them.
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const playerCount = selectedIds.length;
@@ -3313,6 +3359,7 @@ function SetupView({
       ante,
       smallBlind,
       blinds: schedule,
+      rebuyRules: setupRebuyRules,
       players: selectedPlayers,
       randomDealer,
     });
@@ -3347,6 +3394,21 @@ function SetupView({
     : null;
   const smallBlindValid =
     smallBlind === null || isValidSmallBlind(smallBlind, ante);
+  // A closing big blind only means something while the blinds rise.
+  const setupRebuyRules: RebuyRules = {
+    maxRebuys: rebuyRules.maxRebuys,
+    closeAtBigBlind:
+      schedule && rebuyRules.maxRebuys !== 0
+        ? rebuyRules.closeAtBigBlind
+        : null,
+  };
+  const rebuyError = rebuyRulesError(
+    setupRebuyRules,
+    0,
+    Math.max(1, ante),
+    money,
+  );
+  const rebuyCloseOptions = ladder.slice(1);
   const blindLevelNote = !risingBlinds
     ? "Blinds stay fixed"
     : !scheduleValid
@@ -3769,6 +3831,39 @@ function SetupView({
         ) : null}
       </section>
 
+      <section className="glass card">
+        <div className="card-row">
+          <span className="label">Rebuys</span>
+          <span className="card-note">
+            {describeMaxRebuys(setupRebuyRules.maxRebuys)}
+          </span>
+        </div>
+        <RebuyRulesFields
+          rules={rebuyRules}
+          onChange={setRebuyRules}
+          closeOptions={rebuyCloseOptions}
+          showClose={Boolean(schedule) && scheduleValid}
+          idPrefix="setup"
+        />
+        {rebuyError ? (
+          <p className="field-error" role="alert">
+            {rebuyError}
+          </p>
+        ) : (
+          <p className="muted small-note">
+            A busted player can buy back in for the starting stack,{" "}
+            {money(stack)}
+            {setupRebuyRules.maxRebuys === 0
+              ? ", but not in this game."
+              : setupRebuyRules.closeAtBigBlind !== null
+                ? `, until the big blind reaches ${money(
+                    setupRebuyRules.closeAtBigBlind,
+                  )}.`
+                : "."}
+          </p>
+        )}
+      </section>
+
       <button
         className="cta"
         type="submit"
@@ -3777,7 +3872,8 @@ function SetupView({
           stack < 1 ||
           ante < 1 ||
           !scheduleValid ||
-          !smallBlindValid
+          !smallBlindValid ||
+          Boolean(rebuyError)
         }
       >
         Deal First Hand
@@ -4375,6 +4471,31 @@ function ProfileView({
   );
 }
 
+/** Profile's switch for the click on each action, saved on this device. */
+function TurnSoundSetting() {
+  // Profile only opens after the app has loaded, so storage can be read here.
+  const [on, setOn] = useState(readTurnSound);
+  return (
+    <div className="profile-sound">
+      <span>
+        <small>Sounds · on this device</small>
+        <b>Click when a player acts</b>
+      </span>
+      <button
+        className="switch"
+        type="button"
+        role="switch"
+        aria-checked={on}
+        aria-label="Click when a player acts"
+        onClick={() => {
+          storeTurnSound(!on);
+          setOn(!on);
+        }}
+      />
+    </div>
+  );
+}
+
 /** Profile's ⋯ button: who is signed in, Sign out and Delete my account. */
 function AccountMenu({
   email,
@@ -4865,6 +4986,7 @@ function ProfileCard({
           ))}
         </select>
       </label>
+      <TurnSoundSetting />
     </section>
     {/* Outside the card: its blur would trap a fixed-position sheet. */}
     {choosingAvatar ? (
@@ -5585,9 +5707,31 @@ function RenameSheet({
   );
 }
 
+/** The last action taken; seq tells two actions by one seat apart. */
+type LastTurn = {
+  playerIndex: number;
+  handNo: number;
+  stage: number;
+  seq: number;
+};
+
+/** The seq to flash a seat with, while its action is the latest on this street. */
+function flashFor(game: GameState, lastTurn: LastTurn | null, playerIndex: number) {
+  const hand = game.hand;
+  return lastTurn &&
+    hand &&
+    lastTurn.playerIndex === playerIndex &&
+    lastTurn.handNo === hand.no &&
+    lastTurn.stage === hand.stage &&
+    hand.last[playerIndex]
+    ? lastTurn.seq
+    : undefined;
+}
+
 type GameViewProps = {
   game: GameState;
   layout: HandLayout;
+  lastTurn: LastTurn | null;
   onAct: (
     playerIndex: number,
     type: PlayerAction["type"],
@@ -5607,6 +5751,7 @@ type GameViewProps = {
   onUndoHand: () => void;
   onDiscard: () => void;
   onEditBlinds: () => void;
+  onEditRebuys: () => void;
   liveSharing: boolean;
   liveFailing: boolean;
   onShareLive: () => void;
@@ -5698,7 +5843,9 @@ function GameView(props: GameViewProps) {
           <p className="muted">
             {enoughPlayers
               ? "The table has enough players with chips to deal again."
-              : "Fewer than two players have chips remaining. A busted player can buy in to continue."}
+              : game.players.some((_, index) => nextBuyIn(game, index) !== null)
+                ? "Fewer than two players have chips remaining. A busted player can buy in to continue."
+                : "Fewer than two players have chips remaining, and nobody can rebuy under this game's rebuy rules. Finish and save the game, or edit the rebuys."}
           </p>
           {blindsDisplay}
           {!game.winnerAnnouncement ? (
@@ -5715,6 +5862,13 @@ function GameView(props: GameViewProps) {
                 onClick={props.onEditBlinds}
               >
                 Edit blind plan
+              </button>
+              <button
+                className="glass-button full"
+                type="button"
+                onClick={props.onEditRebuys}
+              >
+                Edit rebuys
               </button>
             </>
           ) : null}
@@ -5786,6 +5940,7 @@ function GameView(props: GameViewProps) {
                   game={game}
                   playerIndex={playerIndex}
                   roundClosed={playerIndex === closer}
+                  flash={flashFor(game, props.lastTurn, playerIndex)}
                   onAct={props.onAct}
                   onUndo={props.onUndoAction}
                 />
@@ -5946,6 +6101,266 @@ function PokerHandsChart() {
           </div>
         </section>
       ))}
+    </div>
+  );
+}
+
+type RebuyMaxChoice = "unlimited" | 0 | 1 | 2 | 3 | "other";
+type RebuyCloseChoice = "never" | number | "other";
+
+/**
+ * Why these rebuy limits can't be used, or null. `rebuysMade` is the most
+ * rebuys any player has already made; `closeAbove`, when set, is a big blind the
+ * closing amount must be above (setup, where closing at once means none).
+ */
+function rebuyRulesError(
+  rules: RebuyRules,
+  rebuysMade: number,
+  closeAbove: number | null,
+  money: (value: number) => string,
+) {
+  const { maxRebuys, closeAtBigBlind } = rules;
+  if (
+    maxRebuys !== null &&
+    (!Number.isSafeInteger(maxRebuys) || maxRebuys < 0 || maxRebuys > MAX_REBUYS)
+  ) {
+    return `Allow from 0 to ${MAX_REBUYS} rebuys.`;
+  }
+  if (maxRebuys !== null && maxRebuys < rebuysMade) {
+    return `A player has already rebought ${rebuysMade} time${
+      rebuysMade === 1 ? "" : "s"
+    }, so allow at least ${rebuysMade}.`;
+  }
+  if (
+    closeAtBigBlind !== null &&
+    (!Number.isSafeInteger(closeAtBigBlind) || closeAtBigBlind < 1)
+  ) {
+    return "Enter a big blind of at least 1.";
+  }
+  if (
+    closeAtBigBlind !== null &&
+    closeAbove !== null &&
+    closeAtBigBlind <= closeAbove
+  ) {
+    return `Pick a big blind above ${money(closeAbove)}, or choose None rebuys.`;
+  }
+  return null;
+}
+
+/**
+ * The two rebuy limits, used on setup and in Edit Rebuys. Closing amounts
+ * are big blinds, so they stay right when the blind plan changes.
+ */
+function RebuyRulesFields({
+  rules,
+  onChange,
+  closeOptions,
+  showClose,
+  idPrefix,
+}: {
+  rules: RebuyRules;
+  onChange: (rules: RebuyRules) => void;
+  /** Upcoming big blinds offered as closing points. */
+  closeOptions: number[];
+  showClose: boolean;
+  idPrefix: string;
+}) {
+  const { money } = useMoney();
+  const [customMax, setCustomMax] = useState(
+    rules.maxRebuys !== null && rules.maxRebuys > 3,
+  );
+  const [customClose, setCustomClose] = useState(
+    rules.closeAtBigBlind !== null &&
+      !closeOptions.includes(rules.closeAtBigBlind),
+  );
+  const offered = closeOptions.slice(0, 3);
+  const maxValue: RebuyMaxChoice = customMax
+    ? "other"
+    : rules.maxRebuys === null
+      ? "unlimited"
+      : rules.maxRebuys <= 3
+        ? (rules.maxRebuys as 0 | 1 | 2 | 3)
+        : "other";
+  const closeIsOther =
+    customClose ||
+    (rules.closeAtBigBlind !== null && !offered.includes(rules.closeAtBigBlind));
+  const closeValue: RebuyCloseChoice = closeIsOther
+    ? "other"
+    : (rules.closeAtBigBlind ?? "never");
+
+  return (
+    <>
+      <Segmented<RebuyMaxChoice>
+        label="Rebuys per player"
+        options={[
+          // "No limit" doesn't fit six chips at 375px; the card note says it.
+          { value: "unlimited", label: "∞" },
+          { value: 0, label: "None" },
+          { value: 1, label: "1" },
+          { value: 2, label: "2" },
+          { value: 3, label: "3" },
+          { value: "other", label: "Other" },
+        ]}
+        value={maxValue}
+        onChange={(value) => {
+          if (value === "other") {
+            setCustomMax(true);
+            onChange({ ...rules, maxRebuys: Math.max(4, rules.maxRebuys ?? 4) });
+            return;
+          }
+          setCustomMax(false);
+          onChange({
+            ...rules,
+            maxRebuys: value === "unlimited" ? null : value,
+          });
+        }}
+      />
+      {maxValue === "other" ? (
+        <input
+          className="field"
+          id={`${idPrefix}-max-rebuys`}
+          aria-label="Rebuys per player"
+          type="number"
+          inputMode="numeric"
+          min="0"
+          max={MAX_REBUYS}
+          value={rules.maxRebuys ?? ""}
+          onChange={(event) =>
+            onChange({ ...rules, maxRebuys: Number(event.target.value) })
+          }
+        />
+      ) : null}
+      {showClose && rules.maxRebuys !== 0 ? (
+        <>
+          <span className="label">Rebuys close at big blind</span>
+          <Segmented<RebuyCloseChoice>
+            label="Rebuys close at big blind"
+            options={[
+              { value: "never", label: "Never" },
+              ...offered.map((amount) => ({
+                value: amount,
+                label: money(amount),
+              })),
+              { value: "other", label: "Other" },
+            ]}
+            value={closeValue}
+            onChange={(value) => {
+              if (value === "other") {
+                setCustomClose(true);
+                onChange({
+                  ...rules,
+                  closeAtBigBlind:
+                    rules.closeAtBigBlind ?? closeOptions.at(-1) ?? null,
+                });
+                return;
+              }
+              setCustomClose(false);
+              onChange({
+                ...rules,
+                closeAtBigBlind: value === "never" ? null : value,
+              });
+            }}
+          />
+          {closeValue === "other" ? (
+            <input
+              className="field"
+              id={`${idPrefix}-close-at`}
+              aria-label="Big blind at which rebuys close"
+              type="number"
+              inputMode="numeric"
+              min="1"
+              value={rules.closeAtBigBlind ?? ""}
+              onChange={(event) =>
+                onChange({
+                  ...rules,
+                  closeAtBigBlind: Number(event.target.value),
+                })
+              }
+            />
+          ) : null}
+        </>
+      ) : null}
+    </>
+  );
+}
+
+function RebuyEditor({
+  game,
+  onClose,
+  onSave,
+}: {
+  game: GameState;
+  onClose: () => void;
+  onSave: (rules: RebuyRules) => void;
+}) {
+  const { money } = useMoney();
+  const [rules, setRules] = useState<RebuyRules>(
+    game.rebuyRules ?? { maxRebuys: null, closeAtBigBlind: null },
+  );
+  const closeOptions = upcomingBigBlinds(game);
+  // Offer a closing point while one is set, so it can be switched off.
+  const showClose =
+    closeOptions.length > 0 || game.rebuyRules?.closeAtBigBlind != null;
+  const effective: RebuyRules = {
+    maxRebuys: rules.maxRebuys,
+    closeAtBigBlind:
+      showClose && rules.maxRebuys !== 0 ? rules.closeAtBigBlind : null,
+  };
+  const used = mostRebuysUsed(game);
+  const error = rebuyRulesError(effective, used, null, money);
+  const closedNow =
+    effective.closeAtBigBlind !== null && game.ante >= effective.closeAtBigBlind;
+
+  function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!error) onSave(effective);
+  }
+
+  return (
+    <div
+      className="modal blind-editor-modal show"
+      role="presentation"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <form
+        className="sheet blind-editor-sheet"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="rebuy-editor-title"
+        onSubmit={submit}
+      >
+        <h2 id="rebuy-editor-title">Edit Rebuys</h2>
+        <p className="muted rule-note">
+          Each rebuy is the starting stack, {money(game.startStack)}. The big
+          blind is {money(game.ante)} now. Changes apply to the next rebuy.
+        </p>
+        <span className="label">Rebuys per player</span>
+        <RebuyRulesFields
+          rules={rules}
+          onChange={setRules}
+          closeOptions={closeOptions}
+          showClose={showClose}
+          idPrefix="edit"
+        />
+        {error ? (
+          <p className="field-error" role="alert">
+            {error}
+          </p>
+        ) : (
+          <p className="muted rule-note">
+            {describeRebuyRules(effective, game.currency) ?? "Unlimited rebuys"}
+            .{closedNow ? " Rebuys are closed from now on." : ""}
+          </p>
+        )}
+        <button className="primary full" type="submit" disabled={Boolean(error)}>
+          Save Rebuys
+        </button>
+        <button className="ghost full" type="button" onClick={onClose}>
+          Cancel
+        </button>
+      </form>
     </div>
   );
 }
@@ -6497,13 +6912,20 @@ function BuyInOptions({
     const amount = nextBuyIn(game, index);
     return amount === null ? [] : [{ player, index, amount }];
   });
-  if (!offers.length) return null;
+  // Busted players the host's rebuy limits stop, with the reason.
+  const blocked = game.players.flatMap((player, index) => {
+    const reason = player.stack === 0 ? rebuyBlockReason(game, index) : null;
+    return reason ? [{ player, index, reason }] : [];
+  });
+  if (!offers.length && !blocked.length) return null;
+  const rules = describeRebuyRules(game.rebuyRules, game.currency);
 
   return (
     <div className="buy-in-options">
       <span className="label">Buy in</span>
       <p className="muted small-note">
         A busted player can buy back in for the starting stack.
+        {rules ? ` ${rules}.` : ""}
       </p>
       {offers.map(({ player, index, amount }) => (
         <button
@@ -6516,6 +6938,15 @@ function BuyInOptions({
           <span className="contender-name">{player.name}</span>
           <span className="contender-amount">Buy in · {money(amount)}</span>
         </button>
+      ))}
+      {blocked.map(({ player, index, reason }) => (
+        <div className="contender" key={player.id || index} aria-disabled="true">
+          <Avatar name={player.name} playerId={player.id} size="small" />
+          <span className="contender-name">{player.name}</span>
+          <span className="contender-amount muted">
+            {reason === "max" ? "No rebuys left" : "Rebuys closed"}
+          </span>
+        </div>
       ))}
     </div>
   );
@@ -6649,6 +7080,7 @@ function TableHand({
   onToggleSplit,
   onSplitPot,
   onCancelHand,
+  lastTurn,
 }: GameViewProps & {
   blindsText: string;
   blindSchedule: ReactNode;
@@ -6756,6 +7188,7 @@ function TableHand({
           const spot = seatPosition(index, game.players.length);
           const folded = !hand.in[index];
           const isTurn = !showdown && current === index;
+          const flash = showdown ? undefined : flashFor(game, lastTurn, index);
           const contender = showdown && !folded;
           const inSplit = hand.splitSel?.includes(index) ?? false;
           const tappable = showdown
@@ -6779,6 +7212,7 @@ function TableHand({
             isTurn ? "turn" : "",
             contender ? (inSplit ? "in-split" : "contender") : "",
             undoSeat === index ? "picked" : "",
+            flash ? "just-acted" : "",
           ]
             .filter(Boolean)
             .join(" ");
@@ -6801,7 +7235,7 @@ function TableHand({
                   size={crowded ? "small" : "large"}
                 />
               </span>
-              <span className="table-seat-pill">
+              <span className="table-seat-pill" key={flash ?? "pill"}>
                 <b>{player.name.split(" ")[0]}</b>
                 <span className="table-seat-stack">{money(player.stack)}</span>
                 <small>{status}</small>
@@ -6941,6 +7375,7 @@ function PlayerRow({
   onUndo,
   roundClosed = false,
   dock = false,
+  flash,
 }: {
   game: GameState;
   playerIndex: number;
@@ -6948,11 +7383,18 @@ function PlayerRow({
   onUndo: (playerIndex: number) => void;
   /** This player's action closed the round; keep the card open but locked. */
   roundClosed?: boolean;
+  /** Set while this player's action is the latest; its status flashes. */
+  flash?: number;
   /** The table's action dock under the oval, which names who is to act. */
   dock?: boolean;
 }) {
   const { money, symbol } = useMoney();
   const [amount, setAmount] = useState("");
+  // The quick size last tapped and the amount it set; it stays highlighted
+  // only while the amount is unchanged, so typing or sliding clears it.
+  const [picked, setPicked] = useState<{ label: string; amount: string } | null>(
+    null,
+  );
   const [showRaiseHelp, setShowRaiseHelp] = useState(false);
   const hand = game.hand;
   if (!hand) return null;
@@ -6993,7 +7435,12 @@ function PlayerRow({
             <b>{player.name}</b>
             <small>{stackLine}</small>
           </div>
-          <span className="status-pill">{seatStatus(game, playerIndex, money)}</span>
+          <span
+            className={`status-pill ${flash ? "just-acted" : ""}`}
+            key={flash ?? "status"}
+          >
+            {seatStatus(game, playerIndex, money)}
+          </span>
           {canUndo ? (
             <button
               className="pill-button"
@@ -7018,7 +7465,7 @@ function PlayerRow({
           </div>
           <input className="bet-range" type="range" disabled defaultValue={0} />
           <div className="quick-sizes">
-            {["Min", "½ Pot", "Pot", "All in"].map((label) => (
+            {["⅓ Pot", "½ Pot", "Pot", "All in"].map((label) => (
               <button key={label} type="button" disabled>
                 {label}
               </button>
@@ -7050,7 +7497,12 @@ function PlayerRow({
             <b>{player.name}</b>
             <small>{stackLine}</small>
           </div>
-          <span className="status-pill">{seatStatus(game, playerIndex, money)}</span>
+          <span
+            className={`status-pill ${flash ? "just-acted" : ""}`}
+            key={flash ?? "status"}
+          >
+            {seatStatus(game, playerIndex, money)}
+          </span>
           {canUndo ? (
             <button
               className="pill-button"
@@ -7069,7 +7521,7 @@ function PlayerRow({
   const quickAmount = (target: number) =>
     Math.max(minimum, Math.min(player.stack, Math.round(target)));
   const quickSizes = [
-    { label: "Min", value: null },
+    { label: "⅓ Pot", value: quickAmount(hand.pot / 3) },
     { label: "½ Pot", value: quickAmount(hand.pot / 2) },
     { label: "Pot", value: quickAmount(hand.pot) },
     { label: "All in", value: player.stack },
@@ -7179,17 +7631,25 @@ function PlayerRow({
               }}
             />
             <div className="quick-sizes">
-              {quickSizes.map((size) => (
-                <button
-                  key={size.label}
-                  type="button"
-                  onClick={() =>
-                    setAmount(size.value === null ? "" : String(size.value))
-                  }
-                >
-                  {size.label}
-                </button>
-              ))}
+              {quickSizes.map((size) => {
+                const sizeAmount = String(size.value);
+                const selected =
+                  picked?.label === size.label && picked.amount === amount;
+                return (
+                  <button
+                    key={size.label}
+                    type="button"
+                    className={selected ? "selected" : undefined}
+                    aria-pressed={selected}
+                    onClick={() => {
+                      setAmount(sizeAmount);
+                      setPicked({ label: size.label, amount: sizeAmount });
+                    }}
+                  >
+                    {size.label}
+                  </button>
+                );
+              })}
             </div>
           </>
         ) : null}
@@ -7414,6 +7874,11 @@ function SessionCard({
             {formatDate(session.date)} · {session.hands} hands · Big blind{" "}
             {money(session.ante)} · {session.results.length} players
           </p>
+          {session.rebuyRules ? (
+            <p className="muted session-meta">
+              {describeRebuyRules(session.rebuyRules, currency)}
+            </p>
+          ) : null}
         </div>
         <div className="session-actions">
           {discarded ? (
