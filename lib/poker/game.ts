@@ -242,6 +242,7 @@ export function applyRaiseRules(
     size: raiseSize(game),
     open: [...open],
     full: false,
+    acted: [...hand.acted],
   };
   const total = hand.committed[playerIndex];
   const increase = total - hand.roundHigh;
@@ -272,6 +273,14 @@ export function undoRaiseRules(
   before: RaiseRecord | undefined,
 ) {
   const hand = game.hand!;
+  // A bet or raise made everyone act again; undoing it keeps everyone who
+  // had acted before it, or has acted since, as having acted.
+  if (before?.acted) {
+    hand.acted = hand.acted.map(
+      (acted, index) =>
+        index !== playerIndex && (acted || (before.acted?.[index] ?? false)),
+    );
+  }
   if (before?.full) {
     hand.raiseSize = before.size;
     hand.raiseOpen = [...before.open];
@@ -666,4 +675,33 @@ export function undoLastHand(game: GameState, now = Date.now()) {
   return true;
 }
 
-/** Refunds the current hand and restores the state from immediately before it was dealt. */
+/**
+ * Refunds the current hand and deals it again from the same seat, blinds and
+ * time, so it matches the moment it was first dealt.
+ */
+export function cancelCurrentHand(game: GameState, now = Date.now()) {
+  const hand = game.hand;
+  if (!hand) return false;
+  game.players.forEach((player, index) => {
+    player.stack = hand.stacksBeforeHand[index] ?? player.stack;
+  });
+  game.log = game.log.filter((line) => !belongsToHand(line, hand.no));
+  game.handNo = hand.no - 1;
+  if (hand.dealerIndexBefore !== undefined) {
+    game.dealerIndex = hand.dealerIndexBefore;
+  } else {
+    // Hands dealt before the fuller record: any seat whose next funded
+    // player is this hand's dealer deals the same positions again.
+    const funded = hand.stacksBeforeHand.map((stack) => stack > 0);
+    game.dealerIndex = previousEligibleIndex(funded, hand.dealerIndex);
+  }
+  if (hand.anteBefore !== undefined) {
+    game.ante = hand.anteBefore;
+    game.blindLevel = hand.blindLevelBefore ?? game.blindLevel;
+    game.blinds = hand.blindsBefore ?? null;
+    game.blindLevels = structuredClone(hand.blindLevelsBefore ?? []);
+  }
+  game.hand = null;
+  dealNewHand(game, hand.dealtAt ?? now);
+  return true;
+}

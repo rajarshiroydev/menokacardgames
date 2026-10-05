@@ -18,7 +18,7 @@ import { createPortal } from "react-dom";
 
 import {
   activeIndexes,
-  belongsToHand,
+  cancelCurrentHand,
   bigBlindAtLevel,
   betStops,
   blindStatus,
@@ -72,9 +72,12 @@ import {
   LEGACY_HISTORY_STORAGE_KEY,
   prepareLegacySessionsForAdoption,
   readHandLayout,
+  readTurnSound,
   storeHandLayout,
+  storeTurnSound,
   type HandLayout,
 } from "@/lib/poker/storage";
+import { playTurnSound } from "@/lib/turn-sound";
 import { useRouter } from "next/navigation";
 import qrcode from "qrcode-generator";
 
@@ -496,7 +499,7 @@ function recordWin(game: GameState, line: string) {
 
 function awardPot(game: GameState, playerIndex: number, automatic = false) {
   const hand = game.hand;
-  if (!hand) return 0;
+  if (!hand) return;
   const pot = hand.pot;
   game.players[playerIndex].stack += pot;
   recordWin(
@@ -514,7 +517,6 @@ function awardPot(game: GameState, playerIndex: number, automatic = false) {
     split: false,
   };
   game.hand = null;
-  return pot;
 }
 
 export function PokerLedger({
@@ -585,6 +587,8 @@ export function PokerLedger({
   const [liveBusy, setLiveBusy] = useState(false);
   const [liveFailing, setLiveFailing] = useState(false);
   const [handLayout, setHandLayout] = useState<HandLayout>("list");
+  // The last action taken, so its seat can flash what it did.
+  const [lastTurn, setLastTurn] = useState<LastTurn | null>(null);
   const liveSync = useRef({ lastSent: 0, failures: 0 });
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -1423,12 +1427,23 @@ export function PokerLedger({
       );
     }
 
+    // Feedback that the tap registered, as the next player's card takes over.
+    if (readTurnSound()) {
+      playTurnSound(type === "check" || type === "fold" ? "tap" : "chips");
+    }
+    setLastTurn((previous) => ({
+      playerIndex,
+      handNo: hand.no,
+      stage: hand.stage,
+      seq: (previous?.seq ?? 0) + 1,
+    }));
+
     const active = activeIndexes(next);
     if (active.length === 1) {
       const winner = active[0];
-      const pot = awardPot(next, winner, true);
+      // The winner card announces it; no toast as well.
+      awardPot(next, winner, true);
       setGame(next);
-      showToast(`${next.players[winner].name} +${money(pot)}`);
       return;
     }
     hand.currentPlayer = nextPlayerToAct(next, playerIndex);
@@ -1441,6 +1456,7 @@ export function PokerLedger({
     const hand = next.hand;
     const action = hand?.last[playerIndex];
     if (!hand || !hand.acted[playerIndex] || !action) return;
+    setLastTurn(null);
 
     next.players[playerIndex].stack += action.chips;
     hand.committed[playerIndex] -= action.chips;
@@ -1489,9 +1505,8 @@ export function PokerLedger({
       `${game.players[playerIndex].name} wins`,
       () => {
         const next = structuredClone(game);
-        const pot = awardPot(next, playerIndex);
+        awardPot(next, playerIndex);
         setGame(next);
-        showToast(`${next.players[playerIndex].name} +${money(pot)}`);
       },
     );
   }
@@ -1550,7 +1565,6 @@ export function PokerLedger({
     };
     next.hand = null;
     setGame(next);
-    showToast(`Pot split ${winners.length} ways`);
   }
 
   function startNextHand() {
@@ -1626,15 +1640,7 @@ export function PokerLedger({
       "Cancel hand",
       () => {
         const next = structuredClone(game);
-        const hand = next.hand;
-        if (!hand) return;
-        next.players.forEach((player, index) => {
-          player.stack = hand.stacksBeforeHand[index];
-        });
-        next.log = next.log.filter((line) => !belongsToHand(line, hand.no));
-        next.handNo = hand.no - 1;
-        next.hand = null;
-        dealNewHand(next);
+        if (!cancelCurrentHand(next)) return;
         setGame(next);
         showToast("Hand cancelled");
       },
@@ -2087,6 +2093,7 @@ export function PokerLedger({
           <GameView
             game={game}
             layout={handLayout}
+            lastTurn={lastTurn}
             onAct={act}
             onUndoAction={undoAction}
             onNextStage={nextStage}
@@ -3192,9 +3199,11 @@ function SetupView({
   }
 
   function positionDraggedSeat(drag: NonNullable<typeof seatDragRef.current>) {
-    const x = drag.x - drag.startX;
+    // Vertical only: a row pushed past the screen's side edge widens the
+    // page, and phones zoom out to fit it, which moves the fixed tab bar
+    // and leaves it there after the drop.
     const y = drag.y - drag.startY + window.scrollY - drag.startScrollY;
-    drag.row.style.transform = `translate3d(${x}px, ${y}px, 0) scale(1.03)`;
+    drag.row.style.transform = `translate3d(0, ${y}px, 0) scale(1.03)`;
   }
 
   function scrollWhileDragging() {
@@ -4462,6 +4471,31 @@ function ProfileView({
   );
 }
 
+/** Profile's switch for the click on each action, saved on this device. */
+function TurnSoundSetting() {
+  // Profile only opens after the app has loaded, so storage can be read here.
+  const [on, setOn] = useState(readTurnSound);
+  return (
+    <div className="profile-sound">
+      <span>
+        <small>Sounds · on this device</small>
+        <b>Click when a player acts</b>
+      </span>
+      <button
+        className="switch"
+        type="button"
+        role="switch"
+        aria-checked={on}
+        aria-label="Click when a player acts"
+        onClick={() => {
+          storeTurnSound(!on);
+          setOn(!on);
+        }}
+      />
+    </div>
+  );
+}
+
 /** Profile's ⋯ button: who is signed in, Sign out and Delete my account. */
 function AccountMenu({
   email,
@@ -4952,6 +4986,7 @@ function ProfileCard({
           ))}
         </select>
       </label>
+      <TurnSoundSetting />
     </section>
     {/* Outside the card: its blur would trap a fixed-position sheet. */}
     {choosingAvatar ? (
@@ -5672,9 +5707,31 @@ function RenameSheet({
   );
 }
 
+/** The last action taken; seq tells two actions by one seat apart. */
+type LastTurn = {
+  playerIndex: number;
+  handNo: number;
+  stage: number;
+  seq: number;
+};
+
+/** The seq to flash a seat with, while its action is the latest on this street. */
+function flashFor(game: GameState, lastTurn: LastTurn | null, playerIndex: number) {
+  const hand = game.hand;
+  return lastTurn &&
+    hand &&
+    lastTurn.playerIndex === playerIndex &&
+    lastTurn.handNo === hand.no &&
+    lastTurn.stage === hand.stage &&
+    hand.last[playerIndex]
+    ? lastTurn.seq
+    : undefined;
+}
+
 type GameViewProps = {
   game: GameState;
   layout: HandLayout;
+  lastTurn: LastTurn | null;
   onAct: (
     playerIndex: number,
     type: PlayerAction["type"],
@@ -5883,6 +5940,7 @@ function GameView(props: GameViewProps) {
                   game={game}
                   playerIndex={playerIndex}
                   roundClosed={playerIndex === closer}
+                  flash={flashFor(game, props.lastTurn, playerIndex)}
                   onAct={props.onAct}
                   onUndo={props.onUndoAction}
                 />
@@ -7022,6 +7080,7 @@ function TableHand({
   onToggleSplit,
   onSplitPot,
   onCancelHand,
+  lastTurn,
 }: GameViewProps & {
   blindsText: string;
   blindSchedule: ReactNode;
@@ -7129,6 +7188,7 @@ function TableHand({
           const spot = seatPosition(index, game.players.length);
           const folded = !hand.in[index];
           const isTurn = !showdown && current === index;
+          const flash = showdown ? undefined : flashFor(game, lastTurn, index);
           const contender = showdown && !folded;
           const inSplit = hand.splitSel?.includes(index) ?? false;
           const tappable = showdown
@@ -7152,6 +7212,7 @@ function TableHand({
             isTurn ? "turn" : "",
             contender ? (inSplit ? "in-split" : "contender") : "",
             undoSeat === index ? "picked" : "",
+            flash ? "just-acted" : "",
           ]
             .filter(Boolean)
             .join(" ");
@@ -7174,7 +7235,7 @@ function TableHand({
                   size={crowded ? "small" : "large"}
                 />
               </span>
-              <span className="table-seat-pill">
+              <span className="table-seat-pill" key={flash ?? "pill"}>
                 <b>{player.name.split(" ")[0]}</b>
                 <span className="table-seat-stack">{money(player.stack)}</span>
                 <small>{status}</small>
@@ -7314,6 +7375,7 @@ function PlayerRow({
   onUndo,
   roundClosed = false,
   dock = false,
+  flash,
 }: {
   game: GameState;
   playerIndex: number;
@@ -7321,11 +7383,18 @@ function PlayerRow({
   onUndo: (playerIndex: number) => void;
   /** This player's action closed the round; keep the card open but locked. */
   roundClosed?: boolean;
+  /** Set while this player's action is the latest; its status flashes. */
+  flash?: number;
   /** The table's action dock under the oval, which names who is to act. */
   dock?: boolean;
 }) {
   const { money, symbol } = useMoney();
   const [amount, setAmount] = useState("");
+  // The quick size last tapped and the amount it set; it stays highlighted
+  // only while the amount is unchanged, so typing or sliding clears it.
+  const [picked, setPicked] = useState<{ label: string; amount: string } | null>(
+    null,
+  );
   const [showRaiseHelp, setShowRaiseHelp] = useState(false);
   const hand = game.hand;
   if (!hand) return null;
@@ -7366,7 +7435,12 @@ function PlayerRow({
             <b>{player.name}</b>
             <small>{stackLine}</small>
           </div>
-          <span className="status-pill">{seatStatus(game, playerIndex, money)}</span>
+          <span
+            className={`status-pill ${flash ? "just-acted" : ""}`}
+            key={flash ?? "status"}
+          >
+            {seatStatus(game, playerIndex, money)}
+          </span>
           {canUndo ? (
             <button
               className="pill-button"
@@ -7391,7 +7465,7 @@ function PlayerRow({
           </div>
           <input className="bet-range" type="range" disabled defaultValue={0} />
           <div className="quick-sizes">
-            {["Min", "½ Pot", "Pot", "All in"].map((label) => (
+            {["⅓ Pot", "½ Pot", "Pot", "All in"].map((label) => (
               <button key={label} type="button" disabled>
                 {label}
               </button>
@@ -7423,7 +7497,12 @@ function PlayerRow({
             <b>{player.name}</b>
             <small>{stackLine}</small>
           </div>
-          <span className="status-pill">{seatStatus(game, playerIndex, money)}</span>
+          <span
+            className={`status-pill ${flash ? "just-acted" : ""}`}
+            key={flash ?? "status"}
+          >
+            {seatStatus(game, playerIndex, money)}
+          </span>
           {canUndo ? (
             <button
               className="pill-button"
@@ -7442,7 +7521,7 @@ function PlayerRow({
   const quickAmount = (target: number) =>
     Math.max(minimum, Math.min(player.stack, Math.round(target)));
   const quickSizes = [
-    { label: "Min", value: null },
+    { label: "⅓ Pot", value: quickAmount(hand.pot / 3) },
     { label: "½ Pot", value: quickAmount(hand.pot / 2) },
     { label: "Pot", value: quickAmount(hand.pot) },
     { label: "All in", value: player.stack },
@@ -7552,17 +7631,25 @@ function PlayerRow({
               }}
             />
             <div className="quick-sizes">
-              {quickSizes.map((size) => (
-                <button
-                  key={size.label}
-                  type="button"
-                  onClick={() =>
-                    setAmount(size.value === null ? "" : String(size.value))
-                  }
-                >
-                  {size.label}
-                </button>
-              ))}
+              {quickSizes.map((size) => {
+                const sizeAmount = String(size.value);
+                const selected =
+                  picked?.label === size.label && picked.amount === amount;
+                return (
+                  <button
+                    key={size.label}
+                    type="button"
+                    className={selected ? "selected" : undefined}
+                    aria-pressed={selected}
+                    onClick={() => {
+                      setAmount(sizeAmount);
+                      setPicked({ label: size.label, amount: sizeAmount });
+                    }}
+                  >
+                    {size.label}
+                  </button>
+                );
+              })}
             </div>
           </>
         ) : null}

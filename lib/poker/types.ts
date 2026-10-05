@@ -40,6 +40,8 @@ export type RaiseRecord = {
   open: boolean[];
   /** The action was a full raise, which changed the rules for everyone. */
   full: boolean;
+  /** Who had acted this street before the action. Older actions lack it. */
+  acted?: boolean[];
 };
 
 export type Hand = {
