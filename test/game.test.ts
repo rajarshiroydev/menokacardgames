@@ -7,6 +7,7 @@ import {
   blindStatus,
   betStops,
   buyInPlayer,
+  cancelCurrentHand,
   completedHandRecord,
   dealNewHand,
   editBlindSchedule,
@@ -509,6 +510,53 @@ describe("raise sizes", () => {
     assert.deepEqual(hand.raiseOpen, [false, true, true]);
   });
 
+  /** Takes a player's last chips back, as the table's Undo does. */
+  function undoBet(
+    game: GameState,
+    playerIndex: number,
+    chips: number,
+    before: ReturnType<typeof betTo>,
+  ) {
+    const hand = dealtHand(game);
+    game.players[playerIndex].stack += chips;
+    hand.committed[playerIndex] -= chips;
+    hand.pot -= chips;
+    hand.acted[playerIndex] = false;
+    hand.roundHigh = Math.max(0, ...hand.committed);
+    undoRaiseRules(game, playerIndex, before);
+  }
+
+  test("undoing a raise doesn't make the callers before it act again", () => {
+    const game = gameState();
+    dealNewHand(game);
+    const hand = dealtHand(game);
+
+    betTo(game, 0, 100);
+    betTo(game, 1, 100);
+    const raise = betTo(game, 2, 400);
+    assert.deepEqual(pendingIndexes(game), [0, 1]);
+
+    undoBet(game, 2, 300, raise);
+    assert.deepEqual(hand.acted, [true, true, false]);
+    assert.deepEqual(pendingIndexes(game), [2]);
+
+    betTo(game, 2, 100);
+    assert.deepEqual(pendingIndexes(game), []);
+  });
+
+  test("undoing a raise out of turn keeps the players who acted after it", () => {
+    const game = gameState();
+    dealNewHand(game);
+    const hand = dealtHand(game);
+
+    const raise = betTo(game, 0, 400);
+    betTo(game, 1, 400);
+
+    undoBet(game, 0, 400, raise);
+    assert.deepEqual(hand.acted, [false, true, false]);
+    assert.deepEqual(pendingIndexes(game), [0, 2]);
+  });
+
   test("treats hands saved before these rules as open at the big blind", () => {
     const game = gameState();
     dealNewHand(game);
@@ -687,6 +735,75 @@ describe("undo last hand", () => {
       dealtHand(game).bigBlindIndex,
       before.hand!.bigBlindIndex,
     );
+  });
+});
+
+describe("cancel hand", () => {
+  const MINUTE_MS = 60_000;
+
+  function playTo(game: GameState, hands: number, start = 1_000) {
+    game.players.forEach((player) => {
+      player.buyIns ??= [game.startStack];
+    });
+    for (let index = 0; index < hands; index += 1) {
+      dealNewHand(game, start + index * MINUTE_MS);
+      betTo(game, dealtHand(game).currentPlayer!, 300);
+      finishHand(game, index % game.players.length);
+    }
+  }
+
+  test("deals the cancelled hand again with the same dealer and blinds", () => {
+    for (const hands of [0, 2]) {
+      const game = gameState();
+      game.players.push({ name: "D", stack: 100_000 });
+      playTo(game, hands);
+      dealNewHand(game, 10 * MINUTE_MS);
+      const before = structuredClone(game);
+      betTo(game, dealtHand(game).currentPlayer!, 400);
+      betTo(game, dealtHand(game).currentPlayer!, 400);
+
+      assert.ok(cancelCurrentHand(game, 99 * MINUTE_MS));
+      assert.deepEqual(game, before, `after ${hands} hands`);
+    }
+  });
+
+  test("keeps the blind level of the cancelled hand, by hands or by time", () => {
+    for (const schedule of [
+      { unit: "hands", every: 1, raiseType: "multiply", raiseBy: 2 },
+      { unit: "minutes", every: 2, raiseType: "add", raiseBy: 100 },
+    ] satisfies BlindSchedule[]) {
+      const game = gameState(schedule);
+      game.blindPlans = [
+        { effectiveHand: 1, effectiveAt: 0, baseBigBlind: 100, schedule },
+      ];
+      playTo(game, 3, 0);
+      dealNewHand(game, 5 * MINUTE_MS);
+      const before = structuredClone(game);
+      betTo(game, dealtHand(game).currentPlayer!, 900);
+
+      assert.ok(cancelCurrentHand(game, 60 * MINUTE_MS));
+      assert.deepEqual(game, before, schedule.unit);
+    }
+  });
+
+  test("finds the dealer for hands dealt before the fuller record", () => {
+    const game = gameState();
+    playTo(game, 2);
+    dealNewHand(game, 10 * MINUTE_MS);
+    const before = structuredClone(game);
+    const hand = dealtHand(game);
+    delete hand.dealerIndexBefore;
+    delete hand.anteBefore;
+
+    assert.ok(cancelCurrentHand(game));
+    assert.deepEqual(game.players, before.players);
+    assert.equal(dealtHand(game).dealerIndex, before.hand!.dealerIndex);
+    assert.equal(dealtHand(game).bigBlindIndex, before.hand!.bigBlindIndex);
+  });
+
+  test("does nothing between hands", () => {
+    const game = gameState();
+    assert.equal(cancelCurrentHand(game), false);
   });
 });
 

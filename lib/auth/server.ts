@@ -40,6 +40,23 @@ export function exchangeMagicLinkVerifier(request: Request) {
   });
 }
 
+/**
+ * Neon Auth extends a session each day it is used, but the SDK's session cache
+ * answers get-session itself and drops the renewed session_token cookie, so
+ * the browser's cookie would still expire 7 days after sign-in. Skipping the
+ * cache asks Neon Auth directly; the response carries any cookies it renewed.
+ */
+export function fetchUncachedSession(request: Request) {
+  const url = new URL(request.url);
+  url.search = "?disableCookieCache=true";
+  return handleAuthProxyRequest({
+    request: new Request(url, { method: "GET", headers: request.headers }),
+    path: "get-session",
+    baseUrl,
+    cookieSecret,
+  });
+}
+
 export type HostSession = NonNullable<Awaited<ReturnType<typeof getHostSession>>>;
 
 export async function getHostSession() {
