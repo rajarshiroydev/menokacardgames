@@ -18,7 +18,7 @@ import { createPortal } from "react-dom";
 
 import {
   activeIndexes,
-  belongsToHand,
+  cancelCurrentHand,
   bigBlindAtLevel,
   betStops,
   blindStatus,
@@ -1626,15 +1626,7 @@ export function PokerLedger({
       "Cancel hand",
       () => {
         const next = structuredClone(game);
-        const hand = next.hand;
-        if (!hand) return;
-        next.players.forEach((player, index) => {
-          player.stack = hand.stacksBeforeHand[index];
-        });
-        next.log = next.log.filter((line) => !belongsToHand(line, hand.no));
-        next.handNo = hand.no - 1;
-        next.hand = null;
-        dealNewHand(next);
+        if (!cancelCurrentHand(next)) return;
         setGame(next);
         showToast("Hand cancelled");
       },

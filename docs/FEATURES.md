@@ -186,8 +186,8 @@ The **Profile** tab replaced the Players tab on 30 September 2026. From the top:
 
 ## 9. Fixing mistakes
 
-- **Undo (one action):** undoes a player's latest action in the current betting round, and that player acts again.
-- **Cancel hand:** refunds every chip from the current hand, including the blinds, and immediately deals a fresh hand with the same hand number. The dealer button moves on to the next player.
+- **Undo (one action):** undoes a player's latest action in the current betting round, and that player acts again. Undoing a bet or raise doesn't make the players who had already called or checked before it act again.
+- **Cancel hand:** refunds every chip from the current hand, including the blinds, and deals the same hand again exactly as it was first dealt: the same hand number, dealer, small blind and big blind, and the same blind level (even for timed blinds that have gone up since), with its log lines removed.
 - **Undo last hand:** reverses the last completed hand and deals it again exactly as it was first dealt: the same dealer, small blind and big blind, the same blind level (even for timed blinds that have since gone up), everyone's stacks and buy-ins from before it, and its log lines removed. If the next hand was already dealt, that hand is undone too, and any rebuy made in between is taken back. Only the most recent completed hand can be undone.
 - **Discard game:** throws away the game in progress without saving. Asks for confirmation first.
 - Every one of these asks for confirmation before anything changes.
