@@ -2414,14 +2414,18 @@ function Avatar({
   size?: "large" | "small";
 }) {
   const lookup = useContext(AvatarContext);
+  // Heads-up, the dealer also posts the small blind: the white D badge
+  // moves to the left so the blind badge keeps the right.
+  const roles = role ? role.split(" ") : [];
+  const dealer = roles.includes("D");
+  const blind = roles.find((part) => part !== "D");
   return (
     <span className={`avatar avatar-${size}`} aria-hidden="true">
       <AvatarArt id={avatar ?? lookup(playerId, name)} seed={name} />
-      {role ? (
-        <span className={`role-badge ${role === "D" ? "dealer" : ""}`}>
-          {role}
-        </span>
+      {dealer ? (
+        <span className={`role-badge dealer${blind ? " paired" : ""}`}>D</span>
       ) : null}
+      {blind ? <span className="role-badge">{blind}</span> : null}
     </span>
   );
 }
@@ -4514,7 +4518,6 @@ function ProfileView({
           rows.map((row) => {
             const actions = actionsFor(row);
             const open = menu === row.key;
-            const onApp = row.kind === "self" || row.kind === "friend";
             return (
               <div className="profile-row-wrap" key={row.key}>
                 <PressableRow
@@ -4523,10 +4526,7 @@ function ProfileView({
                     actions.length ? (element) => openMenu(row.key, element) : null
                   }
                 >
-                  <span
-                    className={`profile-avatar${onApp ? " on-app" : ""}`}
-                    aria-hidden="true"
-                  >
+                  <span className="profile-avatar" aria-hidden="true">
                     <AvatarArt id={row.avatar} seed={row.name} />
                   </span>
                   <span className="profile-row-copy">
@@ -5283,7 +5283,7 @@ function FriendRequestCard({
       id={`friend-request-${request.requestId}`}
     >
       <div className="profile-request-head">
-        <span className="profile-avatar on-app" aria-hidden="true">
+        <span className="profile-avatar" aria-hidden="true">
           <AvatarArt id={request.avatar} seed={name} />
         </span>
         <div>
@@ -5578,7 +5578,7 @@ function AddPlayerSheet({
         {found ? (
           <div className="profile-found">
             <div className="profile-found-head">
-              <span className="profile-avatar on-app" aria-hidden="true">
+              <span className="profile-avatar" aria-hidden="true">
                 <AvatarArt id={found.avatar} seed={found.displayName ?? ""} />
               </span>
               <span className="profile-row-copy">

@@ -720,6 +720,11 @@ textarea::placeholder {
   color: var(--bg);
 }
 
+.role-badge.dealer.paired {
+  right: auto;
+  left: -6px;
+}
+
 /* ------------------------------------------------------------------
    App shell, header, tab bar, toast
    ------------------------------------------------------------------ */
@@ -1788,10 +1793,11 @@ textarea::placeholder {
   flex: none;
   width: 68px;
   height: 68px;
-  padding: 3px;
+  padding: 0;
   border: 0;
   border-radius: 50%;
-  background: linear-gradient(135deg, var(--g), var(--b));
+  background: var(--glass2);
+  box-shadow: 0 0 0 1px var(--gb);
 }
 
 .profile-ring > span:first-child {
@@ -2333,13 +2339,6 @@ textarea::placeholder {
   border-radius: 50%;
   background: var(--glass2);
   box-shadow: 0 0 0 1px var(--gb);
-}
-
-/* People on Pokerize get a green-to-blue ring around their avatar. */
-.profile-avatar.on-app {
-  padding: 2px;
-  background: linear-gradient(135deg, var(--g), var(--b));
-  box-shadow: none;
 }
 
 .profile-row-copy {

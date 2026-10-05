@@ -46,7 +46,7 @@ The **Profile** tab replaced the Players tab on 30 September 2026. From the top:
 
 **Your card**
 
-- **Your avatar**, in a green-and-blue ring, next to your name. Tap it (it has a small ✎ badge) to choose another; see **Avatars** below.
+- **Your avatar** next to your name. Tap it (it has a small ✎ badge) to choose another; see **Avatars** below.
 - **Your name**, large, with an **⋯** account menu beside it: "Signed in as" your email, **Edit name**, **Sign out** and **Delete my account**. **Edit name** turns the name into a box with **Save** (1 to 40 characters; Escape cancels). Under the name: "Playing since" the month of your first counted game, or "No games yet".
 - **All-time net**: everything you've won or lost, in your currency. It's green when you're ahead and red when you're behind.
 - **Last 10**: one small bar for each of your latest games (up to 10, in your currency), green up for a win and red down for a loss, taller for bigger results. Hover or long-press a bar for its date and result.
@@ -67,7 +67,7 @@ The **Profile** tab replaced the Players tab on 30 September 2026. From the top:
 - **Filters:** **All**, **Friends** (you, your friends and requests you've sent) and **Guests** (players without an account), each with its count.
 - **Each row** shows the player's avatar, name and a short line (no money amounts; wins and losses are on the Ranks tab):
   - **You**, for your own player (no game count);
-  - **Friend · Played 21 games together**, for a friend, with a green-and-blue ring around their avatar (your own avatar has the same ring);
+  - **Friend · Played 21 games together**, for a friend. Avatars have no coloured ring anywhere in the app, whether friend, guest or you (since 5 October 2026);
   - **Request sent · waiting**, for someone you've sent a friend request;
   - **Guest · Played 26 games together**, for everyone else.
   The count is every saved game you both played in, whoever hosted it ("Played 1 game together" for one): your own games, a friend's games and games hosted by someone else. A game hosted by someone else counts only while that host has each of you linked as a friend (not as a guest). It is worked out again each time Profile opens, so when a host links you later, their earlier games count too, and removing a friend or link takes them out. For guests it counts your own games where you both sat. Until the counts load, rows show just Friend or Guest.
@@ -130,7 +130,7 @@ The **Profile** tab replaced the Players tab on 30 September 2026. From the top:
 
 ## 6. Playing a hand
 
-- **Positions rotate automatically.** Each hand the dealer button, small blind and big blind move to the next player in seat order who still has chips. With only two players left, the dealer posts the small blind. A badge on each player's initial shows **D** (dealer), **SB** or **BB** (both, "D SB", for the heads-up dealer).
+- **Positions rotate automatically.** Each hand the dealer button, small blind and big blind move to the next player in seat order who still has chips. With only two players left, the dealer posts the small blind. A badge on each player's avatar shows **D** (dealer, in white), **SB** or **BB** (in blue). The heads-up dealer gets two separate badges: a white **D** on the left and a blue **SB** on the right (since 5 October 2026).
 - **Seat cards.** Each player has a card with their initial in their own colour, their stack and how much they have put in this street, and a status such as Waiting, Small blind ₹50, Big blind ₹100, Checked, Called ₹200, Bet ₹100, Raised to ₹700, All in ₹2,000 or Folded. Folded players are faded and listed last.
 - **Blinds are posted automatically** when a hand is dealt. A player with fewer chips than the blind posts what they have.
 - **Stages:** pre-flop, flop, turn and river, shown as a progress bar. Cards are dealt physically; the app only tracks chips.

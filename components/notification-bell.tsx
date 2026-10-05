@@ -118,7 +118,7 @@ export function NotificationBell({
             <ul>
               {listed.map((item) => (
                 <li key={item.key} className={item.unread ? "unread" : ""}>
-                  <span className="profile-avatar on-app" aria-hidden="true">
+                  <span className="profile-avatar" aria-hidden="true">
                     <AvatarArt id={item.avatar} seed={item.displayName} />
                   </span>
                   <div className="notification-text">
