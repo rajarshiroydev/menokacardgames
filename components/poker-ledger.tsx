@@ -3153,9 +3153,11 @@ function SetupView({
   }
 
   function positionDraggedSeat(drag: NonNullable<typeof seatDragRef.current>) {
-    const x = drag.x - drag.startX;
+    // Vertical only: a row pushed past the screen's side edge widens the
+    // page, and phones zoom out to fit it, which moves the fixed tab bar
+    // and leaves it there after the drop.
     const y = drag.y - drag.startY + window.scrollY - drag.startScrollY;
-    drag.row.style.transform = `translate3d(${x}px, ${y}px, 0) scale(1.03)`;
+    drag.row.style.transform = `translate3d(0, ${y}px, 0) scale(1.03)`;
   }
 
   function scrollWhileDragging() {
