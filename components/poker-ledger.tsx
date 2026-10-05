@@ -62,9 +62,12 @@ import {
   LEGACY_HISTORY_STORAGE_KEY,
   prepareLegacySessionsForAdoption,
   readHandLayout,
+  readTurnSound,
   storeHandLayout,
+  storeTurnSound,
   type HandLayout,
 } from "@/lib/poker/storage";
+import { playTurnSound } from "@/lib/turn-sound";
 import { useRouter } from "next/navigation";
 import qrcode from "qrcode-generator";
 
@@ -573,6 +576,8 @@ export function PokerLedger({
   const [liveBusy, setLiveBusy] = useState(false);
   const [liveFailing, setLiveFailing] = useState(false);
   const [handLayout, setHandLayout] = useState<HandLayout>("list");
+  // The last action taken, so its seat can flash what it did.
+  const [lastTurn, setLastTurn] = useState<LastTurn | null>(null);
   const liveSync = useRef({ lastSent: 0, failures: 0 });
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -1407,6 +1412,17 @@ export function PokerLedger({
       );
     }
 
+    // Feedback that the tap registered, as the next player's card takes over.
+    if (readTurnSound()) {
+      playTurnSound(type === "check" || type === "fold" ? "tap" : "chips");
+    }
+    setLastTurn((previous) => ({
+      playerIndex,
+      handNo: hand.no,
+      stage: hand.stage,
+      seq: (previous?.seq ?? 0) + 1,
+    }));
+
     const active = activeIndexes(next);
     if (active.length === 1) {
       const winner = active[0];
@@ -1425,6 +1441,7 @@ export function PokerLedger({
     const hand = next.hand;
     const action = hand?.last[playerIndex];
     if (!hand || !hand.acted[playerIndex] || !action) return;
+    setLastTurn(null);
 
     next.players[playerIndex].stack += action.chips;
     hand.committed[playerIndex] -= action.chips;
@@ -2061,6 +2078,7 @@ export function PokerLedger({
           <GameView
             game={game}
             layout={handLayout}
+            lastTurn={lastTurn}
             onAct={act}
             onUndoAction={undoAction}
             onNextStage={nextStage}
@@ -4373,6 +4391,31 @@ function ProfileView({
   );
 }
 
+/** Profile's switch for the click on each action, saved on this device. */
+function TurnSoundSetting() {
+  // Profile only opens after the app has loaded, so storage can be read here.
+  const [on, setOn] = useState(readTurnSound);
+  return (
+    <div className="profile-sound">
+      <span>
+        <small>Sounds · on this device</small>
+        <b>Click when a player acts</b>
+      </span>
+      <button
+        className="switch"
+        type="button"
+        role="switch"
+        aria-checked={on}
+        aria-label="Click when a player acts"
+        onClick={() => {
+          storeTurnSound(!on);
+          setOn(!on);
+        }}
+      />
+    </div>
+  );
+}
+
 /** Profile's ⋯ button: who is signed in, Sign out and Delete my account. */
 function AccountMenu({
   email,
@@ -4863,6 +4906,7 @@ function ProfileCard({
           ))}
         </select>
       </label>
+      <TurnSoundSetting />
     </section>
     {/* Outside the card: its blur would trap a fixed-position sheet. */}
     {choosingAvatar ? (
@@ -5583,9 +5627,31 @@ function RenameSheet({
   );
 }
 
+/** The last action taken; seq tells two actions by one seat apart. */
+type LastTurn = {
+  playerIndex: number;
+  handNo: number;
+  stage: number;
+  seq: number;
+};
+
+/** The seq to flash a seat with, while its action is the latest on this street. */
+function flashFor(game: GameState, lastTurn: LastTurn | null, playerIndex: number) {
+  const hand = game.hand;
+  return lastTurn &&
+    hand &&
+    lastTurn.playerIndex === playerIndex &&
+    lastTurn.handNo === hand.no &&
+    lastTurn.stage === hand.stage &&
+    hand.last[playerIndex]
+    ? lastTurn.seq
+    : undefined;
+}
+
 type GameViewProps = {
   game: GameState;
   layout: HandLayout;
+  lastTurn: LastTurn | null;
   onAct: (
     playerIndex: number,
     type: PlayerAction["type"],
@@ -5784,6 +5850,7 @@ function GameView(props: GameViewProps) {
                   game={game}
                   playerIndex={playerIndex}
                   roundClosed={playerIndex === closer}
+                  flash={flashFor(game, props.lastTurn, playerIndex)}
                   onAct={props.onAct}
                   onUndo={props.onUndoAction}
                 />
@@ -6647,6 +6714,7 @@ function TableHand({
   onToggleSplit,
   onSplitPot,
   onCancelHand,
+  lastTurn,
 }: GameViewProps & {
   blindsText: string;
   blindSchedule: ReactNode;
@@ -6754,6 +6822,7 @@ function TableHand({
           const spot = seatPosition(index, game.players.length);
           const folded = !hand.in[index];
           const isTurn = !showdown && current === index;
+          const flash = showdown ? undefined : flashFor(game, lastTurn, index);
           const contender = showdown && !folded;
           const inSplit = hand.splitSel?.includes(index) ?? false;
           const tappable = showdown
@@ -6777,6 +6846,7 @@ function TableHand({
             isTurn ? "turn" : "",
             contender ? (inSplit ? "in-split" : "contender") : "",
             undoSeat === index ? "picked" : "",
+            flash ? "just-acted" : "",
           ]
             .filter(Boolean)
             .join(" ");
@@ -6799,7 +6869,7 @@ function TableHand({
                   size={crowded ? "small" : "large"}
                 />
               </span>
-              <span className="table-seat-pill">
+              <span className="table-seat-pill" key={flash ?? "pill"}>
                 <b>{player.name.split(" ")[0]}</b>
                 <span className="table-seat-stack">{money(player.stack)}</span>
                 <small>{status}</small>
@@ -6939,6 +7009,7 @@ function PlayerRow({
   onUndo,
   roundClosed = false,
   dock = false,
+  flash,
 }: {
   game: GameState;
   playerIndex: number;
@@ -6946,6 +7017,8 @@ function PlayerRow({
   onUndo: (playerIndex: number) => void;
   /** This player's action closed the round; keep the card open but locked. */
   roundClosed?: boolean;
+  /** Set while this player's action is the latest; its status flashes. */
+  flash?: number;
   /** The table's action dock under the oval, which names who is to act. */
   dock?: boolean;
 }) {
@@ -6996,7 +7069,12 @@ function PlayerRow({
             <b>{player.name}</b>
             <small>{stackLine}</small>
           </div>
-          <span className="status-pill">{seatStatus(game, playerIndex, money)}</span>
+          <span
+            className={`status-pill ${flash ? "just-acted" : ""}`}
+            key={flash ?? "status"}
+          >
+            {seatStatus(game, playerIndex, money)}
+          </span>
           {canUndo ? (
             <button
               className="pill-button"
@@ -7053,7 +7131,12 @@ function PlayerRow({
             <b>{player.name}</b>
             <small>{stackLine}</small>
           </div>
-          <span className="status-pill">{seatStatus(game, playerIndex, money)}</span>
+          <span
+            className={`status-pill ${flash ? "just-acted" : ""}`}
+            key={flash ?? "status"}
+          >
+            {seatStatus(game, playerIndex, money)}
+          </span>
           {canUndo ? (
             <button
               className="pill-button"

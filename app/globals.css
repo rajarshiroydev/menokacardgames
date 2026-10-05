@@ -2055,7 +2055,8 @@ textarea::placeholder {
 }
 
 .profile-code-row,
-.profile-currency {
+.profile-currency,
+.profile-sound {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -2064,13 +2065,15 @@ textarea::placeholder {
 }
 
 .profile-code-row > div:first-child,
-.profile-currency > span {
+.profile-currency > span,
+.profile-sound > span {
   flex: 1;
   min-width: 0;
 }
 
 .profile-code-row small,
-.profile-currency small {
+.profile-currency small,
+.profile-sound small {
   display: block;
   color: var(--ink3);
   font-size: 11px;
@@ -2096,7 +2099,8 @@ textarea::placeholder {
   position: relative;
 }
 
-.profile-currency b {
+.profile-currency b,
+.profile-sound b {
   display: block;
   margin-top: 3px;
   font-size: 14px;
@@ -2649,6 +2653,47 @@ textarea::placeholder {
   box-shadow: 0 18px 40px -18px var(--g);
 }
 
+/* Turn feedback: the next player's card arrives with a glow, so a tap
+   visibly hands the turn on. The dock under the table slides in instead. */
+.seat-card.active {
+  animation: turn-arrive 0.32s ease-out;
+}
+
+.seat-card.active.dock {
+  animation-name: dock-arrive;
+}
+
+@keyframes turn-arrive {
+  from {
+    opacity: 0.5;
+    transform: translateY(6px) scale(0.985);
+    box-shadow:
+      0 0 0 4px color-mix(in oklch, var(--g) 45%, transparent),
+      0 18px 40px -18px var(--g);
+  }
+}
+
+@keyframes dock-arrive {
+  from {
+    opacity: 0;
+    transform: translateX(28px);
+  }
+}
+
+/* The seat that just acted shows what it did in green for a moment. */
+.status-pill.just-acted {
+  animation: acted-flash 1s ease-out;
+}
+
+@keyframes acted-flash {
+  0%,
+  45% {
+    background: var(--g);
+    color: var(--onacc);
+    transform: scale(1.08);
+  }
+}
+
 .seat-main {
   display: flex;
   align-items: center;
@@ -3134,6 +3179,28 @@ textarea::placeholder {
 
 .table-seat.turn .table-seat-pill {
   border-color: var(--g);
+}
+
+.table-seat.turn .table-seat-ring {
+  animation: seat-turn 0.35s ease-out;
+}
+
+@keyframes seat-turn {
+  from {
+    transform: scale(0.85);
+  }
+}
+
+.table-seat.just-acted .table-seat-pill {
+  animation: seat-acted 1s ease-out;
+}
+
+@keyframes seat-acted {
+  0%,
+  45% {
+    border-color: var(--g);
+    box-shadow: 0 0 14px color-mix(in oklch, var(--g) 60%, transparent);
+  }
 }
 
 .table-seat-pill b {
