@@ -1,6 +1,6 @@
 # Feature list
 
-Updated: 1 October 2026
+Updated: 2 October 2026
 
 This is a plain-language list of everything Pokerize can do today. It is written for anyone, technical or not. It describes how the app behaves right now; plans and future ideas live in the [feature plan](./FEATURE-PLAN.md).
 
@@ -154,10 +154,18 @@ The **Profile** tab replaced the Players tab on 30 September 2026. From the top:
 - **All-in run-out:** once betting can't continue (for example, everyone else is all in), the host can deal the remaining stages straight to the showdown without more betting.
 - **Action log:** a running list of what happened (bets, calls, folds, wins, buy-ins, blind changes), newest first, keeping the latest 80 entries. The 6 newest are shown; "Show all" opens the rest.
 - **In-game standings:** every player's current stack, total invested and running profit or loss, sorted by stack.
+- **List or Table view.** During a hand, a **List | Table** switch sits top right. List is the seat cards described above. Table draws the hand as an oval poker table (seat 1 at the top, the rest clockwise), with everything else on the screen unchanged:
+  - in the middle: the four stages as small bars, "Pot · Flop" (or "Pick the winner" / "Split the pot" at the showdown), the pot and the blinds (with the level, for example "₹50 / ₹100 · L2"). A blind schedule note shows under the table
+  - each seat shows the player's avatar with its D/SB/BB badge, first name, stack and status (on the table the blinds read "SB ₹50" and "BB ₹100"). The player to act has a green glowing ring and "To act"; folded players are faded
+  - chips in front of a seat show what that player has put in this street
+  - the acting player's betting panel (the same as in List, headed "Name to act" with their stack behind) is docked under the table. When the round ends it gives way to the Deal button
+  - **Undo** on the table: tap a player who has acted this street and a bar with their last action and an **Undo** button appears under the table. A dashed box under **Cancel hand** says "Tap on player to undo their action." (hidden at the showdown)
+  - the choice is remembered on this device; it starts on List. Between hands both views show the same Between Hands card, so the switch is hidden
 
 ## 7. Winning the pot
 
 - **Showdown.** Once the river betting is finished, the screen title changes to "Showdown" and a **Pick the winner** card lists everyone still in as "Name wins" with the pot. A confirmation asks before the pot is given.
+- **On the Table view** the seats of everyone still in turn blue and read "Tap to award"; tapping a seat asks the same confirmation as the Pick the winner card, which stays under the table. In a split, tapped seats turn green ("In split"), the others read "Tap to add".
 - **Split pot.** Choose "Split between two or more", then tap everyone who ties; untapped players say "Tap to include". The screen shows each player's share, and once at least 2 are chosen a "Split ₹X N ways" button appears. Splits are equal; any leftover single chips go to the tied players in seat order. "Back to one winner" leaves split mode.
 - **Winner celebration.** A card with confetti shows who won, the hand number and the pot size. Press **Next** to continue.
 
@@ -212,7 +220,7 @@ The **Profile** tab replaced the Players tab on 30 September 2026. From the top:
   - Rebuy limits carry on, and players keep the rebuys they already used; **Edit rebuys** can change them.
   - Blinds carry on from where the game finished. Blinds that go up every few hands keep counting hands. Blinds that go up every few minutes restart their clock at the current blinds, so time away from the table doesn't raise them.
   - Until it's saved again, the saved game stays exactly as it was. **Discard Game** on a continued game throws away only the hands played since.
-  - **Finish And Save Session** updates the same game: same number, name and date, with the new end time, hands, results and blind history; standings and friends' groups follow. It needs at least one new hand ("No new hands to save"). If the saved game was changed or discarded since it was continued (for example from another device), nothing is saved: "This game changed since you continued it".
+  - **Finish And Save Session** updates the same game: same number, name and date, with the new end time, hands, results and blind history; standings and friends' groups follow. If no new hand was completed, it offers **Close game** instead, which ends the continued game and leaves the saved game exactly as it was. If the saved game was changed or discarded since it was continued (for example from another device), nothing is saved: "This game changed since you continued it".
 
 ## 12. Standings and ranking
 
@@ -357,6 +365,17 @@ Everyone who signs in has their own account and can host their own games. Friend
 - **What a group doesn't show:** the host's game-by-game history, the running-average graph, the names of games left out of the ranking, discarded games, or anything you could change. The app works the standings out on the server and sends your phone only the list.
 - **When it updates:** each time you open the Ranks screen.
 - **When a group disappears:** as soon as either of you removes the friendship, or while the host's account is locked for deletion. There is no combined score across groups.
+
+## 21. Admin dashboard
+
+- **Who can open it:** only accounts the app's owner has added as admins, directly in the database. For everyone else `/admin` is an ordinary "page not found"; signed-out visitors go to sign-in.
+- **Read only:** nothing on the dashboard changes anyone's data.
+- **Overview:** number of signed-up users (new in the last 7 and 30 days), people who signed in during the last 7 days, guests, linked friends, games (last 7 and 30 days), hands dealt, total time at the table, hosts who played in the last 30 days, friendships, pending friend requests and live standings links in use; bar charts of sign-ups and games for each of the last 12 weeks; the newest users, the top 5 hosts by games hosted and the latest games.
+- **Users:** every account with name, email, user code, join date, last sign-in, games hosted, games played as someone's friend, last game, guests, friends and status (Active, No name, Deleting, Purging). Search by name, email or code; filter All, Hosts, No name yet or Deleting; sort by any column. Selecting a user opens their detail: every player in their ledger with games, net and last played; their latest 50 games with each player's buy-in, rebuys, cash-out and net; friends; and pending requests. Each time a user's detail is opened it is recorded in the admin's audit log.
+- **Guests:** every guest (a player who is neither a host's own player nor linked to an account) with code, the host who added them, date added, games, net and last played. Filter by host; removed guests are hidden unless **Show removed** is on.
+- **Games:** the latest 300 games across all hosts with host, time, length, players, hands, big blind, chips won and winner; select a game to see every player's result.
+- **System:** accounts waiting out their 30-day deletion period, the purge job's records, the 40 most recent audit events and the database migrations applied.
+- Times are shown in India time. **Updated** reloads the data.
 
 ---
 

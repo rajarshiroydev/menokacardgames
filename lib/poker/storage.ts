@@ -27,3 +27,25 @@ export function prepareLegacySessionsForAdoption(
       }),
     }));
 }
+
+/** How the live hand is shown on this device: the seat list or the table. */
+export const HAND_LAYOUT_STORAGE_KEY = "pokerLedger.handLayout.v1";
+export type HandLayout = "list" | "table";
+
+export function readHandLayout(): HandLayout {
+  try {
+    return window.localStorage.getItem(HAND_LAYOUT_STORAGE_KEY) === "table"
+      ? "table"
+      : "list";
+  } catch {
+    return "list";
+  }
+}
+
+export function storeHandLayout(layout: HandLayout) {
+  try {
+    window.localStorage.setItem(HAND_LAYOUT_STORAGE_KEY, layout);
+  } catch {
+    // Private windows may refuse storage; the choice lasts this visit only.
+  }
+}
