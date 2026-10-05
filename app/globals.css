@@ -2942,6 +2942,77 @@ textarea::placeholder {
   font-weight: 500;
 }
 
+/* Side pots: one block per pot on the showdown card. */
+.side-pot {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 10px;
+  border-top: 1px solid var(--gb);
+}
+
+.pot-refund {
+  padding: 10px 12px;
+  border: 1px dashed var(--gb);
+  border-radius: var(--rs);
+  color: var(--ink2);
+  font-size: 13px;
+}
+
+.pot-split {
+  color: var(--ink2);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-align: center;
+}
+
+.table-sidepots {
+  font-size: 10px;
+  font-weight: 700;
+  opacity: 0.85;
+  white-space: nowrap;
+}
+
+.winner-pots {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  margin: 4px 0 8px;
+  padding: 0;
+  list-style: none;
+}
+
+.winner-pots li {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1px solid var(--gb);
+  border-radius: var(--rs);
+  text-align: left;
+}
+
+.winner-pots b {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.winner-pot-label {
+  color: var(--ink2);
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.winner-pot-amount {
+  color: var(--g);
+  font-weight: 800;
+  white-space: nowrap;
+}
+
 /* ------------------------------------------------------------------
    Live hand as a table (design 7a): the oval with the action docked below
    ------------------------------------------------------------------ */

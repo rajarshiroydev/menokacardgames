@@ -18,6 +18,7 @@ import { createPortal } from "react-dom";
 
 import {
   activeIndexes,
+  awardPots,
   cancelCurrentHand,
   bigBlindAtLevel,
   betStops,
@@ -30,6 +31,9 @@ import {
   editBlindSchedule,
   formatDate,
   formatPercent,
+  hasSidePots,
+  potLabel,
+  potsFor,
   applyRaiseRules,
   mayRaise,
   minimumRaise,
@@ -1568,6 +1572,35 @@ export function PokerLedger({
     setGame(next);
   }
 
+  function awardSidePots(winners: number[][]) {
+    if (!game?.hand) return;
+    const { pots, refund } = potsFor(game);
+    const name = (index: number) => game.players[index].name;
+    const parts = pots.map((pot, index) => {
+      const label = pots.length > 1 ? potLabel(index, pots.length).toLowerCase() : "pot";
+      const players = [
+        ...(pot.eligible.length === 1 ? pot.eligible : (winners[index] ?? [])),
+      ].sort((a, b) => a - b);
+      return players.length > 1
+        ? `${players.map(name).join(" and ")} split the ${label} (${money(pot.amount)}).`
+        : `${name(players[0])} wins the ${label} (${money(pot.amount)}).`;
+    });
+    if (refund) {
+      parts.push(
+        `${money(refund.amount)} nobody called goes back to ${name(refund.playerIndex)}.`,
+      );
+    }
+    ask(parts.join(" "), pots.length > 1 ? "Award pots" : "Award pot", () => {
+      const next = structuredClone(game);
+      if (!awardPots(next, winners)) {
+        showToast("Pick a winner for every pot");
+        return;
+      }
+      // The winner card is the announcement, as for a single pot.
+      setGame(next);
+    });
+  }
+
   function startNextHand() {
     if (!game || game.hand) return;
     const next = structuredClone(game);
@@ -2115,6 +2148,7 @@ export function PokerLedger({
             onEndSplit={endSplit}
             onToggleSplit={toggleSplit}
             onSplitPot={splitPot}
+            onAwardPots={awardSidePots}
             onCancelHand={cancelHand}
             onBuyIn={buyIn}
             onNextHand={startNextHand}
@@ -5760,6 +5794,7 @@ type GameViewProps = {
   onEndSplit: () => void;
   onToggleSplit: (playerIndex: number) => void;
   onSplitPot: () => void;
+  onAwardPots: (winners: number[][]) => void;
   onCancelHand: () => void;
   onBuyIn: (playerIndex: number) => void;
   onNextHand: () => void;
@@ -5929,6 +5964,7 @@ function GameView(props: GameViewProps) {
               >
                 {money(hand.pot)}
               </span>
+              <PotBreakdown game={game} className="pot-split" />
             </div>
             {blindsDisplay}
           </section>
@@ -5970,6 +6006,12 @@ function GameView(props: GameViewProps) {
                 >
                   Deal {STAGES[hand.stage + 1]}
                 </button>
+              ) : !pending && hasSidePots(game) ? (
+                <SidePotPicker
+                  key={hand.no}
+                  game={game}
+                  onAward={props.onAwardPots}
+                />
               ) : (
                 <WinnerPicker
                   game={game}
@@ -6979,6 +7021,8 @@ function WinnerCard({
   const winnerText = announcement.split
     ? `${announcement.names.join(" And ")} Win`
     : `${announcement.names[0]} Wins`;
+  const pots =
+    announcement.pots && announcement.pots.length > 1 ? announcement.pots : null;
 
   return (
     <div className="winner-overlay" role="presentation">
@@ -6993,11 +7037,25 @@ function WinnerCard({
             <span key={index} />
           ))}
         </div>
-        <span className="eyebrow">Pot won · Hand {announcement.handNo}</span>
+        <span className="eyebrow">
+          {pots ? "Pots won" : "Pot won"} · Hand {announcement.handNo}
+        </span>
         <h2 id="winner-title">{winnerText}</h2>
-        <p className="gradient-text winner-pot">
-          {money(announcement.pot)}
-        </p>
+        {pots ? (
+          <ul className="winner-pots">
+            {pots.map((pot) => (
+              <li key={pot.label}>
+                <span className="winner-pot-label">{pot.label}</span>
+                <b>{pot.names.join(", ")}</b>
+                <span className="winner-pot-amount">{money(pot.amount)}</span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="gradient-text winner-pot">
+            {money(announcement.pot)}
+          </p>
+        )}
         <button className="cta" type="button" onClick={onNext}>
           Next
         </button>
@@ -7095,6 +7153,7 @@ function TableHand({
   onEndSplit,
   onToggleSplit,
   onSplitPot,
+  onAwardPots,
   onCancelHand,
   lastTurn,
 }: GameViewProps & {
@@ -7110,6 +7169,9 @@ function TableHand({
   const pending = pendingIndexes(game).length > 0;
   const showdown = hand.stage === lastStage && !pending;
   const splitting = Boolean(hand.splitSel);
+  // With side pots the winners are picked per pot on the card below.
+  const multiPot = showdown && hasSidePots(game);
+  const potCount = multiPot ? potsFor(game).pots.length : 1;
   const crowded = game.players.length > 6;
   const current = hand.currentPlayer;
   const undoSeat =
@@ -7117,7 +7179,7 @@ function TableHand({
 
   function tapSeat(index: number) {
     if (showdown) {
-      if (!hand?.in[index]) return;
+      if (!hand?.in[index] || multiPot) return;
       if (splitting) onToggleSplit(index);
       else onPickWinner(index);
       return;
@@ -7154,9 +7216,11 @@ function TableHand({
           </div>
           <span className="table-label">
             {showdown
-              ? splitting
-                ? "Split the pot"
-                : "Pick the winner"
+              ? potCount > 1
+                ? "Pick the winners"
+                : splitting
+                  ? "Split the pot"
+                  : "Pick the winner"
               : `Pot · ${STAGES[hand.stage]}`}
           </span>
           <span
@@ -7167,6 +7231,7 @@ function TableHand({
           >
             {money(hand.pot)}
           </span>
+          <PotBreakdown game={game} className="table-sidepots" />
           <span className="table-blinds">{blindsText}</span>
         </div>
         {showdown
@@ -7208,18 +7273,20 @@ function TableHand({
           const contender = showdown && !folded;
           const inSplit = hand.splitSel?.includes(index) ?? false;
           const tappable = showdown
-            ? contender
+            ? contender && !multiPot
             : Boolean(hand.last[index]) && !splitting;
           const status = folded
             ? "Folded"
             : isTurn
               ? "To act"
               : showdown
-                ? splitting
-                  ? inSplit
-                    ? "In split"
-                    : "Tap to add"
-                  : "Tap to award"
+                ? multiPot
+                  ? "In the hand"
+                  : splitting
+                    ? inSplit
+                      ? "In split"
+                      : "Tap to add"
+                    : "Tap to award"
                 : seatStatus(game, index, money)
                     .replace("Small blind", "SB")
                     .replace("Big blind", "BB");
@@ -7294,6 +7361,8 @@ function TableHand({
           onSplit={onSplitPot}
           onBack={onEndSplit}
         />
+      ) : multiPot ? (
+        <SidePotPicker key={hand.no} game={game} onAward={onAwardPots} />
       ) : showdown ? (
         <WinnerPicker
           game={game}
@@ -7715,6 +7784,177 @@ function PlayerRow({
         {hasAmount ? null : <span className="clear-amount-slot" />}
       </div>
     </div>
+  );
+}
+
+/** "Main ₹3,000 · Side ₹8,000" once a short all-in has made side pots. */
+function PotBreakdown({
+  game,
+  className,
+}: {
+  game: GameState;
+  className: string;
+}) {
+  const { money } = useMoney();
+  const { pots } = potsFor(game);
+  if (pots.length < 2) return null;
+  return (
+    <span className={className}>
+      {pots
+        .map(
+          (pot, index) =>
+            `${potLabel(index, pots.length).replace(" pot", "")} ${money(pot.amount)}`,
+        )
+        .join(" · ")}
+    </span>
+  );
+}
+
+/**
+ * The showdown when an all-in player can't win everything: one winner (or a
+ * split) per pot, then one Award button. A pot only one player can win, and
+ * chips nobody called, are shown and handed out without a choice.
+ */
+function SidePotPicker({
+  game,
+  onAward,
+}: {
+  game: GameState;
+  onAward: (winners: number[][]) => void;
+}) {
+  const { money } = useMoney();
+  const [choice, setChoice] = useState<number[][]>([]);
+  const [splitting, setSplitting] = useState<boolean[]>([]);
+  const { pots, refund } = potsFor(game);
+  const name = (index: number) => game.players[index].name;
+  const several = pots.length > 1;
+  const ready = pots.every((pot, index) =>
+    pot.eligible.length === 1
+      ? true
+      : splitting[index]
+        ? (choice[index]?.length ?? 0) >= 2
+        : (choice[index]?.length ?? 0) === 1,
+  );
+
+  function pick(potIndex: number, playerIndex: number) {
+    setChoice((current) => {
+      const next = [...current];
+      const chosen = next[potIndex] ?? [];
+      next[potIndex] = splitting[potIndex]
+        ? chosen.includes(playerIndex)
+          ? chosen.filter((index) => index !== playerIndex)
+          : [...chosen, playerIndex]
+        : [playerIndex];
+      return next;
+    });
+  }
+
+  function toggleSplit(potIndex: number) {
+    setSplitting((current) => {
+      const next = [...current];
+      next[potIndex] = !next[potIndex];
+      return next;
+    });
+    setChoice((current) => {
+      const next = [...current];
+      next[potIndex] = [];
+      return next;
+    });
+  }
+
+  return (
+    <section className="glass card winner-picker">
+      <div className="card-row">
+        <span className="label">{several ? "Pick the winners" : "Pick the winner"}</span>
+        <span className="accent-amount">
+          {money(pots.reduce((sum, pot) => sum + pot.amount, 0))}
+        </span>
+      </div>
+      <p className="muted small-note">
+        {several
+          ? "An all-in player can only win what each player matched, so this hand has a main pot and side pots. Pick a winner for each."
+          : "An all-in player can only win what each player matched."}
+      </p>
+      {refund ? (
+        <p className="pot-refund">
+          {money(refund.amount)} goes back to {name(refund.playerIndex)} ·
+          nobody called it
+        </p>
+      ) : null}
+      {pots.map((pot, potIndex) => {
+        const chosen = [...(choice[potIndex] ?? [])].sort((a, b) => a - b);
+        const split = splitting[potIndex] ?? false;
+        const each = chosen.length ? Math.floor(pot.amount / chosen.length) : 0;
+        const remainder = pot.amount - each * chosen.length;
+        return (
+          <div className={several ? "side-pot" : "stack-list"} key={potIndex}>
+            {several ? (
+              <div className="card-row">
+                <span className="label">{potLabel(potIndex, pots.length)}</span>
+                <span className="accent-amount">{money(pot.amount)}</span>
+              </div>
+            ) : null}
+            {pot.eligible.length === 1 ? (
+              <p className="muted small-note">
+                Goes to {name(pot.eligible[0])} · nobody else is in it
+              </p>
+            ) : (
+              <>
+                {pot.eligible.map((playerIndex) => {
+                  const isChosen = chosen.includes(playerIndex);
+                  const rank = chosen.indexOf(playerIndex);
+                  const share = each + (rank < remainder ? 1 : 0);
+                  return (
+                    <button
+                      className={`contender ${isChosen ? "selected" : ""}`}
+                      type="button"
+                      aria-pressed={isChosen}
+                      key={playerIndex}
+                      onClick={() => pick(potIndex, playerIndex)}
+                    >
+                      <Avatar
+                        name={name(playerIndex)}
+                        playerId={game.players[playerIndex].id}
+                        size="small"
+                      />
+                      <span className="contender-name">
+                        {split ? name(playerIndex) : `${name(playerIndex)} wins`}
+                      </span>
+                      <span
+                        className={`contender-amount ${
+                          isChosen || !split ? "" : "muted"
+                        }`}
+                      >
+                        {isChosen
+                          ? money(share)
+                          : split
+                            ? "Tap to include"
+                            : money(pot.amount)}
+                      </span>
+                    </button>
+                  );
+                })}
+                <button
+                  className="dashed-button"
+                  type="button"
+                  onClick={() => toggleSplit(potIndex)}
+                >
+                  {split ? "Back to one winner" : "Split this pot"}
+                </button>
+              </>
+            )}
+          </div>
+        );
+      })}
+      <button
+        className="blue-button full tall"
+        type="button"
+        disabled={!ready}
+        onClick={() => onAward(pots.map((_, index) => choice[index] ?? []))}
+      >
+        {several ? "Award pots" : "Award pot"}
+      </button>
+    </section>
   );
 }
 

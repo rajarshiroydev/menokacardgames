@@ -3,6 +3,10 @@ import { describe, test } from "node:test";
 
 import {
   applyRaiseRules,
+  awardPots,
+  hasSidePots,
+  potLabel,
+  potsFor,
   bigBlindAtLevel,
   blindStatus,
   betStops,
@@ -807,6 +811,187 @@ describe("cancel hand", () => {
   });
 });
 
+
+describe("side pots", () => {
+  /**
+   * A hand at the showdown where each player started with `before` and put
+   * in `put`; players in `folded` are out.
+   */
+  function showdown(before: number[], put: number[], folded: number[] = []) {
+    const game = gameState();
+    game.players = before.map((stack, index) => ({
+      name: "ABCDEF"[index],
+      stack,
+    }));
+    dealNewHand(game);
+    const hand = dealtHand(game);
+    hand.stacksBeforeHand = [...before];
+    game.players.forEach((player, index) => {
+      player.stack = before[index] - put[index];
+    });
+    hand.in = before.map((_, index) => !folded.includes(index));
+    hand.pot = put.reduce((sum, chips) => sum + chips, 0);
+    hand.stage = 3;
+    return game;
+  }
+
+  const chips = (game: GameState) =>
+    game.players.reduce((sum, player) => sum + player.stack, 0);
+
+  test("a short all-in only wins what each player matched", () => {
+    const game = showdown([1_000, 10_000, 10_000], [1_000, 5_000, 5_000]);
+    assert.deepEqual(potsFor(game), {
+      pots: [
+        { amount: 3_000, eligible: [0, 1, 2] },
+        { amount: 8_000, eligible: [1, 2] },
+      ],
+      refund: null,
+    });
+    assert.ok(hasSidePots(game));
+
+    assert.ok(awardPots(game, [[0], [1]]));
+    assert.deepEqual(
+      game.players.map((player) => player.stack),
+      [3_000, 13_000, 5_000],
+    );
+    assert.deepEqual(game.winnerAnnouncement?.pots, [
+      { label: "Main pot", amount: 3_000, names: ["A"] },
+      { label: "Side pot", amount: 8_000, names: ["B"] },
+    ]);
+    assert.equal(game.log[0], "Hand 1: B wins side pot ₹8,000");
+    assert.equal(game.log[1], "Hand 1: A wins main pot ₹3,000");
+    assert.equal(game.hand, null);
+  });
+
+  test("chips nobody called go back", () => {
+    const game = showdown([1_000, 10_000], [1_000, 10_000]);
+    assert.deepEqual(potsFor(game), {
+      pots: [{ amount: 2_000, eligible: [0, 1] }],
+      refund: { playerIndex: 1, amount: 9_000 },
+    });
+    assert.ok(hasSidePots(game));
+
+    assert.ok(awardPots(game, [[0]]));
+    assert.deepEqual(
+      game.players.map((player) => player.stack),
+      [2_000, 9_000],
+    );
+    assert.equal(game.log[1], "Hand 1: ₹9,000 returned to B (not called)");
+    assert.equal(game.log[0], "Hand 1: A wins pot ₹2,000");
+  });
+
+  test("folded chips stay in the pots they reached", () => {
+    const game = showdown(
+      [1_000, 10_000, 10_000, 10_000],
+      [1_000, 3_000, 3_000, 500],
+      [3],
+    );
+    assert.deepEqual(potsFor(game).pots, [
+      { amount: 3_500, eligible: [0, 1, 2] },
+      { amount: 4_000, eligible: [1, 2] },
+    ]);
+  });
+
+  test("each all-in amount closes a pot", () => {
+    const game = showdown(
+      [500, 1_500, 10_000, 10_000],
+      [500, 1_500, 4_000, 4_000],
+    );
+    const { pots, refund } = potsFor(game);
+    assert.equal(refund, null);
+    assert.deepEqual(pots, [
+      { amount: 2_000, eligible: [0, 1, 2, 3] },
+      { amount: 3_000, eligible: [1, 2, 3] },
+      { amount: 5_000, eligible: [2, 3] },
+    ]);
+    assert.deepEqual(
+      pots.map((_, index) => potLabel(index, pots.length)),
+      ["Main pot", "Side pot 1", "Side pot 2"],
+    );
+  });
+
+  test("a split side pot gives odd chips in seat order", () => {
+    // D folded after putting in 1,001, so the side pot is an odd ₹2,001.
+    const game = showdown(
+      [1_000, 10_000, 10_000, 10_000],
+      [1_000, 2_000, 2_000, 1_001],
+      [3],
+    );
+    const before = chips(game) + 1_000 + 2_000 + 2_000 + 1_001;
+    assert.deepEqual(potsFor(game).pots, [
+      { amount: 4_000, eligible: [0, 1, 2] },
+      { amount: 2_001, eligible: [1, 2] },
+    ]);
+    assert.ok(awardPots(game, [[0], [2, 1]]));
+    assert.deepEqual(
+      game.players.map((player) => player.stack),
+      [4_000, 8_000 + 1_001, 8_000 + 1_000, 8_999],
+    );
+    assert.equal(chips(game), before);
+    assert.equal(
+      game.log[0],
+      "Hand 1: split side pot ₹2,001 between B, C",
+    );
+  });
+
+  test("a pot only one player can win goes to them", () => {
+    // B's extra was called by D, who then folded, so only B can win it.
+    const game = showdown(
+      [1_000, 10_000, 10_000],
+      [1_000, 3_000, 3_000],
+      [2],
+    );
+    assert.deepEqual(potsFor(game).pots, [
+      { amount: 3_000, eligible: [0, 1] },
+      { amount: 4_000, eligible: [1] },
+    ]);
+    assert.ok(awardPots(game, [[0]]));
+    assert.deepEqual(
+      game.players.map((player) => player.stack),
+      [3_000, 11_000, 7_000],
+    );
+  });
+
+  test("an ordinary hand has one pot", () => {
+    const game = showdown([10_000, 10_000, 10_000], [800, 800, 800]);
+    assert.deepEqual(potsFor(game), {
+      pots: [{ amount: 2_400, eligible: [0, 1, 2] }],
+      refund: null,
+    });
+    assert.equal(hasSidePots(game), false);
+  });
+
+  test("players still to call don't close a pot mid-street", () => {
+    const game = gameState();
+    dealNewHand(game);
+    betTo(game, 0, 300);
+    betTo(game, 1, 300);
+    assert.deepEqual(potsFor(game).pots, [
+      { amount: 700, eligible: [0, 1, 2] },
+    ]);
+    assert.equal(potsFor(game).refund, null);
+  });
+
+  test("refuses a winner who can't win that pot", () => {
+    const game = showdown([1_000, 10_000, 10_000], [1_000, 5_000, 5_000]);
+    const before = structuredClone(game);
+    assert.equal(awardPots(game, [[0], [0]]), false);
+    assert.equal(awardPots(game, [[0]]), false);
+    assert.deepEqual(game, before);
+  });
+
+  test("undo last hand takes the pots back", () => {
+    const game = showdown([1_000, 10_000, 10_000], [1_000, 5_000, 5_000]);
+    assert.ok(awardPots(game, [[0], [1]]));
+    assert.ok(undoLastHand(game));
+    const hand = dealtHand(game);
+    assert.deepEqual(hand.stacksBeforeHand, [1_000, 10_000, 10_000]);
+    assert.deepEqual(
+      game.players.map((player, index) => player.stack + hand.committed[index]),
+      [1_000, 10_000, 10_000],
+    );
+  });
+});
 
 describe("sessionBlindHistory", () => {
   test("keeps a saved history", () => {
