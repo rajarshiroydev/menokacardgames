@@ -85,6 +85,7 @@ import { signOut } from "@/app/auth/sign-in/actions";
 import { AvatarArt } from "@/components/avatar-art";
 import { AvatarPicker, randomAvatarId } from "@/components/avatar-picker";
 import { BrandMark } from "@/components/brand-mark";
+import { NotificationBell } from "@/components/notification-bell";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { AVATARS } from "@/lib/avatars";
 import { APP_NAME } from "@/lib/brand";
@@ -1988,7 +1989,19 @@ export function PokerLedger({
             </h1>
           </div>
           {/* The theme switch lives on Profile only (user decision 2026-10-01). */}
-          {view === "profile" ? <ThemeToggle /> : null}
+          {view === "profile" ? (
+            <>
+              <NotificationBell
+                overview={friendOverview}
+                onOpenRequest={(requestId) => {
+                  document
+                    .getElementById(`friend-request-${requestId}`)
+                    ?.scrollIntoView({ behavior: "smooth", block: "center" });
+                }}
+              />
+              <ThemeToggle />
+            </>
+          ) : null}
           {view === "game" && game?.hand ? (
             <div className="layout-toggle" role="radiogroup" aria-label="Show the hand as">
               {(["list", "table"] as const).map((layout) => (
@@ -5084,7 +5097,10 @@ function FriendRequestCard({
   }
 
   return (
-    <section className="glass profile-request">
+    <section
+      className="glass profile-request"
+      id={`friend-request-${request.requestId}`}
+    >
       <div className="profile-request-head">
         <span className="profile-avatar on-app" aria-hidden="true">
           <AvatarArt id={request.avatar} seed={name} />

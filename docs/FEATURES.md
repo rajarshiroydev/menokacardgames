@@ -36,7 +36,7 @@ Home (redesigned 1 October 2026) is a summary of where things stand; the tab bar
 - There is no standings summary on Home; see the Ranks tab.
 - **Background:** behind Home, a fanned hand of glass cards (A♠ K♥ Q♣ J♦ 10♠) at the top right with a soft blue glow, in both themes. Other screens keep the green and blue lights and faint pitch lines.
 - **Tab bar.** A bar at the bottom of every screen has five tabs: **Home**, **Play** (the game in progress, or table setup when there isn't one), **Ranks** (standings), **Games** (saved game sessions) and **Profile** (you and your players, section 3; its icon is a small person, the others are card suits). The current tab is highlighted in green. A green dot on **Play** means a game is in progress; a blue dot on **Profile** means friend requests are waiting.
-- **Every other screen** shows its title at the top left (for example **Profile** or **Hand 12**) with no line above it. Profile also has the theme button at the top right. There is no on-screen back button; use the phone's back gesture or the browser's back button.
+- **Every other screen** shows its title at the top left (for example **Profile** or **Hand 12**) with no line above it. Profile also has the notification bell and the theme button at the top right. There is no on-screen back button; use the phone's back gesture or the browser's back button.
 - **Title Case everywhere.** All text on every page (buttons, labels, notes, messages, the live link and the sign-in pages) starts each word with a capital, and headings are in capitals. The messages quoted in this list are shown that way in the app. Text boxes keep what you type, and email addresses and links keep their exact case.
 - **Dark and light themes.** A round theme button shows a **sun** in dark mode (tap for light) and a **moon** in light mode (tap for dark). In the app it's only on the **Profile** tab (since 1 October 2026); it's also on the pages outside the app: the sign-in page, the name screen, the locked-account page and the live standings link. The choice is remembered on that device. Dark is the default.
 
@@ -58,6 +58,8 @@ The **Profile** tab replaced the Players tab on 30 September 2026. From the top:
 - **Currency.** Choose the currency for the games you host: ₹ INR (the default), $ USD, € EUR, £ GBP, A$ AUD, C$ CAD, S$ SGD, AED, ৳ BDT or ¥ JPY. It changes the sign on every amount in your games, saved history, standings, profile and live link straight away, including a game in progress and past games. Friends who look at your standings see your currency.
 
 **Friend requests** sent to you appear as cards under your card (section 20).
+
+**Notification bell** (top right of Profile, left of the theme button, since 5 October 2026): tap it to see friend requests waiting for your answer and the friendships made in the **last 30 days** ("You and Meera are now friends"), newest first, each with how long ago ("2d"). A blue badge counts what's new: every waiting request, plus friendships made since you last opened the bell on that device. Opening the bell clears the friendship part of the badge; waiting requests keep counting until you answer them. **Answer** on a request closes the list and scrolls to that request's card. It doesn't tell you when someone declines your request, and it doesn't send phone or email alerts.
 
 **Players**
 
@@ -386,6 +388,6 @@ Everyone who signs in has their own account and can host their own games. Friend
 These are known limitations, not planned features. Planned work is in the [feature plan](./FEATURE-PLAN.md).
 
 - A game in progress can't be moved to another device before it's saved.
-- Friend requests don't send notifications or emails; people see them when they open the Profile tab.
+- Friend requests don't send phone notifications or emails; people see them in the Profile tab's bell. The bell can't yet say when a request you sent was declined, and what counts as new is remembered per device.
 - The live standings link can't be used to play or change the game; only the host's device records it. If the host's phone is locked or offline, the link stops updating until the host opens the app again.
 - Import handles up to 250 new games per file.
