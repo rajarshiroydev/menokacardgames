@@ -1,34 +1,33 @@
 /**
- * The avatars players choose from. They are drawn in code (see
- * components/avatar-art.tsx), so no image service or licence is involved.
+ * The avatars players choose from: 20 hand-picked faces in DiceBear's
+ * "Lorelei" style (CC0, so no credit line is needed). Each one is a static
+ * file, `public/avatars/<id>.svg`, made by `npm run avatars:generate` from
+ * the settings below; the app never calls an image service.
  *
  * Each avatar's id is stored in `accounts.avatar` and `players.avatar`
- * (migration 0015), so an id must never be reused for a different drawing.
- * New avatars get new ids; the database picks defaults only from the ids that
- * existed when the migration ran (`public.random_avatar()`).
+ * (migration 0015), so an id must never be removed. Changing an entry
+ * changes that face for everyone who has it. New avatars get new ids; the
+ * database picks defaults only from the ids that existed when the migration
+ * ran (`public.random_avatar()`).
  */
-
-export type HairBack = "long" | "bob" | "pony" | "bun";
-export type HairFront = "short" | "fringe" | "spiky" | "buzz" | "side" | "curly";
 
 export type AvatarSpec = {
   id: string;
+  /** About 3 in 4 poker players are men, so 15 of the 20 faces are. */
+  look: "male" | "female";
+  /** Lorelei part variants, for example "variant04". */
+  hair: string;
   /** Index into SKIN_TONES. */
   skin: number;
-  hair: string;
-  back?: HairBack;
-  front?: HairFront;
-  /** A headscarf in this colour, framing the face; hides hair and ears. */
-  hijab?: string;
-  /** A turban in this colour. */
-  turban?: string;
-  beard?: boolean;
-  glasses?: boolean;
-  cap?: string;
-  band?: string;
+  hairColor: string;
+  beard?: string;
+  /** Set for male faces: plain eyes and a closed or grinning smile read as male. */
+  eyes?: string;
+  mouth?: string;
+  glasses?: string;
+  earrings?: string;
+  flowers?: string;
   background: string;
-  shirt: string;
-  smile: "open" | "closed";
 };
 
 export const SKIN_TONES = [
@@ -40,30 +39,44 @@ export const SKIN_TONES = [
   "#5e3b28",
 ] as const;
 
-const DARK = "#1d1411";
-const BROWN_BLACK = "#2b1d16";
+export const HAIR_COLORS = {
+  black: "#1a1a1a",
+  dark: "#2b1d16",
+  brown: "#6b4226",
+  auburn: "#a0522d",
+  red: "#c2412d",
+  blond: "#e0b25c",
+  grey: "#9a9a9a",
+  blue: "#3a7bd5",
+  purple: "#8e6cdf",
+  pink: "#e85d75",
+  teal: "#16a085",
+  orange: "#f2994a",
+} as const;
+
+const C = HAIR_COLORS;
 
 export const AVATARS: readonly AvatarSpec[] = [
-  { id: "p01", skin: 1, hair: BROWN_BLACK, front: "side", background: "#cfe8ff", shirt: "#3a7bd5", smile: "open" },
-  { id: "p02", skin: 3, hair: BROWN_BLACK, back: "long", front: "fringe", background: "#ffd9e2", shirt: "#e85d75", smile: "open" },
-  { id: "p03", skin: 0, hair: "#e0b25c", front: "curly", background: "#fff1c2", shirt: "#f2994a", smile: "closed" },
-  { id: "p04", skin: 4, hair: DARK, front: "buzz", beard: true, background: "#d6f5e3", shirt: "#27ae60", smile: "open" },
-  { id: "p05", skin: 2, hair: "#5a3825", back: "bob", front: "fringe", glasses: true, background: "#e8dcff", shirt: "#8e6cdf", smile: "closed" },
-  { id: "p06", skin: 5, hair: DARK, front: "curly", background: "#ffe0c7", shirt: "#d35400", smile: "open" },
-  { id: "p07", skin: 1, hair: "#c2412d", back: "pony", front: "fringe", background: "#d9f2f7", shirt: "#16a085", smile: "open" },
-  { id: "p08", skin: 3, hair: BROWN_BLACK, front: "spiky", background: "#fde2b8", shirt: "#34495e", smile: "open" },
-  { id: "p09", skin: 0, hair: "#8c8c8c", front: "side", glasses: true, beard: true, background: "#e4ecf2", shirt: "#5d6d7e", smile: "closed" },
-  { id: "p10", skin: 2, hair: BROWN_BLACK, back: "bun", front: "fringe", background: "#ffd6cc", shirt: "#c0392b", smile: "open" },
-  { id: "p11", skin: 4, hair: BROWN_BLACK, front: "short", cap: "#e74c3c", background: "#fff3b0", shirt: "#2c3e50", smile: "open" },
-  { id: "p12", skin: 1, hair: "#5a3825", back: "long", front: "fringe", band: "#f368e0", background: "#e3f9d8", shirt: "#6ab04c", smile: "closed" },
-  { id: "p13", skin: 3, hair: DARK, front: "short", glasses: true, background: "#dbe4ff", shirt: "#4834d4", smile: "open" },
-  { id: "p14", skin: 5, hair: DARK, back: "bob", front: "curly", background: "#f9d9f1", shirt: "#be2edd", smile: "open" },
-  { id: "p15", skin: 2, hair: "#a0603a", front: "spiky", beard: true, background: "#d1f2eb", shirt: "#0e7c6b", smile: "closed" },
-  { id: "p16", skin: 0, hair: "#e0b25c", back: "pony", front: "side", background: "#ffe8d6", shirt: "#e17055", smile: "open" },
-  { id: "p17", skin: 2, hair: DARK, hijab: "#2e86de", background: "#e0f0ff", shirt: "#2e86de", smile: "open" },
-  { id: "p18", skin: 4, hair: DARK, hijab: "#b33771", background: "#fde4ef", shirt: "#6d214f", smile: "closed" },
-  { id: "p19", skin: 2, hair: DARK, turban: "#f39c12", beard: true, background: "#fff4d6", shirt: "#1e3799", smile: "open" },
-  { id: "p20", skin: 3, hair: DARK, turban: "#1e3799", background: "#e3e8ff", shirt: "#e58e26", smile: "open" },
+  { id: "p01", look: "male", hair: "variant01", skin: 3, hairColor: C.black, eyes: "variant24", mouth: "happy01", background: "#cfe8ff" },
+  { id: "p02", look: "male", hair: "variant04", skin: 0, hairColor: C.blue, eyes: "variant12", mouth: "happy02", background: "#ffd9e2" },
+  { id: "p03", look: "female", hair: "variant48", skin: 2, hairColor: C.pink, earrings: C.orange, background: "#fff1c2" },
+  { id: "p04", look: "male", hair: "variant27", skin: 4, hairColor: C.orange, eyes: "variant16", mouth: "happy04", background: "#d6f5e3" },
+  { id: "p05", look: "male", hair: "variant06", skin: 1, hairColor: C.brown, beard: "variant02", eyes: "variant08", mouth: "happy09", background: "#e8dcff" },
+  { id: "p06", look: "male", hair: "variant39", skin: 5, hairColor: C.dark, eyes: "variant06", mouth: "happy13", background: "#ffe0c7" },
+  { id: "p07", look: "male", hair: "variant08", skin: 2, hairColor: C.teal, glasses: C.blue, eyes: "variant13", mouth: "happy01", background: "#d9f2f7" },
+  { id: "p08", look: "female", hair: "variant26", skin: 4, hairColor: C.purple, flowers: C.pink, background: "#fde2b8" },
+  { id: "p09", look: "male", hair: "variant02", skin: 0, hairColor: C.red, beard: "variant01", eyes: "variant04", mouth: "happy03", background: "#e4ecf2" },
+  { id: "p10", look: "male", hair: "variant20", skin: 3, hairColor: C.purple, eyes: "variant10", mouth: "happy04", background: "#ffd6cc" },
+  { id: "p11", look: "male", hair: "variant47", skin: 5, hairColor: C.black, eyes: "variant24", mouth: "happy09", background: "#fff3b0" },
+  { id: "p12", look: "male", hair: "variant05", skin: 1, hairColor: C.blond, eyes: "variant12", mouth: "happy13", background: "#e3f9d8" },
+  { id: "p13", look: "female", hair: "variant35", skin: 0, hairColor: C.auburn, glasses: C.pink, background: "#dbe4ff" },
+  { id: "p14", look: "male", hair: "variant07", skin: 4, hairColor: C.grey, beard: "variant01", glasses: C.teal, eyes: "variant16", mouth: "happy02", background: "#f9d9f1" },
+  { id: "p15", look: "male", hair: "variant12", skin: 2, hairColor: C.red, eyes: "variant08", mouth: "happy03", background: "#d1f2eb" },
+  { id: "p16", look: "male", hair: "variant44", skin: 3, hairColor: C.orange, eyes: "variant06", mouth: "happy04", background: "#ffe8d6" },
+  { id: "p17", look: "female", hair: "variant38", skin: 5, hairColor: C.teal, earrings: C.pink, background: "#e0f0ff" },
+  { id: "p18", look: "male", hair: "variant09", skin: 1, hairColor: C.dark, beard: "variant02", glasses: C.purple, eyes: "variant17", mouth: "happy13", background: "#fde4ef" },
+  { id: "p19", look: "male", hair: "variant03", skin: 4, hairColor: C.blue, eyes: "variant04", mouth: "happy01", background: "#fff4d6" },
+  { id: "p20", look: "female", hair: "variant19", skin: 2, hairColor: C.red, earrings: C.blue, background: "#e3e8ff" },
 ];
 
 export const AVATAR_IDS: readonly string[] = AVATARS.map((avatar) => avatar.id);
@@ -87,7 +100,12 @@ export function fallbackAvatarId(seed: string) {
   return AVATARS[hash % AVATARS.length].id;
 }
 
-/** The drawing for an id, or the stand-in for `seed` when the id is unknown. */
+/** The avatar for an id, or the stand-in for `seed` when the id is unknown. */
 export function avatarSpec(id: string | null | undefined, seed = "") {
   return (id && AVATARS_BY_ID.get(id)) || AVATARS_BY_ID.get(fallbackAvatarId(seed))!;
+}
+
+/** Where the avatar's picture is served from. */
+export function avatarSrc(id: string | null | undefined, seed = "") {
+  return `/avatars/${avatarSpec(id, seed).id}.svg`;
 }

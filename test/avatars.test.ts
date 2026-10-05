@@ -6,10 +6,12 @@ import {
   AVATAR_IDS,
   AVATARS,
   avatarSpec,
+  avatarSrc,
   fallbackAvatarId,
   isAvatarId,
   SKIN_TONES,
 } from "../lib/avatars.ts";
+import { AVATAR_DIR, renderAvatarSvg } from "../scripts/generate-avatars.ts";
 import { buildGroupStandings } from "../lib/friends/group-standings.ts";
 import {
   deriveLiveView,
@@ -52,6 +54,20 @@ describe("avatars", () => {
     assert.ok(isAvatarId(fallbackAvatarId("Asha")));
     assert.equal(avatarSpec("p99", "Asha").id, fallbackAvatarId("Asha"));
     assert.equal(avatarSpec("p03", "Asha").id, "p03");
+    assert.equal(avatarSrc("p03"), "/avatars/p03.svg");
+    assert.equal(avatarSrc("p99", "Asha"), `/avatars/${fallbackAvatarId("Asha")}.svg`);
+  });
+
+  it("are three in four men", () => {
+    const men = AVATARS.filter((avatar) => avatar.look === "male").length;
+    assert.equal(men / AVATARS.length, 0.75);
+  });
+
+  it("have pictures that match lib/avatars.ts (else run npm run avatars:generate)", () => {
+    for (const avatar of AVATARS) {
+      const file = readFileSync(new URL(`${avatar.id}.svg`, AVATAR_DIR), "utf8");
+      assert.equal(file, renderAvatarSvg(avatar), `${avatar.id}.svg is out of date`);
+    }
   });
 });
 

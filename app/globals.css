@@ -671,7 +671,7 @@ textarea::placeholder {
 
 /* Avatars */
 
-/* Each avatar is a drawing (components/avatar-art.tsx) filling its circle. */
+/* Each avatar is a picture (components/avatar-art.tsx) filling its circle. */
 .avatar {
   position: relative;
   display: block;
@@ -681,9 +681,9 @@ textarea::placeholder {
   box-shadow: 0 0 0 1px var(--gb);
 }
 
-.avatar > svg,
-.profile-avatar > svg,
-.avatar-choice > svg {
+.avatar > img,
+.profile-avatar > img,
+.avatar-choice > img {
   display: block;
   width: 100%;
   height: 100%;
@@ -1322,7 +1322,7 @@ textarea::placeholder {
   border-radius: 50%;
 }
 
-.home-notice-avatar svg {
+.home-notice-avatar img {
   display: block;
   width: 100%;
   height: 100%;
@@ -1803,7 +1803,7 @@ textarea::placeholder {
   background: var(--bg);
 }
 
-.profile-ring svg {
+.profile-ring img {
   display: block;
   width: 100%;
   height: 100%;

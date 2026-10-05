@@ -2434,7 +2434,8 @@ function Segmented<T extends string | number>({
   columns,
 }: {
   label: string;
-  options: ReadonlyArray<{ value: T; label: string }>;
+  /** With `icon`, the chip shows the icon and `label` becomes its accessible name. */
+  options: ReadonlyArray<{ value: T; label: string; icon?: ReactNode }>;
   value: T;
   onChange: (value: T) => void;
   /** Wrap into rows of this many equal chips instead of one row. */
@@ -2454,12 +2455,32 @@ function Segmented<T extends string | number>({
           role="radio"
           aria-checked={option.value === value}
           className={option.value === value ? "selected" : ""}
+          aria-label={option.icon ? option.label : undefined}
           onClick={() => onChange(option.value)}
         >
-          {option.label}
+          {option.icon ?? option.label}
         </button>
       ))}
     </div>
+  );
+}
+
+/** Drawn rather than typed: the display font's ∞ glyph is too small to read. */
+function InfinityIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 12"
+      width="22"
+      height="11"
+      aria-hidden="true"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.2"
+      strokeLinecap="round"
+      style={{ display: "block", margin: "0 auto" }}
+    >
+      <path d="M12 6c-2-3-3.5-4.5-5.5-4.5a4.5 4.5 0 0 0 0 9c2 0 3.5-1.5 5.5-4.5s3.5-4.5 5.5-4.5a4.5 4.5 0 0 1 0 9c-2 0-3.5-1.5-5.5-4.5z" />
+    </svg>
   );
 }
 
@@ -3597,7 +3618,7 @@ function SetupView({
       <form className="stack-list setup-view" onSubmit={submit}>
         <section className="glass card">
           <label className="label" htmlFor="game-name">
-            Game name <span className="label-note">(optional)</span>
+            Game name <span className="label-note">(Optional)</span>
           </label>
           <input
             className="field"
@@ -6088,7 +6109,7 @@ function GameScreen(props: GameViewProps) {
               ))}
             </div>
             <div className="pot-block">
-              <span className="label">Pot · Hand {hand.no}</span>
+              <span className="label">Pot</span>
               <span
                 className="pot gradient-text"
                 style={
@@ -6387,7 +6408,7 @@ function RebuyRulesFields({
         label="Rebuys per player"
         options={[
           // "No limit" doesn't fit six chips at 375px; the card note says it.
-          { value: "unlimited", label: "∞" },
+          { value: "unlimited", label: "No limit", icon: <InfinityIcon /> },
           { value: 0, label: "None" },
           { value: 1, label: "1" },
           { value: 2, label: "2" },
