@@ -44,7 +44,7 @@ describe("group standings for a linked friend", () => {
     assert.equal(playedInGroup({ ...group, myPlayerId: "p-unseated" }), false);
   });
 
-  it("ranks the host's games exactly as the host's own standings do", () => {
+  it("ranks the shared games with the same rules as the host's own standings", () => {
     const result = buildGroupStandings(group);
     const own = buildStandings(
       group.sessions.map((session) => ({
@@ -57,11 +57,22 @@ describe("group standings for a linked friend", () => {
       })),
     );
     assert.deepEqual(
-      result.rows.map((row) => [row.name, row.rank, row.averageReturn, row.net, row.hands]),
-      own.entries.map((entry) => [entry.name, entry.rank, entry.averageReturn, entry.net, entry.hands]),
+      result.rows.map((row) => [row.name, row.rank, row.averageReturn, row.hands]),
+      own.entries.map((entry) => [entry.name, entry.rank, entry.averageReturn, entry.hands]),
     );
     assert.equal(result.games, 2);
     assert.equal(result.lastPlayed, Date.UTC(2026, 8, 8));
+  });
+
+  it("sends money only on the friend's own row", () => {
+    const rows = buildGroupStandings(group).rows;
+    const me = rows.find((row) => row.isMe);
+    const other = rows.find((row) => !row.isMe);
+    assert.equal(me?.net, 500);
+    assert.equal(me?.invested, 2000);
+    assert.ok(other);
+    assert.equal("net" in other, false);
+    assert.equal("invested" in other, false);
   });
 
   it("marks the friend's own row", () => {
@@ -88,6 +99,42 @@ describe("group standings for a linked friend", () => {
     }
   });
 
+  it("uses only games the friend played in: no other players, games or totals", () => {
+    const withOthers: GroupSessions = {
+      ...group,
+      sessions: [
+        group.sessions[0],
+        {
+          id: "secret-session-x",
+          date: Date.UTC(2026, 8, 4),
+          startStack: 1000,
+          hands: 30,
+          results: [
+            { playerId: "p-raj", name: "Rajarshi", net: 5000, end: 6000, buyIns: [1000] },
+            { playerId: "p-stranger", name: "Stranger", net: 900, end: 1900, buyIns: [1000] },
+            { playerId: "p-top", name: "Topper", net: -5900, end: 0, buyIns: [1000, 5000] },
+          ],
+        },
+        group.sessions[1],
+      ],
+    };
+    const result = buildGroupStandings(withOthers);
+    assert.equal(result.games, 2);
+    assert.deepEqual(
+      result.rows.map((row) => [row.name, row.rank, row.totalSessions, row.hands]),
+      [
+        ["Debraj", 1, 2, 30],
+        ["Rajarshi", 2, 2, 30],
+      ],
+    );
+    const sent = JSON.stringify(result);
+    for (const hidden of ["Stranger", "Topper", "secret-session-x"]) {
+      assert.equal(sent.includes(hidden), false, hidden);
+    }
+    // The graph's games are numbered 1…2 among shared games only.
+    assert.deepEqual(result.chart[0].map(([index]) => index), [1, 2]);
+  });
+
   it("sends one graph line per row: the games that changed that player's score", () => {
     const withMiss: GroupSessions = {
       ...group,
@@ -99,7 +146,7 @@ describe("group standings for a linked friend", () => {
           startStack: 1000,
           hands: 5,
           results: [
-            { playerId: "p-raj", name: "Rajarshi", net: 250, end: 1250, buyIns: [1000] },
+            { playerId: "p-deb", name: "Debraj", net: 250, end: 1250, buyIns: [1000] },
             { playerId: "p-new", name: "Newcomer", net: -250, end: 750, buyIns: [1000] },
           ],
         },
@@ -108,15 +155,15 @@ describe("group standings for a linked friend", () => {
     const result = buildGroupStandings(withMiss);
     assert.equal(result.chart.length, result.rows.length);
     const line = (name: string) => result.chart[result.rows.findIndex((row) => row.name === name)];
-    // Debraj missed game 3, so the phone carries his average; it isn't sent.
     assert.deepEqual(line("Debraj"), [
       [1, -50, -50],
       [2, 25, 100],
+      [3, 25, 25],
     ]);
+    // Rajarshi missed game 3, so the phone carries his average; it isn't sent.
     assert.deepEqual(line("Rajarshi"), [
       [1, 50, 50],
       [2, 0, -50],
-      [3, 8.33, 25],
     ]);
     assert.deepEqual(line("Newcomer"), [[3, -25, -25]]);
   });

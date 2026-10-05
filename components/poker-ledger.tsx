@@ -8411,8 +8411,9 @@ type StandingCardEntry = {
   averageReturn: number | null;
   eligibleSessions: number;
   totalSessions: number;
-  invested: number;
-  net: number;
+  /** Absent on other players' rows in a friend's group: no money is sent. */
+  invested?: number;
+  net?: number;
   hands: number;
   profitableSessions: number;
   isMe?: boolean;
@@ -8445,9 +8446,13 @@ function StandingCard({
     ],
     ["Profitable", `${entry.profitableSessions} (${profitableRate}%)`, null],
     ["Hands", entry.hands.toLocaleString("en-IN"), null],
-    ["Invested", money(entry.invested), null],
-    ["Net", signedMoney(entry.net), entry.net],
   ];
+  if (entry.invested !== undefined) {
+    stats.push(["Invested", money(entry.invested), null]);
+  }
+  if (entry.net !== undefined) {
+    stats.push(["Net", signedMoney(entry.net), entry.net]);
+  }
   return (
     <section id={id} className="glass standing-card">
       <button
@@ -8524,17 +8529,13 @@ function RanksView({
   const [selected, setSelected] = useState("mine");
 
   const group = groups.find((item) => item.hostAccountId === selected);
-  const gameCount = (count: number) => `${count} game${count === 1 ? "" : "s"}`;
+  // No game counts: a friend's group shows only games they played in, and a
+  // count next to the host's name would read as the host's total.
   const options = [
-    {
-      id: "mine",
-      label: "My Hosted Games",
-      detail: gameCount(props.history.length),
-    },
+    { id: "mine", label: "My Hosted Games" },
     ...groups.map((item) => ({
       id: item.hostAccountId,
       label: hostedGamesTitle(item.hostName),
-      detail: gameCount(item.games),
     })),
   ];
 
@@ -8552,7 +8553,7 @@ function RanksView({
           >
             {options.map((option) => (
               <option key={option.id} value={option.id}>
-                {`${option.label} · ${option.detail}`}
+                {option.label}
               </option>
             ))}
           </select>
@@ -8626,7 +8627,7 @@ function GroupStandingsView({ group }: { group: GroupStandings }) {
       ) : null}
       {rows.length ? (
         <StandingsHeading
-          intro={`This is your overall ranking among everyone who has played in sessions hosted by ${hostName}.`}
+          intro={`Your ranking among the players you've sat with in games hosted by ${hostName}.`}
         />
       ) : null}
       {rows.length ? (

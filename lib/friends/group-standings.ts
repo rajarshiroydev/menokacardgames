@@ -34,7 +34,11 @@ export type GroupSessions = {
   }>;
 };
 
-/** A standings row as a friend sees it: no player, game or session IDs. */
+/**
+ * A standings row as a friend sees it: no player, game or session IDs.
+ * `invested` and `net` are sent only on the friend's own row; other players'
+ * money stays on the server (user decision, 2026-10-05).
+ */
 export type GroupStandingRow = {
   rank: number | null;
   name: string;
@@ -42,8 +46,8 @@ export type GroupStandingRow = {
   averageReturn: number | null;
   eligibleSessions: number;
   totalSessions: number;
-  invested: number;
-  net: number;
+  invested?: number;
+  net?: number;
   hands: number;
   profitableSessions: number;
   isMe: boolean;
@@ -63,6 +67,7 @@ export type GroupStandings = {
   currency: string;
   myPlayerName: string;
   metricVersion: number;
+  /** Games the friend played in: the graph's x axis, not the host's total. */
   games: number;
   lastPlayed: number | null;
   rows: GroupStandingRow[];
@@ -83,13 +88,21 @@ export function playedInGroup(group: GroupSessions): boolean {
 const twoDecimals = (value: number) => Math.round(value * 100) / 100;
 
 /**
- * Ranks a host's games exactly as the host's own standings do, then keeps
- * only what the standings list and its graph show. Games themselves, and any
- * game, session or player IDs, never leave the server. The user accepted
- * (2026-09-27) that the graph lets friends see each player's per-game return.
+ * A friend's view of a host's group, built only from the games the friend
+ * played in ("what you could have seen at the table", user decision
+ * 2026-10-05): the players they sat with, ranked among themselves 1…N with
+ * the same rules as the host's own standings, and the graph over those
+ * games. Nothing reveals how many games or players the host has in total,
+ * and only the friend's own row carries money. `friend_group_sessions()`
+ * already returns only those games (migration 0022); they are filtered here
+ * too. Games themselves, and any game, session or player IDs, never leave
+ * the server.
  */
 export function buildGroupStandings(group: GroupSessions): GroupStandings {
-  const sessions: PokerSession[] = group.sessions.map((session) => ({
+  const shared = group.sessions.filter((session) =>
+    session.results.some((result) => result.playerId === group.myPlayerId),
+  );
+  const sessions: PokerSession[] = shared.map((session) => ({
     id: session.id,
     date: session.date,
     ended: session.date,
@@ -107,7 +120,7 @@ export function buildGroupStandings(group: GroupSessions): GroupStandings {
   }));
   const standings = buildStandings(sessions);
   const avatars = new Map<string, string>();
-  for (const session of group.sessions) {
+  for (const session of shared) {
     for (const result of session.results) {
       if (result.avatar) avatars.set(result.playerId, result.avatar);
     }
@@ -124,21 +137,23 @@ export function buildGroupStandings(group: GroupSessions): GroupStandings {
     lastPlayed: sessions.length
       ? Math.max(...sessions.map((session) => session.date))
       : null,
-    rows: standings.entries.map((entry) => ({
-      rank: entry.rank,
-      name: entry.name,
-      avatar:
-        (entry.playerId && avatars.get(entry.playerId)) ||
-        fallbackAvatarId(entry.name),
-      averageReturn: entry.averageReturn,
-      eligibleSessions: entry.eligibleSessions,
-      totalSessions: entry.totalSessions,
-      invested: entry.invested,
-      net: entry.net,
-      hands: entry.hands,
-      profitableSessions: entry.profitableSessions,
-      isMe: entry.key === myKey,
-    })),
+    rows: standings.entries.map((entry) => {
+      const isMe = entry.key === myKey;
+      return {
+        rank: entry.rank,
+        name: entry.name,
+        avatar:
+          (entry.playerId && avatars.get(entry.playerId)) ||
+          fallbackAvatarId(entry.name),
+        averageReturn: entry.averageReturn,
+        eligibleSessions: entry.eligibleSessions,
+        totalSessions: entry.totalSessions,
+        ...(isMe ? { invested: entry.invested, net: entry.net } : {}),
+        hands: entry.hands,
+        profitableSessions: entry.profitableSessions,
+        isMe,
+      };
+    }),
     chart: standings.entries.map((entry) =>
       (standings.series.get(entry.key)?.returns ?? []).flatMap((point) =>
         point && point.sessionReturn !== null
