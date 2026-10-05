@@ -3,7 +3,7 @@ import {
   STANDINGS_METRIC_VERSION,
   standingsKey,
 } from "../poker/standings.ts";
-import { DEFAULT_CURRENCY } from "../poker/money.ts";
+import { type ChipUnit, DEFAULT_CURRENCY } from "../poker/money.ts";
 import type { PokerSession, SessionResult } from "../poker/types";
 import { fallbackAvatarId } from "../avatars.ts";
 
@@ -18,6 +18,8 @@ export type GroupSessions = {
   sessions: Array<{
     id: string;
     date: number;
+    /** "cents" for a game counted in hundredths (migration 0020). */
+    chipUnit?: ChipUnit;
     startStack: number;
     hands: number;
     /**
@@ -91,6 +93,7 @@ export function buildGroupStandings(group: GroupSessions): GroupStandings {
     id: session.id,
     date: session.date,
     ended: session.date,
+    ...(session.chipUnit === "cents" ? { chipUnit: session.chipUnit } : {}),
     ante: 0,
     startStack: session.startStack,
     hands: session.hands,

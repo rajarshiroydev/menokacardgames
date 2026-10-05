@@ -1,4 +1,4 @@
-import { formatMoney } from "./money.ts";
+import { type ChipUnit, formatChips } from "./money.ts";
 import type { RebuyRules } from "./types";
 
 /** Initial buy-in plus rebuys a player can have in one session. */
@@ -98,13 +98,15 @@ export function describeMaxRebuys(maxRebuys: number | null) {
 export function describeRebuyRules(
   rules: RebuyRules | null | undefined,
   currency?: string,
+  chipUnit?: ChipUnit,
 ) {
   const stored = normalizeRebuyRules(rules);
   if (!stored) return null;
   const count = describeMaxRebuys(stored.maxRebuys);
   if (stored.closeAtBigBlind === null || stored.maxRebuys === 0) return count;
-  return `${count}, until the big blind reaches ${formatMoney(
+  return `${count}, until the big blind reaches ${formatChips(
     stored.closeAtBigBlind,
+    chipUnit,
     currency,
   )}`;
 }

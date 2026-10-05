@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 
 import { formatChipChange, smallBlindFor } from "@/lib/poker/game";
 import { describeRebuyRules } from "@/lib/poker/buy-ins";
-import { formatMoney } from "@/lib/poker/money";
+import { chipsToAmount, formatChips } from "@/lib/poker/money";
 import {
   LIVE_VIEW_POLL_MS,
   LIVE_VIEW_REQUEST_TIMEOUT_MS,
@@ -170,7 +170,7 @@ export function LiveStandings({ token }: { token: string }) {
   const { view, failed } = state;
   const age = now - view.updatedAt;
   const stale = failed || age > LIVE_VIEW_STALE_MS;
-  const rebuyNote = describeRebuyRules(view.rebuyRules, view.currency);
+  const rebuyNote = describeRebuyRules(view.rebuyRules, view.currency, view.chipUnit);
 
   return (
     <main className="ledger-shell live-shell">
@@ -187,9 +187,9 @@ export function LiveStandings({ token }: { token: string }) {
       <section className="glass card live-blinds" aria-label="Current blinds">
         <span className="blinds-label">Blinds</span>
         <span className="live-blinds-value">
-          {formatMoney(view.smallBlind ?? smallBlindFor(view.bigBlind), view.currency)}
+          {formatChips(view.smallBlind ?? smallBlindFor(view.bigBlind), view.chipUnit, view.currency)}
           <span className="blinds-separator"> / </span>
-          {formatMoney(view.bigBlind, view.currency)}
+          {formatChips(view.bigBlind, view.chipUnit, view.currency)}
         </span>
         {rebuyNote ? <span className="muted small-note">{rebuyNote}</span> : null}
       </section>
@@ -223,15 +223,15 @@ export function LiveStandings({ token }: { token: string }) {
               <b>{row.name}</b>
               <span className="live-stack">
                 <small>Stack</small>
-                {formatMoney(row.stack, view.currency)}
+                {formatChips(row.stack, view.chipUnit, view.currency)}
               </span>
             </span>
             <span className="live-values">
               <b className={row.net > 0 ? "pos" : row.net < 0 ? "neg" : undefined}>
                 {row.net > 0 ? "▲ " : row.net < 0 ? "▼ " : ""}
-                {formatChipChange(row.net)}
+                {formatChipChange(chipsToAmount(row.net, view.chipUnit))}
               </b>
-              <small>Buy-In {formatMoney(row.invested, view.currency)}</small>
+              <small>Buy-In {formatChips(row.invested, view.chipUnit, view.currency)}</small>
               {row.rebuys > 0 ? (
                 <small>
                   {row.rebuys} rebuy{row.rebuys === 1 ? "" : "s"}

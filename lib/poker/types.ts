@@ -1,3 +1,5 @@
+import type { ChipUnit } from "./money.ts";
+
 export type Player = {
   id?: string;
   name: string;
@@ -170,6 +172,11 @@ export type ContinuedSession = {
 export type GameState = {
   /** The host's currency when the game started; older games lack it (INR). */
   currency?: string;
+  /**
+   * "cents" when every amount in the game is in hundredths (blinds like
+   * 0.25/0.50), chosen at setup. Absent is whole chips, as in older games.
+   */
+  chipUnit?: ChipUnit;
   /** Odd blinds chosen at setup; without it the small blind is half. */
   smallBlindRatio?: SmallBlindRatio;
   gameName?: string;
@@ -213,6 +220,8 @@ export type PokerSession = {
   discardedAt?: number;
   date: number;
   ended: number;
+  /** "cents" when every amount is in hundredths; absent is whole chips. */
+  chipUnit?: ChipUnit;
   ante: number;
   blindHistory?: BlindHistory;
   startStack: number;

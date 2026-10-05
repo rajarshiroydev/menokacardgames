@@ -5819,3 +5819,8 @@ td > .admin-badge:first-child,
   color: var(--ink3);
   font-size: 13px;
 }
+
+/* A segmented control that wraps into equal columns (the starting stacks). */
+.segmented.grid {
+  display: grid;
+}

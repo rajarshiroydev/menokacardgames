@@ -15,6 +15,7 @@ import {
   MAX_SESSIONS_PER_REQUEST,
   validateSession,
 } from "@/lib/poker/session-validation";
+import type { ChipUnit } from "@/lib/poker/money";
 import type { PokerSession, SessionResult } from "@/lib/poker/types";
 import {
   readJsonBody,
@@ -33,6 +34,7 @@ type SessionRow = {
   session_number: number | string;
   played_at: Date | string;
   ended_at: Date | string;
+  chip_unit: ChipUnit;
   ante: number | string;
   starting_stack: number | string;
   hands: number | string;
@@ -58,6 +60,7 @@ function mapSession(row: SessionRow): SavedSession {
       : {}),
     date: new Date(row.played_at).getTime(),
     ended: new Date(row.ended_at).getTime(),
+    ...(row.chip_unit === "cents" ? { chipUnit: row.chip_unit } : {}),
     ante: Number(row.ante),
     ...(row.blind_history ? { blindHistory: row.blind_history } : {}),
     startStack: Number(row.starting_stack),
@@ -82,6 +85,7 @@ function selectSessions(
           owner_session_number AS session_number,
           played_at,
           ended_at,
+          chip_unit,
           ante,
           starting_stack,
           hands,
@@ -400,6 +404,7 @@ async function handlePost(request: Request) {
               game_name,
               played_at,
               ended_at,
+              chip_unit,
               ante,
               starting_stack,
               hands,
@@ -413,6 +418,7 @@ async function handlePost(request: Request) {
                 ${session.name || null},
                 ${new Date(session.date).toISOString()},
                 ${new Date(session.ended).toISOString()},
+                ${session.chipUnit ?? "whole"},
                 ${session.ante},
                 ${session.startStack},
                 ${session.hands},

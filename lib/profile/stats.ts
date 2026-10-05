@@ -1,5 +1,6 @@
 import type { GroupSessions } from "../friends/group-standings.ts";
 import { deriveSessionAccounting } from "../poker/accounting.ts";
+import { chipsInCents } from "../poker/money.ts";
 import { sessionReturn } from "../poker/standings.ts";
 
 /** Games shown as bars on the profile card. */
@@ -22,7 +23,10 @@ export type ProfileStats = {
   /** Mean of those games' returns, in percent, as the standings work it out. */
   averageReturn: number | null;
   profitableGames: number;
-  /** Net result of the games counted in the person's own currency. */
+  /**
+   * Net result of the games counted in the person's own currency, in
+   * currency units; it has cents when a game counted in cents.
+   */
   net: number;
   /** Games left out of `net` and `recent` because they used another currency. */
   otherCurrencyGames: number;
@@ -38,6 +42,7 @@ export type ProfileSummary = ProfileStats & {
   gamesTogether: Record<string, number>;
 };
 
+/** `net` is in hundredths of a currency unit, so chip units add exactly. */
 type Game = { date: number; net: number; return: number; currency: string };
 
 /** Mean of sorted values, so equal sets of returns give identical means. */
@@ -73,7 +78,7 @@ export function buildProfileStats(
       if (value === null) continue;
       games.push({
         date: session.date,
-        net,
+        net: chipsInCents(net, session.chipUnit),
         return: value,
         currency: ledger.currency,
       });
@@ -86,11 +91,11 @@ export function buildProfileStats(
     games: games.length,
     averageReturn: games.length ? mean(games.map((game) => game.return)) : null,
     profitableGames: games.filter((game) => game.net > 0).length,
-    net: own.reduce((sum, game) => sum + game.net, 0),
+    net: own.reduce((sum, game) => sum + game.net, 0) / 100,
     otherCurrencyGames: games.length - own.length,
     recent: own
       .slice(-PROFILE_RECENT_GAMES)
-      .map(({ date, net }) => ({ date, net })),
+      .map(({ date, net }) => ({ date, net: net / 100 })),
     firstPlayed: games[0]?.date ?? null,
   };
 }

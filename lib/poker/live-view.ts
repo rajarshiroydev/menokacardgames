@@ -2,6 +2,7 @@ import { isAvatarId } from "../avatars.ts";
 import { deriveSessionAccounting } from "./accounting.ts";
 import { isValidRebuy, MAX_BUY_INS, parseRebuyRules } from "./buy-ins.ts";
 import { smallBlindFor } from "./game.ts";
+import { type ChipUnit, isChipUnit } from "./money.ts";
 import { cleanPlayerName } from "./player-validation.ts";
 import type { GameState, RebuyRules } from "./types";
 
@@ -38,6 +39,8 @@ export type LiveSnapshotPlayer = {
 
 export type LiveSnapshot = {
   gameName: string;
+  /** "cents" when amounts are in hundredths; absent is whole chips. */
+  chipUnit?: ChipUnit;
   startStack: number;
   handNo: number;
   handInProgress: boolean;
@@ -63,6 +66,8 @@ export type LiveView = {
   gameName: string;
   /** The host's currency code; views stored before it existed lack it (INR). */
   currency?: string;
+  /** "cents" when amounts are in hundredths; absent is whole chips. */
+  chipUnit?: ChipUnit;
   handNo: number;
   handInProgress: boolean;
   bigBlind: number;
@@ -80,6 +85,7 @@ export function buildLiveSnapshot(
   const hand = game.hand;
   return {
     gameName: game.sessionLabel || game.gameName || "Game",
+    ...(game.chipUnit === "cents" ? { chipUnit: game.chipUnit } : {}),
     startStack: game.startStack,
     handNo: game.handNo,
     handInProgress: Boolean(hand),
@@ -125,6 +131,10 @@ export function validateLiveSnapshot(input: unknown): LiveSnapshot {
   if (!gameName || gameName.length > MAX_GAME_NAME_LENGTH) {
     throw new Error(`Game names must be 1 to ${MAX_GAME_NAME_LENGTH} characters`);
   }
+  if (snapshot.chipUnit !== undefined && !isChipUnit(snapshot.chipUnit)) {
+    throw new Error("Invalid chip unit");
+  }
+  const cents = snapshot.chipUnit === "cents";
   const startStack = asChips(snapshot.startStack, "Starting stack", 1);
   const handNo = asChips(snapshot.handNo, "Hand number");
   const bigBlind = asChips(snapshot.bigBlind, "Big blind", 1);
@@ -183,6 +193,7 @@ export function validateLiveSnapshot(input: unknown): LiveSnapshot {
 
   return {
     gameName,
+    ...(cents ? { chipUnit: "cents" as const } : {}),
     startStack,
     handNo,
     handInProgress: snapshot.handInProgress,
@@ -233,6 +244,7 @@ export function deriveLiveView(snapshot: LiveSnapshot): LiveView {
 
   return {
     gameName: snapshot.gameName,
+    ...(snapshot.chipUnit === "cents" ? { chipUnit: snapshot.chipUnit } : {}),
     handNo: snapshot.handNo,
     handInProgress: snapshot.handInProgress,
     bigBlind: snapshot.bigBlind,

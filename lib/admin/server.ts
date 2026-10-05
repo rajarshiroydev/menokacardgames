@@ -3,7 +3,7 @@ import "server-only";
 import { getHostSession } from "@/lib/auth/server";
 import { runAsAuthenticatedUser } from "@/lib/poker/database";
 
-import type { AdminData } from "./data";
+import { type AdminData, type AdminGame, inCurrencyUnits } from "./data";
 
 const GAME_LIMIT = 300;
 
@@ -42,7 +42,7 @@ export async function loadAdminData(
     const [overview, accounts, guests, games, system, detail] = results.map(
       (rows) => (rows[0] as { value: unknown } | undefined)?.value ?? null,
     );
-    return {
+    const data = {
       overview,
       accounts,
       guests,
@@ -50,6 +50,14 @@ export async function loadAdminData(
       system,
       detail: detail ?? null,
     } as AdminData;
+    // Games in cents show in currency units like every other amount.
+    data.games = (data.games ?? []).map(inCurrencyUnits);
+    if (data.detail) {
+      data.detail.games = (data.detail.games ?? []).map(
+        (game: AdminGame) => inCurrencyUnits(game),
+      );
+    }
+    return data;
   } catch (error) {
     if (isForbidden(error)) return "forbidden";
     throw error;

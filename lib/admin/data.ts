@@ -4,6 +4,8 @@
  * milliseconds since the epoch, amounts are chips in the host's currency.
  */
 
+import { type ChipUnit, chipsToAmount } from "../poker/money.ts";
+
 export type AdminAccount = {
   id: string;
   email: string | null;
@@ -50,6 +52,12 @@ export type AdminGame = {
   playedAt: number;
   endedAt: number;
   hands: number;
+  /**
+   * The game's chip unit (migration 0020). The dashboard shows amounts in
+   * currency units: `inCurrencyUnits` converts a cents game's amounts once,
+   * when the data is read.
+   */
+  chipUnit?: ChipUnit;
   bigBlind: number;
   startingStack: number;
   results: AdminResult[];
@@ -230,6 +238,22 @@ export function formatDuration(milliseconds: number) {
 }
 
 /** The chips that changed hands in a game: the sum of the winners' gains. */
+/** A game with its amounts in currency units, so a cents game's 25 is 0.25. */
+export function inCurrencyUnits(game: AdminGame): AdminGame {
+  const amount = (chips: number) => chipsToAmount(Number(chips), game.chipUnit);
+  return {
+    ...game,
+    bigBlind: amount(game.bigBlind),
+    startingStack: amount(game.startingStack),
+    results: game.results.map((result) => ({
+      ...result,
+      invested: amount(result.invested),
+      endingStack: amount(result.endingStack),
+      net: amount(result.net),
+    })),
+  };
+}
+
 export function gamePot(game: Pick<AdminGame, "results">) {
   return game.results.reduce((sum, result) => sum + Math.max(0, result.net), 0);
 }

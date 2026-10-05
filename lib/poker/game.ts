@@ -4,7 +4,7 @@ import {
   normalizeRebuyRules,
   rebuyBlock,
 } from "./buy-ins.ts";
-import { formatMoney } from "./money.ts";
+import { formatChips } from "./money.ts";
 import type {
   BlindHistory,
   BlindPlan,
@@ -100,7 +100,7 @@ export function editRebuyRules(game: GameState, rules: RebuyRules | null) {
   // Not "Hand N:", so undoing that hand keeps this line, like the change.
   game.log.unshift(
     `Before hand ${game.handNo + 1}: rebuy rules changed to ${(
-      describeRebuyRules(stored, game.currency) ?? "Unlimited rebuys"
+      describeRebuyRules(stored, game.currency, game.chipUnit) ?? "Unlimited rebuys"
     ).replace(/^./, (first) => first.toLowerCase())}`,
   );
   game.log = game.log.slice(0, 80);
@@ -518,10 +518,11 @@ function applyBlindLevel(game: GameState, handNo: number, now: number) {
       : [...previousLevels, { handNo, dealtAt: now, bigBlind }];
   if (changed) {
     game.log.unshift(
-      `Hand ${handNo}: blinds ${bigBlind > previousBigBlind ? "up" : "set"} to ${formatMoney(
+      `Hand ${handNo}: blinds ${bigBlind > previousBigBlind ? "up" : "set"} to ${formatChips(
         smallBlindFor(bigBlind, game.smallBlindRatio),
+        game.chipUnit,
         game.currency,
-      )}/${formatMoney(bigBlind, game.currency)} (level ${level + 1})`,
+      )}/${formatChips(bigBlind, game.chipUnit, game.currency)} (level ${level + 1})`,
     );
     game.log = game.log.slice(0, 80);
   }
@@ -821,7 +822,8 @@ export function awardPots(game: GameState, winners: number[][]) {
   }
 
   const name = (index: number) => game.players[index].name;
-  const money = (value: number) => formatMoney(value, game.currency);
+  const money = (value: number) =>
+    formatChips(value, game.chipUnit, game.currency);
   const lines: string[] = [];
   if (refund) {
     game.players[refund.playerIndex].stack += refund.amount;

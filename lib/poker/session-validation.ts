@@ -4,6 +4,7 @@ import {
   MAX_BUY_INS,
   parseRebuyRules,
 } from "./buy-ins.ts";
+import { isChipUnit } from "./money.ts";
 import type {
   BlindHistory,
   BlindSchedule,
@@ -141,6 +142,13 @@ function validateBlindHistory(
   return { plans, levels, smallBlindRatio: { small, big } };
 }
 
+/** A saved game's chip unit; absent or null is whole chips. Throws on anything else. */
+export function parseChipUnit(value: unknown) {
+  if (value === undefined || value === null) return "whole";
+  if (!isChipUnit(value)) throw new Error("Invalid chip unit");
+  return value;
+}
+
 export function validateSession(input: unknown): PokerSession {
   if (!input || typeof input !== "object" || Array.isArray(input)) {
     throw new Error("Invalid session");
@@ -164,6 +172,7 @@ export function validateSession(input: unknown): PokerSession {
       ? undefined
       : validateBlindHistory(candidate.blindHistory, hands, ante, date, ended);
   const rebuyRules = parseRebuyRules(candidate.rebuyRules);
+  const chipUnit = parseChipUnit(candidate.chipUnit);
   const name = String(candidate.name || "").trim();
   if (name.length > MAX_GAME_NAME_LENGTH) {
     throw new Error(
@@ -244,6 +253,7 @@ export function validateSession(input: unknown): PokerSession {
     ...(name ? { name } : {}),
     date,
     ended,
+    ...(chipUnit === "cents" ? { chipUnit } : {}),
     ante,
     ...(blindHistory ? { blindHistory } : {}),
     startStack,

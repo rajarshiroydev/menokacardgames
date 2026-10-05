@@ -38,6 +38,7 @@ async function handleGet() {
           jsonb_build_object(
             'id', session.id,
             'date', (extract(epoch FROM session.played_at) * 1000)::bigint,
+            'chipUnit', session.chip_unit,
             'startStack', session.starting_stack,
             'hands', session.hands,
             'results', normalized.results

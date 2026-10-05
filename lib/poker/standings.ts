@@ -1,4 +1,5 @@
 import { deriveSessionAccounting } from "./accounting.ts";
+import { chipsInCents } from "./money.ts";
 import type { PokerSession, SessionResult } from "./types";
 
 /** Bump when the ranking formula or eligibility rules change. */
@@ -21,9 +22,13 @@ export type StandingsEntry = {
   averageReturn: number | null;
   eligibleSessions: number;
   totalSessions: number;
-  /** Supporting stats below cover eligible sessions only, so they always describe the same games. */
+  /**
+   * Supporting stats below cover eligible sessions only, so they always
+   * describe the same games. Amounts are in currency units and can have
+   * cents when a game counted in cents.
+   */
   invested: number;
-  /** Raw chip result. */
+  /** Raw result. */
   net: number;
   /** Hands dealt in the sessions the player took part in. */
   hands: number;
@@ -52,7 +57,7 @@ export type StandingsSeries = {
   key: string;
   /** Running average after each timeline session; null before the first eligible one. */
   returns: Array<ReturnPoint | null>;
-  /** Cumulative raw chip net from eligible sessions, at the start and after each timeline session. */
+  /** Cumulative raw net from eligible sessions in currency units, at the start and after each timeline session. */
   cumulativeNet: number[];
 };
 
@@ -97,7 +102,9 @@ type Accumulator = StandingsEntry & { returns: number[] };
 
 /**
  * Ranks players by the arithmetic mean of their eligible session returns.
- * Each session counts equally regardless of chip scale.
+ * Each session counts equally regardless of chip scale. Invested and net are
+ * added up in hundredths, so games counted in cents and in whole chips add
+ * exactly, and converted to currency units at the end.
  */
 export function buildStandings(sessions: PokerSession[]): Standings {
   const timeline = chronological(sessions);
@@ -105,6 +112,7 @@ export function buildStandings(sessions: PokerSession[]): Standings {
   const series = new Map<string, StandingsSeries>();
 
   timeline.forEach((session, timelineIndex) => {
+    const cents = (chips: number) => chipsInCents(chips, session.chipUnit);
     let invested: Map<SessionResult, number> | null = null;
     try {
       const accounting = deriveSessionAccounting(session);
@@ -165,11 +173,11 @@ export function buildStandings(sessions: PokerSession[]): Standings {
       }
 
       player.eligibleSessions += 1;
-      player.invested += playerInvested ?? 0;
-      player.net += result.net;
+      player.invested += cents(playerInvested ?? 0);
+      player.net += cents(result.net);
       player.hands += session.hands;
       if (result.net > 0) player.profitableSessions += 1;
-      eligibleNet.set(key, result.net);
+      eligibleNet.set(key, cents(result.net));
       player.returns.push(value);
       player.bestReturn = Math.max(player.bestReturn ?? value, value);
       player.worstReturn = Math.min(player.worstReturn ?? value, value);
@@ -202,7 +210,11 @@ export function buildStandings(sessions: PokerSession[]): Standings {
     .map((player) => {
       const { returns, ...entry } = player;
       void returns;
-      return entry;
+      return {
+        ...entry,
+        invested: entry.invested / 100,
+        net: entry.net / 100,
+      };
     })
     .sort((a, b) => {
       if (a.averageReturn === null || b.averageReturn === null) {
@@ -231,6 +243,11 @@ export function buildStandings(sessions: PokerSession[]): Standings {
       sessionNumber,
       date,
     })),
-    series,
+    series: new Map(
+      [...series].map(([key, line]) => [
+        key,
+        { ...line, cumulativeNet: line.cumulativeNet.map((net) => net / 100) },
+      ]),
+    ),
   };
 }

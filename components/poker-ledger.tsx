@@ -3,6 +3,7 @@
 import {
   ChangeEvent,
   FormEvent,
+  InputHTMLAttributes,
   ReactNode,
   PointerEvent as ReactPointerEvent,
   createContext,
@@ -63,11 +64,24 @@ import {
 } from "@/lib/poker/buy-ins";
 import { gameFromSession } from "@/lib/poker/continue-session";
 import {
+  bigBlindChoices,
+  chipUnitFor,
+  DEFAULT_STACK,
+  defaultBigBlind,
+  fromUnit,
+  inUnit,
+  smallBlindShare as smallBlindShareOf,
+  STACK_PRESETS,
+} from "@/lib/poker/stakes";
+import {
+  type ChipUnit,
+  chipsToInput,
   CURRENCIES,
   currencySymbol,
   DEFAULT_CURRENCY,
-  formatMoney,
-  formatSignedMoney,
+  formatChips,
+  formatSignedChips,
+  parseChips,
 } from "@/lib/poker/money";
 import {
   accountGameStorageKey,
@@ -148,6 +162,13 @@ import type {
 const CurrencyContext = createContext<string>(DEFAULT_CURRENCY);
 
 /**
+ * What the amounts below mean: a game's or saved game's own chip unit, so a
+ * cents game's 25 shows as 0.25. Totals across games (standings, profile)
+ * are already in currency units and use the default, "whole".
+ */
+const ChipUnitContext = createContext<ChipUnit>("whole");
+
+/**
  * The avatar a player in the host's list shows as, by player id or, for games
  * saved without ids, by name. Undefined means the drawing falls back to a
  * stable pick from the name.
@@ -176,14 +197,55 @@ function buildAvatarLookup(
 
 function useMoney() {
   const currency = useContext(CurrencyContext);
+  const unit = useContext(ChipUnitContext);
   return useMemo(
     () => ({
       currency,
+      unit,
       symbol: currencySymbol(currency),
-      money: (value: number) => formatMoney(value, currency),
-      signedMoney: (value: number) => formatSignedMoney(value, currency),
+      money: (value: number) => formatChips(value, unit, currency),
+      signedMoney: (value: number) => formatSignedChips(value, unit, currency),
     }),
-    [currency],
+    [currency, unit],
+  );
+}
+
+/**
+ * An amount box in the current chip unit: it shows 0.25 for 25 cents and
+ * reports stored chips. Text that isn't an amount (empty, or too many
+ * decimals) reports 0, which the forms already refuse.
+ */
+function ChipInput({
+  value,
+  onChange,
+  ...props
+}: Omit<
+  InputHTMLAttributes<HTMLInputElement>,
+  "value" | "onChange" | "type" | "inputMode"
+> & {
+  value: number | null;
+  onChange: (chips: number) => void;
+}) {
+  const unit = useContext(ChipUnitContext);
+  const shown = value === null ? "" : chipsToInput(value, unit);
+  const [text, setText] = useState(shown);
+  // Follow changes made elsewhere (a preset, a unit switch) without
+  // rewriting what is being typed, such as "0." on the way to "0.5".
+  if (value !== null && (parseChips(text, unit) ?? 0) !== value) {
+    setText(shown);
+  }
+  return (
+    <input
+      {...props}
+      type="text"
+      inputMode={unit === "cents" ? "decimal" : "numeric"}
+      autoComplete="off"
+      value={text}
+      onChange={(event) => {
+        setText(event.target.value);
+        onChange(parseChips(event.target.value, unit) ?? 0);
+      }}
+    />
   );
 }
 
@@ -462,13 +524,14 @@ function formatCountdown(ms: number) {
 function describeBlindSchedule(
   schedule: BlindSchedule | null,
   currency: string,
+  unit: ChipUnit | undefined,
 ) {
   if (!schedule) return "Fixed blinds";
   const interval = `${schedule.every} ${schedule.unit === "hands"
     ? schedule.every === 1 ? "hand" : "hands"
     : schedule.every === 1 ? "minute" : "minutes"}`;
   return schedule.raiseType === "add"
-    ? `Add ${formatMoney(schedule.raiseBy, currency)} to the big blind every ${interval}`
+    ? `Add ${formatChips(schedule.raiseBy, unit, currency)} to the big blind every ${interval}`
     : `Multiply the big blind by ${schedule.raiseBy} every ${interval}`;
 }
 
@@ -509,8 +572,9 @@ function awardPot(game: GameState, playerIndex: number, automatic = false) {
   game.players[playerIndex].stack += pot;
   recordWin(
     game,
-    `Hand ${hand.no}: ${game.players[playerIndex].name} wins ${formatMoney(
+    `Hand ${hand.no}: ${game.players[playerIndex].name} wins ${formatChips(
       pot,
+      game.chipUnit,
       game.currency,
     )}${automatic ? " (others folded)" : ""}`,
   );
@@ -538,10 +602,12 @@ export function PokerLedger({
   // another request; profile actions keep it current from here.
   const [profile, setProfile] = useState(initialProfile);
   const currency = profile.currency;
-  const money = (value: number) => formatMoney(value, currency);
   const gameStorageKey = accountGameStorageKey(accountId);
   const liveTokenStorageKey = accountLiveTokenStorageKey(accountId);
   const [game, setGame] = useState<GameState | null>(null);
+  // Messages about the game in progress, in its own chip unit.
+  const money = (value: number) =>
+    formatChips(value, game?.chipUnit, currency);
   const [history, setHistory] = useState<PokerSession[]>([]);
   const [discardedSessions, setDiscardedSessions] = useState<PokerSession[]>(
     [],
@@ -1015,6 +1081,8 @@ export function PokerLedger({
   const startGame = useCallback(
     (input: {
       name: string;
+      /** "cents" when every amount below is in hundredths. */
+      chipUnit: ChipUnit;
       stack: number;
       ante: number;
       /** An odd small blind; null keeps the usual half. */
@@ -1035,7 +1103,7 @@ export function PokerLedger({
         !isValidSmallBlind(input.smallBlind, input.ante)
       ) {
         showToast(
-          `Small blind must be from ${formatMoney(1, currency)} up to the big blind`,
+          `Small blind must be from ${formatChips(1, input.chipUnit, currency)} up to the big blind`,
         );
         return;
       }
@@ -1061,6 +1129,7 @@ export function PokerLedger({
         ...(gameName ? { gameName } : {}),
         sessionLabel: gameName || `Game ${nextSessionNumber}`,
         currency,
+        ...(input.chipUnit === "cents" ? { chipUnit: input.chipUnit } : {}),
         ante: input.ante,
         baseAnte: input.ante,
         // Only an odd choice is stored, so half keeps its exact old rounding.
@@ -1719,6 +1788,7 @@ export function PokerLedger({
       ...(game.gameName ? { name: game.gameName } : {}),
       date: game.startedAt,
       ended: Date.now(),
+      ...(game.chipUnit === "cents" ? { chipUnit: game.chipUnit } : {}),
       ante: startingBigBlind(game),
       ...(game.blindPlans && game.blindLevels
         ? {
@@ -2188,26 +2258,28 @@ export function PokerLedger({
           onConfirm={() => setModal(null)}
         />
       ) : null}
-      {game?.winnerAnnouncement ? (
-        <WinnerCard
-          announcement={game.winnerAnnouncement}
-          onNext={dismissWinner}
-        />
-      ) : null}
-      {editingBlinds && game ? (
-        <BlindEditor
-          game={game}
-          onClose={() => setEditingBlinds(false)}
-          onSave={saveBlindSchedule}
-        />
-      ) : null}
-      {editingRebuys && game && !game.hand ? (
-        <RebuyEditor
-          game={game}
-          onClose={() => setEditingRebuys(false)}
-          onSave={saveRebuyRules}
-        />
-      ) : null}
+      <ChipUnitContext.Provider value={game?.chipUnit ?? "whole"}>
+        {game?.winnerAnnouncement ? (
+          <WinnerCard
+            announcement={game.winnerAnnouncement}
+            onNext={dismissWinner}
+          />
+        ) : null}
+        {editingBlinds && game ? (
+          <BlindEditor
+            game={game}
+            onClose={() => setEditingBlinds(false)}
+            onSave={saveBlindSchedule}
+          />
+        ) : null}
+        {editingRebuys && game && !game.hand ? (
+          <RebuyEditor
+            game={game}
+            onClose={() => setEditingRebuys(false)}
+            onSave={saveRebuyRules}
+          />
+        ) : null}
+      </ChipUnitContext.Provider>
       {sharingLive && game ? (
         <LiveShareSheet
           token={liveToken}
@@ -2359,14 +2431,22 @@ function Segmented<T extends string | number>({
   options,
   value,
   onChange,
+  columns,
 }: {
   label: string;
   options: ReadonlyArray<{ value: T; label: string }>;
   value: T;
   onChange: (value: T) => void;
+  /** Wrap into rows of this many equal chips instead of one row. */
+  columns?: number;
 }) {
   return (
-    <div className="segmented" role="radiogroup" aria-label={label}>
+    <div
+      className={columns ? "segmented grid" : "segmented"}
+      style={columns ? { gridTemplateColumns: `repeat(${columns}, 1fr)` } : undefined}
+      role="radiogroup"
+      aria-label={label}
+    >
       {options.map((option) => (
         <button
           key={String(option.value)}
@@ -2456,7 +2536,9 @@ function HomeView({
 
       <div className="home-stack">
         {game ? (
-          <HomeLiveCard game={game} selfPlayerId={selfPlayerId} onOpen={onGame} />
+          <ChipUnitContext.Provider value={game.chipUnit ?? "whole"}>
+            <HomeLiveCard game={game} selfPlayerId={selfPlayerId} onOpen={onGame} />
+          </ChipUnitContext.Provider>
         ) : (
           <button className="home-start-card" type="button" onClick={onSetup}>
             <span className="home-start-watermark" aria-hidden="true">
@@ -2677,7 +2759,7 @@ function HomeLastSession({
   selfPlayerId: string | null;
   onOpen: () => void;
 }) {
-  const { signedMoney } = useMoney();
+  const { currency } = useMoney();
   const session = history
     .filter((item) => !item.discardedAt)
     .reduce<PokerSession | null>(
@@ -2691,6 +2773,8 @@ function HomeLastSession({
       null,
     );
   if (!session || !session.results.length) return null;
+  const signedMoney = (value: number) =>
+    formatSignedChips(value, session.chipUnit, currency);
 
   let invested = new Map<string, number>();
   try {
@@ -2799,7 +2883,7 @@ function LegacySessionReview({
   onAdopt: (selectedIds: Set<string>) => Promise<void>;
   onClose: () => void;
 }) {
-  const { money } = useMoney();
+  const { currency } = useMoney();
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [submitting, setSubmitting] = useState(false);
 
@@ -2850,7 +2934,8 @@ function LegacySessionReview({
               <span>
                 <strong>{session.name || "Saved Game"}</strong>
                 <small>
-                  {formatDate(session.date)} · Big Blind {money(session.ante)}
+                  {formatDate(session.date)} · Big Blind{" "}
+                  {formatChips(session.ante, session.chipUnit, currency)}
                   {" · "}
                   {session.results.map((result) => result.name).join(", ")}
                 </small>
@@ -2908,7 +2993,7 @@ function ImportReview({
   onConfirm: (plan: ImportPlan) => Promise<void>;
   onClose: () => void;
 }) {
-  const { money } = useMoney();
+  const { currency } = useMoney();
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const count = plan.additions.length;
@@ -2982,7 +3067,7 @@ function ImportReview({
                 <strong>{session.name || "Saved Game"}</strong>
                 <small>
                   {formatDate(session.date)} · Big Blind{" "}
-                  {money(session.ante)}
+                  {formatChips(session.ante, session.chipUnit, currency)}
                   {" · "}
                   {session.results.map((result) => result.name).join(", ")}
                 </small>
@@ -3046,6 +3131,7 @@ function SetupView({
   suggestedName: string;
   onStart: (input: {
     name: string;
+    chipUnit: ChipUnit;
     stack: number;
     ante: number;
     smallBlind: number | null;
@@ -3055,10 +3141,14 @@ function SetupView({
     randomDealer: boolean;
   }) => void;
 }) {
-  const { money, symbol } = useMoney();
+  const { currency, symbol } = useMoney();
+  // Every amount in this form is in hundredths, so 0.25 and 10,000 use the
+  // same boxes. The game's chip unit follows from them when it starts
+  // (lib/poker/stakes.ts); nobody picks it.
+  const money = (value: number) => formatChips(value, "cents", currency);
   const [name, setName] = useState("");
-  const [stack, setStack] = useState(10_000);
-  const [ante, setAnte] = useState(100);
+  const [stack, setStack] = useState(DEFAULT_STACK);
+  const [ante, setAnte] = useState(() => defaultBigBlind(DEFAULT_STACK));
   const [risingBlinds, setRisingBlinds] = useState(false);
   const [blindUnit, setBlindUnit] = useState<BlindSchedule["unit"]>(
     DEFAULT_BLIND_SCHEDULE.unit,
@@ -3077,7 +3167,7 @@ function SetupView({
   const [oddBlinds, setOddBlinds] = useState(false);
   const [smallBlindShare, setSmallBlindShare] = useState(40);
   const [customSmallBlind, setCustomSmallBlind] = useState(false);
-  const [smallBlindAmount, setSmallBlindAmount] = useState(40);
+  const [smallBlindAmount, setSmallBlindAmount] = useState(4_000);
   const [rebuyRules, setRebuyRules] = useState<RebuyRules>({
     maxRebuys: null,
     closeAtBigBlind: null,
@@ -3171,9 +3261,28 @@ function SetupView({
     !schedule ||
     (schedule.every >= 1 &&
       schedule.raiseBy > (schedule.raiseType === "multiply" ? 1 : 0));
+  // The game's unit, from every amount typed or picked (all in hundredths).
+  const chipUnit = chipUnitFor(stack, [
+    ante,
+    risingBlinds && blindRaiseType === "add" ? blindRaiseBy : null,
+    rebuyRules.closeAtBigBlind,
+    oddBlinds && customSmallBlind ? smallBlindAmount : null,
+  ]);
+  /** The plan in the game's unit, which rounds its levels like the game will. */
+  const scheduleInUnit = (plan: BlindSchedule | null) =>
+    plan?.raiseType === "add"
+      ? { ...plan, raiseBy: inUnit(plan.raiseBy, chipUnit) }
+      : plan;
   const ladder = schedule && scheduleValid
     ? Array.from({ length: 4 }, (_, level) =>
-        bigBlindAtLevel(Math.max(1, ante), schedule, level),
+        fromUnit(
+          bigBlindAtLevel(
+            inUnit(Math.max(1, ante), chipUnit),
+            scheduleInUnit(schedule),
+            level,
+          ),
+          chipUnit,
+        ),
       )
     : [];
 
@@ -3185,6 +3294,21 @@ function SetupView({
           ? current
           : [...current, playerId],
     );
+  }
+
+  /**
+   * A new stack brings its usual big blind (100 big blinds deep) and drops
+   * amounts picked for the old one, so 50 and 0.50 never sit beside 50K.
+   */
+  function chooseStack(next: number) {
+    const bigBlind = defaultBigBlind(next);
+    setStack(next);
+    setAnte(bigBlind);
+    setCustomAnte(false);
+    setCustomSmallBlind(false);
+    setSmallBlindAmount(smallBlindFor(bigBlind));
+    if (blindRaiseType === "add") setBlindRaiseBy(bigBlind);
+    setRebuyRules((rules) => ({ ...rules, closeAtBigBlind: null }));
   }
 
   function chooseBlindLevels(choice: "fixed" | BlindSchedule["unit"]) {
@@ -3400,13 +3524,18 @@ function SetupView({
     ) {
       return;
     }
+    const closeAt = setupRebuyRules.closeAtBigBlind;
     onStart({
       name,
-      stack,
-      ante,
-      smallBlind,
-      blinds: schedule,
-      rebuyRules: setupRebuyRules,
+      chipUnit,
+      stack: inUnit(stack, chipUnit),
+      ante: inUnit(ante, chipUnit),
+      smallBlind: smallBlind === null ? null : inUnit(smallBlind, chipUnit),
+      blinds: scheduleInUnit(schedule),
+      rebuyRules: {
+        ...setupRebuyRules,
+        closeAtBigBlind: closeAt === null ? null : inUnit(closeAt, chipUnit),
+      },
       players: selectedPlayers,
       randomDealer,
     });
@@ -3418,15 +3547,12 @@ function SetupView({
     new Set(selectedIds).size === playerCount;
   const nameFor = (playerId: string) =>
     players.find((player) => player.id === playerId)?.name ?? "";
-  const stackPreset = STACK_PRESETS.some((option) => option.value === stack);
-  const antePreset = ANTE_PRESETS.some((option) => option.value === ante);
-  const bigBlindForShares = Math.max(1, ante);
+  const stackPreset = STACK_PRESETS.includes(stack);
+  const anteChoices = bigBlindChoices(stack);
+  const antePreset = anteChoices.includes(ante);
   const smallBlindOptions = SMALL_BLIND_SHARES.map((percent) => ({
     percent,
-    amount: Math.min(
-      bigBlindForShares,
-      Math.max(1, Math.round((bigBlindForShares * percent) / 100)),
-    ),
+    amount: smallBlindShareOf(Math.max(1, ante), percent, chipUnit),
   })).filter(
     (option, index, all) =>
       all.findIndex((other) => other.amount === option.amount) === index,
@@ -3467,484 +3593,480 @@ function SetupView({
           : `Big blind +${money(blindRaiseBy)} each level`;
 
   return (
-    <form className="stack-list setup-view" onSubmit={submit}>
-      <section className="glass card">
-        <label className="label" htmlFor="game-name">
-          Game name <span className="label-note">(optional)</span>
-        </label>
-        <input
-          className="field"
-          id="game-name"
-          maxLength={80}
-          placeholder={suggestedName}
-          value={name}
-          onChange={(event) => setName(event.target.value)}
-        />
-      </section>
+    <ChipUnitContext.Provider value="cents">
+      <form className="stack-list setup-view" onSubmit={submit}>
+        <section className="glass card">
+          <label className="label" htmlFor="game-name">
+            Game name <span className="label-note">(optional)</span>
+          </label>
+          <input
+            className="field"
+            id="game-name"
+            maxLength={80}
+            placeholder={suggestedName}
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+          />
+        </section>
 
-      <section className="glass card">
-        <div className="card-row">
-          <span className="label">Select players</span>
-        </div>
-        {error ? (
-          <div className="inline-state">
-            <span>{error}</span>
-            <button type="button" className="text-button" onClick={onRetry}>
-              Try again
-            </button>
+        <section className="glass card">
+          <div className="card-row">
+            <span className="label">Select players</span>
           </div>
-        ) : loading ? (
-          <p className="muted">Loading players…</p>
-        ) : players.length ? (
-          <div className="seat-chips">
-            {[
-              ...players.filter((player) => player.id === selfPlayerId),
-              ...players.filter((player) => player.id !== selfPlayerId),
-            ].map((player) => {
-              const seat = selectedIds.indexOf(player.id);
-              const full = seat < 0 && playerCount >= MAX_SEATS;
-              return (
-                <button
-                  key={player.id}
-                  type="button"
-                  className={`seat-chip ${seat >= 0 ? "seated" : ""}`}
-                  aria-pressed={seat >= 0}
-                  disabled={full}
-                  onClick={() => toggleSeat(player.id)}
-                >
-                  <span className="seat-chip-dot" aria-hidden="true">
-                    {seat >= 0 ? seat + 1 : "+"}
-                  </span>
-                  {player.name}
-                  {player.id === selfPlayerId ? (
-                    <span className="you-tag">You</span>
-                  ) : null}
-                </button>
-              );
-            })}
-          </div>
-        ) : null}
-        {!loading && !error && players.length < 2 ? (
-          <p className="muted">Add at least two players before starting a game.</p>
-        ) : null}
-        {playerCount > 1 ? (
-          <>
-            <div className="card-row seat-order-heading">
-              <span className="label">Seating Order</span>
-              <div className="heading-with-info">
-                <label className="switch-row">
-                  <span>Randomize dealer</span>
-                  <button
-                    className="switch"
-                    type="button"
-                    role="switch"
-                    aria-checked={randomDealer}
-                    aria-label="Randomize dealer"
-                    onClick={() => setRandomDealer((on) => !on)}
-                  />
-                </label>
-                <button
-                  className="info-button"
-                  type="button"
-                  aria-label="About randomize dealer"
-                  onClick={() => setShowDealerHelp(true)}
-                >
-                  i
-                </button>
-              </div>
+          {error ? (
+            <div className="inline-state">
+              <span>{error}</span>
+              <button type="button" className="text-button" onClick={onRetry}>
+                Try again
+              </button>
             </div>
-            {showDealerHelp ? (
-              <InfoSheet
-                label="About randomize dealer"
-                onClose={() => setShowDealerHelp(false)}
-              >
-                <p>
-                  <b>Randomize Dealer On:</b> the first dealer is chosen at
-                  random when the game starts.
-                </p>
-                <p>
-                  <b>Randomize Dealer Off:</b> seat 1 deals first.
-                </p>
-              </InfoSheet>
-            ) : null}
-            <div className="seat-order-list" ref={seatListRef}>
-              {selectedIds.map((selectedId, index) => {
-                let shift = 0;
-                if (draggingSeat !== null && dropSeat !== null) {
-                  if (
-                    draggingSeat < dropSeat &&
-                    index > draggingSeat &&
-                    index <= dropSeat
-                  ) {
-                    shift = -seatDragStep;
-                  } else if (
-                    draggingSeat > dropSeat &&
-                    index >= dropSeat &&
-                    index < draggingSeat
-                  ) {
-                    shift = seatDragStep;
-                  }
-                }
-                const seatName = nameFor(selectedId);
+          ) : loading ? (
+            <p className="muted">Loading players…</p>
+          ) : players.length ? (
+            <div className="seat-chips">
+              {[
+                ...players.filter((player) => player.id === selfPlayerId),
+                ...players.filter((player) => player.id !== selfPlayerId),
+              ].map((player) => {
+                const seat = selectedIds.indexOf(player.id);
+                const full = seat < 0 && playerCount >= MAX_SEATS;
                 return (
-                  <div
-                    className={`seat-row${draggingSeat === index ? " is-dragging" : ""}${
-                      draggingSeat !== null &&
-                      dropSeat === index &&
-                      draggingSeat !== index
-                        ? " is-drop-target"
-                        : ""
-                    }`}
-                    data-seat-index={index}
-                    key={selectedId}
-                    style={
-                      shift
-                        ? { transform: `translate3d(0, ${shift}px, 0)` }
-                        : undefined
-                    }
+                  <button
+                    key={player.id}
+                    type="button"
+                    className={`seat-chip ${seat >= 0 ? "seated" : ""}`}
+                    aria-pressed={seat >= 0}
+                    disabled={full}
+                    onClick={() => toggleSeat(player.id)}
                   >
-                    <span className="seat-number" aria-hidden="true">
-                      {index + 1}
+                    <span className="seat-chip-dot" aria-hidden="true">
+                      {seat >= 0 ? seat + 1 : "+"}
                     </span>
-                    <Avatar name={seatName} playerId={selectedId} size="small" />
-                    <span className="seat-name">{seatName}</span>
-                    <button
-                      className="seat-drag-handle"
-                      type="button"
-                      disabled={loading || Boolean(error)}
-                      aria-label={`Move seat ${index + 1}, ${seatName}. Drag or use arrow keys.`}
-                      onPointerDown={(event) => startSeatDrag(event, index)}
-                      onPointerMove={moveSeatDrag}
-                      onPointerUp={endSeatDrag}
-                      onPointerCancel={cancelSeatDrag}
-                      onLostPointerCapture={cancelSeatDrag}
-                      onKeyDown={(event) => {
-                        if (event.key === "ArrowUp" && index > 0) {
-                          event.preventDefault();
-                          moveSeat(index, index - 1);
-                        } else if (
-                          event.key === "ArrowDown" &&
-                          index < playerCount - 1
-                        ) {
-                          event.preventDefault();
-                          moveSeat(index, index + 1);
-                        }
-                      }}
-                    >
-                      <span aria-hidden="true">⠿</span>
-                    </button>
-                  </div>
+                    {player.name}
+                    {player.id === selfPlayerId ? (
+                      <span className="you-tag">You</span>
+                    ) : null}
+                  </button>
                 );
               })}
             </div>
-          </>
-        ) : null}
-      </section>
+          ) : null}
+          {!loading && !error && players.length < 2 ? (
+            <p className="muted">Add at least two players before starting a game.</p>
+          ) : null}
+          {playerCount > 1 ? (
+            <>
+              <div className="card-row seat-order-heading">
+                <span className="label">Seating Order</span>
+                <div className="heading-with-info">
+                  <label className="switch-row">
+                    <span>Randomize dealer</span>
+                    <button
+                      className="switch"
+                      type="button"
+                      role="switch"
+                      aria-checked={randomDealer}
+                      aria-label="Randomize dealer"
+                      onClick={() => setRandomDealer((on) => !on)}
+                    />
+                  </label>
+                  <button
+                    className="info-button"
+                    type="button"
+                    aria-label="About randomize dealer"
+                    onClick={() => setShowDealerHelp(true)}
+                  >
+                    i
+                  </button>
+                </div>
+              </div>
+              {showDealerHelp ? (
+                <InfoSheet
+                  label="About randomize dealer"
+                  onClose={() => setShowDealerHelp(false)}
+                >
+                  <p>
+                    <b>Randomize Dealer On:</b> the first dealer is chosen at
+                    random when the game starts.
+                  </p>
+                  <p>
+                    <b>Randomize Dealer Off:</b> seat 1 deals first.
+                  </p>
+                </InfoSheet>
+              ) : null}
+              <div className="seat-order-list" ref={seatListRef}>
+                {selectedIds.map((selectedId, index) => {
+                  let shift = 0;
+                  if (draggingSeat !== null && dropSeat !== null) {
+                    if (
+                      draggingSeat < dropSeat &&
+                      index > draggingSeat &&
+                      index <= dropSeat
+                    ) {
+                      shift = -seatDragStep;
+                    } else if (
+                      draggingSeat > dropSeat &&
+                      index >= dropSeat &&
+                      index < draggingSeat
+                    ) {
+                      shift = seatDragStep;
+                    }
+                  }
+                  const seatName = nameFor(selectedId);
+                  return (
+                    <div
+                      className={`seat-row${draggingSeat === index ? " is-dragging" : ""}${
+                        draggingSeat !== null &&
+                        dropSeat === index &&
+                        draggingSeat !== index
+                          ? " is-drop-target"
+                          : ""
+                      }`}
+                      data-seat-index={index}
+                      key={selectedId}
+                      style={
+                        shift
+                          ? { transform: `translate3d(0, ${shift}px, 0)` }
+                          : undefined
+                      }
+                    >
+                      <span className="seat-number" aria-hidden="true">
+                        {index + 1}
+                      </span>
+                      <Avatar name={seatName} playerId={selectedId} size="small" />
+                      <span className="seat-name">{seatName}</span>
+                      <button
+                        className="seat-drag-handle"
+                        type="button"
+                        disabled={loading || Boolean(error)}
+                        aria-label={`Move seat ${index + 1}, ${seatName}. Drag or use arrow keys.`}
+                        onPointerDown={(event) => startSeatDrag(event, index)}
+                        onPointerMove={moveSeatDrag}
+                        onPointerUp={endSeatDrag}
+                        onPointerCancel={cancelSeatDrag}
+                        onLostPointerCapture={cancelSeatDrag}
+                        onKeyDown={(event) => {
+                          if (event.key === "ArrowUp" && index > 0) {
+                            event.preventDefault();
+                            moveSeat(index, index - 1);
+                          } else if (
+                            event.key === "ArrowDown" &&
+                            index < playerCount - 1
+                          ) {
+                            event.preventDefault();
+                            moveSeat(index, index + 1);
+                          }
+                        }}
+                      >
+                        <span aria-hidden="true">⠿</span>
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          ) : null}
+        </section>
 
-      <section className="glass card">
-        <div className="card-row">
-          <span className="label">Starting stack</span>
-          <span className="card-note">First buy-in {money(stack)}</span>
-        </div>
-        <Segmented
-          label="Starting stack"
-          options={[...STACK_PRESETS, { value: "other", label: "Other" }]}
-          value={customStack || !stackPreset ? "other" : stack}
-          onChange={(value) => {
-            if (value === "other") {
-              setCustomStack(true);
-            } else {
-              setCustomStack(false);
-              setStack(value);
-            }
-          }}
-        />
-        {customStack || !stackPreset ? (
-          <input
-            className="field"
-            id="stack"
-            aria-label="Starting stack amount"
-            type="number"
-            inputMode="numeric"
-            min="1"
-            value={stack}
-            onChange={(event) => setStack(Number(event.target.value))}
-          />
-        ) : null}
-      </section>
-
-      <section className="glass card">
-        <div className="card-row">
-          <span className="label">Big blind</span>
-          <div className="heading-with-info">
-            <label className="switch-row">
-              <span>Odd blinds</span>
-              <button
-                className="switch"
-                type="button"
-                role="switch"
-                aria-checked={oddBlinds}
-                aria-label="Odd blinds"
-                onClick={() => setOddBlinds((on) => !on)}
-              />
-            </label>
-            <button
-              className="info-button"
-              type="button"
-              aria-label="About odd blinds"
-              onClick={() => setShowOddBlindsHelp(true)}
-            >
-              i
-            </button>
+        <section className="glass card">
+          <div className="card-row">
+            <span className="label">Starting stack</span>
+            <span className="card-note">First buy-in {money(stack)}</span>
           </div>
-        </div>
-        {showOddBlindsHelp ? (
-          <InfoSheet
-            label="About odd blinds"
-            onClose={() => setShowOddBlindsHelp(false)}
-          >
-            <p>
-              By default the small blind is <b>half the big blind</b>, rounded
-              down. Turn on odd blinds to pick a different small blind, such
-              as {money(40)} with a {money(100)} big blind.
-            </p>
-          </InfoSheet>
-        ) : null}
-        <Segmented
-          label="Big blind"
-          options={[
-            ...ANTE_PRESETS.map((option) => ({
-              ...option,
-              label: `${symbol}${option.label}`,
-            })),
-            { value: "other", label: "Other" },
-          ]}
-          value={customAnte || !antePreset ? "other" : ante}
-          onChange={(value) => {
-            if (value === "other") {
-              setCustomAnte(true);
-            } else {
-              setCustomAnte(false);
-              setAnte(value);
-            }
-          }}
-        />
-        {customAnte || !antePreset ? (
-          <input
-            className="field"
-            id="ante"
-            aria-label="Big blind amount"
-            type="number"
-            inputMode="numeric"
-            min="1"
-            value={ante}
-            onChange={(event) => setAnte(Number(event.target.value))}
+          <Segmented
+            label="Starting stack"
+            columns={6}
+            options={[
+              ...STACK_PRESETS.map((value) => ({
+                value,
+                label: compactAmount(value),
+              })),
+              { value: "other" as const, label: "Other" },
+            ]}
+            value={customStack || !stackPreset ? "other" : stack}
+            onChange={(value) => {
+              if (value === "other") {
+                setCustomStack(true);
+              } else {
+                setCustomStack(false);
+                chooseStack(value);
+              }
+            }}
           />
-        ) : null}
-        {oddBlinds ? (
-          <>
-            <span className="label">Small blind</span>
-            <Segmented
-              label="Small blind"
-              options={[
-                ...smallBlindOptions.map((option) => ({
-                  value: option.amount,
-                  label: money(option.amount),
-                })),
-                { value: "other" as const, label: "Other" },
-              ]}
-              value={customSmallBlind ? "other" : sharedSmallBlind.amount}
-              onChange={(value) => {
-                if (value === "other") {
-                  setCustomSmallBlind(true);
-                  setSmallBlindAmount(sharedSmallBlind.amount);
-                  return;
-                }
-                setCustomSmallBlind(false);
-                const picked = smallBlindOptions.find(
-                  (option) => option.amount === value,
-                );
-                if (picked) setSmallBlindShare(picked.percent);
-              }}
+          {customStack || !stackPreset ? (
+            <ChipInput
+              className="field"
+              id="stack"
+              aria-label="Starting stack amount"
+              value={stack}
+              onChange={chooseStack}
             />
-            {customSmallBlind ? (
-              <input
-                className="field"
-                aria-label="Small blind amount"
-                type="number"
-                inputMode="numeric"
-                min="1"
-                max={Math.max(1, ante)}
-                value={smallBlindAmount}
-                onChange={(event) =>
-                  setSmallBlindAmount(Number(event.target.value))
-                }
-              />
-            ) : null}
-            {smallBlindValid ? null : (
-              <p className="field-error" role="alert">
-                The small blind must be from {money(1)} up to the big blind.
-              </p>
-            )}
-          </>
-        ) : null}
-      </section>
+          ) : null}
+        </section>
 
-      <section className="glass card">
-        <div className="card-row">
-          <span className="label">Blind levels</span>
-          <span className="card-note">{blindLevelNote}</span>
-        </div>
-        <Segmented
-          label="Blind levels"
-          options={[
-            { value: "fixed", label: "Fixed" },
-            { value: "hands", label: "By Hands" },
-            { value: "minutes", label: "By Minutes" },
-          ]}
-          value={risingBlinds ? blindUnit : "fixed"}
-          onChange={chooseBlindLevels}
-        />
-        {risingBlinds ? (
-          <>
-            <Segmented
-              label="How the big blind rises"
-              options={[
-                { value: "multiply", label: "Multiply" },
-                { value: "add", label: "Add fixed amount" },
-              ]}
-              value={blindRaiseType}
-              onChange={(nextType) => {
-                setBlindRaiseType(nextType);
-                setBlindRaiseBy(
-                  nextType === "multiply" ? 2 : Math.max(1, ante),
-                );
-              }}
-            />
-            <div className="field-grid">
-              <div>
-                <label className="label" htmlFor="blind-every">
-                  Every ({blindUnit})
-                </label>
-                <input
-                  className="field"
-                  id="blind-every"
-                  type="number"
-                  inputMode="numeric"
-                  min="1"
-                  value={blindEvery}
-                  onChange={(event) =>
-                    setBlindEvery(Number(event.target.value))
-                  }
+        <section className="glass card">
+          <div className="card-row">
+            <span className="label">Big blind</span>
+            <div className="heading-with-info">
+              <label className="switch-row">
+                <span>Odd blinds</span>
+                <button
+                  className="switch"
+                  type="button"
+                  role="switch"
+                  aria-checked={oddBlinds}
+                  aria-label="Odd blinds"
+                  onClick={() => setOddBlinds((on) => !on)}
                 />
-              </div>
-              <div>
-                <label className="label" htmlFor="blind-raise-by">
-                  {blindRaiseType === "multiply" ? "Multiply by" : `Add ${symbol.trim()}`}
-                </label>
-                <input
-                  className="field"
-                  id="blind-raise-by"
-                  type="number"
-                  inputMode="decimal"
-                  min={blindRaiseType === "multiply" ? "1.1" : "1"}
-                  step={blindRaiseType === "multiply" ? "0.1" : "1"}
-                  value={blindRaiseBy}
-                  onChange={(event) =>
-                    setBlindRaiseBy(Number(event.target.value))
-                  }
-                />
-              </div>
+              </label>
+              <button
+                className="info-button"
+                type="button"
+                aria-label="About odd blinds"
+                onClick={() => setShowOddBlindsHelp(true)}
+              >
+                i
+              </button>
             </div>
-            <p className="muted small-note">
-              {scheduleValid ? (
-                <>
-                  Big blind: {ladder
-                    .map((bigBlind) => money(bigBlind))
-                    .join(", ")}
-                  , …
-                  {blindUnit === "minutes"
-                    ? " Timed levels apply when the next hand is dealt."
-                    : ""}
-                </>
-              ) : (
-                <>
-                  Set an interval of at least 1 and an increase that makes the
-                  blinds bigger.
-                </>
+          </div>
+          {showOddBlindsHelp ? (
+            <InfoSheet
+              label="About odd blinds"
+              onClose={() => setShowOddBlindsHelp(false)}
+            >
+              <p>
+                By default the small blind is <b>half the big blind</b>, rounded
+                down. Turn on odd blinds to pick a different small blind, such
+                as {money(4_000)} with a {money(10_000)} big blind.
+              </p>
+            </InfoSheet>
+          ) : null}
+          <Segmented
+            label="Big blind"
+            options={[
+              ...anteChoices.map((value) => ({ value, label: money(value) })),
+              { value: "other" as const, label: "Other" },
+            ]}
+            value={customAnte || !antePreset ? "other" : ante}
+            onChange={(value) => {
+              if (value === "other") {
+                setCustomAnte(true);
+              } else {
+                setCustomAnte(false);
+                setAnte(value);
+              }
+            }}
+          />
+          {customAnte || !antePreset ? (
+            <ChipInput
+              className="field"
+              id="ante"
+              aria-label="Big blind amount"
+              value={ante}
+              onChange={setAnte}
+            />
+          ) : null}
+          {oddBlinds ? (
+            <>
+              <span className="label">Small blind</span>
+              <Segmented
+                label="Small blind"
+                options={[
+                  ...smallBlindOptions.map((option) => ({
+                    value: option.amount,
+                    label: money(option.amount),
+                  })),
+                  { value: "other" as const, label: "Other" },
+                ]}
+                value={customSmallBlind ? "other" : sharedSmallBlind.amount}
+                onChange={(value) => {
+                  if (value === "other") {
+                    setCustomSmallBlind(true);
+                    setSmallBlindAmount(sharedSmallBlind.amount);
+                    return;
+                  }
+                  setCustomSmallBlind(false);
+                  const picked = smallBlindOptions.find(
+                    (option) => option.amount === value,
+                  );
+                  if (picked) setSmallBlindShare(picked.percent);
+                }}
+              />
+              {customSmallBlind ? (
+                <ChipInput
+                  className="field"
+                  aria-label="Small blind amount"
+                  value={smallBlindAmount}
+                  onChange={setSmallBlindAmount}
+                />
+              ) : null}
+              {smallBlindValid ? null : (
+                <p className="field-error" role="alert">
+                  The small blind must be from {money(1)} up to the big blind.
+                </p>
               )}
+            </>
+          ) : null}
+        </section>
+
+        <section className="glass card">
+          <div className="card-row">
+            <span className="label">Blind levels</span>
+            <span className="card-note">{blindLevelNote}</span>
+          </div>
+          <Segmented
+            label="Blind levels"
+            options={[
+              { value: "fixed", label: "Fixed" },
+              { value: "hands", label: "By Hands" },
+              { value: "minutes", label: "By Minutes" },
+            ]}
+            value={risingBlinds ? blindUnit : "fixed"}
+            onChange={chooseBlindLevels}
+          />
+          {risingBlinds ? (
+            <>
+              <Segmented
+                label="How the big blind rises"
+                options={[
+                  { value: "multiply", label: "Multiply" },
+                  { value: "add", label: "Add fixed amount" },
+                ]}
+                value={blindRaiseType}
+                onChange={(nextType) => {
+                  setBlindRaiseType(nextType);
+                  setBlindRaiseBy(
+                    nextType === "multiply" ? 2 : Math.max(1, ante),
+                  );
+                }}
+              />
+              <div className="field-grid">
+                <div>
+                  <label className="label" htmlFor="blind-every">
+                    Every ({blindUnit})
+                  </label>
+                  <input
+                    className="field"
+                    id="blind-every"
+                    type="number"
+                    inputMode="numeric"
+                    min="1"
+                    value={blindEvery}
+                    onChange={(event) =>
+                      setBlindEvery(Number(event.target.value))
+                    }
+                  />
+                </div>
+                <div>
+                  <label className="label" htmlFor="blind-raise-by">
+                    {blindRaiseType === "multiply" ? "Multiply by" : `Add ${symbol.trim()}`}
+                  </label>
+                  {blindRaiseType === "multiply" ? (
+                    <input
+                      className="field"
+                      id="blind-raise-by"
+                      type="number"
+                      inputMode="decimal"
+                      min="1.1"
+                      step="0.1"
+                      value={blindRaiseBy}
+                      onChange={(event) =>
+                        setBlindRaiseBy(Number(event.target.value))
+                      }
+                    />
+                  ) : (
+                    <ChipInput
+                      className="field"
+                      id="blind-raise-by"
+                      value={blindRaiseBy}
+                      onChange={setBlindRaiseBy}
+                    />
+                  )}
+                </div>
+              </div>
+              <p className="muted small-note">
+                {scheduleValid ? (
+                  <>
+                    Big blind: {ladder
+                      .map((bigBlind) => money(bigBlind))
+                      .join(", ")}
+                    , …
+                    {blindUnit === "minutes"
+                      ? " Timed levels apply when the next hand is dealt."
+                      : ""}
+                  </>
+                ) : (
+                  <>
+                    Set an interval of at least 1 and an increase that makes the
+                    blinds bigger.
+                  </>
+                )}
+              </p>
+            </>
+          ) : null}
+        </section>
+
+        <section className="glass card">
+          <div className="card-row">
+            <span className="label">Rebuys</span>
+            <span className="card-note">
+              {describeMaxRebuys(setupRebuyRules.maxRebuys)}
+            </span>
+          </div>
+          <RebuyRulesFields
+            rules={rebuyRules}
+            onChange={setRebuyRules}
+            closeOptions={rebuyCloseOptions}
+            showClose={Boolean(schedule) && scheduleValid}
+            idPrefix="setup"
+          />
+          {rebuyError ? (
+            <p className="field-error" role="alert">
+              {rebuyError}
             </p>
-          </>
-        ) : null}
-      </section>
+          ) : (
+            <p className="muted small-note">
+              A busted player can buy back in for the starting stack,{" "}
+              {money(stack)}
+              {setupRebuyRules.maxRebuys === 0
+                ? ", but not in this game."
+                : setupRebuyRules.closeAtBigBlind !== null
+                  ? `, until the big blind reaches ${money(
+                      setupRebuyRules.closeAtBigBlind,
+                    )}.`
+                  : "."}
+            </p>
+          )}
+        </section>
 
-      <section className="glass card">
-        <div className="card-row">
-          <span className="label">Rebuys</span>
-          <span className="card-note">
-            {describeMaxRebuys(setupRebuyRules.maxRebuys)}
-          </span>
-        </div>
-        <RebuyRulesFields
-          rules={rebuyRules}
-          onChange={setRebuyRules}
-          closeOptions={rebuyCloseOptions}
-          showClose={Boolean(schedule) && scheduleValid}
-          idPrefix="setup"
-        />
-        {rebuyError ? (
-          <p className="field-error" role="alert">
-            {rebuyError}
-          </p>
-        ) : (
-          <p className="muted small-note">
-            A busted player can buy back in for the starting stack,{" "}
-            {money(stack)}
-            {setupRebuyRules.maxRebuys === 0
-              ? ", but not in this game."
-              : setupRebuyRules.closeAtBigBlind !== null
-                ? `, until the big blind reaches ${money(
-                    setupRebuyRules.closeAtBigBlind,
-                  )}.`
-                : "."}
-          </p>
-        )}
-      </section>
-
-      <button
-        className="cta"
-        type="submit"
-        disabled={
-          !selectionComplete ||
-          stack < 1 ||
-          ante < 1 ||
-          !scheduleValid ||
-          !smallBlindValid ||
-          Boolean(rebuyError)
-        }
-      >
-        Deal First Hand
-      </button>
-    </form>
+        <button
+          className="cta"
+          type="submit"
+          disabled={
+            !selectionComplete ||
+            stack < 1 ||
+            ante < 1 ||
+            !scheduleValid ||
+            !smallBlindValid ||
+            Boolean(rebuyError)
+          }
+        >
+          Deal First Hand
+        </button>
+      </form>
+    </ChipUnitContext.Provider>
   );
 }
 
 const MAX_SEATS = 10;
+
+/** A stack chip's label from hundredths: "20", "500", "1K", "50K". */
+function compactAmount(hundredths: number) {
+  const amount = hundredths / 100;
+  return amount >= 1_000 ? `${amount / 1_000}K` : String(amount);
+}
 /** Odd small blind chips, as percentages of the big blind (100: 25–100). */
 const SMALL_BLIND_SHARES = [25, 40, 60, 75, 100] as const;
-const STACK_PRESETS = [
-  { value: 5_000, label: "5K" },
-  { value: 10_000, label: "10K" },
-  { value: 20_000, label: "20K" },
-  { value: 50_000, label: "50K" },
-] as const;
-const ANTE_PRESETS = [
-  { value: 50, label: "50" },
-  { value: 100, label: "100" },
-  { value: 200, label: "200" },
-  { value: 500, label: "500" },
-  { value: 1_000, label: "1K" },
-] as const;
 
 /** How long a press on a player opens their options. */
 const LONG_PRESS_MS = 450;
@@ -4798,7 +4920,11 @@ function ProfileCard({
     }
   }
 
-  const netText = stats ? signedMoney(stats.net) : "–";
+  // The headline has room for whole amounts only; from 1,000 up the cents
+  // from small-stakes games are dropped here (the bars' titles keep them).
+  const netText = stats
+    ? signedMoney(Math.abs(stats.net) >= 1_000 ? Math.round(stats.net) : stats.net)
+    : "–";
   const recent = stats?.recent ?? [];
   const largest = Math.max(1, ...recent.map((game) => Math.abs(game.net)));
   const bar = (value: number) =>
@@ -5808,8 +5934,17 @@ type GameViewProps = {
   onShareLive: () => void;
 };
 
+/** The game screen, with its amounts in the game's own chip unit. */
 function GameView(props: GameViewProps) {
-  const { currency, money, signedMoney } = useMoney();
+  return (
+    <ChipUnitContext.Provider value={props.game.chipUnit ?? "whole"}>
+      <GameScreen {...props} />
+    </ChipUnitContext.Provider>
+  );
+}
+
+function GameScreen(props: GameViewProps) {
+  const { currency, unit, money, signedMoney } = useMoney();
   const { game } = props;
   const hand = game.hand;
   const net = (index: number) =>
@@ -5844,7 +5979,7 @@ function GameView(props: GameViewProps) {
       {pendingPlan ? (
         <div className="blind-timer due">
           From hand {pendingPlan.effectiveHand}:{" "}
-          {describeBlindSchedule(pendingPlan.schedule, currency)}
+          {describeBlindSchedule(pendingPlan.schedule, currency, unit)}
         </div>
       ) : null}
     </>
@@ -6320,19 +6455,13 @@ function RebuyRulesFields({
             }}
           />
           {closeValue === "other" ? (
-            <input
+            <ChipInput
               className="field"
               id={`${idPrefix}-close-at`}
               aria-label="Big blind at which rebuys close"
-              type="number"
-              inputMode="numeric"
-              min="1"
-              value={rules.closeAtBigBlind ?? ""}
-              onChange={(event) =>
-                onChange({
-                  ...rules,
-                  closeAtBigBlind: Number(event.target.value),
-                })
+              value={rules.closeAtBigBlind}
+              onChange={(closeAtBigBlind) =>
+                onChange({ ...rules, closeAtBigBlind })
               }
             />
           ) : null}
@@ -6408,7 +6537,7 @@ function RebuyEditor({
           </p>
         ) : (
           <p className="muted rule-note">
-            {describeRebuyRules(effective, game.currency) ?? "Unlimited rebuys"}
+            {describeRebuyRules(effective, game.currency, game.chipUnit) ?? "Unlimited rebuys"}
             .{closedNow ? " Rebuys are closed from now on." : ""}
           </p>
         )}
@@ -6542,14 +6671,22 @@ function BlindEditor({
                 <label htmlFor="edit-blind-raise-by">
                   {raiseType === "multiply" ? "Multiplier" : "Amount"}
                 </label>
-                <input
-                  id="edit-blind-raise-by"
-                  type="number"
-                  min={raiseType === "multiply" ? "1.1" : "1"}
-                  step={raiseType === "multiply" ? "0.1" : "1"}
-                  value={raiseBy}
-                  onChange={(event) => setRaiseBy(Number(event.target.value))}
-                />
+                {raiseType === "multiply" ? (
+                  <input
+                    id="edit-blind-raise-by"
+                    type="number"
+                    min="1.1"
+                    step="0.1"
+                    value={raiseBy}
+                    onChange={(event) => setRaiseBy(Number(event.target.value))}
+                  />
+                ) : (
+                  <ChipInput
+                    id="edit-blind-raise-by"
+                    value={raiseBy}
+                    onChange={setRaiseBy}
+                  />
+                )}
               </div>
             </div>
             <p className="muted rule-note">
@@ -6976,7 +7113,7 @@ function BuyInOptions({
     return reason ? [{ player, index, reason }] : [];
   });
   if (!offers.length && !blocked.length) return null;
-  const rules = describeRebuyRules(game.rebuyRules, game.currency);
+  const rules = describeRebuyRules(game.rebuyRules, game.currency, game.chipUnit);
 
   return (
     <div className="buy-in-options">
@@ -7473,7 +7610,8 @@ function PlayerRow({
   /** The table's action dock under the oval, which names who is to act. */
   dock?: boolean;
 }) {
-  const { money, symbol } = useMoney();
+  const { money, symbol, unit } = useMoney();
+  // What is typed, in the game's unit ("0.75" in a cents game).
   const [amount, setAmount] = useState("");
   // The quick size last tapped and the amount it set; it stays highlighted
   // only while the amount is unchanged, so typing or sliding clears it.
@@ -7499,8 +7637,10 @@ function PlayerRow({
   const canUndo = hand.last[playerIndex] && !hand.splitSel;
   const hasAmount = amount.trim() !== "";
   const stops = betStops(minimum, player.stack);
+  // Text that isn't an amount (like "1.234" in cents) bets nothing, which
+  // disables the bet button.
   const betAmount = hasAmount
-    ? Math.floor(Number(amount))
+    ? (parseChips(amount, unit) ?? 0)
     : (stops[0] ?? 0);
   const allIn = betAmount >= player.stack;
   // The slider sits on the highest stop not above the entered amount.
@@ -7674,10 +7814,10 @@ function PlayerRow({
             <label className="bet-input">
               <span>{symbol.trim()}</span>
               <input
-                type="number"
-                inputMode="numeric"
-                min={minimum}
-                placeholder={String(stops[0] ?? "")}
+                type="text"
+                inputMode={unit === "cents" ? "decimal" : "numeric"}
+                autoComplete="off"
+                placeholder={stops[0] === undefined ? "" : chipsToInput(stops[0], unit)}
                 aria-label={
                   raising ? "Chips to put in for the raise" : "Bet amount"
                 }
@@ -7712,12 +7852,12 @@ function PlayerRow({
               onChange={(event) => {
                 const index = Number(event.target.value);
                 // The first stop is the default, so it leaves Call and Fold on.
-                setAmount(index === 0 ? "" : String(stops[index]));
+                setAmount(index === 0 ? "" : chipsToInput(stops[index], unit));
               }}
             />
             <div className="quick-sizes">
               {quickSizes.map((size) => {
-                const sizeAmount = String(size.value);
+                const sizeAmount = chipsToInput(size.value, unit);
                 const selected =
                   picked?.label === size.label && picked.amount === amount;
                 return (
@@ -8099,7 +8239,16 @@ function ExpandingList<T>({
   );
 }
 
-function SessionCard({
+/** A saved game's card, with its amounts in that game's chip unit. */
+function SessionCard(props: Parameters<typeof SessionCardBody>[0]) {
+  return (
+    <ChipUnitContext.Provider value={props.session.chipUnit ?? "whole"}>
+      <SessionCardBody {...props} />
+    </ChipUnitContext.Provider>
+  );
+}
+
+function SessionCardBody({
   session,
   discarded = false,
   onContinue,
@@ -8114,7 +8263,7 @@ function SessionCard({
   onRestore?: (id: string) => void;
   onDeletePermanently?: (id: string) => void;
 }) {
-  const { currency, money, signedMoney } = useMoney();
+  const { currency, unit, money, signedMoney } = useMoney();
   const sortedResults = [...session.results].sort((a, b) => b.net - a.net);
   const blinds = sessionBlindHistory(session);
   const lastBigBlind = blinds.levels.at(-1)!.bigBlind;
@@ -8132,7 +8281,7 @@ function SessionCard({
           </p>
           {session.rebuyRules ? (
             <p className="muted session-meta">
-              {describeRebuyRules(session.rebuyRules, currency)}
+              {describeRebuyRules(session.rebuyRules, currency, session.chipUnit)}
             </p>
           ) : null}
         </div>
@@ -8181,7 +8330,7 @@ function SessionCard({
               From hand {plan.effectiveHand}: {money(
                 smallBlindFor(plan.baseBigBlind, blinds.smallBlindRatio),
               )}/{money(plan.baseBigBlind)} ·{" "}
-              {describeBlindSchedule(plan.schedule, currency)}
+              {describeBlindSchedule(plan.schedule, currency, unit)}
             </div>
           ))}
           <b>Blinds used</b>

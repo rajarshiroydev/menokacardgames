@@ -57,6 +57,7 @@ export function gameFromSession(
     ...(session.name ? { gameName: session.name } : {}),
     sessionLabel: label,
     currency,
+    ...(session.chipUnit === "cents" ? { chipUnit: session.chipUnit } : {}),
     ...(history.smallBlindRatio
       ? { smallBlindRatio: { ...history.smallBlindRatio } }
       : {}),
@@ -143,7 +144,8 @@ export function continuationError(
     incoming.id !== saved.id ||
     incoming.date !== saved.date ||
     incoming.startStack !== saved.startStack ||
-    incoming.ante !== saved.ante
+    incoming.ante !== saved.ante ||
+    (incoming.chipUnit ?? "whole") !== (saved.chipUnit ?? "whole")
   ) {
     return "The continued game doesn't match the saved game";
   }

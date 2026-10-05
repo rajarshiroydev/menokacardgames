@@ -37,6 +37,7 @@ function canonicalContent(session: PokerSession, name: string) {
     name,
     date: session.date,
     ended: session.ended,
+    chipUnit: session.chipUnit ?? "whole",
     ante: session.ante,
     startStack: session.startStack,
     hands: session.hands,
