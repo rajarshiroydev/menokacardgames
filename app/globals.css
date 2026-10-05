@@ -2790,6 +2790,12 @@ textarea::placeholder {
   font-weight: 700;
 }
 
+.quick-sizes button.selected {
+  border-color: var(--g);
+  background: var(--g);
+  color: var(--onacc);
+}
+
 .action-row {
   display: grid;
   grid-template-columns: 0.8fr 1fr 1.2fr;

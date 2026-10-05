@@ -6951,6 +6951,11 @@ function PlayerRow({
 }) {
   const { money, symbol } = useMoney();
   const [amount, setAmount] = useState("");
+  // The quick size last tapped and the amount it set; it stays highlighted
+  // only while the amount is unchanged, so typing or sliding clears it.
+  const [picked, setPicked] = useState<{ label: string; amount: string } | null>(
+    null,
+  );
   const [showRaiseHelp, setShowRaiseHelp] = useState(false);
   const hand = game.hand;
   if (!hand) return null;
@@ -7016,7 +7021,7 @@ function PlayerRow({
           </div>
           <input className="bet-range" type="range" disabled defaultValue={0} />
           <div className="quick-sizes">
-            {["Min", "½ Pot", "Pot", "All in"].map((label) => (
+            {["⅓ Pot", "½ Pot", "Pot", "All in"].map((label) => (
               <button key={label} type="button" disabled>
                 {label}
               </button>
@@ -7067,7 +7072,7 @@ function PlayerRow({
   const quickAmount = (target: number) =>
     Math.max(minimum, Math.min(player.stack, Math.round(target)));
   const quickSizes = [
-    { label: "Min", value: null },
+    { label: "⅓ Pot", value: quickAmount(hand.pot / 3) },
     { label: "½ Pot", value: quickAmount(hand.pot / 2) },
     { label: "Pot", value: quickAmount(hand.pot) },
     { label: "All in", value: player.stack },
@@ -7177,17 +7182,25 @@ function PlayerRow({
               }}
             />
             <div className="quick-sizes">
-              {quickSizes.map((size) => (
-                <button
-                  key={size.label}
-                  type="button"
-                  onClick={() =>
-                    setAmount(size.value === null ? "" : String(size.value))
-                  }
-                >
-                  {size.label}
-                </button>
-              ))}
+              {quickSizes.map((size) => {
+                const sizeAmount = String(size.value);
+                const selected =
+                  picked?.label === size.label && picked.amount === amount;
+                return (
+                  <button
+                    key={size.label}
+                    type="button"
+                    className={selected ? "selected" : undefined}
+                    aria-pressed={selected}
+                    onClick={() => {
+                      setAmount(sizeAmount);
+                      setPicked({ label: size.label, amount: sizeAmount });
+                    }}
+                  >
+                    {size.label}
+                  </button>
+                );
+              })}
             </div>
           </>
         ) : null}

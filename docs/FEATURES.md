@@ -134,8 +134,8 @@ The **Profile** tab replaced the Players tab on 30 September 2026. From the top:
   - **Bet / Raise**: the button shows the amount and bets it in one tap. It starts at the minimum, for example "Bet ₹100". A raise shows the total it reaches, for example "Raise ₹1,300". Once a bet stands (before the flop the big blind counts), putting in more is always called a raise, so the big blind's own raise also reads "Raise".
   - **Amount box**: the large green number on the right of the card. It shows the minimum until you type an exact amount. The box, slider and quick buttons are always the chips to put in now, not the total.
   - **Bet slider**: a slider snaps to exact amounts: the minimum, 1.5×, 2×, 5× and 10× the minimum (for example ₹100, ₹150, ₹200, ₹500, ₹1,000), then the player's whole stack. The button follows the slider; at the far end it reads "All in" and puts in the whole stack. Steps that would reach the stack are skipped, and a player who can't cover the minimum sees only All in.
-  - **Quick buttons** under the slider: **Min** (back to the minimum), **½ Pot** and **Pot** (half or all of the pot, never below the minimum or above the stack) and **All in**.
-  - While an amount other than the minimum is chosen, Check/Call and Fold are switched off, so an entered bet can't be lost by pressing the wrong button. "Clear amount to call or fold" (or **Min**) switches them back on.
+  - **Quick buttons** under the slider: **⅓ Pot**, **½ Pot** and **Pot** (a third, half or all of the pot, never below the minimum or above the stack) and **All in**. The one you tap turns green and stays green until you type, slide or tap another.
+  - While an amount other than the minimum is chosen, Check/Call and Fold are switched off, so an entered bet can't be lost by pressing the wrong button. "Clear amount to call or fold", or sliding back to the start, switches them back on.
   - **Fold**
   - **All in**: the quick button or the end of the slider; the button puts in the player's whole stack, even if it's less than a full call
 - **Minimum amounts:**
