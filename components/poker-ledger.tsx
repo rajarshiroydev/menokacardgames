@@ -488,7 +488,7 @@ function recordWin(game: GameState, line: string) {
 
 function awardPot(game: GameState, playerIndex: number, automatic = false) {
   const hand = game.hand;
-  if (!hand) return 0;
+  if (!hand) return;
   const pot = hand.pot;
   game.players[playerIndex].stack += pot;
   recordWin(
@@ -506,7 +506,6 @@ function awardPot(game: GameState, playerIndex: number, automatic = false) {
     split: false,
   };
   game.hand = null;
-  return pot;
 }
 
 export function PokerLedger({
@@ -1426,9 +1425,9 @@ export function PokerLedger({
     const active = activeIndexes(next);
     if (active.length === 1) {
       const winner = active[0];
-      const pot = awardPot(next, winner, true);
+      // The winner card announces it; no toast as well.
+      awardPot(next, winner, true);
       setGame(next);
-      showToast(`${next.players[winner].name} +${money(pot)}`);
       return;
     }
     hand.currentPlayer = nextPlayerToAct(next, playerIndex);
@@ -1490,9 +1489,8 @@ export function PokerLedger({
       `${game.players[playerIndex].name} wins`,
       () => {
         const next = structuredClone(game);
-        const pot = awardPot(next, playerIndex);
+        awardPot(next, playerIndex);
         setGame(next);
-        showToast(`${next.players[playerIndex].name} +${money(pot)}`);
       },
     );
   }
@@ -1551,7 +1549,6 @@ export function PokerLedger({
     };
     next.hand = null;
     setGame(next);
-    showToast(`Pot split ${winners.length} ways`);
   }
 
   function startNextHand() {

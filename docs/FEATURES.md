@@ -165,7 +165,7 @@ The **Profile** tab replaced the Players tab on 30 September 2026. From the top:
 - **Showdown.** Once the river betting is finished, the screen title changes to "Showdown" and a **Pick the winner** card lists everyone still in as "Name wins" with the pot. A confirmation asks before the pot is given.
 - **On the Table view** the seats of everyone still in turn blue and read "Tap to award"; tapping a seat asks the same confirmation as the Pick the winner card, which stays under the table. In a split, tapped seats turn green ("In split"), the others read "Tap to add".
 - **Split pot.** Choose "Split between two or more", then tap everyone who ties; untapped players say "Tap to include". The screen shows each player's share, and once at least 2 are chosen a "Split ₹X N ways" button appears. Splits are equal; any leftover single chips go to the tied players in seat order. "Back to one winner" leaves split mode.
-- **Winner celebration.** A card with confetti shows who won, the hand number and the pot size. Press **Next** to continue.
+- **Winner celebration.** A card with confetti shows who won, the hand number and the pot size. Press **Next** to continue. It is the only announcement; no notification pops up at the top as well.
 
 ## 8. Between hands
 
