@@ -12,6 +12,8 @@ import type {
   CompletedHand,
   GameState,
   PokerSession,
+  Pot,
+  PotResult,
   RaiseRecord,
   RebuyRules,
   SmallBlindRatio,
@@ -703,5 +705,158 @@ export function cancelCurrentHand(game: GameState, now = Date.now()) {
   }
   game.hand = null;
   dealNewHand(game, hand.dealtAt ?? now);
+  return true;
+}
+
+/** Chips each player has put in this hand, blinds included. */
+export function handContributions(game: GameState) {
+  const hand = game.hand;
+  if (!hand) return game.players.map(() => 0);
+  return game.players.map((player, index) =>
+    Math.max(0, (hand.stacksBeforeHand[index] ?? player.stack) - player.stack),
+  );
+}
+
+/**
+ * Splits the chips in the hand into a main pot and side pots. A player can
+ * only win, from each opponent, as much as they put in themselves, so every
+ * all-in amount of a player still in closes a pot; only players still in who
+ * reached it can win it. Chips a single player put in beyond what anyone
+ * else did were never called and go back to them (`refund`). Folded players'
+ * chips stay in the pots they reached.
+ */
+export function potsFor(game: GameState): {
+  pots: Pot[];
+  refund: { playerIndex: number; amount: number } | null;
+} {
+  const hand = game.hand;
+  if (!hand) return { pots: [], refund: null };
+  const totals = handContributions(game);
+  const highest = Math.max(0, ...totals);
+  const top = totals.flatMap((chips, index) =>
+    chips === highest ? [index] : [],
+  );
+  let refund: { playerIndex: number; amount: number } | null = null;
+  if (top.length === 1 && highest > 0) {
+    const next = Math.max(
+      0,
+      ...totals.filter((_, index) => index !== top[0]),
+    );
+    refund = { playerIndex: top[0], amount: highest - next };
+    totals[top[0]] = next;
+  }
+
+  // Pots close at each all-in amount of a player still in; the rest of the
+  // chips form the last pot. Players with chips left can still match any
+  // pot, so mid-street they count for every one.
+  const contenders = activeIndexes(game);
+  const allIn = (index: number) => game.players[index].stack === 0;
+  const levels = [
+    ...new Set([
+      ...contenders.filter(allIn).map((index) => totals[index]),
+      Math.max(0, ...contenders.map((index) => totals[index])),
+    ]),
+  ]
+    .filter((chips) => chips > 0)
+    .sort((a, b) => a - b);
+  const pots: Pot[] = [];
+  let previous = 0;
+  for (const level of levels) {
+    const amount = totals.reduce(
+      (sum, chips) => sum + Math.max(0, Math.min(chips, level) - previous),
+      0,
+    );
+    const eligible = contenders.filter(
+      (index) => totals[index] >= level || !allIn(index),
+    );
+    if (amount > 0) pots.push({ amount, eligible });
+    previous = level;
+  }
+  // Folded chips above every player still in (rare) go to the last pot.
+  const placed = pots.reduce((sum, pot) => sum + pot.amount, 0);
+  const rest = totals.reduce((sum, chips) => sum + chips, 0) - placed;
+  if (rest > 0) {
+    if (pots.length) pots[pots.length - 1].amount += rest;
+    else pots.push({ amount: rest, eligible: contenders });
+  }
+  return { pots, refund: refund?.amount ? refund : null };
+}
+
+/** "Main pot", then "Side pot", or "Side pot 1", "Side pot 2", … */
+export function potLabel(index: number, count: number) {
+  if (index === 0) return "Main pot";
+  return count > 2 ? `Side pot ${index}` : "Side pot";
+}
+
+/** More than one pot to win, or chips to give back: the side-pot showdown. */
+export function hasSidePots(game: GameState) {
+  const { pots, refund } = potsFor(game);
+  return pots.length > 1 || refund !== null;
+}
+
+/**
+ * Pays out every pot. `winners[i]` holds the winners of pot i, one player or
+ * several for a split (even shares, odd chips in seat order); a pot only one
+ * player can win goes to them whatever is passed. Gives back any uncalled
+ * chips, logs each pot, records the hand for undo and clears it. Returns
+ * false, changing nothing, if a pot has no valid winner.
+ */
+export function awardPots(game: GameState, winners: number[][]) {
+  const hand = game.hand;
+  if (!hand) return false;
+  const { pots, refund } = potsFor(game);
+  const chosen = pots.map((pot, index) =>
+    pot.eligible.length === 1
+      ? pot.eligible
+      : [...new Set(winners[index] ?? [])].sort((a, b) => a - b),
+  );
+  if (
+    chosen.some(
+      (players, index) =>
+        !players.length ||
+        players.some((player) => !pots[index].eligible.includes(player)),
+    )
+  ) {
+    return false;
+  }
+
+  const name = (index: number) => game.players[index].name;
+  const money = (value: number) => formatMoney(value, game.currency);
+  const lines: string[] = [];
+  if (refund) {
+    game.players[refund.playerIndex].stack += refund.amount;
+    lines.push(
+      `Hand ${hand.no}: ${money(refund.amount)} returned to ${name(refund.playerIndex)} (not called)`,
+    );
+  }
+  const results: PotResult[] = pots.map((pot, index) => {
+    const players = chosen[index];
+    const each = Math.floor(pot.amount / players.length);
+    const remainder = pot.amount - each * players.length;
+    players.forEach((player, rank) => {
+      game.players[player].stack += each + (rank < remainder ? 1 : 0);
+    });
+    const label = pots.length > 1 ? potLabel(index, pots.length) : "Pot";
+    const potName = label.toLowerCase();
+    lines.push(
+      players.length > 1
+        ? `Hand ${hand.no}: split ${potName} ${money(pot.amount)} between ${players.map(name).join(", ")}`
+        : `Hand ${hand.no}: ${name(players[0])} wins ${potName} ${money(pot.amount)}`,
+    );
+    return { label, amount: pot.amount, names: players.map(name) };
+  });
+  lines.forEach((line) => game.log.unshift(line));
+  game.log = game.log.slice(0, 80);
+
+  const names = [...new Set(chosen.flat())].sort((a, b) => a - b).map(name);
+  game.lastHand = completedHandRecord(game);
+  game.winnerAnnouncement = {
+    names,
+    pot: pots.reduce((sum, pot) => sum + pot.amount, 0),
+    handNo: hand.no,
+    split: names.length > 1,
+    pots: results,
+  };
+  game.hand = null;
   return true;
 }

@@ -25,6 +25,21 @@ export type WinnerAnnouncement = {
   pot: number;
   handNo: number;
   split: boolean;
+  /** Each pot's winners, when the hand had side pots. */
+  pots?: PotResult[];
+};
+
+/** A main or side pot and the players still in who can win it. */
+export type Pot = {
+  amount: number;
+  eligible: number[];
+};
+
+/** How a pot was paid out, for the winner card. */
+export type PotResult = {
+  label: string;
+  amount: number;
+  names: string[];
 };
 
 export type PlayerAction = {
