@@ -1,4 +1,9 @@
-import { MAX_BUY_INS } from "./buy-ins.ts";
+import {
+  describeRebuyRules,
+  MAX_BUY_INS,
+  normalizeRebuyRules,
+  rebuyBlock,
+} from "./buy-ins.ts";
 import { formatMoney } from "./money.ts";
 import type {
   BlindHistory,
@@ -8,6 +13,7 @@ import type {
   GameState,
   PokerSession,
   RaiseRecord,
+  RebuyRules,
   SmallBlindRatio,
 } from "./types";
 
@@ -64,9 +70,45 @@ export function totalBuyIns(game: GameState, playerIndex: number) {
   );
 }
 
+/** Rebuys a player has made, not counting their first buy-in. */
+export function rebuysUsed(game: GameState, playerIndex: number) {
+  return playerBuyIns(game, playerIndex).length - 1;
+}
+
+/** The most rebuys any player has made; a lower limit can't be set. */
+export function mostRebuysUsed(game: GameState) {
+  return Math.max(0, ...game.players.map((_, index) => rebuysUsed(game, index)));
+}
+
+/** Why the host's rebuy limits stop this player rebuying, or null. */
+export function rebuyBlockReason(game: GameState, playerIndex: number) {
+  return rebuyBlock(game.rebuyRules, rebuysUsed(game, playerIndex), game.ante);
+}
+
+/**
+ * Changes the rebuy limits between hands. Returns false, changing nothing,
+ * when the limit is below rebuys already made.
+ */
+export function editRebuyRules(game: GameState, rules: RebuyRules | null) {
+  const stored = normalizeRebuyRules(rules);
+  const maxRebuys = stored?.maxRebuys ?? null;
+  if (maxRebuys !== null && maxRebuys < mostRebuysUsed(game)) return false;
+  if (stored) game.rebuyRules = stored;
+  else delete game.rebuyRules;
+  // Not "Hand N:", so undoing that hand keeps this line, like the change.
+  game.log.unshift(
+    `Before hand ${game.handNo + 1}: rebuy rules changed to ${(
+      describeRebuyRules(stored, game.currency) ?? "Unlimited rebuys"
+    ).replace(/^./, (first) => first.toLowerCase())}`,
+  );
+  game.log = game.log.slice(0, 80);
+  return true;
+}
+
 export function nextBuyIn(game: GameState, playerIndex: number) {
   const player = game.players[playerIndex];
   if (!player || game.hand || player.stack !== 0) return null;
+  if (rebuyBlockReason(game, playerIndex)) return null;
   // Every rebuy is the full starting stack.
   const amount = game.startStack;
   return (
@@ -346,6 +388,28 @@ export function editBlindSchedule(
       schedule,
     },
   ];
+}
+
+/**
+ * The next few big blinds above the current one under the plan for the next
+ * hand, for choosing when rebuys close. Empty when the blinds are fixed.
+ */
+export function upcomingBigBlinds(game: GameState, count = 4) {
+  const pending = pendingBlindPlan(game);
+  const plan = pending ?? planForHand(game, game.handNo);
+  if (!plan.schedule || plan.schedule.every <= 0) return [];
+  const firstLevel = pending ? 1 : (game.blindLevel ?? 0) + 1;
+  const amounts: number[] = [];
+  // Levels that round to the same big blind count once.
+  for (let level = firstLevel; level < firstLevel + 1000; level += 1) {
+    if (amounts.length >= count) break;
+    const bigBlind = bigBlindAtLevel(plan.baseBigBlind, plan.schedule, level);
+    if (!Number.isSafeInteger(bigBlind)) break;
+    if (bigBlind > game.ante && bigBlind !== amounts.at(-1)) {
+      amounts.push(bigBlind);
+    }
+  }
+  return amounts;
 }
 
 export function bigBlindAtLevel(

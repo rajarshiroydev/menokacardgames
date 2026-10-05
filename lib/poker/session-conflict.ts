@@ -41,6 +41,12 @@ function canonicalContent(session: PokerSession, name: string) {
     startStack: session.startStack,
     hands: session.hands,
     blindHistory: canonicalBlindHistory(session.blindHistory),
+    rebuyRules: session.rebuyRules
+      ? {
+          maxRebuys: session.rebuyRules.maxRebuys,
+          closeAtBigBlind: session.rebuyRules.closeAtBigBlind,
+        }
+      : null,
     // Player names are display labels; the resolved player ID is the identity.
     results: session.results.map((result) => ({
       playerId: result.playerId ?? null,
