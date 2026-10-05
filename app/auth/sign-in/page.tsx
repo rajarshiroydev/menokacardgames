@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { BrandMark } from "@/components/brand-mark";
@@ -5,6 +6,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { DELETION_GRACE_PERIOD_DAYS } from "@/lib/accounts/lifecycle";
 import { getHostSession } from "@/lib/auth/server";
 import { APP_NAME } from "@/lib/brand";
+import { MINIMUM_AGE } from "@/lib/info/legal";
 import { testbedMode } from "@/lib/testbed/server";
 
 import { MagicLinkForm } from "./magic-link-form";
@@ -46,6 +48,11 @@ export default async function SignInPage({
         ) : (
           <MagicLinkForm />
         )}
+        <p className="auth-legal">
+          By signing in you agree to the <Link href="/terms">Terms of Use</Link>{" "}
+          and <Link href="/privacy">Privacy Policy</Link>. You must be{" "}
+          {MINIMUM_AGE} or over. <Link href="/features">What {APP_NAME} does</Link>
+        </p>
       </section>
     </main>
   );

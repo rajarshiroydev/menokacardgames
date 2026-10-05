@@ -1,6 +1,6 @@
 # Feature list
 
-Updated: 2 October 2026
+Updated: 5 October 2026
 
 This is a plain-language list of everything Pokerize can do today. It is written for anyone, technical or not. It describes how the app behaves right now; plans and future ideas live in the [feature plan](./FEATURE-PLAN.md).
 
@@ -14,7 +14,7 @@ This is a plain-language list of everything Pokerize can do today. It is written
 
 - **Sign in with your email, no password.** Enter your email address and the app emails you a one-time sign-in link. Opening the link signs you in. Each link works once and expires after five minutes.
 - **Open the link in the same browser.** The sign-in only applies to the browser that opens the link. If you request a link on your phone but open it on your laptop, the laptop is signed in, not the phone. In app previews that keep their own browser, copy the link from the email and paste it into that browser's address bar.
-- **Staying signed in.** A sign-in lasts 7 days from the last time you used the app on that device, so opening it at least once a week keeps you signed in. (Before this fix, built 5 October 2026, every sign-in ended 7 days after signing in, however often you used the app.) The **⋯** button beside your name on the Profile card shows "Signed in as" your email address, with **Edit name**, **Sign out** and **Delete my account** (section 14).
+- **Staying signed in.** A sign-in lasts 7 days from the last time you used the app on that device, so opening it at least once a week keeps you signed in. (Before this fix, built 5 October 2026, every sign-in ended 7 days after signing in, however often you used the app.) The **⋯** button beside your name on the Profile card shows "Signed in as" your email address, with **Edit name** and **Sign out**. **Delete my account** is in Settings (sections 14 and 22).
 - **Save your name first.** Right after signing in, an account without a name sees only a "What should friends call you?" screen. Type your name (1 to 40 characters; extra spaces are tidied up), pick an avatar from the 20 below it (the random one you were given is ringed in green until you tap another; since 1 October 2026) and press **Save and continue** to open the app. The name and avatar are saved together. The button stays greyed out while the name is blank. There is no skip; **Sign out** at the top is the only other way out. This happens once: afterwards you can change the name on the Profile screen (section 3).
 - **Every host has a private ledger.** The person who signs in is the *host*. Each host has their own friend list, games, history and standings. Two hosts never see each other's data, even if they both have a friend called "Rajarshi". The same friend in two hosts' lists is two separate records with separate histories.
 - **Friends don't need accounts.** Friends are just names in the host's list. Only the host signs in.
@@ -47,14 +47,14 @@ The **Profile** tab replaced the Players tab on 30 September 2026. From the top:
 **Your card**
 
 - **Your avatar** next to your name. Tap it (it has a small ✎ badge) to choose another; see **Avatars** below.
-- **Your name**, large, with an **⋯** account menu beside it: "Signed in as" your email, **Edit name**, **Sign out** and **Delete my account**. **Edit name** turns the name into a box with **Save** (1 to 40 characters; Escape cancels). Under the name: "Playing since" the month of your first counted game, or "No games yet".
+- **Your name**, large, with an **⋯** account menu beside it: "Signed in as" your email, **Edit name** and **Sign out** (Delete My Account moved to Settings on 5 October 2026). **Edit name** turns the name into a box with **Save** (1 to 40 characters; Escape cancels). Under the name: "Playing since" the month of your first counted game, or "No games yet".
 - **All-time net**: everything you've won or lost, in your currency. It's green when you're ahead and red when you're behind.
 - **Last 10**: one small bar for each of your latest games (up to 10, in your currency), green up for a win and red down for a loss, taller for bigger results. Hover or long-press a bar for its date and result.
 - **Three tiles:** **Games played**, **Avg return** (your average session return, section 12, to one decimal) and **Profitable** (games you finished ahead, for example 15/24).
 - **Which games count.** Every game you played in: the games you host yourself (as your own player, see "You" below) and the games your friends host where they've linked you (section 20). A game counts exactly when it would count in that host's standings.
 - **Other currencies.** Games hosted in a different currency count in the three tiles, but not in the all-time net or the bars, because amounts in different currencies are never added together. The card then says, for example, "Net leaves out 6 games played in another currency".
 - **Your user code** (two groups of four, for example 7KQ4-M2XP) with **Copy** (it shows "Copied" for a moment) and a **QR** button that opens **User code**: **My Code** shows your code as a QR for a friend to scan, and **Scan Code** opens the camera to scan theirs (section 20). The **⋯** button offers **Replace code**: you get a new random code straight away, the old one stops working, and existing friends stay (section 20).
-- **Sounds.** **Click when a player acts** (under Currency) turns the action click on or off. It starts on and is remembered on this device only.
+- **Settings** (since 5 October 2026), the last row of the card ("Sounds, privacy and more"), opens the **Settings** screen (section 22). The **Button click sounds** switch moved there from the card.
 - **Currency.** Choose the currency for the games you host: ₹ INR (the default), $ USD, € EUR, £ GBP, A$ AUD, C$ CAD, S$ SGD, AED, ৳ BDT or ¥ JPY. It changes the sign on every amount in your games, saved history, standings, profile and live link straight away, including a game in progress and past games. Friends who look at your standings see your currency.
 
 **Friend requests** sent to you appear as cards under your card (section 20).
@@ -154,7 +154,7 @@ The **Profile** tab replaced the Players tab on 30 September 2026. From the top:
 - **Main and side pots shown.** Once a player still in the hand is all in for less than others have put in, the pot shows how it splits under the total, for example "Main ₹3,000 · Side ₹8,000" (also in the middle of the Table view). Each player's all-in amount closes a pot; with more than one side pot they read "Side 1", "Side 2" and so on.
 - **Short all-ins.** An all-in that raises by less than the minimum is a "short all-in". Players who already acted must still call it or fold, but they can't raise again: their row shows only Call and Fold, with a note saying why. Players who haven't acted yet on that street can still raise. A later full raise lets everyone raise again. The action log marks it as "short of a full raise".
 - **A raise reopens the betting.** The round ends only when every player still in has called, checked, folded or gone all in. The blue button that deals the next street always names it ("Deal FLOP", "Deal TURN" or "Deal RIVER"); it is faded and can't be pressed until the round ends. It sits under the seat cards and stays in the same spot while you play: when a player's action ends the round, their card stays open (greyed out, marked "Betting round complete · Deal FLOP next", with Undo still available) until the next street is dealt, so the Deal button doesn't jump. At the river it is replaced by the Pick the winner card.
-- **Feedback when the turn moves on.** Each action plays a short click on the phone that was tapped: two chip clicks for a call, bet, raise or all in, and a softer single knock for a check or fold. The player who acted has their status ("Called ₹100", "Folded" and so on) flash green for about a second, and the next player's card slides in with a green glow. In Table view, the betting panel under the table slides in, the next seat's ring pops, and the seat that acted glows. The flash clears when the next street is dealt or the action is undone. Animations are skipped when the phone is set to reduce motion. The click can be turned off in Profile; an iPhone on silent never plays it.
+- **Feedback when the turn moves on.** Each action plays a short click on the phone that was tapped: two chip clicks for a call, bet, raise or all in, and a softer single knock for a check or fold. The player who acted has their status ("Called ₹100", "Folded" and so on) flash green for about a second, and the next player's card slides in with a green glow. In Table view, the betting panel under the table slides in, the next seat's ring pops, and the seat that acted glows. The flash clears when the next street is dealt or the action is undone. Animations are skipped when the phone is set to reduce motion. The click can be turned off in Settings (Profile → Settings); an iPhone on silent never plays it.
 - **Pot and stages.** A scoreboard at the top shows the four stages as a bar (finished stages green, the current one green-blue), the pot in very large numbers and the blinds. Very large pots shrink to fit on one line.
 - **Everyone else folds:** the last player left wins the pot automatically.
 - **All-in run-out:** once betting can't continue (for example, everyone else is all in), the host can deal the remaining stages straight to the showdown without more betting.
@@ -274,7 +274,7 @@ The **Profile** tab replaced the Players tab on 30 September 2026. From the top:
 
 ## 14. Deleting your account
 
-- **Delete my account** is in the **⋯** account menu beside your name on the Profile card, under "Signed in as", **Edit name** and **Sign out**. A confirmation explains exactly what happens before anything changes, as a short list of points (locked and hidden straight away, signed out everywhere, 30 days to recover, then permanent). The 6-hour provider backups are described under Backups below, not in the confirmation.
+- **Delete My Account** is at the bottom of **Settings** (Profile card → Settings, section 22), in red. Since 5 October 2026 it is no longer in the ⋯ menu beside your name. A confirmation explains exactly what happens before anything changes, as a short list of points (locked and hidden straight away, signed out everywhere, 30 days to recover, then permanent). The 6-hour provider backups are described under Backups below, not in the confirmation.
 - **Recent sign-in required.** Like permanent deletion, it only works within **10 minutes** of signing in. Otherwise the app offers to email a fresh sign-in link.
 - **What happens straight away:**
   - your players, games and standings are locked and hidden
@@ -386,6 +386,23 @@ Everyone who signs in has their own account and can host their own games. Friend
 - **Games:** the latest 300 games across all hosts with host, time, length, players, hands, big blind, chips won and winner; select a game to see every player's result.
 - **System:** accounts waiting out their 30-day deletion period, the purge job's records, the 40 most recent audit events and the database migrations applied.
 - Times are shown in India time. **Updated** reloads the data.
+
+## 22. Settings and info pages
+
+Added 5 October 2026 (user request).
+
+- **Opening it.** The **Settings** row at the bottom of the Profile card opens a **Settings** screen. The tab bar keeps **Profile** highlighted; the phone's back gesture returns to Profile.
+- **Sounds · On This Device:** **Button click sounds** (a soft click on each action in a hand). It starts on and is remembered on that device only.
+- **About Pokerize:** **Features** and **What's New** (showing the date of the latest entry).
+- **Privacy And Legal:** **Privacy Policy**, **Terms of Use** and **Account Deletion**.
+- **Account:** "Signed in as" your email, **Contact Us** (therajarshiroy@gmail.com: tapping it opens an email in the phone's mail app, if one is set up; the copy button beside it copies the address and shows a tick for a moment), **Sign Out**, and **Delete My Account** in red (the same confirmation as section 14).
+- **Info pages.** Each row opens a page with a **Back** button and the theme switch. Back returns to Settings (the app reloads there). They need no sign-in, so they can be opened from the sign-in page, shared, or listed in app stores, at these addresses: `/features`, `/whats-new`, `/privacy`, `/terms` and `/account-deletion`. Opened any other way, **Back** goes to the app's front door (sign-in if signed out). Each page lists the others at its foot, with the contact email. Long text on these pages is in normal sentence case; headings and buttons keep the Title Case house style.
+  - **Features:** a plain-language tour of the app in ten groups (private ledger, setting up, playing a hand, fixing mistakes, saved games, standings, friends, live standings, profile, safety and privacy).
+  - **What's New:** every release day since the first version (27 July 2026), newest first, each with a short title and items tagged **New**, **Improved** or **Fixed**.
+  - **Privacy Policy:** who runs the app (Rajarshi Roy, India), what is kept and why, who can see it, the services used (Neon, Vercel, Healthchecks.io), that data is stored in the United States, how long it's kept (30-day recovery, 6-hour provider copies), your rights under India's DPDP Act 2023, the 18+ age limit and how to complain.
+  - **Terms of Use:** 18 or over; a scorekeeper, not a gambling service; you follow local laws; numbers can be wrong and money between players is your own arrangement; fair use; 30 days' notice before any shutdown; liability limits; Indian law.
+  - **Account Deletion:** how to delete in the app, what happens straight away, the 30 days to recover, what is deleted and kept, deleting single things, and emailing us if you can't sign in.
+- **Sign-in page.** Under the sign-in form: "By signing in you agree to the Terms of Use and Privacy Policy. You must be 18 or over.", plus a link to the Features page.
 
 ---
 

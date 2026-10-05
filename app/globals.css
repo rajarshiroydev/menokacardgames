@@ -2061,8 +2061,7 @@ textarea::placeholder {
 }
 
 .profile-code-row,
-.profile-currency,
-.profile-sound {
+.profile-currency {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -2071,15 +2070,13 @@ textarea::placeholder {
 }
 
 .profile-code-row > div:first-child,
-.profile-currency > span,
-.profile-sound > span {
+.profile-currency > span {
   flex: 1;
   min-width: 0;
 }
 
 .profile-code-row small,
-.profile-currency small,
-.profile-sound small {
+.profile-currency small {
   display: block;
   color: var(--ink3);
   font-size: 11px;
@@ -2105,8 +2102,7 @@ textarea::placeholder {
   position: relative;
 }
 
-.profile-currency b,
-.profile-sound b {
+.profile-currency b {
   display: block;
   margin-top: 3px;
   font-size: 14px;
@@ -5628,6 +5624,9 @@ td > .admin-badge:first-child,
 @media (max-width: 760px) {
   .admin-shell {
     grid-template-columns: minmax(0, 1fr);
+    /* One column: keep rows at their own height. Stretched to fill the
+       screen, a short view (Users) made the top nav bar grow tall. */
+    align-content: start;
     gap: 14px;
     padding: 12px var(--gutter);
   }
@@ -5822,4 +5821,392 @@ td > .admin-badge:first-child,
 /* A segmented control that wraps into equal columns (the starting stacks). */
 .segmented.grid {
   display: grid;
+}
+
+/* ------------------------------------------------------------------
+   Public info pages (features, what's new, privacy, terms, deletion)
+   ------------------------------------------------------------------ */
+
+.info-page {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: min(100%, 680px);
+  margin: 0 auto;
+  padding: max(14px, env(safe-area-inset-top)) var(--gutter)
+    max(32px, env(safe-area-inset-bottom));
+}
+
+.info-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.info-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 42px;
+  padding: 0 16px 0 12px;
+  border: 1px solid var(--gb);
+  border-radius: 999px;
+  background: var(--glass);
+  color: var(--ink);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.info-back span {
+  font-size: 22px;
+  line-height: 1;
+}
+
+.info-head {
+  display: grid;
+  gap: 8px;
+  padding: 8px 2px 4px;
+}
+
+.info-head .eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--g);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+
+.info-mark {
+  width: 24px;
+  height: 24px;
+  border-radius: 7px;
+}
+
+.info-head h1 {
+  font-family: var(--fd);
+  font-size: 46px;
+  font-weight: 900;
+  font-variation-settings: "opsz" 72;
+  line-height: 0.95;
+  text-transform: uppercase;
+}
+
+.info-updated {
+  color: var(--ink3);
+  font-size: 12px;
+}
+
+/* Long prose reads in sentence case; headings and buttons keep the house
+   Title Case (exception agreed for the info pages, 2026-10-05). */
+.info-intro,
+.info-body p,
+.info-body li,
+.info-body dd,
+.info-foot p,
+.info-note {
+  text-transform: none;
+}
+
+.info-intro {
+  color: var(--ink2);
+  font-size: 16px;
+}
+
+.info-body {
+  display: grid;
+  gap: 12px;
+}
+
+.info-section {
+  display: grid;
+  gap: 10px;
+  padding: 18px 16px;
+}
+
+.info-section h2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--fd);
+  font-size: 24px;
+  font-weight: 900;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.info-section h3 {
+  margin-top: 4px;
+  color: var(--g);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.info-section p,
+.info-section li {
+  color: var(--ink2);
+}
+
+.info-section b {
+  color: var(--ink);
+}
+
+.info-section ul,
+.info-section ol {
+  display: grid;
+  gap: 6px;
+  padding-left: 20px;
+}
+
+.info-section ul {
+  list-style: disc;
+}
+
+.info-section ol {
+  list-style: decimal;
+}
+
+.info-section li::marker {
+  color: var(--g);
+}
+
+.info-page a:not(.info-back) {
+  color: var(--g);
+  text-underline-offset: 3px;
+}
+
+.info-note {
+  color: var(--ink3);
+  text-align: center;
+}
+
+.info-foot {
+  display: grid;
+  gap: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+  color: var(--ink3);
+  font-size: 13px;
+}
+
+.info-foot nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+}
+
+.info-foot nav a {
+  font-weight: 700;
+  text-decoration: none;
+}
+
+/* Features */
+
+.feature-suit {
+  color: var(--g);
+  font-size: 20px;
+}
+
+.feature-lead {
+  margin-top: -4px;
+}
+
+.feature-list {
+  display: grid;
+  gap: 12px;
+}
+
+.feature-list > div {
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.feature-list dt {
+  font-weight: 700;
+}
+
+.feature-list dd {
+  margin-top: 2px;
+  color: var(--ink2);
+}
+
+/* What's New */
+
+.info-section .changelog-title {
+  margin-top: -4px;
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.info-section .changelog-items {
+  padding-left: 0;
+  list-style: none;
+}
+
+.info-section .changelog-items li {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}
+
+.change-tag {
+  flex: none;
+  width: 74px;
+  margin-top: 2px;
+  padding: 2px 0;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.change-tag-new {
+  background: color-mix(in oklab, var(--g) 22%, transparent);
+  color: var(--g);
+}
+
+.change-tag-improved {
+  background: color-mix(in oklab, var(--b) 22%, transparent);
+  color: var(--b);
+}
+
+.change-tag-fixed {
+  background: var(--glass2);
+  color: var(--ink2);
+}
+
+/* Sign-in page: the agreement line under the form. */
+.auth-legal {
+  color: var(--ink3);
+  font-size: 12px;
+}
+
+.auth-legal a {
+  color: var(--ink2);
+  text-underline-offset: 3px;
+}
+
+/* ------------------------------------------------------------------
+   Settings (opened from the Profile card)
+   ------------------------------------------------------------------ */
+
+.profile-settings-link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+  text-align: left;
+}
+
+.profile-settings-link > span:first-child {
+  flex: 1;
+  min-width: 0;
+}
+
+.profile-settings-link small {
+  display: block;
+  color: var(--ink3);
+  font-size: 11px;
+}
+
+.profile-settings-link b {
+  display: block;
+  margin-top: 3px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.settings-chevron {
+  flex: none;
+  color: var(--ink3);
+  font-size: 22px;
+  line-height: 1;
+}
+
+.settings-view {
+  display: grid;
+  gap: 18px;
+}
+
+.settings-group {
+  display: grid;
+  gap: 8px;
+}
+
+.settings-group h2 {
+  padding: 0 4px;
+  color: var(--ink3);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.settings-card {
+  display: grid;
+  padding: 0 16px;
+}
+
+.settings-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 60px;
+  padding: 12px 0;
+  color: var(--ink);
+  text-align: left;
+  text-decoration: none;
+}
+
+.settings-row + .settings-row {
+  border-top: 1px solid var(--line);
+}
+
+.settings-row > span:first-child {
+  flex: 1;
+  min-width: 0;
+}
+
+.settings-row b {
+  display: block;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.settings-row small {
+  display: block;
+  margin-top: 2px;
+  color: var(--ink3);
+  font-size: 12px;
+}
+
+/* Contact Us: the email link fills the row, Copy sits on the right. */
+.settings-row-link {
+  flex: 1;
+  min-width: 0;
+  color: inherit;
+  text-decoration: none;
+}
+
+.settings-row-danger b {
+  color: var(--neg);
+}
+
+.settings-foot {
+  color: var(--ink3);
+  font-size: 12px;
+  text-align: center;
 }

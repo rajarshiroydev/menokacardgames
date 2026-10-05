@@ -92,7 +92,6 @@ import {
   readHandLayout,
   readTurnSound,
   storeHandLayout,
-  storeTurnSound,
   type HandLayout,
 } from "@/lib/poker/storage";
 import { playTurnSound } from "@/lib/turn-sound";
@@ -104,6 +103,7 @@ import { AvatarArt } from "@/components/avatar-art";
 import { AvatarPicker, randomAvatarId } from "@/components/avatar-picker";
 import { BrandMark } from "@/components/brand-mark";
 import { NotificationBell } from "@/components/notification-bell";
+import { SettingsView } from "@/components/settings-view";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { AVATARS } from "@/lib/avatars";
 import { APP_NAME } from "@/lib/brand";
@@ -256,6 +256,7 @@ type View =
   | "history"
   | "sessions"
   | "profile"
+  | "settings"
   | "hands";
 const VIEWS: readonly View[] = [
   "home",
@@ -264,6 +265,7 @@ const VIEWS: readonly View[] = [
   "history",
   "sessions",
   "profile",
+  "settings",
   "hands",
 ];
 
@@ -830,11 +832,17 @@ export function PokerLedger({
       setLegacyGame(readStoredGame(LEGACY_GAME_STORAGE_KEY));
       setLegacySessions(readStoredHistory(LEGACY_HISTORY_STORAGE_KEY));
       setHandLayout(readHandLayout());
-      window.history.replaceState(
-        { ...window.history.state, appView: "home" },
-        "",
-      );
-      if (storedGame) {
+      // Back from an info page opened in Settings reloads the app on the
+      // Settings entry, so it reopens there; every other start opens Home.
+      if (window.history.state?.appView === "settings") {
+        setView("settings");
+      } else {
+        window.history.replaceState(
+          { ...window.history.state, appView: "home" },
+          "",
+        );
+      }
+      if (storedGame && window.history.state?.appView !== "settings") {
         window.history.pushState(
           { ...window.history.state, appView: "game" },
           "",
@@ -2045,8 +2053,10 @@ export function PokerLedger({
               ? { title: "My Hosted Games" }
               : view === "profile"
                 ? { title: "Profile" }
-                : view === "hands"
-                  ? { title: "Hand Rankings" }
+                : view === "settings"
+                  ? { title: "Settings" }
+                  : view === "hands"
+                    ? { title: "Hand Rankings" }
                   : null;
   const homeView = (
     <HomeView
@@ -2160,7 +2170,7 @@ export function PokerLedger({
           <ProfileView
             profile={profile}
             accountEmail={accountEmail}
-            onDeleteAccount={deleteAccount}
+            onOpenSettings={() => navigate("settings")}
             onProfile={(next) => {
               setProfile(next);
               // Your own player goes by your name, so the list follows it.
@@ -2193,6 +2203,8 @@ export function PokerLedger({
             stats={profileStats}
             statsError={profileStatsError}
           />
+        ) : view === "settings" ? (
+          <SettingsView email={accountEmail} onDeleteAccount={deleteAccount} />
         ) : view === "hands" ? (
           <PokerHandsChart />
         ) : view === "setup" ? (
@@ -2334,6 +2346,7 @@ const TABS: ReadonlyArray<{ target: TabTarget; icon: ReactNode; label: string }>
 function tabForView(view: View): TabTarget {
   if (view === "setup" || view === "game") return "play";
   if (view === "hands") return "home";
+  if (view === "settings") return "profile";
   return view;
 }
 
@@ -4152,7 +4165,7 @@ function monthYear(timestamp: number) {
 function ProfileView({
   profile,
   accountEmail,
-  onDeleteAccount,
+  onOpenSettings,
   onProfile,
   players,
   discardedPlayers,
@@ -4180,7 +4193,7 @@ function ProfileView({
 }: {
   profile: AccountProfile;
   accountEmail: string;
-  onDeleteAccount: () => void;
+  onOpenSettings: () => void;
   onProfile: (profile: AccountProfile) => void;
   players: PlayerProfile[];
   discardedPlayers: PlayerProfile[];
@@ -4446,7 +4459,7 @@ function ProfileView({
       <ProfileCard
         profile={profile}
         accountEmail={accountEmail}
-        onDeleteAccount={onDeleteAccount}
+        onOpenSettings={onOpenSettings}
         onProfile={onProfile}
         onScannedCode={(code) => {
           setScannedCode(code);
@@ -4661,40 +4674,16 @@ function ProfileView({
   );
 }
 
-/** Profile's switch for the click on each action, saved on this device. */
-function TurnSoundSetting() {
-  // Profile only opens after the app has loaded, so storage can be read here.
-  const [on, setOn] = useState(readTurnSound);
-  return (
-    <div className="profile-sound">
-      <span>
-        <small>Sounds · on this device</small>
-        <b>Click when a player acts</b>
-      </span>
-      <button
-        className="switch"
-        type="button"
-        role="switch"
-        aria-checked={on}
-        aria-label="Click when a player acts"
-        onClick={() => {
-          storeTurnSound(!on);
-          setOn(!on);
-        }}
-      />
-    </div>
-  );
-}
-
-/** Profile's ⋯ button: who is signed in, Sign out and Delete my account. */
+/**
+ * Profile's ⋯ button: who is signed in, Edit name and Sign out. Delete My
+ * Account lives in Settings only (user decision 2026-10-05).
+ */
 function AccountMenu({
   email,
   onEditName,
-  onDeleteAccount,
 }: {
   email: string;
   onEditName: () => void;
-  onDeleteAccount: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const container = useRef<HTMLDivElement>(null);
@@ -4748,17 +4737,6 @@ function AccountMenu({
               Sign out
             </button>
           </form>
-          <button
-            type="button"
-            role="menuitem"
-            className="danger-text"
-            onClick={() => {
-              setOpen(false);
-              onDeleteAccount();
-            }}
-          >
-            Delete my account
-          </button>
         </div>
       ) : null}
     </div>
@@ -4805,11 +4783,11 @@ function PressableRow({
   );
 }
 
-/** The card at the top: name, record, user code and currency. */
+/** The card at the top: name, record, user code, currency and Settings. */
 function ProfileCard({
   profile,
   accountEmail,
-  onDeleteAccount,
+  onOpenSettings,
   onProfile,
   onScannedCode,
   onToast,
@@ -4818,7 +4796,7 @@ function ProfileCard({
 }: {
   profile: AccountProfile;
   accountEmail: string;
-  onDeleteAccount: () => void;
+  onOpenSettings: () => void;
   onProfile: (profile: AccountProfile) => void;
   /** A friend's user code read with Scan Code. */
   onScannedCode: (code: string) => void;
@@ -5036,7 +5014,6 @@ function ProfileCard({
               setDraft(name);
               setEditing(true);
             }}
-            onDeleteAccount={onDeleteAccount}
           />
         )}
       </div>
@@ -5180,7 +5157,15 @@ function ProfileCard({
           ))}
         </select>
       </label>
-      <TurnSoundSetting />
+      <button className="profile-settings-link" type="button" onClick={onOpenSettings}>
+        <span>
+          <small>Sounds, privacy and more</small>
+          <b>Settings</b>
+        </span>
+        <span className="settings-chevron" aria-hidden="true">
+          ›
+        </span>
+      </button>
     </section>
     {/* Outside the card: its blur would trap a fixed-position sheet. */}
     {choosingAvatar ? (

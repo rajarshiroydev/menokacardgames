@@ -28,6 +28,8 @@ Updated 2026-09-25. Durable working agreements, decisions and environment facts,
 
 ## Environment facts
 
+- CSS class names share one global stylesheet, and Tailwind v4 (`@import "tailwindcss"`) also turns plain words found anywhere in the source into utilities (`fixed`, `table`, `hidden`, `block`…). Give new classes a component prefix (`settings-row-danger`, `change-tag-fixed`), never a bare word, and check `app/globals.css` for an existing class first (`.danger` is a button style). Found 2026-10-05 when a "Fixed" tag became `position: fixed`.
+
 - Neon project `menokacardgames` (ID `wispy-morning-76468301`, account roystark.dev@gmail.com). Production data lives on `br-small-sea-ayumyssr` (named "production"; pooled host `ep-delicate-pond-ay8ple8b-pooler`), and Vercel Production connects there as `menoka_app`. Always name Neon branches by ID: a snapshot restore can swap branch names, and restores leave copies such as `restore-copy-2026-09-24` (`br-withered-glitter-ay2zbaoe`). Since 2026-09-30 Neon's default branch is production (`br-small-sea-ayumyssr`), set by the user in the console. Vercel Preview's `DATABASE_URL` points at `cutover-rehearsal` (`br-tiny-forest-ayt6f3fe`) as `menoka_app`.
 - Isolated development branch `multi-user-auth` (`br-little-rain-ay5fufwv`). Local `.env.local` targets that branch.
 - Dev branch accounts: the user's real ledger (therajarshiroy@gmail.com: 9 players, 24 sessions, 72 results) and an empty second host (roystark24@gmail.com), kept for two-account tests.
