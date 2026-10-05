@@ -8555,7 +8555,14 @@ function RanksView({
  * Games and every friend's group. Its "i" says whose ranking this is, then
  * how players are ranked.
  */
-function StandingsHeading({ intro }: { intro: string }) {
+function StandingsHeading({
+  intro,
+  hidden,
+}: {
+  intro: string;
+  /** For a friend's group: what is kept from you to protect other players. */
+  hidden?: readonly string[];
+}) {
   const [showRankingHelp, setShowRankingHelp] = useState(false);
   return (
     <>
@@ -8573,7 +8580,11 @@ function StandingsHeading({ intro }: { intro: string }) {
         </div>
       </div>
       {showRankingHelp ? (
-        <RankingHelp intro={intro} onClose={() => setShowRankingHelp(false)} />
+        <RankingHelp
+          intro={intro}
+          hidden={hidden}
+          onClose={() => setShowRankingHelp(false)}
+        />
       ) : null}
     </>
   );
@@ -8613,6 +8624,7 @@ function GroupStandingsView({ group }: { group: GroupStandings }) {
       {rows.length ? (
         <StandingsHeading
           intro={`Your ranking among the players you've sat with in games hosted by ${hostName}.`}
+          hidden={GROUP_HIDDEN_INFO}
         />
       ) : null}
       {rows.length ? (
@@ -8782,11 +8794,25 @@ function StandingsView({
   );
 }
 
+/**
+ * What a friend's group leaves out, matching what the server sends
+ * (lib/friends/group-standings.ts; user decisions 2026-10-05).
+ */
+const GROUP_HIDDEN_INFO = [
+  "Games you didn't play in",
+  "Players you've never sat with",
+  "Other players' chips put in and net won or lost (only yours show)",
+  "How many games and players the host has in total",
+  "The host's game-by-game history",
+] as const;
+
 function RankingHelp({
   intro,
+  hidden,
   onClose,
 }: {
   intro: string;
+  hidden?: readonly string[];
   onClose: () => void;
 }) {
   return (
@@ -8797,6 +8823,18 @@ function RankingHelp({
         they won or lost in each game as a percentage of the chips they put
         in, averaged over their games.
       </p>
+      {hidden?.length ? (
+        <>
+          <p>
+            <b>Hidden to protect other players&apos; privacy:</b>
+          </p>
+          <ul className="info-sheet-list">
+            {hidden.map((item) => (
+              <li key={item}>{item}</li>
+            ))}
+          </ul>
+        </>
+      ) : null}
     </InfoSheet>
   );
 }
