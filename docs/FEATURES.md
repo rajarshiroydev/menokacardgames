@@ -107,7 +107,7 @@ The **Profile** tab replaced the Players tab on 30 September 2026. From the top:
   - The table, the "blinds go up" notices, the game log, saved games in the Games screen and the live standings link all show the real small blind.
 - **Blind levels.** **Fixed**, **By Hands** or **By Minutes**. See section 5.
 - **Rebuys.** A card below the blinds sets the game's rebuy limits (section 8). Both default to no limit, the same as before.
-  - **Rebuys per player:** **No limit** (the default), **None**, **1**, **2**, **3** or **Other** (0 to 63).
+  - **Rebuys per player:** **∞** (no limit, the default), **None**, **1**, **2**, **3** or **Other** (0 to 63).
   - **Rebuys close at big blind:** only shown with rising blinds, and not with None. **Never** (the default), the next three big blinds of the plan (for ₹100 doubling: ₹200, ₹400, ₹800) or **Other** to type a big blind. It must be above the starting big blind; otherwise a message shows and Deal First Hand stays unavailable.
   - A line under the choices says what a busted player can do, for example "A busted player can buy back in for the starting stack, ₹10,000, until the big blind reaches ₹400."
 - **Deal First Hand** only becomes available when at least two different players are seated and the numbers are valid. It starts the game and deals hand 1.

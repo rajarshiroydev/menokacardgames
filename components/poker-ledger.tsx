@@ -6135,7 +6135,8 @@ function RebuyRulesFields({
       <Segmented<RebuyMaxChoice>
         label="Rebuys per player"
         options={[
-          { value: "unlimited", label: "No limit" },
+          // "No limit" doesn't fit six chips at 375px; the card note says it.
+          { value: "unlimited", label: "∞" },
           { value: 0, label: "None" },
           { value: 1, label: "1" },
           { value: 2, label: "2" },
