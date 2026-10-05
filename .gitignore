@@ -40,3 +40,11 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# design and reference material kept locally, not part of the app
+/Menoka Card Games Redesign/
+/Menoka Card Games Redesign.zip
+/Menoka Redesign.dc.html
+/Pokerize Logo Design/
+/Pokerize Logo Design.zip
+/design_handoff_sporty_glass_redesign/
