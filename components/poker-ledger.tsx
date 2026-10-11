@@ -90,8 +90,10 @@ import {
   LEGACY_HISTORY_STORAGE_KEY,
   prepareLegacySessionsForAdoption,
   readHandLayout,
+  readTableTurn,
   readTurnSound,
   storeHandLayout,
+  storeTableTurn,
   type HandLayout,
 } from "@/lib/poker/storage";
 import { playTurnSound } from "@/lib/turn-sound";
@@ -2497,6 +2499,27 @@ function InfinityIcon() {
       style={{ display: "block", margin: "0 auto" }}
     >
       <path d="M12 6c-2-3-3.5-4.5-5.5-4.5a4.5 4.5 0 0 0 0 9c2 0 3.5-1.5 5.5-4.5s3.5-4.5 5.5-4.5a4.5 4.5 0 0 1 0 9c-2 0-3.5-1.5-5.5-4.5z" />
+    </svg>
+  );
+}
+
+/** A clockwise arrow round a dot: turns the table view's seats one place. */
+function TurnSeatsIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width="18"
+      height="18"
+      aria-hidden="true"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M20 12a8 8 0 1 1-2.34-5.66" />
+      <path d="M20 4v4.5h-4.5" />
+      <circle cx="12" cy="12" r="2" fill="currentColor" stroke="none" />
     </svg>
   );
 }
@@ -7306,8 +7329,19 @@ function TableHand({
   const { money } = useMoney();
   // The seat tapped for its Undo; it clears once that seat can't undo.
   const [picked, setPicked] = useState<number | null>(null);
+  // Places the seats are turned clockwise to match the real table; the deal
+  // order is unchanged.
+  const [turn, setTurn] = useState(() => readTableTurn(game.startedAt));
   const hand = game.hand;
   if (!hand) return null;
+  const count = game.players.length;
+  const place = (index: number) => seatPosition((index + turn) % count, count);
+
+  function turnSeats() {
+    const next = (turn + 1) % count;
+    setTurn(next);
+    storeTableTurn(game.startedAt, next);
+  }
   const lastStage = STAGES.length - 1;
   const pending = pendingIndexes(game).length > 0;
   const showdown = hand.stage === lastStage && !pending;
@@ -7337,6 +7371,15 @@ function TableHand({
         className={`poker-table ${crowded ? "crowded" : ""}`}
         aria-label={`Table, hand ${hand.no}`}
       >
+        <button
+          className="table-turn"
+          type="button"
+          aria-label="Move every seat one place clockwise"
+          title="Move seats to match your table"
+          onClick={turnSeats}
+        >
+          <TurnSeatsIcon />
+        </button>
         <div className="table-rim" aria-hidden="true">
           <div className="table-felt">
             <span className="table-line" />
@@ -7384,7 +7427,7 @@ function TableHand({
               if (!(chips > 0)) return null;
               // Chips sit in front of the seat, clear of the pot: under the
               // name for seats along the top, over the avatar for the rest.
-              const spot = seatPosition(index, game.players.length);
+              const spot = place(index);
               const upper = spot.y < 40;
               // On a full table, chips over a side seat would touch the seat
               // above it, so they go beside the avatar, towards the pot.
@@ -7409,7 +7452,7 @@ function TableHand({
               );
             })}
         {game.players.map((player, index) => {
-          const spot = seatPosition(index, game.players.length);
+          const spot = place(index);
           const folded = !hand.in[index];
           const isTurn = !showdown && current === index;
           const flash = showdown ? undefined : flashFor(game, lastTurn, index);

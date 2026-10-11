@@ -3057,6 +3057,26 @@ textarea::placeholder {
   height: 440px;
 }
 
+.table-turn {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  z-index: 3;
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border: 1px solid var(--gb);
+  border-radius: 999px;
+  background: var(--seat);
+  color: var(--ink2);
+  cursor: pointer;
+}
+
+.table-turn:active {
+  transform: rotate(30deg);
+}
+
 .table-rim {
   position: absolute;
   inset: 56px 22px;
@@ -3150,6 +3170,9 @@ textarea::placeholder {
 
 .table-chips {
   position: absolute;
+  transition:
+    left 0.3s ease-out,
+    top 0.3s ease-out;
   display: flex;
   align-items: center;
   gap: 4px;
@@ -3184,7 +3207,10 @@ textarea::placeholder {
   background: none;
   color: var(--ink);
   transform: translate(-50%, -50%);
-  transition: opacity 0.18s ease-out;
+  transition:
+    opacity 0.18s ease-out,
+    left 0.3s ease-out,
+    top 0.3s ease-out;
 }
 
 .table-seat:active:not(:disabled) {

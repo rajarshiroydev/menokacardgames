@@ -72,3 +72,34 @@ export function storeTurnSound(on: boolean) {
     // Private windows may refuse storage; the choice lasts this visit only.
   }
 }
+
+/**
+ * How many places the table view is turned on this device, so the seats can
+ * match where people really sit. Display only: deal order never changes. Kept
+ * per game (by its start time), so a new game starts unturned.
+ */
+export const TABLE_TURN_STORAGE_KEY = "pokerLedger.tableTurn.v1";
+
+export function readTableTurn(startedAt: number): number {
+  try {
+    const stored = JSON.parse(
+      window.localStorage.getItem(TABLE_TURN_STORAGE_KEY) || "null",
+    );
+    return stored?.startedAt === startedAt && Number.isInteger(stored.turn)
+      ? stored.turn
+      : 0;
+  } catch {
+    return 0;
+  }
+}
+
+export function storeTableTurn(startedAt: number, turn: number) {
+  try {
+    window.localStorage.setItem(
+      TABLE_TURN_STORAGE_KEY,
+      JSON.stringify({ startedAt, turn }),
+    );
+  } catch {
+    // Private windows may refuse storage; the turn lasts this hand only.
+  }
+}

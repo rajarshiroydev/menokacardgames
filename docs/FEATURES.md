@@ -166,6 +166,7 @@ The **Profile** tab replaced the Players tab on 30 September 2026. From the top:
   - chips in front of a seat show what that player has put in this street
   - the acting player's betting panel (the same as in List, headed "Name to act" with their stack behind) is docked under the table. When the round ends it gives way to the Deal button
   - **Undo** on the table: tap a player who has acted this street and a bar with their last action and an **Undo** button appears under the table. A dashed box under **Cancel hand** says "Tap on player to undo their action." (hidden at the showdown)
+  - **Turn the seats:** a round arrow button at the table's top right moves every seat (with its chips) one place clockwise; tap again to keep turning, until the screen matches where everyone really sits. It changes only the picture, never the deal order. The turn is remembered on this device for that game, so a new game starts with seat 1 at the top again
   - the choice is remembered on this device; it starts on List. Between hands both views show the same Between Hands card, so the switch is hidden
 
 ## 7. Winning the pot
