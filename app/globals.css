@@ -2917,6 +2917,15 @@ textarea::placeholder {
   background: var(--glass2);
 }
 
+/* A pot that follows an earlier one: its winners stay bright, the rest fade. */
+.contender:disabled {
+  cursor: default;
+}
+
+.contender.selected:disabled {
+  opacity: 1;
+}
+
 .contender-name {
   flex: 1;
   min-width: 0;

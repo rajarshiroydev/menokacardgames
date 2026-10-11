@@ -789,6 +789,70 @@ export function potLabel(index: number, count: number) {
   return count > 2 ? `Side pot ${index}` : "Side pot";
 }
 
+/**
+ * Casino order for odd chips in a split: the winner nearest the dealer's
+ * left gets the first leftover chip, then on clockwise.
+ */
+export function oddChipOrder(
+  winners: number[],
+  dealerIndex: number,
+  seats: number,
+) {
+  const fromDealer = (index: number) =>
+    (index - dealerIndex - 1 + seats * 2) % seats;
+  return [...winners].sort((a, b) => fromDealer(a) - fromDealer(b));
+}
+
+/** Each winner's share of a pot: even shares, odd chips in casino order. */
+export function splitShares(
+  amount: number,
+  winners: number[],
+  dealerIndex: number,
+  seats: number,
+) {
+  const shares = new Map<number, number>();
+  if (!winners.length) return shares;
+  const each = Math.floor(amount / winners.length);
+  const remainder = amount - each * winners.length;
+  oddChipOrder(winners, dealerIndex, seats).forEach((player, rank) => {
+    shares.set(player, each + (rank < remainder ? 1 : 0));
+  });
+  return shares;
+}
+
+/**
+ * Who wins each pot, given the host's picks. Each later pot's players are
+ * some of the earlier pot's, so the best hand of a pot is also the best of
+ * every later pot it is in: when the previous pot's winners include players
+ * of this pot, those players win it (sharing it if they shared the previous
+ * one), whatever was picked. A pot only one player can win goes to them.
+ * Otherwise the pick stands. `from` is the pot where the forced winners
+ * were picked (the first of a chain of pots they won the same way), or null.
+ */
+export function resolvePotWinners(pots: Pot[], picks: number[][]) {
+  const resolved: { winners: number[]; from: number | null }[] = [];
+  pots.forEach((pot, index) => {
+    if (pot.eligible.length === 1) {
+      resolved.push({ winners: [...pot.eligible], from: null });
+      return;
+    }
+    const previous = resolved[index - 1]?.winners ?? [];
+    const carried = previous.filter((player) => pot.eligible.includes(player));
+    if (carried.length) {
+      const before = resolved[index - 1];
+      const same =
+        carried.length === before.winners.length && before.from !== null;
+      resolved.push({ winners: carried, from: same ? before.from : index - 1 });
+      return;
+    }
+    resolved.push({
+      winners: [...new Set(picks[index] ?? [])].sort((a, b) => a - b),
+      from: null,
+    });
+  });
+  return resolved;
+}
+
 /** More than one pot to win, or chips to give back: the side-pot showdown. */
 export function hasSidePots(game: GameState) {
   const { pots, refund } = potsFor(game);
@@ -797,8 +861,9 @@ export function hasSidePots(game: GameState) {
 
 /**
  * Pays out every pot. `winners[i]` holds the winners of pot i, one player or
- * several for a split (even shares, odd chips in seat order); a pot only one
- * player can win goes to them whatever is passed. Gives back any uncalled
+ * several for a split (even shares, odd chips from the dealer's left). A pot
+ * only one player can win, or one an earlier pot's winners are in, is settled
+ * by `resolvePotWinners` whatever is passed. Gives back any uncalled
  * chips, logs each pot, records the hand for undo and clears it. Returns
  * false, changing nothing, if a pot has no valid winner.
  */
@@ -806,10 +871,8 @@ export function awardPots(game: GameState, winners: number[][]) {
   const hand = game.hand;
   if (!hand) return false;
   const { pots, refund } = potsFor(game);
-  const chosen = pots.map((pot, index) =>
-    pot.eligible.length === 1
-      ? pot.eligible
-      : [...new Set(winners[index] ?? [])].sort((a, b) => a - b),
+  const chosen = resolvePotWinners(pots, winners).map(
+    (result) => result.winners,
   );
   if (
     chosen.some(
@@ -833,10 +896,13 @@ export function awardPots(game: GameState, winners: number[][]) {
   }
   const results: PotResult[] = pots.map((pot, index) => {
     const players = chosen[index];
-    const each = Math.floor(pot.amount / players.length);
-    const remainder = pot.amount - each * players.length;
-    players.forEach((player, rank) => {
-      game.players[player].stack += each + (rank < remainder ? 1 : 0);
+    splitShares(
+      pot.amount,
+      players,
+      hand.dealerIndex,
+      game.players.length,
+    ).forEach((share, player) => {
+      game.players[player].stack += share;
     });
     const label = pots.length > 1 ? potLabel(index, pots.length) : "Pot";
     const potName = label.toLowerCase();

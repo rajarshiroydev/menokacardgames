@@ -5,6 +5,8 @@ import {
   applyRaiseRules,
   awardPots,
   hasSidePots,
+  resolvePotWinners,
+  oddChipOrder,
   potLabel,
   potsFor,
   bigBlindAtLevel,
@@ -910,13 +912,15 @@ describe("side pots", () => {
     );
   });
 
-  test("a split side pot gives odd chips in seat order", () => {
+  test("a split side pot gives the odd chip left of the dealer", () => {
     // D folded after putting in 1,001, so the side pot is an odd ₹2,001.
+    // A deals, so B, first to the dealer's left, gets the odd chip.
     const game = showdown(
       [1_000, 10_000, 10_000, 10_000],
       [1_000, 2_000, 2_000, 1_001],
       [3],
     );
+    assert.equal(dealtHand(game).dealerIndex, 0);
     const before = chips(game) + 1_000 + 2_000 + 2_000 + 1_001;
     assert.deepEqual(potsFor(game).pots, [
       { amount: 4_000, eligible: [0, 1, 2] },
@@ -931,6 +935,91 @@ describe("side pots", () => {
     assert.equal(
       game.log[0],
       "Hand 1: split side pot ₹2,001 between B, C",
+    );
+  });
+
+  test("odd chips go clockwise from the dealer's left, not by seat number", () => {
+    const game = showdown(
+      [1_000, 10_000, 10_000, 10_000],
+      [1_000, 2_000, 2_000, 1_001],
+      [3],
+    );
+    // B deals: C is first to their left, and gets the odd chip.
+    dealtHand(game).dealerIndex = 1;
+    assert.ok(awardPots(game, [[0], [1, 2]]));
+    assert.deepEqual(
+      game.players.map((player) => player.stack),
+      [4_000, 8_000 + 1_000, 8_000 + 1_001, 8_999],
+    );
+    assert.deepEqual(oddChipOrder([0, 1, 3], 2, 4), [3, 0, 1]);
+    assert.deepEqual(oddChipOrder([0, 2], 3, 4), [0, 2]);
+    assert.deepEqual(oddChipOrder([1, 3], 3, 4), [1, 3]);
+  });
+
+  test("a pot's winners also win each later pot they're in", () => {
+    // Main pot: everyone; side 1: B, C, D; side 2: C, D.
+    const pots = [
+      { amount: 80, eligible: [0, 1, 2, 3] },
+      { amount: 90, eligible: [1, 2, 3] },
+      { amount: 100, eligible: [2, 3] },
+    ];
+    const winners = (picks: number[][]) =>
+      resolvePotWinners(pots, picks).map((result) => result.winners);
+    // The eight scenarios from the user's guide, picked fully, stay as picked.
+    for (const picks of [
+      [[0], [1], [2]],
+      [[0], [3], [3]],
+      [[1], [1], [3]],
+      [[2], [2], [2]],
+      [[0, 1], [1], [3]],
+      [[0], [1], [2, 3]],
+      [[1, 2], [1, 2], [2]],
+      [[0, 2], [2], [2]],
+    ]) {
+      assert.deepEqual(winners(picks), picks, `${picks}`);
+    }
+    // C wins the main pot: C is in both side pots, so C wins them too,
+    // whatever was picked there.
+    assert.deepEqual(resolvePotWinners(pots, [[2], [1]]), [
+      { winners: [2], from: null },
+      { winners: [2], from: 0 },
+      { winners: [2], from: 0 },
+    ]);
+    // A wins the main pot but isn't in side 1, so side 1 is picked (B); B
+    // isn't in side 2, so it is picked too.
+    assert.deepEqual(winners([[0], [1], [3]]), [[0], [1], [3]]);
+    // A and C split the main pot: only C is in the side pots.
+    assert.deepEqual(winners([[0, 2]]), [[0, 2], [2], [2]]);
+    // B and C split side 1: they split side 2's share too, but only C is in it.
+    assert.deepEqual(winners([[0], [1, 2], [3]]), [[0], [1, 2], [2]]);
+    // C and D split the main pot, so both side pots are split by them.
+    assert.deepEqual(winners([[2, 3]]), [[2, 3], [2, 3], [2, 3]]);
+    // A pot nobody else can win goes to its one player.
+    assert.deepEqual(
+      resolvePotWinners(
+        [
+          { amount: 30, eligible: [0, 1] },
+          { amount: 40, eligible: [1] },
+        ],
+        [[0]],
+      ),
+      [
+        { winners: [0], from: null },
+        { winners: [1], from: null },
+      ],
+    );
+  });
+
+  test("awarding follows the main pot's winner into the side pots", () => {
+    const game = showdown(
+      [500, 1_500, 10_000, 10_000],
+      [500, 1_500, 4_000, 4_000],
+    );
+    // C wins the main pot; the picks for the side pots are overruled.
+    assert.ok(awardPots(game, [[2], [1], [3]]));
+    assert.deepEqual(
+      game.players.map((player) => player.stack),
+      [0, 0, 6_000 + 10_000, 6_000],
     );
   });
 
