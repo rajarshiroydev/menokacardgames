@@ -8061,7 +8061,7 @@ function SidePotPicker({
       </div>
       <p className="muted small-note">
         {several
-          ? "An all-in player can only win what each player matched, so this hand has a main pot and side pots. Pick a winner for each."
+          ? "Each pot goes to the best hand among the players listed under it."
           : "An all-in player can only win what each player matched."}
       </p>
       {refund ? (
