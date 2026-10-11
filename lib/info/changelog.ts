@@ -25,6 +25,32 @@ export const CHANGE_TAG_LABELS: Record<ChangeTag, string> = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    date: "2026-10-12",
+    title: "Ante, rake and smarter side pots",
+    items: [
+      {
+        tag: "new",
+        text: "Big blind ante. Turn it on at setup and the big blind also puts in one big blind for the whole table each hand.",
+      },
+      {
+        tag: "new",
+        text: "House rake. Choose 2%, 3%, 5%, 10% or your own rate, with a most-per-hand limit. No flop, no rake.",
+      },
+      {
+        tag: "new",
+        text: "Turn the table. A button on the Table view moves every seat one place, so the screen matches where everyone really sits.",
+      },
+      {
+        tag: "improved",
+        text: "Side pots fill themselves in. Pick the main pot's winner and every side pot they're in follows automatically.",
+      },
+      {
+        tag: "improved",
+        text: "A split pot's leftover chip now goes to the winner nearest the dealer's left, as in casinos.",
+      },
+    ],
+  },
+  {
     date: "2026-10-05",
     title: "Side pots, cents and a busy day at the table",
     items: [

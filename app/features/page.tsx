@@ -66,6 +66,14 @@ const GROUPS: FeatureGroup[] = [
         name: "Rebuy limits",
         text: "Allow unlimited rebuys, none, or a set number per player, and optionally stop rebuys once the blinds reach a certain size.",
       },
+      {
+        name: "Big blind ante",
+        text: "Turn it on and the big blind also puts in one big blind for the whole table each hand, rising with the blinds.",
+      },
+      {
+        name: "House rake",
+        text: "Take 2%, 3%, 5%, 10% or your own rate of each pot that sees a flop, up to a limit per hand. The rake is kept apart from players' results.",
+      },
     ],
   },
   {
@@ -95,11 +103,11 @@ const GROUPS: FeatureGroup[] = [
       },
       {
         name: "List or Table view",
-        text: "See the hand as a list of seat cards or as an oval poker table. Your phone remembers which you like.",
+        text: "See the hand as a list of seat cards or as an oval poker table. Your phone remembers which you like, and a button turns the table so the seats match where everyone sits.",
       },
       {
         name: "Showdown",
-        text: "Pick the winner, split a pot between players who tie, or award each side pot separately. Confetti included.",
+        text: "Pick the winner, split a pot between players who tie, or award each side pot separately; side pots follow the main pot's winner automatically. Confetti included.",
       },
     ],
   },
