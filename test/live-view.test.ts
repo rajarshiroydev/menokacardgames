@@ -46,6 +46,22 @@ function snapshot(overrides: Partial<LiveSnapshot> = {}): LiveSnapshot {
 }
 
 describe("live view snapshot", () => {
+  test("a raked game balances at minus the house's rake", () => {
+    const raked = snapshot({
+      rake: 250,
+      players: [
+        { name: "Debraj", stack: 13_750, buyIns: [10_000], settledStack: 13_750 },
+        { name: "Rajarshi", stack: 6_000, buyIns: [10_000], settledStack: 6_000 },
+      ],
+    });
+    const view = deriveLiveView(validateLiveSnapshot(raked));
+    assert.equal(view.rake, 250);
+    assert.deepEqual(view.standings.map((row) => row.net), [3_750, -4_000]);
+    assert.throws(() =>
+      deriveLiveView(validateLiveSnapshot({ ...raked, rake: undefined })),
+    );
+  });
+
   test("between hands, the live and settled stacks are the same", () => {
     const built = buildLiveSnapshot(game([15_000, 5_000, 10_000]));
     assert.equal(built.gameName, "Game 26");

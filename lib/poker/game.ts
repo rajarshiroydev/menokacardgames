@@ -11,10 +11,12 @@ import type {
   BlindSchedule,
   CompletedHand,
   GameState,
+  Hand,
   PokerSession,
   Pot,
   PotResult,
   RaiseRecord,
+  RakeRules,
   RebuyRules,
   SmallBlindRatio,
 } from "./types";
@@ -566,6 +568,17 @@ export function dealNewHand(game: GameState, now = Date.now()) {
       pot += chips;
     },
   );
+  // A big blind ante comes after the blind itself, from what is left: dead
+  // money in the main pot, not part of the big blind's bet.
+  let ante: Hand["ante"];
+  if (game.bigBlindAnte) {
+    const amount = Math.min(game.ante, game.players[bigBlindIndex].stack);
+    if (amount > 0) {
+      game.players[bigBlindIndex].stack -= amount;
+      pot += amount;
+      ante = { playerIndex: bigBlindIndex, amount };
+    }
+  }
   game.dealerIndex = dealerIndex;
 
   game.hand = {
@@ -588,6 +601,7 @@ export function dealNewHand(game: GameState, now = Date.now()) {
     blindLevelBefore,
     blindsBefore,
     blindLevelsBefore,
+    ...(ante ? { ante } : {}),
   };
   resetRaiseRules(game);
   game.hand.currentPlayer = nextPlayerToAct(game, bigBlindIndex);
@@ -627,6 +641,7 @@ export function completedHandRecord(game: GameState): CompletedHand {
     blindLevelsBefore: hand.blindLevelsBefore
       ? structuredClone(hand.blindLevelsBefore)
       : undefined,
+    rakeBefore: game.rake ?? 0,
   };
 }
 
@@ -671,6 +686,10 @@ export function undoLastHand(game: GameState, now = Date.now()) {
     game.blinds = last.blindsBefore ?? null;
     game.blindLevels = structuredClone(last.blindLevelsBefore ?? []);
   }
+  if (last.rakeBefore !== undefined) {
+    if (last.rakeBefore > 0) game.rake = last.rakeBefore;
+    else delete game.rake;
+  }
   game.lastHand = null;
   game.winnerAnnouncement = null;
   game.hand = null;
@@ -709,7 +728,7 @@ export function cancelCurrentHand(game: GameState, now = Date.now()) {
   return true;
 }
 
-/** Chips each player has put in this hand, blinds included. */
+/** Chips each player has put in this hand, blinds and ante included. */
 export function handContributions(game: GameState) {
   const hand = game.hand;
   if (!hand) return game.players.map(() => 0);
@@ -724,7 +743,8 @@ export function handContributions(game: GameState) {
  * all-in amount of a player still in closes a pot; only players still in who
  * reached it can win it. Chips a single player put in beyond what anyone
  * else did were never called and go back to them (`refund`). Folded players'
- * chips stay in the pots they reached.
+ * chips stay in the pots they reached. A big blind ante is dead money: it
+ * isn't part of the poster's bet and goes to the main pot.
  */
 export function potsFor(game: GameState): {
   pots: Pot[];
@@ -733,6 +753,8 @@ export function potsFor(game: GameState): {
   const hand = game.hand;
   if (!hand) return { pots: [], refund: null };
   const totals = handContributions(game);
+  const ante = hand.ante;
+  if (ante) totals[ante.playerIndex] -= ante.amount;
   const highest = Math.max(0, ...totals);
   const top = totals.flatMap((chips, index) =>
     chips === highest ? [index] : [],
@@ -780,7 +802,112 @@ export function potsFor(game: GameState): {
     if (pots.length) pots[pots.length - 1].amount += rest;
     else pots.push({ amount: rest, eligible: contenders });
   }
+  if (ante) {
+    if (pots.length) pots[0].amount += ante.amount;
+    else pots.push({ amount: ante.amount, eligible: contenders });
+  }
   return { pots, refund: refund?.amount ? refund : null };
+}
+
+/**
+ * The rake for the hand in play: the rule's percent of the pots (chips
+ * nobody called don't count), rounded down, at most the cap. No flop, no
+ * rake: a hand that ends before the flop pays nothing.
+ */
+export function handRake(game: GameState) {
+  const rules = game.rakeRules;
+  const hand = game.hand;
+  if (!rules || !hand || hand.stage < 1) return 0;
+  const contested = potsFor(game).pots.reduce(
+    (sum, pot) => sum + pot.amount,
+    0,
+  );
+  // In tenths of a percent, so 2.5% is exact whole-number arithmetic.
+  const tenths = Math.round(rules.percent * 10);
+  return Math.min(rules.cap, Math.floor((contested * tenths) / 1000));
+}
+
+/**
+ * Takes `rake` out of the pots in proportion to their size, rounded down,
+ * with any chips left over taken from the main pot first.
+ */
+export function rakedPots(pots: Pot[], rake: number): Pot[] {
+  const total = pots.reduce((sum, pot) => sum + pot.amount, 0);
+  if (!(rake > 0) || total <= 0) return pots.map((pot) => ({ ...pot }));
+  const cuts = pots.map((pot) => Math.floor((rake * pot.amount) / total));
+  let left = rake - cuts.reduce((sum, cut) => sum + cut, 0);
+  pots.forEach((pot, index) => {
+    const room = pot.amount - cuts[index];
+    const extra = Math.min(left, room);
+    cuts[index] += extra;
+    left -= extra;
+  });
+  return pots.map((pot, index) => ({
+    ...pot,
+    amount: pot.amount - cuts[index],
+  }));
+}
+
+/** The pots as they'll be paid: after the rake, with any uncalled refund. */
+export function payablePots(game: GameState) {
+  const { pots, refund } = potsFor(game);
+  const rake = handRake(game);
+  return { pots: rakedPots(pots, rake), refund, rake };
+}
+
+/**
+ * Takes this hand's rake for the house, logs it and returns it. Call once,
+ * as the pot is paid.
+ */
+export function takeRake(game: GameState) {
+  const hand = game.hand;
+  const rake = handRake(game);
+  if (!hand || rake <= 0) return 0;
+  game.rake = (game.rake ?? 0) + rake;
+  game.log.unshift(
+    `Hand ${hand.no}: house rake ${formatChips(rake, game.chipUnit, game.currency)}`,
+  );
+  game.log = game.log.slice(0, 80);
+  return rake;
+}
+
+/** "5% rake, up to ₹500": the rules in words. */
+export function describeRakeRules(
+  rules: RakeRules,
+  money: (value: number) => string,
+) {
+  return `${rules.percent}% rake, up to ${money(rules.cap)}`;
+}
+
+export const RAKE_PERCENTS = [2, 3, 5, 10] as const;
+export const MAX_RAKE_PERCENT = 10;
+
+/** A rake percent the app accepts: 0.1 to 10, in steps of 0.1. */
+export function isValidRakePercent(percent: unknown): percent is number {
+  if (typeof percent !== "number" || !Number.isFinite(percent)) return false;
+  const tenths = Math.round(percent * 10);
+  return (
+    Math.abs(percent * 10 - tenths) < 1e-9 &&
+    tenths >= 1 &&
+    tenths <= MAX_RAKE_PERCENT * 10
+  );
+}
+
+/**
+ * Valid rake rules, or null: a percent from 0.1 to 10 in steps of 0.1 and a
+ * cap of at least 1.
+ */
+export function normalizeRakeRules(value: unknown): RakeRules | null {
+  if (!value || typeof value !== "object") return null;
+  const { percent, cap } = value as Record<string, unknown>;
+  if (
+    !isValidRakePercent(percent) ||
+    !Number.isSafeInteger(cap) ||
+    (cap as number) < 1
+  ) {
+    return null;
+  }
+  return { percent: Math.round(percent * 10) / 10, cap: cap as number };
 }
 
 /** "Main pot", then "Side pot", or "Side pot 1", "Side pot 2", … */
@@ -863,14 +990,15 @@ export function hasSidePots(game: GameState) {
  * Pays out every pot. `winners[i]` holds the winners of pot i, one player or
  * several for a split (even shares, odd chips from the dealer's left). A pot
  * only one player can win, or one an earlier pot's winners are in, is settled
- * by `resolvePotWinners` whatever is passed. Gives back any uncalled
- * chips, logs each pot, records the hand for undo and clears it. Returns
- * false, changing nothing, if a pot has no valid winner.
+ * by `resolvePotWinners` whatever is passed. Takes the rake,
+ * gives back any uncalled chips, logs each pot, records the hand for undo
+ * and clears it. Returns false, changing nothing, if a pot has no valid
+ * winner.
  */
 export function awardPots(game: GameState, winners: number[][]) {
   const hand = game.hand;
   if (!hand) return false;
-  const { pots, refund } = potsFor(game);
+  const { pots, refund, rake } = payablePots(game);
   const chosen = resolvePotWinners(pots, winners).map(
     (result) => result.winners,
   );
@@ -884,10 +1012,15 @@ export function awardPots(game: GameState, winners: number[][]) {
     return false;
   }
 
+  const record = completedHandRecord(game);
   const name = (index: number) => game.players[index].name;
   const money = (value: number) =>
     formatChips(value, game.chipUnit, game.currency);
   const lines: string[] = [];
+  if (rake > 0) {
+    game.rake = (game.rake ?? 0) + rake;
+    lines.push(`Hand ${hand.no}: house rake ${money(rake)}`);
+  }
   if (refund) {
     game.players[refund.playerIndex].stack += refund.amount;
     lines.push(
@@ -917,7 +1050,7 @@ export function awardPots(game: GameState, winners: number[][]) {
   game.log = game.log.slice(0, 80);
 
   const names = [...new Set(chosen.flat())].sort((a, b) => a - b).map(name);
-  game.lastHand = completedHandRecord(game);
+  game.lastHand = record;
   game.winnerAnnouncement = {
     names,
     pot: pots.reduce((sum, pot) => sum + pot.amount, 0),

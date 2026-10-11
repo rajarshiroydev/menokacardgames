@@ -24,9 +24,18 @@ function participantNameKey(name: string) {
   return name.trim().toLowerCase().replace(/\s+/g, " ");
 }
 
+/**
+ * Checks a game's chips: each player's net is their end minus their buy-ins,
+ * and the chips left at the end are everything bought in less the house
+ * rake, so the nets add up to minus the rake (zero without rake).
+ */
 export function deriveSessionAccounting(
-  session: Pick<PokerSession, "results" | "startStack">,
+  session: Pick<PokerSession, "results" | "startStack" | "rake">,
 ): DerivedSessionAccounting {
+  const rake = session.rake ?? 0;
+  if (!Number.isSafeInteger(rake) || rake < 0) {
+    throw new Error("Invalid rake");
+  }
   const participantKeys = new Set<string>();
   const results = session.results.map((result) => {
     const participantKey = result.playerId
@@ -61,7 +70,7 @@ export function deriveSessionAccounting(
     "Total net result",
   );
 
-  if (totalEnding !== totalInvested || totalNet !== 0) {
+  if (totalEnding + rake !== totalInvested || totalNet !== -rake) {
     throw new Error("Session chips must balance across all players");
   }
 

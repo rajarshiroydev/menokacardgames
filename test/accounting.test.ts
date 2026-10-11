@@ -87,4 +87,26 @@ describe("session accounting", () => {
       /supported chip range/,
     );
   });
+
+  it("balances a raked game at minus the rake", () => {
+    const raked = {
+      startStack: 10_000,
+      rake: 300,
+      results: [
+        { playerId: "one", name: "One", net: 1_700, end: 11_700 },
+        { playerId: "two", name: "Two", net: -2_000, end: 8_000 },
+      ],
+    };
+    const accounting = deriveSessionAccounting(raked);
+    assert.equal(accounting.totalNet, -300);
+    assert.equal(accounting.totalEnding, 19_700);
+    assert.throws(
+      () => deriveSessionAccounting({ ...raked, rake: 0 }),
+      /must balance/,
+    );
+    assert.throws(
+      () => deriveSessionAccounting({ ...raked, rake: -300 }),
+      /Invalid rake/,
+    );
+  });
 });

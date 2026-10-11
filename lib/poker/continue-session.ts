@@ -28,7 +28,8 @@ function levelForBigBlind(plan: BlindPlan, bigBlind: number) {
  * buy-ins; hand numbers carry on. The dealer isn't saved, so the next one is
  * drawn at random. A timed blind schedule restarts its clock at the current
  * big blind on the next hand, so time away from the table doesn't raise it.
- * Rebuy limits carry over; the host can change them between hands.
+ * Rebuy limits carry over; the host can change them between hands. The ante
+ * and rake rules carry over too, and the house keeps the rake it took.
  */
 export function gameFromSession(
   session: SavedSession,
@@ -69,6 +70,9 @@ export function gameFromSession(
     blindLevels: history.levels.map((level) => ({ ...level })),
     startStack: session.startStack,
     ...(session.rebuyRules ? { rebuyRules: { ...session.rebuyRules } } : {}),
+    ...(session.bigBlindAnte ? { bigBlindAnte: true } : {}),
+    ...(session.rakeRules ? { rakeRules: { ...session.rakeRules } } : {}),
+    ...(session.rake ? { rake: session.rake } : {}),
     startedAt: session.date,
     players: session.results.map((result) => ({
       ...(result.playerId ? { id: result.playerId } : {}),
@@ -145,9 +149,15 @@ export function continuationError(
     incoming.date !== saved.date ||
     incoming.startStack !== saved.startStack ||
     incoming.ante !== saved.ante ||
-    (incoming.chipUnit ?? "whole") !== (saved.chipUnit ?? "whole")
+    (incoming.chipUnit ?? "whole") !== (saved.chipUnit ?? "whole") ||
+    Boolean(incoming.bigBlindAnte) !== Boolean(saved.bigBlindAnte) ||
+    JSON.stringify(incoming.rakeRules ?? null) !==
+      JSON.stringify(saved.rakeRules ?? null)
   ) {
     return "The continued game doesn't match the saved game";
+  }
+  if ((incoming.rake ?? 0) < (saved.rake ?? 0)) {
+    return "The continued game must keep the rake already taken";
   }
   if (incoming.hands <= saved.hands) {
     return "No new hands to save";

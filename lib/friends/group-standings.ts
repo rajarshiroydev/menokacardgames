@@ -22,6 +22,8 @@ export type GroupSessions = {
     chipUnit?: ChipUnit;
     startStack: number;
     hands: number;
+    /** Chips the house raked (migration 0023); absent or 0 is none. */
+    rake?: number;
     /**
      * `avatar` is what the player shows as in the host's list (migration
      * 0015). `accountId` is the account that player is, if any (migration
@@ -109,6 +111,7 @@ export function buildGroupStandings(group: GroupSessions): GroupStandings {
     ...(session.chipUnit === "cents" ? { chipUnit: session.chipUnit } : {}),
     ante: 0,
     startStack: session.startStack,
+    ...(session.rake ? { rake: Number(session.rake) } : {}),
     hands: session.hands,
     results: session.results.map((result) => ({
       playerId: result.playerId,

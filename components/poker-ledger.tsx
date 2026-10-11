@@ -32,11 +32,18 @@ import {
   editBlindSchedule,
   formatDate,
   formatPercent,
+  describeRakeRules,
+  handRake,
   hasSidePots,
+  payablePots,
+  normalizeRakeRules,
   potLabel,
   resolvePotWinners,
   potsFor,
+  isValidRakePercent,
+  RAKE_PERCENTS,
   splitShares,
+  takeRake,
   applyRaiseRules,
   mayRaise,
   minimumRaise,
@@ -158,6 +165,7 @@ import type {
   PlayerAction,
   PlayerProfile,
   PokerSession,
+  RakeRules,
   RebuyRules,
   WinnerAnnouncement,
 } from "@/lib/poker/types";
@@ -574,7 +582,8 @@ function recordWin(game: GameState, line: string) {
 function awardPot(game: GameState, playerIndex: number, automatic = false) {
   const hand = game.hand;
   if (!hand) return;
-  const pot = hand.pot;
+  const record = completedHandRecord(game);
+  const pot = hand.pot - takeRake(game);
   game.players[playerIndex].stack += pot;
   recordWin(
     game,
@@ -584,7 +593,7 @@ function awardPot(game: GameState, playerIndex: number, automatic = false) {
       game.currency,
     )}${automatic ? " (others folded)" : ""}`,
   );
-  game.lastHand = completedHandRecord(game);
+  game.lastHand = record;
   game.winnerAnnouncement = {
     names: [game.players[playerIndex].name],
     pot,
@@ -1102,6 +1111,9 @@ export function PokerLedger({
       blinds: BlindSchedule | null;
       /** Rebuy limits; null or both limits off means none. */
       rebuyRules: RebuyRules | null;
+      bigBlindAnte: boolean;
+      /** The house's cut; null is no rake. */
+      rakeRules: RakeRules | null;
       players: PlayerProfile[];
       /** Draw the first dealer now; otherwise seat 1 deals first. */
       randomDealer: boolean;
@@ -1131,7 +1143,14 @@ export function PokerLedger({
         showToast("Blind increase must make the blinds bigger");
         return;
       }
+      if (input.rakeRules && !normalizeRakeRules(input.rakeRules)) {
+        showToast("Rake must be 1 to 10% with a cap above 0");
+        return;
+      }
       const rebuyRules = normalizeRebuyRules(input.rebuyRules);
+      const rakeRules = input.rakeRules
+        ? normalizeRakeRules(input.rakeRules)
+        : null;
       const gameName = input.name.trim();
       const startedAt = Date.now();
       const firstDealer = input.randomDealer
@@ -1160,6 +1179,8 @@ export function PokerLedger({
         blindLevels: [],
         startStack: input.stack,
         ...(rebuyRules ? { rebuyRules } : {}),
+        ...(input.bigBlindAnte ? { bigBlindAnte: true } : {}),
+        ...(rakeRules ? { rakeRules } : {}),
         startedAt,
         players: input.players.map((player) => ({
           id: player.id,
@@ -1584,10 +1605,11 @@ export function PokerLedger({
 
   function pickWinner(playerIndex: number) {
     if (!game?.hand) return;
+    const rake = handRake(game);
     ask(
-      `Give the ${money(game.hand.pot)} pot to ${
+      `Give the ${money(game.hand.pot - rake)} pot to ${
         game.players[playerIndex].name
-      }?`,
+      }?${rake ? ` The house takes ${money(rake)} rake.` : ""}`,
       `${game.players[playerIndex].name} wins`,
       () => {
         const next = structuredClone(game);
@@ -1631,8 +1653,10 @@ export function PokerLedger({
     const hand = next.hand;
     if (!hand?.splitSel) return;
     const winners = [...hand.splitSel].sort((a, b) => a - b);
+    const record = completedHandRecord(next);
+    const pot = hand.pot - takeRake(next);
     splitShares(
-      hand.pot,
+      pot,
       winners,
       hand.dealerIndex,
       next.players.length,
@@ -1641,14 +1665,14 @@ export function PokerLedger({
     });
     recordWin(
       next,
-      `Hand ${hand.no}: split ${money(hand.pot)} between ${winners
+      `Hand ${hand.no}: split ${money(pot)} between ${winners
         .map((index) => next.players[index].name)
         .join(", ")}`,
     );
-    next.lastHand = completedHandRecord(next);
+    next.lastHand = record;
     next.winnerAnnouncement = {
       names: winners.map((index) => next.players[index].name),
-      pot: hand.pot,
+      pot,
       handNo: hand.no,
       split: true,
     };
@@ -1658,11 +1682,11 @@ export function PokerLedger({
 
   function awardSidePots(winners: number[][]) {
     if (!game?.hand) return;
-    const { pots, refund } = potsFor(game);
+    const { pots, refund, rake } = payablePots(game);
     const name = (index: number) => game.players[index].name;
     const label = (index: number) =>
       pots.length > 1 ? potLabel(index, pots.length) : "Pot";
-    // One line per pot, "Main pot · $39,600: Bikram", then any refund.
+    // One line per pot, "Main pot · $39,600: Bikram", then any refund and rake.
     const resolved = resolvePotWinners(pots, winners);
     const points = resolved.map(({ winners: players }, index) => {
       const who =
@@ -1676,6 +1700,7 @@ export function PokerLedger({
         `${money(refund.amount)} back to ${name(refund.playerIndex)} (not called)`,
       );
     }
+    if (rake) points.push(`House rake · ${money(rake)}`);
     setModal({
       kind: "confirm",
       message: pots.length > 1 ? "Award these pots?" : "Award this pot?",
@@ -1830,6 +1855,9 @@ export function PokerLedger({
         : {}),
       startStack: game.startStack,
       ...(game.rebuyRules ? { rebuyRules: game.rebuyRules } : {}),
+      ...(game.bigBlindAnte ? { bigBlindAnte: true } : {}),
+      ...(game.rakeRules ? { rakeRules: game.rakeRules } : {}),
+      ...(game.rake ? { rake: game.rake } : {}),
       hands: completedHands,
       results: game.players.map((player, index) => ({
         ...(player.id ? { playerId: player.id } : {}),
@@ -3211,6 +3239,8 @@ function SetupView({
     smallBlind: number | null;
     blinds: BlindSchedule | null;
     rebuyRules: RebuyRules | null;
+    bigBlindAnte: boolean;
+    rakeRules: RakeRules | null;
     players: PlayerProfile[];
     randomDealer: boolean;
   }) => void;
@@ -3246,6 +3276,13 @@ function SetupView({
     maxRebuys: null,
     closeAtBigBlind: null,
   });
+  const [bigBlindAnte, setBigBlindAnte] = useState(false);
+  const [rakeOn, setRakeOn] = useState(false);
+  const [rakePercent, setRakePercent] = useState<number>(5);
+  // Other: a typed percent, 0.1 to 10 in steps of 0.1.
+  const [customRake, setCustomRake] = useState(false);
+  // The cap follows the big blind (three of them) until it is typed in.
+  const [typedRakeCap, setTypedRakeCap] = useState<number | null>(null);
   // Tapping players seats them in tap order; the list below reorders them.
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const playerCount = selectedIds.length;
@@ -3276,6 +3313,8 @@ function SetupView({
   const [dropSeat, setDropSeat] = useState<number | null>(null);
   const [seatDragStep, setSeatDragStep] = useState(0);
   const [showDealerHelp, setShowDealerHelp] = useState(false);
+  const [showAnteHelp, setShowAnteHelp] = useState(false);
+  const [showRakeHelp, setShowRakeHelp] = useState(false);
   const [showOddBlindsHelp, setShowOddBlindsHelp] = useState(false);
 
   useEffect(() => () => {
@@ -3600,6 +3639,13 @@ function SetupView({
     }
     const closeAt = setupRebuyRules.closeAtBigBlind;
     onStart({
+      bigBlindAnte,
+      rakeRules: rakeOn
+        ? {
+            percent: Math.round(rakePercent * 10) / 10,
+            cap: inUnit(rakeCap, chipUnit),
+          }
+        : null,
       name,
       chipUnit,
       stack: inUnit(stack, chipUnit),
@@ -3656,6 +3702,9 @@ function SetupView({
     money,
   );
   const rebuyCloseOptions = ladder.slice(1);
+  const rakeCap = typedRakeCap ?? Math.max(1, ante) * 3;
+  const rakeCapValid = !rakeOn || rakeCap >= 1;
+  const rakePercentValid = !rakeOn || isValidRakePercent(rakePercent);
   const blindLevelNote = !risingBlinds
     ? "Blinds stay fixed"
     : !scheduleValid
@@ -4082,6 +4131,168 @@ function SetupView({
 
         <section className="glass card">
           <div className="card-row">
+            <span className="label">Ante</span>
+            <div className="heading-with-info">
+              <label className="switch-row">
+                <span>Big blind ante</span>
+                <button
+                  className="switch"
+                  type="button"
+                  role="switch"
+                  aria-checked={bigBlindAnte}
+                  aria-label="Big blind ante"
+                  onClick={() => setBigBlindAnte((on) => !on)}
+                />
+              </label>
+              <button
+                className="info-button"
+                type="button"
+                aria-label="About the big blind ante"
+                onClick={() => setShowAnteHelp(true)}
+              >
+                i
+              </button>
+            </div>
+          </div>
+          {showAnteHelp ? (
+            <InfoSheet
+              label="About the big blind ante"
+              onClose={() => setShowAnteHelp(false)}
+            >
+              <p>
+                <b>Big Blind Ante On:</b> each hand the big blind also puts in
+                an ante of one big blind for the whole table. It goes to the
+                main pot and doesn&apos;t count toward their bet.
+              </p>
+              <p>
+                <b>Big Blind Ante Off:</b> no ante, only the blinds.
+              </p>
+            </InfoSheet>
+          ) : null}
+          {bigBlindAnte ? (
+            <p className="muted small-note">
+              Each hand the big blind also puts in an ante of one big blind (
+              {money(Math.max(1, ante))} to start) for the whole table. It goes
+              to the main pot and doesn&apos;t count toward their bet.
+            </p>
+          ) : null}
+        </section>
+
+        <section className="glass card">
+          <div className="card-row">
+            <span className="label">Rake</span>
+            <div className="heading-with-info">
+              <label className="switch-row">
+                <span>House rake</span>
+                <button
+                  className="switch"
+                  type="button"
+                  role="switch"
+                  aria-checked={rakeOn}
+                  aria-label="House rake"
+                  onClick={() => setRakeOn((on) => !on)}
+                />
+              </label>
+              <button
+                className="info-button"
+                type="button"
+                aria-label="About the house rake"
+                onClick={() => setShowRakeHelp(true)}
+              >
+                i
+              </button>
+            </div>
+          </div>
+          {showRakeHelp ? (
+            <InfoSheet
+              label="About the house rake"
+              onClose={() => setShowRakeHelp(false)}
+            >
+              <p>
+                <b>House Rake On:</b> the house takes a share of each pot that
+                sees a flop, up to the most per hand. No flop, no rake. The
+                rake leaves the game, so results add up to minus it.
+              </p>
+              <p>
+                <b>House Rake Off:</b> no rake, every chip stays with the
+                players.
+              </p>
+            </InfoSheet>
+          ) : null}
+          {rakeOn ? (
+            <>
+              <Segmented
+                label="Share of each pot"
+                columns={5}
+                options={[
+                  ...RAKE_PERCENTS.map((percent) => ({
+                    value: percent,
+                    label: `${percent}%`,
+                  })),
+                  { value: "other" as const, label: "Other" },
+                ]}
+                value={customRake ? "other" : rakePercent}
+                onChange={(value) => {
+                  if (value === "other") {
+                    setCustomRake(true);
+                  } else {
+                    setCustomRake(false);
+                    setRakePercent(value);
+                  }
+                }}
+              />
+              {customRake ? (
+                <div className="percent-field">
+                  <input
+                    className="field"
+                    id="rake-percent"
+                    type="number"
+                    inputMode="decimal"
+                    min="0.1"
+                    max="10"
+                    step="0.1"
+                    aria-label="Rake percent"
+                    value={Number.isFinite(rakePercent) ? rakePercent : ""}
+                    onChange={(event) =>
+                      setRakePercent(Number(event.target.value))
+                    }
+                  />
+                  <span aria-hidden="true">%</span>
+                </div>
+              ) : null}
+              <label className="label" htmlFor="rake-cap">
+                Most per hand
+              </label>
+              <div className="money-field">
+                <span aria-hidden="true">{symbol.trim()}</span>
+                <ChipInput
+                  className="field"
+                  id="rake-cap"
+                  value={rakeCap}
+                  onChange={setTypedRakeCap}
+                />
+              </div>
+            </>
+          ) : null}
+          {rakeOn && !rakePercentValid ? (
+            <p className="field-error" role="alert">
+              Rake must be 0.1% to 10%, in steps of 0.1.
+            </p>
+          ) : rakeOn && !rakeCapValid ? (
+            <p className="field-error" role="alert">
+              Set the most the house takes in a hand.
+            </p>
+          ) : rakeOn ? (
+            <p className="muted small-note">
+              The house takes {rakePercent}% of each pot that sees a flop, up to{" "}
+              {money(rakeCap)} a hand. No flop, no rake. The rake leaves the
+              game, so results add up to minus it.
+            </p>
+          ) : null}
+        </section>
+
+        <section className="glass card">
+          <div className="card-row">
             <span className="label">Rebuys</span>
             <span className="card-note">
               {describeMaxRebuys(setupRebuyRules.maxRebuys)}
@@ -4122,6 +4333,8 @@ function SetupView({
             ante < 1 ||
             !scheduleValid ||
             !smallBlindValid ||
+            !rakeCapValid ||
+            !rakePercentValid ||
             Boolean(rebuyError)
           }
         >
@@ -6039,6 +6252,11 @@ function GameScreen(props: GameViewProps) {
           <span className="blinds-level">L{blinds.level + 1}</span>
         ) : null}
       </div>
+      {game.bigBlindAnte ? (
+        <span className="muted small-note">
+          Big blind ante {money(blinds.bigBlind)}
+        </span>
+      ) : null}
       {blindSchedule}
     </div>
   );
@@ -6104,8 +6322,8 @@ function GameScreen(props: GameViewProps) {
       ) : props.layout === "table" ? (
         <TableHand
           blindsText={`${money(blinds.smallBlind)} / ${money(blinds.bigBlind)}${
-            blinds.schedule ? ` · L${blinds.level + 1}` : ""
-          }`}
+            game.bigBlindAnte ? ` · Ante ${money(blinds.bigBlind)}` : ""
+          }${blinds.schedule ? ` · L${blinds.level + 1}` : ""}`}
           blindSchedule={blinds.schedule || pendingPlan ? blindSchedule : null}
           {...props}
         />
@@ -6214,6 +6432,12 @@ function GameScreen(props: GameViewProps) {
           <h2 className="card-title">Session Standings</h2>
           <span className="card-note">Start {money(game.startStack)}</span>
         </div>
+        {game.rakeRules ? (
+          <p className="muted small-note">
+            {describeRakeRules(game.rakeRules, money)} · house has taken{" "}
+            {money(game.rake ?? 0)}
+          </p>
+        ) : null}
         <button
           className={`glass-button full live-share-button${
             props.liveSharing ? " sharing" : ""
@@ -7260,13 +7484,20 @@ function WinnerPicker({
   const { money } = useMoney();
   const hand = game.hand;
   if (!hand) return null;
+  const rake = handRake(game);
+  const payout = hand.pot - rake;
 
   return (
     <section className="glass card winner-picker">
       <div className="card-row">
         <span className="label">Pick the winner</span>
-        <span className="accent-amount">{money(hand.pot)}</span>
+        <span className="accent-amount">{money(payout)}</span>
       </div>
+      {rake ? (
+        <p className="muted small-note">
+          After the house&apos;s {money(rake)} rake.
+        </p>
+      ) : null}
       {pending ? (
         <p className="muted small-note">
           Finish the river betting before picking a winner.
@@ -7290,7 +7521,7 @@ function WinnerPicker({
           <span className="contender-name">
             {game.players[playerIndex].name} wins
           </span>
-          <span className="contender-amount">{money(hand.pot)}</span>
+          <span className="contender-amount">{money(payout)}</span>
         </button>
       ))}
       {activeIndexes(game).length > 1 ? (
@@ -8027,7 +8258,7 @@ function SidePotPicker({
   const { money } = useMoney();
   const [choice, setChoice] = useState<number[][]>([]);
   const [splitting, setSplitting] = useState<boolean[]>([]);
-  const { pots, refund } = potsFor(game);
+  const { pots, refund, rake } = payablePots(game);
   const name = (index: number) => game.players[index].name;
   const several = pots.length > 1;
   // A pot being split isn't decided until two or more players are in it.
@@ -8099,6 +8330,11 @@ function SidePotPicker({
         <p className="pot-refund">
           {money(refund.amount)} goes back to {name(refund.playerIndex)} ·
           nobody called it
+        </p>
+      ) : null}
+      {rake ? (
+        <p className="muted small-note">
+          Pots are after the house&apos;s {money(rake)} rake.
         </p>
       ) : null}
       {pots.map((pot, potIndex) => {
@@ -8212,8 +8448,9 @@ function SplitView({
   const { money } = useMoney();
   const hand = game.hand;
   if (!hand?.splitSel) return null;
+  const payout = hand.pot - handRake(game);
   const shares = splitShares(
-    hand.pot,
+    payout,
     hand.splitSel,
     hand.dealerIndex,
     game.players.length,
@@ -8223,7 +8460,7 @@ function SplitView({
     <section className="glass card winner-picker">
       <div className="card-row">
         <span className="label">Split the pot</span>
-        <span className="accent-amount">{money(hand.pot)}</span>
+        <span className="accent-amount">{money(payout)}</span>
       </div>
       {activeIndexes(game).map((playerIndex) => {
         const isSelected = hand.splitSel?.includes(playerIndex) ?? false;
@@ -8252,7 +8489,7 @@ function SplitView({
       })}
       {hand.splitSel.length > 1 ? (
         <button className="blue-button full tall" type="button" onClick={onSplit}>
-          Split {money(hand.pot)} {hand.splitSel.length} ways
+          Split {money(payout)} {hand.splitSel.length} ways
         </button>
       ) : (
         <p className="muted small-note">Select at least 2 players.</p>
@@ -8384,6 +8621,18 @@ function SessionCardBody({
           {session.rebuyRules ? (
             <p className="muted session-meta">
               {describeRebuyRules(session.rebuyRules, currency, session.chipUnit)}
+            </p>
+          ) : null}
+          {session.bigBlindAnte || session.rakeRules ? (
+            <p className="muted session-meta">
+              {[
+                session.bigBlindAnte ? "Big blind ante" : "",
+                session.rakeRules
+                  ? `${describeRakeRules(session.rakeRules, money)} · house took ${money(session.rake ?? 0)}`
+                  : "",
+              ]
+                .filter(Boolean)
+                .join(" · ")}
             </p>
           ) : null}
         </div>

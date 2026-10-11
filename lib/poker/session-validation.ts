@@ -4,11 +4,13 @@ import {
   MAX_BUY_INS,
   parseRebuyRules,
 } from "./buy-ins.ts";
+import { normalizeRakeRules } from "./game.ts";
 import { isChipUnit } from "./money.ts";
 import type {
   BlindHistory,
   BlindSchedule,
   PokerSession,
+  RakeRules,
   SessionResult,
 } from "./types";
 
@@ -149,6 +151,21 @@ export function parseChipUnit(value: unknown) {
   return value;
 }
 
+export function parseBigBlindAnte(value: unknown) {
+  if (value === undefined || value === null || value === false) return false;
+  if (value !== true) throw new Error("Invalid big blind ante");
+  return true;
+}
+
+export function parseRakeRules(value: unknown): RakeRules | undefined {
+  if (value === undefined || value === null) return undefined;
+  const rules = normalizeRakeRules(value);
+  if (!rules) {
+    throw new Error("Rake must be 0.1 to 10 percent with a cap of at least 1");
+  }
+  return rules;
+}
+
 export function validateSession(input: unknown): PokerSession {
   if (!input || typeof input !== "object" || Array.isArray(input)) {
     throw new Error("Invalid session");
@@ -172,6 +189,16 @@ export function validateSession(input: unknown): PokerSession {
       ? undefined
       : validateBlindHistory(candidate.blindHistory, hands, ante, date, ended);
   const rebuyRules = parseRebuyRules(candidate.rebuyRules);
+  const bigBlindAnte = parseBigBlindAnte(candidate.bigBlindAnte);
+  const rakeRules = parseRakeRules(candidate.rakeRules);
+  const rake =
+    candidate.rake === undefined || candidate.rake === null
+      ? 0
+      : asSafeInteger(candidate.rake, "rake", { min: 0 });
+  // The house takes at most the cap a hand, and nothing without rules.
+  if (rake > 0 && (!rakeRules || rake > rakeRules.cap * hands)) {
+    throw new Error("The rake doesn't match the game's rake rules");
+  }
   const chipUnit = parseChipUnit(candidate.chipUnit);
   const name = String(candidate.name || "").trim();
   if (name.length > MAX_GAME_NAME_LENGTH) {
@@ -258,6 +285,9 @@ export function validateSession(input: unknown): PokerSession {
     ...(blindHistory ? { blindHistory } : {}),
     startStack,
     ...(rebuyRules ? { rebuyRules } : {}),
+    ...(bigBlindAnte ? { bigBlindAnte } : {}),
+    ...(rakeRules ? { rakeRules } : {}),
+    ...(rake > 0 ? { rake } : {}),
     hands,
     results,
   };

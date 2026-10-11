@@ -4,8 +4,12 @@ import { describe, test } from "node:test";
 import {
   applyRaiseRules,
   awardPots,
+  handRake,
   hasSidePots,
+  normalizeRakeRules,
   resolvePotWinners,
+  rakedPots,
+  takeRake,
   oddChipOrder,
   potLabel,
   potsFor,
@@ -1114,5 +1118,201 @@ describe("first dealer", () => {
     assert.equal(first.bigBlindIndex, 1);
     playHands(game, 1);
     assert.equal(dealtHand(game).dealerIndex, 0);
+  });
+});
+
+describe("big blind ante", () => {
+  function anteGame() {
+    const game = gameState();
+    game.bigBlindAnte = true;
+    dealNewHand(game);
+    return game;
+  }
+
+  test("the big blind posts one big blind of ante, outside their bet", () => {
+    const game = anteGame();
+    const hand = dealtHand(game);
+    // A deals, B is the small blind, C the big blind.
+    assert.equal(hand.bigBlindIndex, 2);
+    assert.deepEqual(hand.ante, { playerIndex: 2, amount: 100 });
+    assert.deepEqual(hand.committed, [0, 50, 100]);
+    assert.equal(hand.roundHigh, 100);
+    assert.equal(hand.pot, 250);
+    assert.equal(game.players[2].stack, 100_000 - 200);
+    assert.equal(minimumRaise(game, 0), 200);
+  });
+
+  test("a short big blind posts the blind first, then what is left", () => {
+    const game = gameState();
+    game.bigBlindAnte = true;
+    game.players[2].stack = 150;
+    dealNewHand(game);
+    const hand = dealtHand(game);
+    assert.equal(hand.committed[2], 100);
+    assert.deepEqual(hand.ante, { playerIndex: 2, amount: 50 });
+    assert.equal(game.players[2].stack, 0);
+  });
+
+  test("the ante is dead money in the main pot, never returned as uncalled", () => {
+    const game = anteGame();
+    betTo(game, 0, 100);
+    betTo(game, 1, 100);
+    // Everyone has 100 in; the big blind's extra 100 is the ante.
+    assert.deepEqual(potsFor(game), {
+      pots: [{ amount: 400, eligible: [0, 1, 2] }],
+      refund: null,
+    });
+  });
+
+  test("a short all-in still lets the ante go to the main pot", () => {
+    const game = gameState();
+    game.bigBlindAnte = true;
+    game.players[0].stack = 300;
+    dealNewHand(game);
+    betTo(game, 0, 300);
+    betTo(game, 1, 1_000);
+    betTo(game, 2, 1_000);
+    assert.deepEqual(potsFor(game), {
+      pots: [
+        { amount: 300 * 3 + 100, eligible: [0, 1, 2] },
+        { amount: 700 * 2, eligible: [1, 2] },
+      ],
+      refund: null,
+    });
+  });
+
+  test("off by default, and cancel or undo take the ante back", () => {
+    const plain = gameState();
+    dealNewHand(plain);
+    assert.equal(dealtHand(plain).ante, undefined);
+    assert.equal(dealtHand(plain).pot, 150);
+
+    const game = anteGame();
+    assert.ok(cancelCurrentHand(game));
+    assert.deepEqual(
+      game.players.map((player, index) => player.stack + dealtHand(game).committed[index]),
+      [100_000, 100_000, 100_000 - 100],
+    );
+  });
+});
+
+describe("rake", () => {
+  function rakeGame(percent = 5, cap = 300) {
+    const game = gameState();
+    game.rakeRules = { percent, cap };
+    dealNewHand(game);
+    return game;
+  }
+
+  test("no flop, no rake", () => {
+    const game = rakeGame();
+    betTo(game, 0, 1_000);
+    betTo(game, 1, 1_000);
+    betTo(game, 2, 1_000);
+    assert.equal(handRake(game), 0);
+  });
+
+  test("takes the percent of a flopped pot, rounded down, up to the cap", () => {
+    const game = rakeGame();
+    betTo(game, 0, 1_010);
+    betTo(game, 1, 1_010);
+    betTo(game, 2, 1_010);
+    dealtHand(game).stage = 1;
+    // 5% of 3,030 is 151.5.
+    assert.equal(handRake(game), 151);
+    const capped = rakeGame(10, 200);
+    betTo(capped, 0, 5_000);
+    betTo(capped, 1, 5_000);
+    betTo(capped, 2, 5_000);
+    dealtHand(capped).stage = 3;
+    assert.equal(handRake(capped), 200);
+  });
+
+  test("a custom percent in tenths is exact", () => {
+    const game = rakeGame(2.5, 1_000);
+    betTo(game, 0, 1_000);
+    betTo(game, 1, 1_000);
+    betTo(game, 2, 1_000);
+    dealtHand(game).stage = 1;
+    // 2.5% of 3,000 is 75; 0.7% of 3,000 is 21 (not 20.999…).
+    assert.equal(handRake(game), 75);
+    game.rakeRules = { percent: 0.7, cap: 1_000 };
+    assert.equal(handRake(game), 21);
+    assert.deepEqual(normalizeRakeRules({ percent: 2.5, cap: 300 }), {
+      percent: 2.5,
+      cap: 300,
+    });
+    assert.deepEqual(normalizeRakeRules({ percent: 0.1, cap: 1 }), {
+      percent: 0.1,
+      cap: 1,
+    });
+    for (const percent of [0, 0.05, 2.55, 10.1, -1, Number.NaN, "5"]) {
+      assert.equal(normalizeRakeRules({ percent, cap: 300 }), null, `${percent}`);
+    }
+    assert.equal(normalizeRakeRules({ percent: 5, cap: 0 }), null);
+  });
+
+  test("chips nobody called aren't raked", () => {
+    const game = rakeGame();
+    betTo(game, 0, 1_000);
+    betTo(game, 1, 1_000);
+    betTo(game, 2, 1_000);
+    dealtHand(game).stage = 1;
+    betTo(game, 0, 3_000);
+    fold(game, 1);
+    fold(game, 2);
+    // 2,000 of A's bet goes back; the rake is 5% of the 3,000 that was called.
+    assert.equal(potsFor(game).refund?.amount, 2_000);
+    assert.equal(handRake(game), 150);
+  });
+
+  test("comes out of the pots in proportion, leftovers from the main pot", () => {
+    assert.deepEqual(
+      rakedPots(
+        [
+          { amount: 300, eligible: [0, 1, 2] },
+          { amount: 700, eligible: [1, 2] },
+        ],
+        51,
+      ),
+      [
+        { amount: 300 - 16, eligible: [0, 1, 2] },
+        { amount: 700 - 35, eligible: [1, 2] },
+      ],
+    );
+    assert.deepEqual(rakedPots([{ amount: 10, eligible: [0] }], 0), [
+      { amount: 10, eligible: [0] },
+    ]);
+  });
+
+  test("awarding pots takes the rake for the house, and undo gives it back", () => {
+    const game = rakeGame();
+    betTo(game, 0, 1_000);
+    betTo(game, 1, 1_000);
+    betTo(game, 2, 1_000);
+    dealtHand(game).stage = 3;
+    const total = game.players.reduce((sum, player) => sum + player.stack, 0) + 3_000;
+    assert.ok(awardPots(game, [[0]]));
+    assert.equal(game.rake, 150);
+    assert.equal(game.players[0].stack, 99_000 + 2_850);
+    assert.equal(
+      game.players.reduce((sum, player) => sum + player.stack, 0) + game.rake,
+      total,
+    );
+    assert.equal(game.log.at(-1), "Hand 1: house rake ₹150");
+    assert.ok(undoLastHand(game));
+    assert.equal(game.rake, undefined);
+  });
+
+  test("takeRake adds to the game's total and logs it once", () => {
+    const game = rakeGame();
+    betTo(game, 0, 1_000);
+    betTo(game, 1, 1_000);
+    betTo(game, 2, 1_000);
+    dealtHand(game).stage = 1;
+    game.rake = 40;
+    assert.equal(takeRake(game), 150);
+    assert.equal(game.rake, 190);
+    assert.equal(game.log[0], "Hand 1: house rake ₹150");
   });
 });

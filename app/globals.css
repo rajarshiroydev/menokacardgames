@@ -380,6 +380,53 @@ textarea::placeholder {
   background-size: 12px 8px;
 }
 
+/* A percent box with the % sign inside it, after the number. */
+.percent-field {
+  position: relative;
+}
+
+.percent-field > span {
+  position: absolute;
+  top: 50%;
+  right: 14px;
+  color: var(--ink2);
+  font-size: 16px;
+  font-weight: 500;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.percent-field > .field {
+  padding-right: 34px;
+  -moz-appearance: textfield;
+}
+
+.percent-field > .field::-webkit-outer-spin-button,
+.percent-field > .field::-webkit-inner-spin-button {
+  margin: 0;
+  -webkit-appearance: none;
+}
+
+/* An amount box with the currency symbol inside it, before the number. */
+.money-field {
+  position: relative;
+}
+
+.money-field > span {
+  position: absolute;
+  top: 50%;
+  left: 14px;
+  color: var(--ink2);
+  font-size: 16px;
+  font-weight: 500;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.money-field > .field {
+  padding-left: 32px;
+}
+
 .field:focus,
 .sheet input:focus,
 .sheet select:focus {

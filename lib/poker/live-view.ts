@@ -49,6 +49,8 @@ export type LiveSnapshot = {
   smallBlind?: number;
   /** The host's rebuy limits; absent when there are none. */
   rebuyRules?: RebuyRules;
+  /** Chips the house has raked so far; absent is none. */
+  rake?: number;
   players: LiveSnapshotPlayer[];
 };
 
@@ -73,6 +75,7 @@ export type LiveView = {
   bigBlind: number;
   smallBlind?: number;
   rebuyRules?: RebuyRules;
+  rake?: number;
   standings: LiveStanding[];
 };
 
@@ -92,6 +95,7 @@ export function buildLiveSnapshot(
     bigBlind: game.ante,
     smallBlind: smallBlindFor(game.ante, game.smallBlindRatio),
     ...(game.rebuyRules ? { rebuyRules: game.rebuyRules } : {}),
+    ...(game.rake ? { rake: game.rake } : {}),
     players: game.players.map((player, index) => {
       const buyIns = player.buyIns?.length ? [...player.buyIns] : [game.startStack];
       const before = hand?.stacksBeforeHand[index];
@@ -146,6 +150,8 @@ export function validateLiveSnapshot(input: unknown): LiveSnapshot {
     throw new Error("The small blind can't be bigger than the big blind");
   }
   const rebuyRules = parseRebuyRules(snapshot.rebuyRules);
+  const rake =
+    snapshot.rake === undefined ? 0 : asChips(snapshot.rake, "Rake");
   if (typeof snapshot.handInProgress !== "boolean") {
     throw new Error("Invalid hand status");
   }
@@ -200,6 +206,7 @@ export function validateLiveSnapshot(input: unknown): LiveSnapshot {
     bigBlind,
     ...(smallBlind === undefined ? {} : { smallBlind }),
     ...(rebuyRules ? { rebuyRules } : {}),
+    ...(rake > 0 ? { rake } : {}),
     players,
   };
 }
@@ -207,11 +214,12 @@ export function validateLiveSnapshot(input: unknown): LiveSnapshot {
 /**
  * Ranks players by net result from settled stacks, so the order changes when
  * a hand ends rather than with every bet. Throws unless the settled chips
- * balance against everything bought in, as a saved game must.
+ * and the rake balance against everything bought in, as a saved game must.
  */
 export function deriveLiveView(snapshot: LiveSnapshot): LiveView {
   const accounting = deriveSessionAccounting({
     startStack: snapshot.startStack,
+    rake: snapshot.rake,
     results: snapshot.players.map((player) => ({
       name: player.name,
       end: player.settledStack,
@@ -250,6 +258,7 @@ export function deriveLiveView(snapshot: LiveSnapshot): LiveView {
     bigBlind: snapshot.bigBlind,
     ...(snapshot.smallBlind === undefined ? {} : { smallBlind: snapshot.smallBlind }),
     ...(snapshot.rebuyRules ? { rebuyRules: snapshot.rebuyRules } : {}),
+    ...(snapshot.rake ? { rake: snapshot.rake } : {}),
     standings,
   };
 }

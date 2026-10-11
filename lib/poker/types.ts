@@ -95,6 +95,20 @@ export type Hand = {
   blindLevelBefore?: number;
   blindsBefore?: BlindSchedule | null;
   blindLevelsBefore?: BlindLevelRecord[];
+  /**
+   * The big blind ante posted this hand: dead money in the main pot that
+   * doesn't count toward the poster's bet. Absent without antes.
+   */
+  ante?: { playerIndex: number; amount: number };
+};
+
+/**
+ * The house's cut, chosen at setup: `percent` (0.1 to 10, in steps of 0.1) of each pot
+ * that sees a flop, at most `cap` chips a hand. No flop, no rake.
+ */
+export type RakeRules = {
+  percent: number;
+  cap: number;
 };
 
 export type BlindSchedule = {
@@ -133,6 +147,8 @@ export type CompletedHand = {
   blindLevelBefore?: number;
   blindsBefore?: BlindSchedule | null;
   blindLevelsBefore?: BlindLevelRecord[];
+  /** Rake taken in the game before this hand; older records lack it. */
+  rakeBefore?: number;
 };
 
 /**
@@ -192,6 +208,12 @@ export type GameState = {
   startStack: number;
   /** Rebuy limits chosen at setup or edited between hands; absent is none. */
   rebuyRules?: RebuyRules;
+  /** The big blind also posts an ante of one big blind each hand. */
+  bigBlindAnte?: boolean;
+  /** The house's cut; absent is no rake. */
+  rakeRules?: RakeRules;
+  /** Chips the house has taken so far; absent is none. */
+  rake?: number;
   startedAt: number;
   players: Player[];
   hand: Hand | null;
@@ -227,6 +249,15 @@ export type PokerSession = {
   startStack: number;
   /** Rebuy limits the game finished with; absent when there were none. */
   rebuyRules?: RebuyRules;
+  /** Played with a big blind ante; absent is no ante. */
+  bigBlindAnte?: boolean;
+  /** The rake rules played with; absent is no rake. */
+  rakeRules?: RakeRules;
+  /**
+   * Chips the house took. Players' results add up to minus this, so it is
+   * part of the accounting check. Absent is none.
+   */
+  rake?: number;
   hands: number;
   results: SessionResult[];
 };

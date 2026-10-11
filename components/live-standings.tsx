@@ -192,6 +192,11 @@ export function LiveStandings({ token }: { token: string }) {
           {formatChips(view.bigBlind, view.chipUnit, view.currency)}
         </span>
         {rebuyNote ? <span className="muted small-note">{rebuyNote}</span> : null}
+        {view.rake ? (
+          <span className="muted small-note">
+            House rake so far {formatChips(view.rake, view.chipUnit, view.currency)}
+          </span>
+        ) : null}
       </section>
 
       <section className="glass card live-list" aria-label="Standings">

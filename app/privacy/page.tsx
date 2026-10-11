@@ -72,7 +72,7 @@ export default function PrivacyPage() {
           </li>
           <li>
             <b>Your games:</b> game names, dates and times, seats, blinds,
-            buy-ins, rebuys, chip counts and results.
+            antes, rake, buy-ins, rebuys, chip counts and results.
           </li>
           <li>
             <b>Friends:</b> the friend requests you send and answer, and who you

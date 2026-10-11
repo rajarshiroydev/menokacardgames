@@ -203,4 +203,31 @@ describe("continuationError", () => {
     delete dropped.blindHistory;
     assert.ok(continuationError(saved, dropped));
   });
+
+  it("keeps the ante and rake rules, and never less rake", () => {
+    const rakedSaved: SavedSession = {
+      ...structuredClone(saved),
+      bigBlindAnte: true,
+      rakeRules: { percent: 5, cap: 500 },
+      rake: 400,
+    };
+    const next = (overrides: Partial<PokerSession> = {}) =>
+      continued({
+        bigBlindAnte: true,
+        rakeRules: { percent: 5, cap: 500 },
+        rake: 600,
+        ...overrides,
+      });
+    assert.equal(continuationError(rakedSaved, next()), null);
+    assert.ok(continuationError(rakedSaved, next({ bigBlindAnte: undefined })));
+    assert.ok(continuationError(rakedSaved, next({ rakeRules: { percent: 3, cap: 500 } })));
+    assert.equal(
+      continuationError(rakedSaved, next({ rake: 300 })),
+      "The continued game must keep the rake already taken",
+    );
+    const game = gameFromSession(rakedSaved, [], "INR", NOW, () => 0);
+    assert.equal(game.bigBlindAnte, true);
+    assert.deepEqual(game.rakeRules, { percent: 5, cap: 500 });
+    assert.equal(game.rake, 400);
+  });
 });

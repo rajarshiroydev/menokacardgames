@@ -48,6 +48,11 @@ function canonicalContent(session: PokerSession, name: string) {
           closeAtBigBlind: session.rebuyRules.closeAtBigBlind,
         }
       : null,
+    bigBlindAnte: session.bigBlindAnte === true,
+    rakeRules: session.rakeRules
+      ? { percent: session.rakeRules.percent, cap: session.rakeRules.cap }
+      : null,
+    rake: session.rake ?? 0,
     // Player names are display labels; the resolved player ID is the identity.
     results: session.results.map((result) => ({
       playerId: result.playerId ?? null,

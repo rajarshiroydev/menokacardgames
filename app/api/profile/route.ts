@@ -41,6 +41,7 @@ async function handleGet() {
             'chipUnit', session.chip_unit,
             'startStack', session.starting_stack,
             'hands', session.hands,
+            'rake', session.rake,
             'results', normalized.results
           )
           ORDER BY session.played_at, session.created_at

@@ -174,4 +174,42 @@ describe("session validation", () => {
       /Invalid blind history order/,
     );
   });
+
+  test("keeps the ante, rake rules and a rake that balances", () => {
+    const raked = {
+      ...validSession,
+      bigBlindAnte: true,
+      rakeRules: { percent: 5, cap: 200 },
+      rake: 300,
+      results: [
+        { name: "Raj", net: 200, end: 10200 },
+        { name: "Sam", net: -500, end: 9500 },
+      ],
+    };
+    assert.deepEqual(validateSession(raked), raked);
+    // More than the cap on every hand.
+    assert.throws(
+      () => validateSession({ ...raked, rake: 801, results: [
+        { name: "Raj", net: -301, end: 9699 },
+        { name: "Sam", net: -500, end: 9500 },
+      ] }),
+      /rake rules/,
+    );
+    assert.throws(
+      () => validateSession({ ...raked, rakeRules: undefined }),
+      /rake rules/,
+    );
+    assert.throws(
+      () => validateSession({ ...raked, rakeRules: { percent: 11, cap: 200 } }),
+      /0.1 to 10 percent/,
+    );
+    assert.throws(
+      () => validateSession({ ...raked, bigBlindAnte: "yes" }),
+      /big blind ante/,
+    );
+    assert.throws(
+      () => validateSession({ ...raked, rake: 0 }),
+      /must balance/,
+    );
+  });
 });

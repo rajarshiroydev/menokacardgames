@@ -40,6 +40,9 @@ type SessionRow = {
   hands: number | string;
   blind_history: PokerSession["blindHistory"] | null;
   rebuy_rules: PokerSession["rebuyRules"] | null;
+  big_blind_ante: boolean;
+  rake_rules: PokerSession["rakeRules"] | null;
+  rake: number | string;
   results: PokerSession["results"];
 };
 
@@ -65,6 +68,9 @@ function mapSession(row: SessionRow): SavedSession {
     ...(row.blind_history ? { blindHistory: row.blind_history } : {}),
     startStack: Number(row.starting_stack),
     ...(row.rebuy_rules ? { rebuyRules: row.rebuy_rules } : {}),
+    ...(row.big_blind_ante ? { bigBlindAnte: true } : {}),
+    ...(row.rake_rules ? { rakeRules: row.rake_rules } : {}),
+    ...(Number(row.rake) > 0 ? { rake: Number(row.rake) } : {}),
     hands: Number(row.hands),
     results: row.results,
   };
@@ -91,6 +97,9 @@ function selectSessions(
           hands,
           blind_history,
           rebuy_rules,
+          big_blind_ante,
+          rake_rules,
+          rake,
           normalized.results,
           discarded_at
         FROM poker_sessions AS session
@@ -410,6 +419,9 @@ async function handlePost(request: Request) {
               hands,
               blind_history,
               rebuy_rules,
+              big_blind_ante,
+              rake_rules,
+              rake,
               results
               ) SELECT
                 ${ownerId}::uuid,
@@ -424,6 +436,9 @@ async function handlePost(request: Request) {
                 ${session.hands},
                 ${session.blindHistory ? JSON.stringify(session.blindHistory) : null}::jsonb,
                 ${session.rebuyRules ? JSON.stringify(session.rebuyRules) : null}::jsonb,
+                ${session.bigBlindAnte === true},
+                ${session.rakeRules ? JSON.stringify(session.rakeRules) : null}::jsonb,
+                ${session.rake ?? 0},
                 ${JSON.stringify(session.results)}::jsonb
               FROM allocated
               ON CONFLICT (owner_id, id) WHERE owner_id IS NOT NULL DO NOTHING
@@ -624,6 +639,7 @@ async function handlePut(request: Request) {
             'previousHands', session.hands,
             'previousBlindHistory', session.blind_history,
             'previousRebuyRules', session.rebuy_rules,
+            'previousRake', session.rake,
             'previousResults', session.results,
             'hands', ${resolved.hands}::bigint
           )
@@ -642,6 +658,7 @@ async function handlePut(request: Request) {
             hands = ${resolved.hands},
             blind_history = ${resolved.blindHistory ? JSON.stringify(resolved.blindHistory) : null}::jsonb,
             rebuy_rules = ${resolved.rebuyRules ? JSON.stringify(resolved.rebuyRules) : null}::jsonb,
+            rake = ${resolved.rake ?? 0},
             results = ${JSON.stringify(resolved.results)}::jsonb
           WHERE owner_id = ${ownerId}::uuid
             AND id = ${resolved.id}
