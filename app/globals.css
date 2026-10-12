@@ -2671,6 +2671,7 @@ textarea::placeholder {
   color: var(--ink2);
   font-size: 12px;
   text-align: center;
+  overflow-wrap: anywhere;
 }
 
 .blind-timer.due {
@@ -3249,12 +3250,14 @@ textarea::placeholder {
 }
 
 .table-blinds {
+  /* Stays inside the felt: very large blinds wrap instead of being cut off. */
+  max-width: 62%;
   padding: 4px 10px;
-  border-radius: 999px;
+  border-radius: 14px;
   background: rgba(0, 0, 0, 0.28);
   font-size: 11px;
   font-weight: 700;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
 .table-chips {
