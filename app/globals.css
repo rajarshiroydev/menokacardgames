@@ -2678,6 +2678,46 @@ textarea::placeholder {
   font-weight: 700;
 }
 
+.blind-timer.paused {
+  color: var(--ink2);
+  font-weight: 700;
+}
+
+.blind-clock {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 4px 8px;
+  max-width: 100%;
+}
+
+.clock-toggle {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 4px;
+  min-height: 28px;
+  padding: 3px 10px;
+  border: 1px solid var(--gb);
+  border-radius: 999px;
+  background: var(--field);
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: none;
+}
+
+/* Barlow sits low in its line box; centre the capitals on the icon. */
+.clock-toggle span {
+  text-box: trim-both cap alphabetic;
+}
+
+.clock-toggle[aria-pressed="true"] {
+  border-color: var(--b);
+  color: var(--b);
+}
+
 .seat-card {
   display: flex;
   flex-direction: column;
@@ -3475,6 +3515,10 @@ textarea::placeholder {
 
 .between-card .blind-timer {
   text-align: left;
+}
+
+.between-card .blind-clock {
+  justify-content: flex-start;
 }
 
 .buy-in-options {

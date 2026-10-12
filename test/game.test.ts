@@ -22,6 +22,9 @@ import {
   completedHandRecord,
   dealNewHand,
   editBlindSchedule,
+  hasBlindClock,
+  pauseBlindClock,
+  resumeBlindClock,
   mayRaise,
   minimumRaise,
   nextBuyIn,
@@ -967,6 +970,120 @@ describe("cancel hand", () => {
   });
 });
 
+
+describe("blind clock pause", () => {
+  const MIN = 60_000;
+  const start = 1_000_000;
+  const timed: BlindSchedule = {
+    unit: "minutes",
+    every: 20,
+    raiseType: "add",
+    raiseBy: 100,
+  };
+
+  function timedGame() {
+    const game = gameState(timed);
+    game.startedAt = start;
+    game.players.forEach((player) => {
+      player.buyIns = [game.startStack];
+    });
+    dealNewHand(game, start);
+    return game;
+  }
+
+  test("freezes the countdown and resumes with the same time left", () => {
+    const game = timedGame();
+    assert.ok(pauseBlindClock(game, start + 8 * MIN));
+    assert.equal(game.log[0], "Blind clock paused (L1, 12:00 left)");
+    const paused = blindStatus(game, start + 50 * MIN);
+    assert.equal(paused.paused, true);
+    assert.equal(paused.msLeft, 12 * MIN);
+    assert.equal(paused.dueNow, false);
+    assert.equal(pauseBlindClock(game, start + 9 * MIN), false);
+
+    assert.ok(resumeBlindClock(game, start + 68 * MIN));
+    assert.equal(game.log[0], "Blind clock resumed");
+    assert.equal(game.blindPausedMs, 60 * MIN);
+    const running = blindStatus(game, start + 70 * MIN);
+    assert.equal(running.paused, false);
+    assert.equal(running.msLeft, 10 * MIN);
+
+    finishHand(game, 0);
+    dealNewHand(game, start + 75 * MIN);
+    assert.equal(game.ante, 100);
+    dealNewHand(game, start + 81 * MIN);
+    assert.equal(game.ante, 200);
+  });
+
+  test("a deal while paused resumes the clock at the same level", () => {
+    const game = timedGame();
+    finishHand(game, 0);
+    pauseBlindClock(game, start + 15 * MIN);
+    // Dinner runs past the level break; the next deal keeps level 1.
+    dealNewHand(game, start + 90 * MIN);
+    assert.equal(game.blindClockPausedAt, undefined);
+    assert.equal(game.ante, 100);
+    assert.equal(blindStatus(game, start + 90 * MIN).msLeft, 5 * MIN);
+    assert.equal(game.log[0], "Blind clock resumed");
+  });
+
+  test("a plan chosen before or during a pause loses no time", () => {
+    for (const choseAt of [2, 10]) {
+      const game = timedGame();
+      finishHand(game, 0);
+      pauseBlindClock(game, start + 5 * MIN);
+      editBlindSchedule(game, { ...timed, every: 15 }, start + choseAt * MIN);
+      resumeBlindClock(game, start + 40 * MIN);
+      // Chosen at 2: 3 minutes ran before the pause. At 10: none.
+      assert.equal(
+        pendingBlindPlan(game)?.effectiveAt,
+        start + (choseAt === 2 ? 37 : 40) * MIN,
+        `chosen at ${choseAt}`,
+      );
+    }
+  });
+
+  test("Cancel hand and Undo last hand keep the pause and its time", () => {
+    // Paused and resumed during the hand, then cancelled.
+    const game = timedGame();
+    pauseBlindClock(game, start + 5 * MIN);
+    resumeBlindClock(game, start + 35 * MIN);
+    assert.ok(cancelCurrentHand(game, start + 36 * MIN));
+    assert.equal(game.ante, 100);
+    assert.equal(blindStatus(game, start + 36 * MIN).msLeft, 14 * MIN);
+
+    // Still paused when cancelled: it stays paused.
+    pauseBlindClock(game, start + 40 * MIN);
+    assert.ok(cancelCurrentHand(game, start + 41 * MIN));
+    assert.equal(game.blindClockPausedAt, start + 40 * MIN);
+    assert.equal(blindStatus(game, start + 90 * MIN).msLeft, 10 * MIN);
+    resumeBlindClock(game, start + 100 * MIN);
+
+    // A break between hands, then the next hand undone.
+    finishHand(game, 1);
+    dealNewHand(game, start + 101 * MIN);
+    finishHand(game, 2);
+    pauseBlindClock(game, start + 102 * MIN);
+    dealNewHand(game, start + 130 * MIN);
+    assert.ok(undoLastHand(game, start + 131 * MIN));
+    assert.equal(game.handNo, 2);
+    assert.equal(game.ante, 100);
+    // 30 + 60 + 28 minutes paused in all; 13 of 20 minutes used.
+    assert.equal(game.blindPausedMs, 118 * MIN);
+    assert.equal(blindStatus(game, start + 131 * MIN).msLeft, 7 * MIN);
+  });
+
+  test("fixed and By Hands games have no clock to pause", () => {
+    for (const blinds of [null, { ...timed, unit: "hands" }] as const) {
+      const game = gameState(blinds);
+      dealNewHand(game, start);
+      assert.equal(hasBlindClock(game), false);
+      assert.equal(pauseBlindClock(game, start), false);
+    }
+    const game = timedGame();
+    assert.equal(hasBlindClock(game), true);
+  });
+});
 
 describe("side pots", () => {
   /**

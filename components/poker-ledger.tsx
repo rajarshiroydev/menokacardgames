@@ -24,6 +24,10 @@ import {
   bigBlindAtLevel,
   betStops,
   blindStatus,
+  formatClock,
+  hasBlindClock,
+  pauseBlindClock,
+  resumeBlindClock,
   sessionBlindHistory,
   buyInPlayer,
   completedHandRecord,
@@ -528,11 +532,6 @@ function readStoredHistory(storageKey: string) {
   } catch {
     return [];
   }
-}
-
-function formatCountdown(ms: number) {
-  const total = Math.ceil(ms / 1000);
-  return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")}`;
 }
 
 function describeBlindSchedule(
@@ -1790,6 +1789,15 @@ export function PokerLedger({
     showToast("Rebuys updated");
   }
 
+  function toggleBlindClock() {
+    if (!game) return;
+    const next = structuredClone(game);
+    const pausing = next.blindClockPausedAt === undefined;
+    if (!(pausing ? pauseBlindClock(next) : resumeBlindClock(next))) return;
+    setGame(next);
+    showToast(pausing ? "Blind clock paused" : "Blind clock resumed");
+  }
+
   function cancelHand() {
     if (!game?.hand) return;
     ask(
@@ -2287,6 +2295,7 @@ export function PokerLedger({
             onUndoHand={undoHand}
             onDiscard={discardGame}
             onEditBlinds={() => setEditingBlinds(true)}
+            onToggleBlindClock={toggleBlindClock}
             onEditRebuys={() => setEditingRebuys(true)}
             liveSharing={Boolean(liveToken)}
             liveFailing={liveFailing}
@@ -2606,6 +2615,24 @@ function UndoIcon() {
     >
       <path d="M9 14 4 9l5-5" />
       <path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11" />
+    </svg>
+  );
+}
+
+function PauseIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="currentColor">
+      {/* Bottom-heavy, so the bars rest on the label's baseline. */}
+      <rect x="6" y="7" width="4" height="12" rx="1" />
+      <rect x="14" y="7" width="4" height="12" rx="1" />
+    </svg>
+  );
+}
+
+function PlayIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="currentColor">
+      <path d="M8 7.8v10.4a1 1 0 0 0 1.5.86l8.5-5.2a1 1 0 0 0 0-1.72l-8.5-5.2A1 1 0 0 0 8 7.8Z" />
     </svg>
   );
 }
@@ -6228,6 +6255,7 @@ type GameViewProps = {
   onUndoHand: () => void;
   onDiscard: () => void;
   onEditBlinds: () => void;
+  onToggleBlindClock: () => void;
   onEditRebuys: () => void;
   liveSharing: boolean;
   liveFailing: boolean;
@@ -6250,8 +6278,11 @@ function GameScreen(props: GameViewProps) {
   const net = (index: number) =>
     game.players[index].stack - totalBuyIns(game, index);
   const enoughPlayers = game.players.filter((player) => player.stack > 0).length >= 2;
-  // Timed levels run on the clock between hands too, so keep the countdown live.
-  const now = useBlindClock(game.blinds?.unit === "minutes");
+  // Timed levels run on the clock between hands too, so keep the countdown
+  // live, unless the host paused it.
+  const now = useBlindClock(
+    game.blinds?.unit === "minutes" && game.blindClockPausedAt === undefined,
+  );
   const blinds = blindStatus(game, now);
   const pendingPlan = pendingBlindPlan(game);
   const nextBlinds = `${money(blinds.nextSmallBlind)}/${money(
@@ -6265,24 +6296,42 @@ function GameScreen(props: GameViewProps) {
         ? `${nextBlinds} in ${blinds.handsLeft} hand${
             blinds.handsLeft === 1 ? "" : "s"
           }`
-        : `${nextBlinds} in ${formatCountdown(blinds.msLeft)}`;
+        : `${nextBlinds} in ${formatClock(blinds.msLeft)}`;
+  const clock = hasBlindClock(game);
+  const pausedNote = blinds.paused ? "Clock paused · " : "";
+  const clockButton = clock ? (
+    <button
+      type="button"
+      className="clock-toggle"
+      aria-pressed={blinds.paused}
+      aria-label={blinds.paused ? "Resume blind clock" : "Pause blind clock"}
+      onClick={props.onToggleBlindClock}
+    >
+      {blinds.paused ? <PlayIcon /> : <PauseIcon />}
+      <span>{blinds.paused ? "Resume" : "Pause"}</span>
+    </button>
+  ) : null;
   const blindSchedule = (
-    <>
+    <div className="blind-clock">
       {blinds.schedule && !pendingPlan ? (
         <div
-          className={`blind-timer ${blinds.dueNow ? "due" : ""}`}
+          className={`blind-timer ${blinds.dueNow ? "due" : ""} ${
+            blinds.paused ? "paused" : ""
+          }`}
           aria-live="polite"
         >
+          {pausedNote}
           {blindNote}
         </div>
       ) : null}
       {pendingPlan ? (
-        <div className="blind-timer due">
-          From hand {pendingPlan.effectiveHand}:{" "}
+        <div className={`blind-timer due ${blinds.paused ? "paused" : ""}`}>
+          {pausedNote}From hand {pendingPlan.effectiveHand}:{" "}
           {describeBlindSchedule(pendingPlan.schedule, currency, unit)}
         </div>
       ) : null}
-    </>
+      {clockButton}
+    </div>
   );
   const blindsDisplay = (
     <div className="blinds-display" aria-label="Current blinds">

@@ -100,6 +100,8 @@ export type Hand = {
   anteBefore?: number;
   blindLevelBefore?: number;
   blindLevelStartedAtBefore?: number;
+  /** `GameState.blindPausedMs` when the hand was dealt; absent before any pause. */
+  blindPausedMsAtDeal?: number;
   blindsBefore?: BlindSchedule | null;
   blindLevelsBefore?: BlindLevelRecord[];
   /**
@@ -153,6 +155,7 @@ export type CompletedHand = {
   anteBefore?: number;
   blindLevelBefore?: number;
   blindLevelStartedAtBefore?: number;
+  blindPausedMsAtDeal?: number;
   blindsBefore?: BlindSchedule | null;
   blindLevelsBefore?: BlindLevelRecord[];
   /** Rake taken in the game before this hand; older records lack it. */
@@ -216,6 +219,13 @@ export type GameState = {
    * Older games lack it and count from the plan's start instead.
    */
   blindLevelStartedAt?: number;
+  /** When the host paused the blind clock; absent while it runs. */
+  blindClockPausedAt?: number;
+  /**
+   * Total time the blind clock has been paused this game. Cancel hand and
+   * Undo last hand never restore it, so a do-over can't take back a break.
+   */
+  blindPausedMs?: number;
   blindPlans?: BlindPlan[];
   blindLevels?: BlindLevelRecord[];
   startStack: number;

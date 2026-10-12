@@ -61,6 +61,10 @@ export const CHANGELOG: ChangelogEntry[] = [
         text: "A split pot's leftover chip now goes to the winner nearest the dealer's left, as in casinos.",
       },
       {
+        tag: "new",
+        text: "Pause the blind clock. In timed games, tap Pause beside the countdown for a break; the blinds wait where they were. Dealing the next hand starts the clock again.",
+      },
+      {
         tag: "fixed",
         text: "Timed blinds no longer leap ahead after a break. A table left open goes up one level on the next deal, the one the screen shows, and that level's clock starts then.",
       },

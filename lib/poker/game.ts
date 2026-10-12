@@ -527,6 +527,8 @@ export function blindStatus(game: GameState, now = Date.now()) {
     msLeft: 0,
     /** The next hand dealt will be at a higher level. */
     dueNow: false,
+    /** The host paused the timed clock; the countdown is frozen. */
+    paused: game.blindClockPausedAt !== undefined,
   };
   if (!schedule || schedule.every <= 0) return status;
 
@@ -544,10 +546,80 @@ export function blindStatus(game: GameState, now = Date.now()) {
   } else {
     const levelEndsAt =
       levelStartedAt(game, plan, level) + schedule.every * MINUTE;
-    status.msLeft = Math.max(0, levelEndsAt - now);
+    status.msLeft = Math.max(
+      0,
+      levelEndsAt - (game.blindClockPausedAt ?? now),
+    );
     status.dueNow = status.msLeft === 0;
   }
   return status;
+}
+
+/** Whether a timed blind clock is running now or starts with the next hand. */
+export function hasBlindClock(game: GameState) {
+  const timed = (plan: BlindPlan | undefined) =>
+    plan?.schedule?.unit === "minutes" && plan.schedule.every > 0;
+  return timed(planForHand(game, game.handNo)) || timed(pendingBlindPlan(game));
+}
+
+function logBlindClock(game: GameState, line: string) {
+  // No hand prefix, so Cancel hand and Undo last hand keep these lines.
+  game.log.unshift(line);
+  game.log = game.log.slice(0, 80);
+}
+
+/** Moves the current timed level's start later, so it loses no time. */
+function delayCurrentLevel(game: GameState, ms: number) {
+  const plan = planForHand(game, game.handNo);
+  if (ms <= 0 || plan.schedule?.unit !== "minutes" || game.handNo < 1) return;
+  game.blindLevelStartedAt =
+    levelStartedAt(game, plan, game.blindLevel ?? 0) + ms;
+}
+
+/**
+ * Stops the timed blind clock, between hands or during a hand. Blinds still
+ * only change when a hand is dealt; while paused the countdown is frozen.
+ */
+export function pauseBlindClock(game: GameState, now = Date.now()) {
+  if (game.blindClockPausedAt !== undefined || !hasBlindClock(game)) {
+    return false;
+  }
+  const status = blindStatus(game, now);
+  game.blindClockPausedAt = now;
+  logBlindClock(
+    game,
+    status.schedule?.unit === "minutes"
+      ? `Blind clock paused (L${status.level + 1}, ${
+          status.dueNow ? "next level due" : `${formatClock(status.msLeft)} left`
+        })`
+      : "Blind clock paused",
+  );
+  return true;
+}
+
+/** Restarts the clock where it stopped: the paused time doesn't count. */
+export function resumeBlindClock(game: GameState, now = Date.now()) {
+  const pausedAt = game.blindClockPausedAt;
+  if (pausedAt === undefined) return false;
+  const paused = Math.max(0, now - pausedAt);
+  delete game.blindClockPausedAt;
+  delayCurrentLevel(game, paused);
+  // A plan chosen for the next hand counts from when it was chosen, less
+  // the time paused since then.
+  game.blindPlans?.forEach((plan) => {
+    if (plan.effectiveHand > game.handNo && plan.schedule?.unit === "minutes") {
+      plan.effectiveAt += Math.max(0, now - Math.max(pausedAt, plan.effectiveAt));
+    }
+  });
+  if (paused > 0) game.blindPausedMs = (game.blindPausedMs ?? 0) + paused;
+  logBlindClock(game, "Blind clock resumed");
+  return true;
+}
+
+/** Minutes and seconds, as the countdown shows them. */
+export function formatClock(ms: number) {
+  const total = Math.ceil(ms / 1000);
+  return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")}`;
 }
 
 /** Moves `game.ante` to the level the given hand belongs to. */
@@ -582,6 +654,31 @@ function applyBlindLevel(game: GameState, handNo: number, now: number) {
 }
 
 export function dealNewHand(game: GameState, now = Date.now()) {
+  // Dealing restarts a paused clock, so a forgotten Resume can't freeze it.
+  if (
+    game.blindClockPausedAt !== undefined &&
+    game.players.filter((player) => player.stack > 0).length >= 2
+  ) {
+    resumeBlindClock(game, now);
+  }
+  dealHand(game, now);
+}
+
+/**
+ * Deals a hand again at its original time for Cancel hand and Undo last
+ * hand. The clock stays paused or running as it is, and pause time taken
+ * since the hand was first dealt still counts as paused.
+ */
+function redealHand(game: GameState, dealtAt: number, pausedMsAtDeal?: number) {
+  dealHand(game, dealtAt);
+  // A hand dealt before the first pause has no record: nothing was paused yet.
+  delayCurrentLevel(game, (game.blindPausedMs ?? 0) - (pausedMsAtDeal ?? 0));
+  if (game.hand && game.blindPausedMs !== undefined) {
+    game.hand.blindPausedMsAtDeal = pausedMsAtDeal ?? 0;
+  }
+}
+
+function dealHand(game: GameState, now: number) {
   const alive = game.players.filter((player) => player.stack > 0).length;
   if (alive < 2) {
     game.hand = null;
@@ -654,6 +751,9 @@ export function dealNewHand(game: GameState, now = Date.now()) {
     ...(blindLevelStartedAtBefore !== undefined
       ? { blindLevelStartedAtBefore }
       : {}),
+    ...(game.blindPausedMs !== undefined
+      ? { blindPausedMsAtDeal: game.blindPausedMs }
+      : {}),
     blindsBefore,
     blindLevelsBefore,
     ...(ante ? { ante } : {}),
@@ -693,6 +793,7 @@ export function completedHandRecord(game: GameState): CompletedHand {
     anteBefore: hand.anteBefore,
     blindLevelBefore: hand.blindLevelBefore,
     blindLevelStartedAtBefore: hand.blindLevelStartedAtBefore,
+    blindPausedMsAtDeal: hand.blindPausedMsAtDeal,
     blindsBefore: hand.blindsBefore,
     blindLevelsBefore: hand.blindLevelsBefore
       ? structuredClone(hand.blindLevelsBefore)
@@ -757,7 +858,7 @@ export function undoLastHand(game: GameState, now = Date.now()) {
   game.lastHand = null;
   game.winnerAnnouncement = null;
   game.hand = null;
-  dealNewHand(game, last.dealtAt ?? now);
+  redealHand(game, last.dealtAt ?? now, last.blindPausedMsAtDeal);
   return true;
 }
 
@@ -793,7 +894,7 @@ export function cancelCurrentHand(game: GameState, now = Date.now()) {
     game.blindLevels = structuredClone(hand.blindLevelsBefore ?? []);
   }
   game.hand = null;
-  dealNewHand(game, hand.dealtAt ?? now);
+  redealHand(game, hand.dealtAt ?? now, hand.blindPausedMsAtDeal);
   return true;
 }
 
