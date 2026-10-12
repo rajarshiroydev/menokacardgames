@@ -1,8 +1,13 @@
 import { DELETION_GRACE_PERIOD_DAYS } from "../accounts/lifecycle.ts";
 import { RECENT_SIGN_IN_WINDOW_MS } from "../auth/recent-sign-in.ts";
+import { GAME_BACKUP_EXPIRY_DAYS } from "../poker/game-backup.ts";
 import { LIVE_VIEW_EXPIRY_HOURS } from "../poker/live-view.ts";
 
-export { DELETION_GRACE_PERIOD_DAYS, LIVE_VIEW_EXPIRY_HOURS };
+export {
+  DELETION_GRACE_PERIOD_DAYS,
+  GAME_BACKUP_EXPIRY_DAYS,
+  LIVE_VIEW_EXPIRY_HOURS,
+};
 
 /**
  * Facts the public info pages (privacy, terms, account deletion) state.
@@ -20,7 +25,7 @@ export const DATA_LOCATION = "the United States";
 
 export const PRIVACY_UPDATED = "2026-10-12";
 export const TERMS_UPDATED = "2026-10-05";
-export const DELETION_UPDATED = "2026-10-05";
+export const DELETION_UPDATED = "2026-10-12";
 
 /** Hours the database provider keeps recovery copies of deleted data. */
 export const PROVIDER_BACKUP_HOURS = 6;

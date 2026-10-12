@@ -125,8 +125,8 @@ const GROUPS: FeatureGroup[] = [
         text: "Between hands you can change the blind plan or the rebuy limits, buy busted players back in, seat someone who arrives late, or cash out someone who has to leave.",
       },
       {
-        name: "Nothing lost on refresh",
-        text: "The game in progress is kept on your phone, so closing the app or reloading doesn't lose it.",
+        name: "Nothing lost",
+        text: "The game in progress is kept on your phone and backed up while you play. If your phone dies, restore it on another device and carry on from the same hand.",
       },
     ],
   },

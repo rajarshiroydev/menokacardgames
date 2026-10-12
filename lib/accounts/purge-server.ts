@@ -49,6 +49,18 @@ export function createPurgeStore(): PurgeStore {
   };
 }
 
+/**
+ * Deletes backups of games in progress that nobody updated for 7 days
+ * (migration 0024), through the menoka_purge role. Returns how many went.
+ */
+export async function deleteExpiredGameBackups() {
+  const sql = neon(requiredEnvironmentVariable("PURGE_DATABASE_URL"));
+  const rows = (await sql`
+    SELECT public.purge_expired_game_backups() AS deleted
+  `) as Array<{ deleted: number }>;
+  return Number(rows[0]?.deleted ?? 0);
+}
+
 /** Deletes a Neon Auth user through Neon's documented branch-level endpoint. */
 export function createNeonIdentityDeleter(): IdentityDeleter {
   const apiKey = requiredEnvironmentVariable("NEON_API_KEY");

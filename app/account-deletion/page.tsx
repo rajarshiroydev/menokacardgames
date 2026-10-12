@@ -7,6 +7,7 @@ import {
   CONTACT_EMAIL,
   DELETION_GRACE_PERIOD_DAYS,
   DELETION_UPDATED,
+  GAME_BACKUP_EXPIRY_DAYS,
   PROVIDER_BACKUP_HOURS,
   RECENT_SIGN_IN_MINUTES,
 } from "@/lib/info/legal";
@@ -61,6 +62,11 @@ export default function AccountDeletionPage() {
             friend requests disappear.
           </li>
           <li>Any live standings link you shared stops working.</li>
+          <li>
+            The copy of your game in progress can&apos;t be restored. It is
+            deleted after {GAME_BACKUP_EXPIRY_DAYS} days, or comes back if you
+            recover your account before then.
+          </li>
         </ul>
       </InfoSection>
 
@@ -81,7 +87,10 @@ export default function AccountDeletionPage() {
         <ul>
           <li>your sign-in identity and email address;</li>
           <li>your name, avatar, user code and currency;</li>
-          <li>every player, game, result, buy-in and record in your ledger;</li>
+          <li>
+            every player, game, result, buy-in and record in your ledger,
+            including the copy of a game in progress;
+          </li>
           <li>your friend requests and friendships.</li>
         </ul>
         <p>

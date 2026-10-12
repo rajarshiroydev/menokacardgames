@@ -26,8 +26,12 @@ export const CHANGE_TAG_LABELS: Record<ChangeTag, string> = {
 export const CHANGELOG: ChangelogEntry[] = [
   {
     date: "2026-10-12",
-    title: "Late joins, own buy-ins, ante and rake",
+    title: "Backups, late joins, own buy-ins, ante and rake",
     items: [
+      {
+        tag: "new",
+        text: "Your game is backed up while you play. If your phone dies, open Pokerize on another phone or laptop and tap Restore game on Home to carry on from the same hand.",
+      },
       {
         tag: "new",
         text: "Own amounts. Turn it on at setup and each player can buy in for a different amount. Forgot to turn it on? A late player can still pick their amount, and a rebuy has a Change amount link. Standings still compare everyone fairly by their return on what they put in.",

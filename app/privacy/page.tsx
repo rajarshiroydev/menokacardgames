@@ -7,6 +7,7 @@ import {
   CONTACT_EMAIL,
   DATA_LOCATION,
   DELETION_GRACE_PERIOD_DAYS,
+  GAME_BACKUP_EXPIRY_DAYS,
   LIVE_VIEW_EXPIRY_HOURS,
   MINIMUM_AGE,
   OPERATOR_COUNTRY,
@@ -75,6 +76,13 @@ export default function PrivacyPage() {
             antes, rake, buy-ins, rebuys, chip counts and results.
           </li>
           <li>
+            <b>The game in progress:</b> while you play, your phone sends us a
+            copy of the game every few seconds (players, chips, bets and the
+            action log), so you can carry on from another device if your phone
+            dies. It is deleted when you save or discard the game, or{" "}
+            {GAME_BACKUP_EXPIRY_DAYS} days after its last change.
+          </li>
+          <li>
             <b>Friends:</b> the friend requests you send and answer, and who you
             are friends with.
           </li>
@@ -86,11 +94,10 @@ export default function PrivacyPage() {
         </ul>
         <h3>Kept only on your phone</h3>
         <p>
-          The game in progress, your theme, the List or Table choice, the sound
-          setting and when you last opened the notification bell are stored in
-          your browser, not on our servers. The game in progress reaches us only
-          when you save it, or as a live standings snapshot while you share a
-          live link.
+          Your theme, the List or Table choice, the sound setting, when you
+          last opened the notification bell and a random ID for your browser
+          (so we know which device holds a game in progress) are stored in your
+          browser, not on our servers.
         </p>
         <h3>The camera</h3>
         <p>
@@ -117,8 +124,8 @@ export default function PrivacyPage() {
         <ul>
           <li>To sign you in and keep your ledger private to you.</li>
           <li>
-            To run the app: save games, work out standings, connect friends and
-            show live standings.
+            To run the app: save games, back up the game in progress, work out
+            standings, connect friends and show live standings.
           </li>
           <li>To keep the app secure, prevent abuse and fix problems.</li>
           <li>To answer you when you contact us.</li>
@@ -203,6 +210,10 @@ export default function PrivacyPage() {
           <li>
             Players and games you delete permanently yourself are deleted
             straight away.
+          </li>
+          <li>
+            The copy of a game in progress until you save or discard it, or{" "}
+            {GAME_BACKUP_EXPIRY_DAYS} days after its last change.
           </li>
           <li>Hosting request logs are kept only for a short time.</li>
         </ul>

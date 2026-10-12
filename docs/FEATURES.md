@@ -227,7 +227,11 @@ The **Profile** tab replaced the Players tab on 30 September 2026. From the top:
 
 - **Games in progress survive a refresh.** The current game is kept on the device, so closing or reloading the page doesn't lose it.
 - **Tied to your account.** A game in progress is saved on the device for the signed-in host only. Another host signing in on the same device doesn't see it.
-- **One device per game.** A game in progress (including a continued saved game, section 11) lives on the device where it was started. It isn't synced to other devices until it's saved. Players can still follow it on their own phones through a live standings link (see section 19).
+- **One device per game.** A game in progress (including a continued saved game, section 11) is played on one device at a time. Players can still follow it on their own phones through a live standings link (see section 19).
+- **Backed up while you play** (since 12 October 2026). The host's device sends a copy of the game in progress to the server 2 seconds after the last change, at most once every 10 seconds, plus when the app opens or comes back on screen. It works whether or not a live link is shared. If the phone is offline the copy waits for the next change.
+- **Restore on another device.** When a device has no game in progress, Home shows an **Unfinished game** card above **Start a game**: the game's name, "Hand 12 in progress" (or "12 hands played"), how many players are still at the table, and when it was last saved ("saved 5 min ago on another device"). **Restore game** opens it at the same hand, with the same stacks, blinds, buy-ins and log ("Game 79 restored"); **Delete** asks first ("Delete the unfinished Game 79? It can't be restored after this."). If a game is already in progress, the card isn't shown.
+- **The old device hands over.** Restoring moves the game to the new device. When the old device next sends its copy (or opens the app), it closes its game and says "Game 79 moved to another device. It was restored there, so it's closed here." Its live standings link is left to the new device, which can share a new one. The old device's Home then offers the game like any other unfinished game, so it can be taken back the same way.
+- **When the copy goes.** Saving the game deletes its copy, and so does discarding it or closing a continued game. A copy nobody changes for **7 days** is deleted by the daily clean-up. Each device keeps at most one copy: starting a new game there replaces its old one. While an account is locked for deletion its copy can't be restored; it comes back on recovery unless the 7 days have passed.
 - **Back button works.** The phone's back gesture or the browser's back button moves back through the app's screens.
 
 ## 11. Saving a game and game history
@@ -306,7 +310,7 @@ The **Profile** tab replaced the Players tab on 30 September 2026. From the top:
 - **What happens straight away:**
   - your players, games and standings are locked and hidden
   - you are signed out on **every** device, not just this one
-  - the game in progress on this device is cleared
+  - the game in progress on this device is cleared, and its backup (section 10) can't be restored; it is deleted after 7 days, or comes back on recovery before then
   - the sign-in page confirms the account is locked
   - your friends no longer see you among their friends, and you drop out of their requests (see section 20); the players they linked to you stay in their lists
 - **30 days to change your mind.** Sign in again with the same email within **30 days** to see the "Deletion is scheduled" screen. It shows when you asked and the exact date and time everything will be deleted. Press **Recover my account** and everything comes back exactly as it was.
@@ -437,7 +441,7 @@ Added 5 October 2026 (user request).
 
 These are known limitations, not planned features. Planned work is in the [feature plan](./FEATURE-PLAN.md).
 
-- A game in progress can't be moved to another device before it's saved.
+- A game in progress is backed up only every 10 seconds at most, so a restore can miss the last few actions; the host's phone must also have been online since them.
 - Friend requests don't send phone notifications or emails; people see them in the Profile tab's bell. The bell can't yet say when a request you sent was declined, and what counts as new is remembered per device.
 - The live standings link can't be used to play or change the game; only the host's device records it. If the host's phone is locked or offline, the link stops updating until the host opens the app again.
 - Import handles up to 250 new games per file.

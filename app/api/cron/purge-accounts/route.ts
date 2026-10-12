@@ -4,6 +4,7 @@ import { purgeDueAccounts } from "@/lib/accounts/purge";
 import {
   createNeonIdentityDeleter,
   createPurgeStore,
+  deleteExpiredGameBackups,
   pingHealthcheck,
 } from "@/lib/accounts/purge-server";
 
@@ -28,8 +29,9 @@ function authorized(request: Request) {
 
 /**
  * Daily Vercel Cron job: permanently deletes accounts whose 30-day recovery
- * period has ended. The response and the Healthchecks.io report contain only
- * counts, internal account IDs and error messages, never emails or names.
+ * period has ended, then backups of games in progress left for 7 days. The
+ * response and the Healthchecks.io report contain only counts, internal
+ * account IDs and error messages, never emails or names.
  */
 export async function GET(request: Request) {
   if (!authorized(request)) {
@@ -38,14 +40,29 @@ export async function GET(request: Request) {
 
   await pingHealthcheck("start");
   try {
-    const report = await purgeDueAccounts(
+    const accounts = await purgeDueAccounts(
       createPurgeStore(),
       createNeonIdentityDeleter(),
     );
+    // A failed backup clean-up doesn't undo the account purge; it is
+    // reported and the next run deletes the backups.
+    let expiredGameBackups: number | null = null;
+    let backupError: string | undefined;
+    try {
+      expiredGameBackups = await deleteExpiredGameBackups();
+    } catch (error) {
+      backupError = error instanceof Error ? error.message : String(error);
+    }
+    const report = {
+      ...accounts,
+      expiredGameBackups,
+      ...(backupError ? { backupError } : {}),
+    };
+    const failed = Boolean(accounts.failed || backupError);
     const summary = JSON.stringify(report);
     console.info("account purge run", summary);
-    await pingHealthcheck(report.failed ? "fail" : "success", summary);
-    return json(report, report.failed ? 500 : 200);
+    await pingHealthcheck(failed ? "fail" : "success", summary);
+    return json(report, failed ? 500 : 200);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.error("account purge run failed", message);

@@ -85,6 +85,12 @@ import {
 } from "@/lib/poker/buy-ins";
 import { gameFromSession } from "@/lib/poker/continue-session";
 import {
+  GAME_BACKUP_MIN_INTERVAL_MS,
+  GAME_BACKUP_QUIET_MS,
+  gameBackupId,
+  type GameBackupSummary,
+} from "@/lib/poker/game-backup";
+import {
   bigBlindChoices,
   chipUnitFor,
   DEFAULT_STACK,
@@ -106,6 +112,7 @@ import {
 } from "@/lib/poker/money";
 import {
   accountGameStorageKey,
+  readDeviceId,
   accountLiveTokenStorageKey,
   LEGACY_GAME_STORAGE_KEY,
   LEGACY_HISTORY_STORAGE_KEY,
@@ -311,6 +318,8 @@ type ModalState =
       confirmLabel: string;
       /** Dismiss button text; defaults to "Cancel". */
       dismissLabel?: string;
+      /** A notice with a single button, nothing to cancel. */
+      hideDismiss?: boolean;
       danger?: boolean;
       onConfirm: () => void;
       /** A link under the message for another way to go on, such as a different amount. */
@@ -416,6 +425,37 @@ async function friendsApi<T>(body?: object): Promise<T> {
 }
 
 /** Starts, updates or stops the live standings link (`/api/live`). */
+/** Backups of the game in progress (app/api/game-backups). */
+async function gameBackupApi<T>(
+  method: "GET" | "PUT" | "POST" | "DELETE",
+  options: { query?: Record<string, string>; body?: object } = {},
+): Promise<T> {
+  const query = options.query
+    ? `?${new URLSearchParams(options.query).toString()}`
+    : "";
+  const response = await fetch(`/api/game-backups${query}`, {
+    method,
+    ...(options.body
+      ? {
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(options.body),
+        }
+      : {}),
+  });
+  const data = (await response.json().catch(() => ({}))) as T & {
+    code?: string;
+    error?: string;
+  };
+  if (!response.ok) {
+    throw new ApiError(
+      apiErrorMessage(response.status, data.error, "Could not reach the backup"),
+      response.status,
+      data.code,
+    );
+  }
+  return data;
+}
+
 async function liveApi<T>(
   method: "POST" | "PUT" | "DELETE",
   body?: object,
@@ -486,9 +526,21 @@ async function playersApi<T>(
 
 function readStoredGame(storageKey: string) {
   try {
-    const data = JSON.parse(
-      window.localStorage.getItem(storageKey) || "null",
-    ) as GameState | null;
+    return normalizeGameState(
+      JSON.parse(window.localStorage.getItem(storageKey) || "null"),
+    );
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * A game kept on a device or restored from a backup, brought up to date with
+ * fields older versions didn't have. Null when it isn't a game.
+ */
+function normalizeGameState(input: unknown): GameState | null {
+  try {
+    const data = input as GameState | null;
     if (!data?.players) return null;
     // Games saved before escalating blinds kept one fixed big blind.
     data.baseAnte ??= data.ante;
@@ -690,6 +742,13 @@ export function PokerLedger({
   // The last action taken, so its seat can flash what it did.
   const [lastTurn, setLastTurn] = useState<LastTurn | null>(null);
   const liveSync = useRef({ lastSent: 0, failures: 0 });
+  // Backups of the game in progress, so it can be restored on another device.
+  const [gameBackups, setGameBackups] = useState<GameBackupSummary[]>([]);
+  const [restoringBackup, setRestoringBackup] = useState(false);
+  const backupSync = useRef<{ lastSent: number; pending: Promise<void> }>({
+    lastSent: 0,
+    pending: Promise.resolve(),
+  });
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const showToast = useCallback((message: string) => {
@@ -794,14 +853,34 @@ export function PokerLedger({
   }, []);
 
   /** Quietly refreshes what the screen being opened shows. */
+  /** Unfinished games backed up from any device, for Home. */
+  const refreshGameBackups = useCallback(async () => {
+    try {
+      const data = await gameBackupApi<{ backups?: GameBackupSummary[] }>(
+        "GET",
+        { query: { deviceId: readDeviceId() } },
+      );
+      setGameBackups(Array.isArray(data.backups) ? data.backups : []);
+    } catch {
+      // Home simply doesn't offer a restore until the next check.
+    }
+  }, []);
+
   const refreshForView = useCallback(
     (nextView: View) => {
+      if (nextView === "home") void refreshGameBackups();
       if (showsPlayerList(nextView)) void refreshPlayers({ quiet: true });
       if (nextView === "home" || nextView === "profile") void refreshFriends();
       if (nextView === "profile") void refreshProfileStats();
       if (nextView === "history") void refreshGroups();
     },
-    [refreshFriends, refreshGroups, refreshPlayers, refreshProfileStats],
+    [
+      refreshFriends,
+      refreshGameBackups,
+      refreshGroups,
+      refreshPlayers,
+      refreshProfileStats,
+    ],
   );
 
   const navigate = useCallback(
@@ -877,6 +956,7 @@ export function PokerLedger({
         setView("game");
       }
       setReady(true);
+      void refreshGameBackups();
       void refreshHistory();
       void refreshPlayers();
       void refreshFriends();
@@ -890,6 +970,7 @@ export function PokerLedger({
     gameStorageKey,
     liveTokenStorageKey,
     refreshFriends,
+    refreshGameBackups,
     refreshGroups,
     refreshHistory,
     refreshPlayers,
@@ -1000,6 +1081,144 @@ export function PokerLedger({
       clearInterval(heartbeat);
     };
   }, [game, liveToken, ready, sendLiveSnapshot]);
+
+  /**
+   * Another device restored this game and took it over, so this one closes
+   * its copy. The live link is left alone: it belongs to the account, and
+   * the other device may be sharing it now.
+   */
+  const handOverGame = useCallback(
+    (moved: GameState) => {
+      const movedId = gameBackupId(moved);
+      setGame((current) =>
+        current && gameBackupId(current) === movedId ? null : current,
+      );
+      rememberLiveToken(null);
+      setSharingLive(false);
+      navigate("home", { replace: true });
+      setModal({
+        kind: "confirm",
+        message: `${moved.sessionLabel || "This game"} moved to another device. It was restored there, so it's closed here.`,
+        confirmLabel: "OK",
+        hideDismiss: true,
+        onConfirm: () => {},
+      });
+    },
+    [navigate, rememberLiveToken],
+  );
+
+  const sendGameBackup = useCallback(
+    (current: GameState) => {
+      backupSync.current.lastSent = Date.now();
+      const sending = gameBackupApi("PUT", {
+        body: {
+          gameId: gameBackupId(current),
+          deviceId: readDeviceId(),
+          state: current,
+        },
+      }).then(
+        () => undefined,
+        (error) => {
+          if (error instanceof ApiError && error.code === "moved") {
+            handOverGame(current);
+          }
+          // Anything else (offline, already saved) waits for the next change.
+        },
+      );
+      backupSync.current.pending = sending;
+      return sending;
+    },
+    [handOverGame],
+  );
+
+  // Backs the game up after it changes: two seconds after the last change and
+  // at most every ten seconds, so with the live link's updates a host stays
+  // well inside the API write limit. Opening the app or coming back to it
+  // sends one too, which is also how a phone learns the game moved.
+  useEffect(() => {
+    if (!ready || !game) return;
+    const wait = Math.max(
+      GAME_BACKUP_QUIET_MS,
+      backupSync.current.lastSent + GAME_BACKUP_MIN_INTERVAL_MS - Date.now(),
+    );
+    const timer = setTimeout(() => void sendGameBackup(game), wait);
+    function backOnScreen() {
+      if (
+        document.visibilityState === "visible" &&
+        game &&
+        Date.now() - backupSync.current.lastSent >= GAME_BACKUP_MIN_INTERVAL_MS
+      ) {
+        void sendGameBackup(game);
+      }
+    }
+    document.addEventListener("visibilitychange", backOnScreen);
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener("visibilitychange", backOnScreen);
+    };
+  }, [game, ready, sendGameBackup]);
+
+  /** A discarded or closed game's backup goes, after any update in flight. */
+  function forgetGameBackup(current: GameState) {
+    const gameId = gameBackupId(current);
+    void backupSync.current.pending.then(() =>
+      gameBackupApi("DELETE", {
+        query: { gameId, deviceId: readDeviceId() },
+      }).catch(() => {
+        // It expires after 7 days; Home offers it until then.
+      }),
+    );
+  }
+
+  async function restoreGameBackup(backup: GameBackupSummary) {
+    if (restoringBackup) return;
+    if (game) {
+      showToast("Finish or discard the game in progress first");
+      return;
+    }
+    setRestoringBackup(true);
+    try {
+      const data = await gameBackupApi<{ state?: unknown }>("POST", {
+        body: { gameId: backup.gameId, deviceId: readDeviceId() },
+      });
+      const restored = normalizeGameState(data.state);
+      if (!restored) throw new Error("This unfinished game can't be opened");
+      backupSync.current.lastSent = Date.now();
+      setGameBackups((current) =>
+        current.filter((item) => item.gameId !== backup.gameId),
+      );
+      setGame(restored);
+      navigate("game");
+      showToast(`${backup.name} restored`);
+    } catch (error) {
+      showToast(
+        error instanceof Error ? error.message : "Could not restore the game",
+      );
+      void refreshGameBackups();
+    } finally {
+      setRestoringBackup(false);
+    }
+  }
+
+  function deleteGameBackup(backup: GameBackupSummary) {
+    ask(
+      `Delete the unfinished ${backup.name}? It can't be restored after this.`,
+      "Delete",
+      () => {
+        setGameBackups((current) =>
+          current.filter((item) => item.gameId !== backup.gameId),
+        );
+        gameBackupApi("DELETE", { query: { gameId: backup.gameId } })
+          .then(() => showToast(`${backup.name} deleted`))
+          .catch((error) => {
+            showToast(
+              error instanceof Error ? error.message : "Could not delete it",
+            );
+            void refreshGameBackups();
+          });
+      },
+    );
+  }
 
   /** Saving or discarding the game ends its live link. */
   function endLiveSharing() {
@@ -1923,6 +2142,7 @@ export function PokerLedger({
       "Reset game",
       () => {
         endLiveSharing();
+        if (game) forgetGameBackup(game);
         setGame(null);
         navigate("home", { replace: true });
       },
@@ -2021,6 +2241,7 @@ export function PokerLedger({
         "Close game",
         () => {
           endLiveSharing();
+          forgetGameBackup(game);
           setGame(null);
           navigate("sessions", { replace: true });
           showToast(`${label} closed; nothing changed`);
@@ -2216,6 +2437,10 @@ export function PokerLedger({
       friendRequests={friendRequests}
       legacyGame={legacyGame}
       legacySessionCount={legacySessions.length}
+      gameBackups={gameBackups}
+      restoringBackup={restoringBackup}
+      onRestoreBackup={(backup) => void restoreGameBackup(backup)}
+      onDeleteBackup={deleteGameBackup}
       onAdoptLegacyGame={offerLegacyGameAdoption}
       onGame={() => navigate(game ? "game" : "setup")}
       onSetup={() => navigate("setup")}
@@ -2780,6 +3005,10 @@ function HomeView({
   friendRequests,
   legacyGame,
   legacySessionCount,
+  gameBackups,
+  restoringBackup,
+  onRestoreBackup,
+  onDeleteBackup,
   onAdoptLegacyGame,
   onGame,
   onSetup,
@@ -2795,6 +3024,10 @@ function HomeView({
   friendRequests: FriendOverview["received"];
   legacyGame: GameState | null;
   legacySessionCount: number;
+  gameBackups: GameBackupSummary[];
+  restoringBackup: boolean;
+  onRestoreBackup: (backup: GameBackupSummary) => void;
+  onDeleteBackup: (backup: GameBackupSummary) => void;
   onAdoptLegacyGame: () => void;
   onGame: () => void;
   onSetup: () => void;
@@ -2828,6 +3061,14 @@ function HomeView({
       </div>
 
       <div className="home-stack">
+        {!game && gameBackups[0] ? (
+          <UnfinishedGameCard
+            backup={gameBackups[0]}
+            busy={restoringBackup}
+            onRestore={() => onRestoreBackup(gameBackups[0])}
+            onDelete={() => onDeleteBackup(gameBackups[0])}
+          />
+        ) : null}
         {game ? (
           <ChipUnitContext.Provider value={game.chipUnit ?? "whole"}>
             <HomeLiveCard game={game} selfPlayerId={selfPlayerId} onOpen={onGame} />
@@ -2962,6 +3203,66 @@ function HomeFan() {
         ))}
       </div>
     </div>
+  );
+}
+
+/** How long ago, in words: "just now", "5 min ago", "3 hours ago", "2 days ago". */
+function timeAgo(timestamp: number, now = Date.now()) {
+  const minutes = Math.max(0, Math.floor((now - timestamp) / 60_000));
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return `${minutes} min ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} hour${hours === 1 ? "" : "s"} ago`;
+  const days = Math.floor(hours / 24);
+  return `${days} day${days === 1 ? "" : "s"} ago`;
+}
+
+/** Home's offer to carry on a game backed up from this or another device. */
+function UnfinishedGameCard({
+  backup,
+  busy,
+  onRestore,
+  onDelete,
+}: {
+  backup: GameBackupSummary;
+  busy: boolean;
+  onRestore: () => void;
+  onDelete: () => void;
+}) {
+  // The time is read once the page is on the phone, which knows the clock.
+  const [now, setNow] = useState<number | null>(null);
+  useEffect(() => {
+    const timer = setTimeout(() => setNow(Date.now()), 0);
+    return () => clearTimeout(timer);
+  }, []);
+  return (
+    <section
+      className="glass legacy-data-card"
+      aria-labelledby="unfinished-game-title"
+    >
+      <div>
+        <span className="eyebrow">Unfinished game</span>
+        <h2 id="unfinished-game-title" className="literal-text">
+          {backup.name}
+        </h2>
+        <p>
+          {backup.handInProgress
+            ? `Hand ${backup.handNo} in progress`
+            : `${backup.handNo} hand${backup.handNo === 1 ? "" : "s"} played`}{" "}
+          · {backup.players} players
+          {now === null ? "" : ` · saved ${timeAgo(backup.updatedAt, now)}`}
+          {backup.thisDevice ? "" : " on another device"}
+        </p>
+      </div>
+      <div className="legacy-data-actions">
+        <button className="primary" type="button" disabled={busy} onClick={onRestore}>
+          {busy ? "Restoring…" : "Restore game"}
+        </button>
+        <button className="ghost danger-text" type="button" disabled={busy} onClick={onDelete}>
+          Delete
+        </button>
+      </div>
+    </section>
   );
 }
 
@@ -10393,9 +10694,11 @@ function Modal({
         >
           {state.confirmLabel}
         </button>
-        <button className="ghost" onClick={onClose}>
-          {(state.kind === "confirm" && state.dismissLabel) || "Cancel"}
-        </button>
+        {state.kind === "confirm" && state.hideDismiss ? null : (
+          <button className="ghost" onClick={onClose}>
+            {(state.kind === "confirm" && state.dismissLabel) || "Cancel"}
+          </button>
+        )}
       </div>
     </div>
   );

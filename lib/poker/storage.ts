@@ -7,6 +7,43 @@ export function accountGameStorageKey(accountId: string) {
   return `pokerLedger.account.${accountId}.game.v1`;
 }
 
+/**
+ * This browser's random ID, so the server knows which device holds a game's
+ * backup (lib/poker/game-backup.ts). Kept for this visit when storage is
+ * refused, which only means a restore can't tell this device apart later.
+ */
+export const DEVICE_ID_STORAGE_KEY = "pokerLedger.deviceId.v1";
+let deviceIdThisVisit: string | null = null;
+
+function newDeviceId() {
+  const bytes = new Uint8Array(18);
+  crypto.getRandomValues(bytes);
+  return btoa(String.fromCharCode(...bytes))
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/, "");
+}
+
+export function readDeviceId(): string {
+  if (deviceIdThisVisit) return deviceIdThisVisit;
+  try {
+    const stored = window.localStorage.getItem(DEVICE_ID_STORAGE_KEY);
+    if (stored && /^[A-Za-z0-9_-]{16,64}$/.test(stored)) {
+      deviceIdThisVisit = stored;
+      return stored;
+    }
+  } catch {
+    // Blocked storage: a new ID for this visit.
+  }
+  deviceIdThisVisit = newDeviceId();
+  try {
+    window.localStorage.setItem(DEVICE_ID_STORAGE_KEY, deviceIdThisVisit);
+  } catch {
+    // Kept for this visit only.
+  }
+  return deviceIdThisVisit;
+}
+
 /** The share token for this account's live standings link, if sharing. */
 export function accountLiveTokenStorageKey(accountId: string) {
   return `pokerLedger.account.${accountId}.live.v1`;

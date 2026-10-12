@@ -528,10 +528,39 @@ async function handlePost(request: Request) {
       }
     }
 
+    await deleteGameBackups(
+      authUserId,
+      ownerId,
+      resolvedSessions.map((session) => session.id),
+    );
     return json({ saved });
   } catch (error) {
     console.error("sessions POST error", error);
     return json({ error: "Could not reach the ledger database" }, 500);
+  }
+}
+
+/**
+ * Saved games no longer need their backup of the game in progress. A failure
+ * is only logged: the save stands, Home doesn't offer a saved game, and the
+ * backup expires on its own.
+ */
+async function deleteGameBackups(
+  authUserId: string,
+  ownerId: string,
+  gameIds: string[],
+) {
+  if (!gameIds.length) return;
+  try {
+    await runAsAuthenticatedUser(authUserId, (sql) => [
+      sql`
+        DELETE FROM game_backups
+        WHERE owner_id = ${ownerId}::uuid
+          AND game_id = ANY(${gameIds}::text[])
+      `,
+    ]);
+  } catch (error) {
+    console.error("sessions game backup cleanup error", error);
   }
 }
 
@@ -737,6 +766,13 @@ async function handlePut(request: Request) {
         CROSS JOIN LATERAL jsonb_array_elements_text(
           source.value->'buyIns'
         ) WITH ORDINALITY AS buy_in(value, position)
+      `,
+      // The game is saved, so its backup of the game in progress goes.
+      sql`
+        DELETE FROM game_backups
+        WHERE owner_id = ${ownerId}::uuid
+          AND game_id = ${resolved.id}
+          AND NULLIF(current_setting('app.continued_record', true), '') IS NOT NULL
       `,
     ]);
     if (!results[2].length) return sessionChangedResponse();
