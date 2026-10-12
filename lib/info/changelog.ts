@@ -34,7 +34,7 @@ export const CHANGELOG: ChangelogEntry[] = [
       },
       {
         tag: "new",
-        text: "Late arrivals. Between hands, tap Add player, pick who's joining and where they sit. They buy in for the starting stack and play from the next hand.",
+        text: "Late arrivals. Between hands, tap Add player, pick who's joining, where they sit and what they buy in for. They play from the next hand.",
       },
       {
         tag: "new",
