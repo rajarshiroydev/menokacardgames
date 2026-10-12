@@ -1212,7 +1212,8 @@ textarea::placeholder {
 
 .home-live-pot {
   display: block;
-  margin-top: 4px;
+  /* The tight line height lets the glyphs rise ~7px above the box; clear the kicker. */
+  margin-top: 12px;
   color: var(--g);
   font-family: var(--fd);
   font-size: 64px;
