@@ -454,24 +454,57 @@ export function bigBlindAtLevel(
   return Math.max(1, Math.round(raised));
 }
 
+/** When the current timed level began under `plan`. */
+function levelStartedAt(game: GameState, plan: BlindPlan, level: number) {
+  return (
+    game.blindLevelStartedAt ??
+    plan.effectiveAt + level * (plan.schedule?.every ?? 0) * MINUTE
+  );
+}
+
 /**
- * Level the given hand is dealt at. Hand-based levels count completed hands,
- * so `every: 10` keeps hands 1-10 at level 0. Time-based levels count real
- * minutes since the game started, and only apply when the next hand is dealt.
+ * Level the given hand is dealt at, and when that level began. Hand-based
+ * levels count completed hands, so `every: 10` keeps hands 1-10 at level 0.
+ * Timed levels last `every` real minutes and only change when a hand is
+ * dealt, by at most one level per deal, so a table left idle doesn't jump
+ * several levels. The next level starts where the last one ended, keeping
+ * the schedule during play; after a break longer than a whole level, its
+ * clock starts at the deal instead.
  */
+function blindLevelAt(game: GameState, handNo: number, now: number) {
+  const plan = planForHand(game, handNo);
+  const schedule = plan.schedule;
+  if (!schedule || schedule.every <= 0) {
+    return { level: 0, startedAt: undefined };
+  }
+  if (schedule.unit === "hands") {
+    const elapsed = handNo - plan.effectiveHand;
+    return {
+      level: Math.max(0, Math.floor(elapsed / schedule.every)),
+      startedAt: undefined,
+    };
+  }
+  // The hand before this one ran under the same plan, at `game.blindLevel`.
+  const samePlan = handNo > plan.effectiveHand;
+  const level = samePlan ? (game.blindLevel ?? 0) : 0;
+  const startedAt = samePlan
+    ? levelStartedAt(game, plan, level)
+    : plan.effectiveAt;
+  const levelMs = schedule.every * MINUTE;
+  const endsAt = startedAt + levelMs;
+  if (now < endsAt) return { level, startedAt };
+  return {
+    level: level + 1,
+    startedAt: now - endsAt < levelMs ? endsAt : now,
+  };
+}
+
 export function blindLevelFor(
   game: GameState,
   handNo: number,
   now = Date.now(),
 ) {
-  const plan = planForHand(game, handNo);
-  const schedule = plan.schedule;
-  if (!schedule || schedule.every <= 0) return 0;
-  const elapsed =
-    schedule.unit === "hands"
-      ? handNo - plan.effectiveHand
-      : (now - plan.effectiveAt) / MINUTE;
-  return Math.max(0, Math.floor(elapsed / schedule.every));
+  return blindLevelAt(game, handNo, now).level;
 }
 
 /** What the blinds are now, and what the next level brings. */
@@ -510,7 +543,7 @@ export function blindStatus(game: GameState, now = Date.now()) {
     status.dueNow = status.handsLeft === 0;
   } else {
     const levelEndsAt =
-      plan.effectiveAt + (level + 1) * schedule.every * MINUTE;
+      levelStartedAt(game, plan, level) + schedule.every * MINUTE;
     status.msLeft = Math.max(0, levelEndsAt - now);
     status.dueNow = status.msLeft === 0;
   }
@@ -520,12 +553,14 @@ export function blindStatus(game: GameState, now = Date.now()) {
 /** Moves `game.ante` to the level the given hand belongs to. */
 function applyBlindLevel(game: GameState, handNo: number, now: number) {
   const plan = planForHand(game, handNo);
-  const level = blindLevelFor(game, handNo, now);
+  const { level, startedAt } = blindLevelAt(game, handNo, now);
   const bigBlind = bigBlindAtLevel(plan.baseBigBlind, plan.schedule, level);
   const previousBigBlind = game.ante;
   const changed = bigBlind !== previousBigBlind;
   game.blinds = plan.schedule;
   game.blindLevel = level;
+  if (startedAt === undefined) delete game.blindLevelStartedAt;
+  else game.blindLevelStartedAt = startedAt;
   game.ante = bigBlind;
   const previousLevels = (game.blindLevels ?? []).filter(
     (entry) => entry.handNo < handNo,
@@ -556,6 +591,7 @@ export function dealNewHand(game: GameState, now = Date.now()) {
   const dealerIndexBefore = game.dealerIndex;
   const anteBefore = game.ante;
   const blindLevelBefore = game.blindLevel ?? 0;
+  const blindLevelStartedAtBefore = game.blindLevelStartedAt;
   const blindsBefore = game.blinds ?? null;
   const blindLevelsBefore = structuredClone(game.blindLevels ?? []);
   game.handNo += 1;
@@ -615,6 +651,9 @@ export function dealNewHand(game: GameState, now = Date.now()) {
     dealerIndexBefore,
     anteBefore,
     blindLevelBefore,
+    ...(blindLevelStartedAtBefore !== undefined
+      ? { blindLevelStartedAtBefore }
+      : {}),
     blindsBefore,
     blindLevelsBefore,
     ...(ante ? { ante } : {}),
@@ -653,6 +692,7 @@ export function completedHandRecord(game: GameState): CompletedHand {
     dealerIndexBefore: hand.dealerIndexBefore,
     anteBefore: hand.anteBefore,
     blindLevelBefore: hand.blindLevelBefore,
+    blindLevelStartedAtBefore: hand.blindLevelStartedAtBefore,
     blindsBefore: hand.blindsBefore,
     blindLevelsBefore: hand.blindLevelsBefore
       ? structuredClone(hand.blindLevelsBefore)
@@ -702,6 +742,11 @@ export function undoLastHand(game: GameState, now = Date.now()) {
   if (last.anteBefore !== undefined) {
     game.ante = last.anteBefore;
     game.blindLevel = last.blindLevelBefore ?? game.blindLevel;
+    if (last.blindLevelStartedAtBefore === undefined) {
+      delete game.blindLevelStartedAt;
+    } else {
+      game.blindLevelStartedAt = last.blindLevelStartedAtBefore;
+    }
     game.blinds = last.blindsBefore ?? null;
     game.blindLevels = structuredClone(last.blindLevelsBefore ?? []);
   }
@@ -739,6 +784,11 @@ export function cancelCurrentHand(game: GameState, now = Date.now()) {
   if (hand.anteBefore !== undefined) {
     game.ante = hand.anteBefore;
     game.blindLevel = hand.blindLevelBefore ?? game.blindLevel;
+    if (hand.blindLevelStartedAtBefore === undefined) {
+      delete game.blindLevelStartedAt;
+    } else {
+      game.blindLevelStartedAt = hand.blindLevelStartedAtBefore;
+    }
     game.blinds = hand.blindsBefore ?? null;
     game.blindLevels = structuredClone(hand.blindLevelsBefore ?? []);
   }

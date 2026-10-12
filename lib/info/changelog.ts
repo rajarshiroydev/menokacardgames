@@ -60,6 +60,10 @@ export const CHANGELOG: ChangelogEntry[] = [
         tag: "improved",
         text: "A split pot's leftover chip now goes to the winner nearest the dealer's left, as in casinos.",
       },
+      {
+        tag: "fixed",
+        text: "Timed blinds no longer leap ahead after a break. A table left open goes up one level on the next deal, the one the screen shows, and that level's clock starts then.",
+      },
     ],
   },
   {

@@ -99,6 +99,7 @@ export type Hand = {
   dealerIndexBefore?: number;
   anteBefore?: number;
   blindLevelBefore?: number;
+  blindLevelStartedAtBefore?: number;
   blindsBefore?: BlindSchedule | null;
   blindLevelsBefore?: BlindLevelRecord[];
   /**
@@ -151,6 +152,7 @@ export type CompletedHand = {
   dealerIndexBefore?: number;
   anteBefore?: number;
   blindLevelBefore?: number;
+  blindLevelStartedAtBefore?: number;
   blindsBefore?: BlindSchedule | null;
   blindLevelsBefore?: BlindLevelRecord[];
   /** Rake taken in the game before this hand; older records lack it. */
@@ -209,6 +211,11 @@ export type GameState = {
   baseAnte?: number;
   blinds?: BlindSchedule | null;
   blindLevel?: number;
+  /**
+   * When the current timed level began; it lasts `every` minutes from here.
+   * Older games lack it and count from the plan's start instead.
+   */
+  blindLevelStartedAt?: number;
   blindPlans?: BlindPlan[];
   blindLevels?: BlindLevelRecord[];
   startStack: number;

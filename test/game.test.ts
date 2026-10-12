@@ -264,9 +264,115 @@ describe("rising blinds", () => {
     assert.equal(game.blindLevel, 1);
     assert.deepEqual(game.hand?.committed, [150, 0, 75]);
 
+    // Two levels have passed by the clock, but one deal moves up one level.
     playHands(game, 1, start + 61 * 60_000);
-    assert.equal(game.ante, 338);
+    assert.equal(game.ante, 225);
+    assert.equal(game.blindLevel, 2);
+  });
+
+  test("moves a timed level up by one when an idle table deals", () => {
+    const start = 1_000_000;
+    const schedule: BlindSchedule = {
+      unit: "minutes",
+      every: 20,
+      raiseType: "multiply",
+      raiseBy: 2,
+    };
+    const game = gameState(schedule);
+    game.startedAt = start;
+    game.blindPlans = [
+      { effectiveHand: 1, effectiveAt: start, baseBigBlind: 100, schedule },
+    ];
+    for (const minutes of [0, 20, 40, 60]) {
+      playHands(game, 1, start + minutes * 60_000);
+    }
     assert.equal(game.blindLevel, 3);
+    assert.equal(game.ante, 800);
+
+    // Left open for 17 hours: the screen and the deal agree on one level up.
+    const later = start + 17 * 60 * 60_000;
+    const status = blindStatus(game, later);
+    assert.equal(status.dueNow, true);
+    assert.equal(status.nextBigBlind, 1_600);
+    playHands(game, 1, later);
+    assert.equal(game.blindLevel, 4);
+    assert.equal(game.ante, 1_600);
+    assert.equal(game.log[0], "Hand 5: blinds up to ₹800/₹1,600 (level 5)");
+    // The new level's clock starts at that deal.
+    assert.equal(game.blindLevelStartedAt, later);
+    assert.equal(blindStatus(game, later).msLeft, 20 * 60_000);
+  });
+
+  test("keeps timed levels on schedule during play", () => {
+    const start = 1_000_000;
+    const game = gameState({
+      unit: "minutes",
+      every: 20,
+      raiseType: "add",
+      raiseBy: 100,
+    });
+    game.startedAt = start;
+
+    playHands(game, 1, start);
+    // A long hand runs past the break; the next level still ends at 40.
+    playHands(game, 1, start + 23 * 60_000);
+    assert.equal(game.ante, 200);
+    assert.equal(game.blindLevelStartedAt, start + 20 * 60_000);
+    assert.equal(blindStatus(game, start + 23 * 60_000).msLeft, 17 * 60_000);
+    playHands(game, 1, start + 41 * 60_000);
+    assert.equal(game.ante, 300);
+    assert.equal(game.blindLevelStartedAt, start + 40 * 60_000);
+
+    // A break longer than a whole level restarts the clock at the deal.
+    playHands(game, 1, start + 85 * 60_000);
+    assert.equal(game.ante, 400);
+    assert.equal(game.blindLevelStartedAt, start + 85 * 60_000);
+  });
+
+  test("counts older timed games from the plan's start", () => {
+    const start = 1_000_000;
+    const game = gameState({
+      unit: "minutes",
+      every: 10,
+      raiseType: "add",
+      raiseBy: 100,
+    });
+    game.startedAt = start;
+    // Saved mid-game at level 3 before level start times were kept.
+    game.handNo = 7;
+    game.blindLevel = 2;
+    game.ante = 300;
+
+    assert.equal(blindStatus(game, start + 25 * 60_000).msLeft, 5 * 60_000);
+    playHands(game, 1, start + 25 * 60_000);
+    assert.equal(game.ante, 300);
+    playHands(game, 1, start + 3 * 60 * 60_000);
+    assert.equal(game.ante, 400);
+    assert.equal(game.blindLevel, 3);
+  });
+
+  test("a changed timed plan starts at its first level", () => {
+    const start = 1_000_000;
+    const game = gameState({
+      unit: "minutes",
+      every: 10,
+      raiseType: "add",
+      raiseBy: 100,
+    });
+    game.startedAt = start;
+    playHands(game, 1, start);
+    playHands(game, 1, start + 11 * 60_000);
+    assert.equal(game.blindLevel, 1);
+
+    editBlindSchedule(
+      game,
+      { unit: "minutes", every: 15, raiseType: "add", raiseBy: 50 },
+      start + 12 * 60_000,
+    );
+    // Hours later the new plan moves up only one level from its start.
+    playHands(game, 1, start + 5 * 60 * 60_000);
+    assert.equal(game.blindLevel, 1);
+    assert.equal(game.ante, 250);
   });
 
   test("rounds multiplied blinds and never drops below 1", () => {
