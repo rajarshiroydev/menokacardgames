@@ -122,7 +122,7 @@ const GROUPS: FeatureGroup[] = [
       },
       {
         name: "Edit as you go",
-        text: "Between hands you can change the blind plan or the rebuy limits, and buy busted players back in.",
+        text: "Between hands you can change the blind plan or the rebuy limits, buy busted players back in, seat someone who arrives late, or cash out someone who has to leave.",
       },
       {
         name: "Nothing lost on refresh",

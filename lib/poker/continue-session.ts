@@ -165,18 +165,26 @@ export function continuationError(
   if (incoming.ended <= saved.ended) {
     return "The continued game must end after the saved game";
   }
+  // Everyone saved must still be there; players who joined late are new
+  // results, and a late seat can move the others along.
+  const incomingById = new Map(
+    incoming.results.flatMap((result) =>
+      result.playerId ? [[result.playerId, result] as const] : [],
+    ),
+  );
   if (
-    incoming.results.length !== saved.results.length ||
-    incoming.results.some(
-      (result, index) =>
-        !result.playerId || result.playerId !== saved.results[index].playerId,
+    incoming.results.some((result) => !result.playerId) ||
+    incomingById.size !== incoming.results.length ||
+    saved.results.some(
+      (result) => !result.playerId || !incomingById.has(result.playerId),
     )
   ) {
-    return "The continued game must keep the same players in the same seats";
+    return "The continued game must keep every saved player";
   }
-  const keptBuyIns = saved.results.every((result, index) => {
+  const keptBuyIns = saved.results.every((result) => {
     const before = result.buyIns ?? [saved.startStack];
-    const after = incoming.results[index].buyIns ?? [incoming.startStack];
+    const later = incomingById.get(result.playerId!)!;
+    const after = later.buyIns ?? [incoming.startStack];
     return startsWith(after.map(String), before.map(String));
   });
   if (!keptBuyIns) {

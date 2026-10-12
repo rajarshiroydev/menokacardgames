@@ -227,7 +227,7 @@ export function LiveStandings({ token }: { token: string }) {
             <span className="live-player">
               <b>{row.name}</b>
               <span className="live-stack">
-                <small>Stack</small>
+                <small>{row.left ? "Cashed out" : "Stack"}</small>
                 {formatChips(row.stack, view.chipUnit, view.currency)}
               </span>
             </span>

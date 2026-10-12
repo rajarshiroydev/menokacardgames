@@ -138,6 +138,19 @@ describe("live view standings", () => {
 });
 
 describe("live view validation", () => {
+  test("a player who cashed out keeps their chips and is marked as left", () => {
+    const left = game([15_000, 5_000, 10_000]);
+    left.players[0].left = true;
+    const built = buildLiveSnapshot(left);
+    assert.equal(built.players[0].left, true);
+    assert.equal(built.players[1].left, undefined);
+    const view = deriveLiveView(validateLiveSnapshot(built));
+    assert.deepEqual(
+      view.standings.map((row) => [row.name, row.stack, row.left ?? false]),
+      [["Debraj", 15_000, true], ["Pratik", 10_000, false], ["Rajarshi", 5_000, false]],
+    );
+  });
+
   test("accepts a valid snapshot and cleans names", () => {
     const input = snapshot();
     input.players[0].name = "  Debraj   Das ";
@@ -167,6 +180,14 @@ describe("live view validation", () => {
       input.players[0].stack = 14_100;
     }],
     ["duplicate names", (input) => { input.players[1].name = "debraj"; }],
+    ["a table status other than left", (input) => {
+      (input.players[0] as unknown as { left: string }).left = "yes";
+    }],
+    ["a player who left but is still in the hand", (input) => {
+      input.handInProgress = true;
+      input.players[0].left = true;
+      input.players[0].stack = 13_900;
+    }],
   ];
 
   for (const [label, change] of rejects) {

@@ -1,6 +1,6 @@
 # Feature list
 
-Updated: 5 October 2026
+Updated: 12 October 2026
 
 This is a plain-language list of everything Pokerize can do today. It is written for anyone, technical or not. It describes how the app behaves right now; plans and future ideas live in the [feature plan](./FEATURE-PLAN.md).
 
@@ -99,7 +99,7 @@ The **Profile** tab replaced the Players tab on 30 September 2026. From the top:
 ## 4. Starting a game
 
 - **Game name (optional).** If left empty, the game is called "Game" plus the next number in your ledger, for example "Game 25". Numbers count up separately for each host.
-- **Select players.** Every player on your friend list appears as a button, with you first, marked **You**. Tap players to seat them; the order you tap is the seating order, and each seated player shows their seat number. Tap a seated player again to take them off the table. There's no seated count or "need 2" note: **Deal First Hand** stays unavailable until two are seated. Up to 10 players can be seated; once 10 are seated, the others can't be tapped.
+- **Select players.** Every player on your friend list appears as a button, with you first, marked **You**. Tap players to seat them; the order you tap is the seating order, and each seated player shows their seat number. Tap a seated player again to take them off the table. There's no seated count or "need 2" note: **Deal First Hand** stays unavailable until two are seated. Up to 10 players can be seated; once 10 are seated, the others can't be tapped. More can join between hands later (section 8), up to 10 in the whole game.
 - **Seating Order.** Once two or more are seated, a **Seating Order** list shows the seats in order. Drag a player by the grip (⠿) to change seats, or use the arrow keys on the grip. A **Randomize dealer** switch beside the heading is **on by default**: the first dealer is drawn at random from the seated players when **Deal First Hand** is pressed, so nobody sees it during setup. Off, seat 1 deals first. Either way the dealer then moves round the table in seat order. Its **i** button opens a sheet with two lines, **Randomize Dealer On** (chosen at random when the game starts) and **Randomize Dealer Off** (seat 1 deals first); it closes with **Got it**, a tap outside it or Escape, like the other **i** sheets.
 - **Starting stack / first buy-in.** Two rows of quick choices: 20, 50, 100, 200, 500 and 1K, then 2K, 5K, 10K (the default), 20K, 50K and **Other** to type any amount (up to two decimals, at least 0.01).
 - **Big blind.** Follows the stack: choosing a stack picks the usual big blind for it, 1/100 of the stack (₹100 for 10K, ₹0.50 for 50), and offers four choices, 1/200, 1/100, 1/50 and 1/20 of the stack (for 10K: ₹50, ₹100, ₹200 and ₹500; for 50: ₹0.25, ₹0.50, ₹1 and ₹2.50), plus **Other** to type any amount. Choosing another stack resets the big blind, a typed small blind, an "add" blind increase and the rebuy closing blind to suit it.
@@ -200,6 +200,14 @@ The **Profile** tab replaced the Players tab on 30 September 2026. From the top:
   - Games saved before 24 September 2026 used half the previous buy-in (10,000, then 5,000, then 2,500). Those games, and old backups, stay valid and are ranked as before. A game already in progress when the rule changed keeps its earlier half buy-ins, and any new buy-in is the full stack.
   - Each buy-in asks for confirmation and appears in the log.
   - Every buy-in counts as money invested in the standings.
+- **Add player** (late join, since 12 October 2026). Opens a sheet listing everyone on your player list who isn't in this game. Pick who's joining, then their **Seat**: "Left of *name*" for each player still at the table (the next seat clockwise, the way the deal goes), with the last hand's dealer marked "(dealer last hand)"; it starts on the left of the last seat. **Add *name* · *starting stack*** seats them, bought in for the starting stack, and they're dealt in from the next hand with no extra blind to post. The log says "Before hand 9: Dev joins and buys in for ₹10,000". The dealer button stays with the same player wherever the new seat is.
+  - **Up to 10 people per game**, counting anyone who cashed out. Once 10 have played, the sheet says so and nobody else can join.
+  - Only players already on your list can join; to add a new guest, add them on Profile, then come back to the table.
+- **Cash out** (since 12 October 2026). Opens a sheet listing everyone still at the table with their chips. Tapping a player asks "Cash out *name* with ₹X? They can return later." with **Cash Out · ₹X**. The chips in front of them become their final result: they stay in Session Standings marked "Cashed out", are counted when the game is saved, aren't dealt in again and can't rebuy. The log says "Before hand 9: Asha cashes out with ₹12,000". A busted player can be cashed out too, which stops the buy-in offer for them.
+  - **Return:** the same sheet lists players who left under **Left the table**, each with **Return · ₹X**. Returning seats them again with the chips they left with ("Before hand 12: Asha returns to the table with ₹12,000"), which also fixes a cash-out tapped by mistake.
+  - Players who cashed out don't appear on the table during a hand (List or Table view); the live standings link shows them as "Cashed out" (section 19).
+  - If fewer than two players with chips are left at the table, the game shows **Not Enough Chips**, as when players bust.
+- **Undo last hand after a table change:** adding, cashing out or returning a player switches off **Undo last hand** until another hand is finished, because the hand before can't be replayed with a different table.
 - **Edit Blind Plan** (see section 5).
 - **Edit rebuys** (see Buy-ins above).
 
@@ -207,7 +215,7 @@ The **Profile** tab replaced the Players tab on 30 September 2026. From the top:
 
 - **Undo (one action)** (since 12 October 2026, the same in List and Table view): one button above **Cancel hand** takes back the latest action of the current street and names it, such as "Undo Asha's call", "Undo Arjun's raise", "Undo Bikram's fold" or "Undo Asha's all in". It uses the first name, or the full name when two players share a first name ("Undo Arjun S.'s check"). That player acts again, and the button then names the action before it, so repeated taps step back through the street. It is hidden before anyone acts on a street and while splitting a pot; at the showdown it undoes the last river action. The player cards no longer have their own Undo buttons. Undoing a bet or raise doesn't make the players who had already called or checked before it act again.
 - **Cancel hand:** refunds every chip from the current hand, including the blinds, and deals the same hand again exactly as it was first dealt: the same hand number, dealer, small blind and big blind, and the same blind level (even for timed blinds that have gone up since), with its log lines removed.
-- **Undo last hand:** reverses the last completed hand and deals it again exactly as it was first dealt: the same dealer, small blind and big blind, the same blind level (even for timed blinds that have since gone up), everyone's stacks and buy-ins from before it, and its log lines removed. If the next hand was already dealt, that hand is undone too, and any rebuy made in between is taken back. Only the most recent completed hand can be undone.
+- **Undo last hand:** reverses the last completed hand and deals it again exactly as it was first dealt: the same dealer, small blind and big blind, the same blind level (even for timed blinds that have since gone up), everyone's stacks and buy-ins from before it, and its log lines removed. If the next hand was already dealt, that hand is undone too, and any rebuy made in between is taken back. Only the most recent completed hand can be undone, and not across a player joining, cashing out or returning (section 8).
 - **Discard game:** throws away the game in progress without saving. Asks for confirmation first.
 - Every one of these asks for confirmation before anything changes.
 
@@ -236,6 +244,7 @@ The **Profile** tab replaced the Players tab on 30 September 2026. From the top:
 - **Permanently delete a game** only after it has been discarded, and only within 10 minutes of signing in (see section 13).
 - **Continue a saved game.** Every saved game card (not discarded ones) has a **Continue game** button, for any game, however long ago it was saved. It asks for confirmation first, and isn't allowed while another game is in progress ("Finish or discard the game in progress first").
   - The game opens between hands, so busted players can buy in before the next deal. Everyone keeps their seat, the chips they finished with and their buy-ins, under their current name. Hand numbers carry on (after 95 hands the next is hand 96), and the log starts with "Continued from Game 6 after 95 hands".
+  - Saved games don't record who cashed out, so a player who left comes back seated with the chips they left with; cash them out again if they aren't playing. Players can join a continued game (section 8); saving it keeps every earlier player and buy-in and adds the new ones.
   - The dealer isn't saved with a game, so the next dealer is drawn at random.
   - Rebuy limits carry on, and players keep the rebuys they already used; **Edit rebuys** can change them.
   - The big blind ante and rake rules carry on unchanged, and the house keeps the rake already taken.
@@ -265,7 +274,7 @@ The **Profile** tab replaced the Players tab on 30 September 2026. From the top:
 - **Each player's row shows** rank (in a gold circle for 1st, silver for 2nd and bronze for 3rd; the live standings link uses the same colours), name and average return (to two decimal places). Tap a row to open or close its details:
   - **Sessions:** games played, for example 24. If some can't be ranked, it adds how many were, for example "24 (23 ranked)"
   - **Profitable:** games they finished ahead, with the percentage
-  - **Hands:** total hands dealt in the games they played
+  - **Hands:** total hands dealt in the games they played (a player who joined late or left early is counted for the whole game)
   - **Invested:** total chips put in
   - **Net:** total won or lost, in the host's currency
 - **Games that can't be ranked.** If a game's saved chip totals don't add up, or a player put in no chips, that game is left out of the ranking. The row says which game and why, for example "Not ranked: Game 12 — the saved chip totals do not add up". All the other stats on the row count only ranked games, so they always describe the same games. A player with no rankable games shows as "Unranked", never as 0%.
@@ -339,7 +348,7 @@ The **Profile** tab replaced the Players tab on 30 September 2026. From the top:
 ## 19. Live standings for players
 
 - **Share the game with the table.** During a game, the **Session Standings** card has a **Share live standings** button. **Create live link** makes a link and shows it as a QR code, with **Share link** (the phone's share menu, for example WhatsApp) and **Copy link**.
-- **No sign-in for players.** Anyone who opens the link sees a read-only page. From the top: the game name, the current blinds in large type (with the rebuy limits underneath, when the game has any), then every player's card with rank, their avatar (as in the host's list), stack (in large type), net ▲/▼ and **Buy-In** (everything they've bought in, including rebuys, with the number of rebuys), and finally the hand status (for example "Hand 12 in progress" or "After hand 12") with when it was last updated.
+- **No sign-in for players.** Anyone who opens the link sees a read-only page. From the top: the game name, the current blinds in large type (with the rebuy limits underneath, when the game has any), then every player's card with rank, their avatar (as in the host's list), stack (in large type; labelled "Cashed out" instead of "Stack" for a player who left, section 8), net ▲/▼ and **Buy-In** (everything they've bought in, including rebuys, with the number of rebuys), and finally the hand status (for example "Hand 12 in progress" or "After hand 12") with when it was last updated.
 - **When the numbers change.** Stacks update after every action, so a player can check their chips before betting. Net and rank change only when a hand ends, so the order doesn't jump around during a hand.
 - **How fast.** The host's phone sends each change about a second after the host stops tapping, at most once every 3 seconds. Players' phones check every 5 seconds while the page is open on screen, and at once when they come back to it (after unlocking the phone, switching back from another app, or getting the network back). A check that gets no answer within 8 seconds is dropped and tried again, so a bad connection can't stop the page from updating.
 - **Is the host still connected?** The page says "Updated 12s ago". While the host's phone is on, it also checks in once a minute when nothing has changed. After 2½ minutes without any update, the page warns that the host's phone may be offline or asleep. If instead the player's own phone can't reach the app, the page says "This phone can't reach the app" and keeps trying.

@@ -180,13 +180,41 @@ describe("continuationError", () => {
     assert.ok(continuationError(saved, continued({ ended: saved.ended })));
   });
 
-  it("refuses changed seats or players", () => {
-    const swapped = continued();
-    swapped.results.reverse();
-    assert.ok(continuationError(saved, swapped));
+  it("refuses a game that drops a saved player", () => {
     const fewer = continued();
     fewer.results.pop();
-    assert.ok(continuationError(saved, fewer));
+    assert.equal(
+      continuationError(saved, fewer),
+      "The continued game must keep every saved player",
+    );
+    const replaced = continued();
+    replaced.results[2] = { ...replaced.results[2], playerId: "p9" };
+    assert.ok(continuationError(saved, replaced));
+    const unknown = continued();
+    delete unknown.results[2].playerId;
+    assert.ok(continuationError(saved, unknown));
+  });
+
+  it("accepts players who joined late, wherever they sit", () => {
+    const joined = continued();
+    // Joined in seat 2 for the starting stack and is up 2,000; Raj paid it.
+    joined.results.splice(1, 0, {
+      playerId: "p4",
+      name: "Dev",
+      net: 2000,
+      end: 12000,
+    });
+    joined.results[0] = { ...joined.results[0], net: 8000, end: 28000 };
+    assert.equal(continuationError(saved, joined), null);
+    const swapped = continued();
+    swapped.results.reverse();
+    assert.equal(continuationError(saved, swapped), null);
+  });
+
+  it("refuses a player listed twice", () => {
+    const twice = continued();
+    twice.results.push({ ...twice.results[2] });
+    assert.ok(continuationError(saved, twice));
   });
 
   it("refuses dropped buy-ins", () => {

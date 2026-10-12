@@ -35,6 +35,8 @@ export type LiveSnapshotPlayer = {
   buyIns: number[];
   /** Chips at the start of the current hand, or `stack` between hands. */
   settledStack: number;
+  /** Cashed out and left the table; `stack` is what they left with. */
+  left?: boolean;
 };
 
 export type LiveSnapshot = {
@@ -62,6 +64,8 @@ export type LiveStanding = {
   invested: number;
   net: number;
   rebuys: number;
+  /** Cashed out and left the table; absent while seated. */
+  left?: boolean;
 };
 
 export type LiveView = {
@@ -109,6 +113,7 @@ export function buildLiveSnapshot(
         stack: player.stack,
         buyIns,
         settledStack,
+        ...(player.left ? { left: true } : {}),
       };
     }),
   };
@@ -194,7 +199,20 @@ export function validateLiveSnapshot(input: unknown): LiveSnapshot {
     }
     // An avatar the server doesn't know is dropped; the page draws a stand-in.
     const avatar = isAvatarId(player.avatar) ? player.avatar : undefined;
-    return { name, ...(avatar ? { avatar } : {}), stack, buyIns, settledStack };
+    if (player.left !== undefined && player.left !== true) {
+      throw new Error(`Invalid table status for ${name}`);
+    }
+    if (player.left && stack !== settledStack) {
+      throw new Error(`${name} left the table and can't be in a hand`);
+    }
+    return {
+      name,
+      ...(avatar ? { avatar } : {}),
+      stack,
+      buyIns,
+      settledStack,
+      ...(player.left ? { left: true } : {}),
+    };
   });
 
   return {
@@ -237,6 +255,7 @@ export function deriveLiveView(snapshot: LiveSnapshot): LiveView {
     invested: result.invested,
     net: result.net,
     rebuys: result.buyIns.length - 1,
+    ...(snapshot.players[index].left ? { left: true } : {}),
   }));
   rows.sort(
     (a, b) =>

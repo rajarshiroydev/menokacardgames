@@ -12,6 +12,7 @@ import type {
   CompletedHand,
   GameState,
   Hand,
+  Player,
   PokerSession,
   Pot,
   PotResult,
@@ -112,7 +113,7 @@ export function editRebuyRules(game: GameState, rules: RebuyRules | null) {
 export function nextBuyIn(game: GameState, playerIndex: number) {
   const player = game.players[playerIndex];
   const hand = game.hand;
-  if (!player || player.stack !== 0) return null;
+  if (!player || player.left || player.stack !== 0) return null;
   // During a hand, only a player who was bust when it was dealt (not one who
   // is all in); they sit the hand out.
   if (
@@ -131,6 +132,107 @@ export function nextBuyIn(game: GameState, playerIndex: number) {
   )
     ? amount
     : null;
+}
+
+/** Up to this many people can play in one game, counting anyone who left. */
+export const MAX_GAME_PLAYERS = 10;
+
+/** Seated with chips, so dealt into the next hand. */
+export function isDealtIn(player: Player) {
+  return !player.left && player.stack > 0;
+}
+
+/** Seated players with chips; the next hand needs two. */
+export function dealablePlayerCount(game: GameState) {
+  return game.players.filter(isDealtIn).length;
+}
+
+function nameKey(name: string) {
+  return name.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+/**
+ * Whether a player from the host's list can join between hands: the game
+ * has room and they aren't in it already (by record, or by name for older
+ * players without one, since a saved game can't list a name twice).
+ */
+export function canJoinGame(
+  game: GameState,
+  player: { id?: string; name: string },
+) {
+  if (game.hand || game.players.length >= MAX_GAME_PLAYERS) return false;
+  return !game.players.some(
+    (seated) =>
+      (player.id && seated.id === player.id) ||
+      nameKey(seated.name) === nameKey(player.name),
+  );
+}
+
+function tableLog(game: GameState, line: string) {
+  // Not "Hand N:", so undoing a hand keeps the line, like the change.
+  game.log.unshift(`Before hand ${game.handNo + 1}: ${line}`);
+  game.log = game.log.slice(0, 80);
+}
+
+/**
+ * Seats a late player between hands at `seat` (0 is before the first seat,
+ * `players.length` after the last), bought in for the starting stack and
+ * dealt in from the next hand like everyone else. Undo last hand can't reach
+ * back past a change to the table, so it is switched off.
+ */
+export function joinGame(
+  game: GameState,
+  player: { id?: string; name: string },
+  seat: number,
+) {
+  if (!canJoinGame(game, player)) return false;
+  if (!Number.isInteger(seat) || seat < 0 || seat > game.players.length) {
+    return false;
+  }
+  game.players.splice(seat, 0, {
+    ...(player.id ? { id: player.id } : {}),
+    name: player.name,
+    stack: game.startStack,
+    buyIns: [game.startStack],
+  });
+  // The button stays with the same player.
+  if (seat <= game.dealerIndex) game.dealerIndex += 1;
+  game.lastHand = null;
+  tableLog(
+    game,
+    `${player.name} joins and buys in for ${formatChips(game.startStack, game.chipUnit, game.currency)}`,
+  );
+  return true;
+}
+
+/**
+ * A player leaves between hands with the chips in front of them, which
+ * become their result. They stay in the game's list, so saving counts them,
+ * but are no longer dealt in.
+ */
+export function cashOutPlayer(game: GameState, playerIndex: number) {
+  const player = game.players[playerIndex];
+  if (game.hand || !player || player.left) return false;
+  player.left = true;
+  game.lastHand = null;
+  tableLog(
+    game,
+    `${player.name} cashes out with ${formatChips(player.stack, game.chipUnit, game.currency)}`,
+  );
+  return true;
+}
+
+/** A player who cashed out sits down again with the chips they left with. */
+export function returnToTable(game: GameState, playerIndex: number) {
+  const player = game.players[playerIndex];
+  if (game.hand || !player?.left) return false;
+  delete player.left;
+  game.lastHand = null;
+  tableLog(
+    game,
+    `${player.name} returns to the table with ${formatChips(player.stack, game.chipUnit, game.currency)}`,
+  );
+  return true;
 }
 
 export function buyInPlayer(game: GameState, playerIndex: number) {
@@ -582,7 +684,7 @@ function applyBlindLevel(game: GameState, handNo: number, now: number) {
 }
 
 export function dealNewHand(game: GameState, now = Date.now()) {
-  const alive = game.players.filter((player) => player.stack > 0).length;
+  const alive = game.players.filter(isDealtIn).length;
   if (alive < 2) {
     game.hand = null;
     return;
@@ -596,7 +698,7 @@ export function dealNewHand(game: GameState, now = Date.now()) {
   const blindLevelsBefore = structuredClone(game.blindLevels ?? []);
   game.handNo += 1;
   applyBlindLevel(game, game.handNo, now);
-  const inHand = game.players.map((player) => player.stack > 0);
+  const inHand = game.players.map(isDealtIn);
   const previousDealer = Number.isInteger(game.dealerIndex)
     ? game.dealerIndex
     : -1;

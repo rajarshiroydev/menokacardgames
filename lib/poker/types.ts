@@ -6,6 +6,11 @@ export type Player = {
   stack: number;
   /** Initial stack followed by each rebuy amount. */
   buyIns?: number[];
+  /**
+   * Cashed out and left the table: not dealt in, and `stack` is the chips
+   * they left with, which is their result. Absent while seated.
+   */
+  left?: boolean;
 };
 
 export type PlayerProfile = {

@@ -26,8 +26,16 @@ export const CHANGE_TAG_LABELS: Record<ChangeTag, string> = {
 export const CHANGELOG: ChangelogEntry[] = [
   {
     date: "2026-10-12",
-    title: "Ante, rake and smarter side pots",
+    title: "Late joins, ante, rake and smarter side pots",
     items: [
+      {
+        tag: "new",
+        text: "Late arrivals. Between hands, tap Add player, pick who's joining and where they sit. They buy in for the starting stack and play from the next hand.",
+      },
+      {
+        tag: "new",
+        text: "Leaving early. Between hands, tap Cash out and pick who's going. The chips in front of them become their result. Tapped by mistake, or they came back? Return seats them again with the same chips.",
+      },
       {
         tag: "new",
         text: "Big blind ante. Turn it on at setup and the big blind also puts in one big blind for the whole table each hand.",

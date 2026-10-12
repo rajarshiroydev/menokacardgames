@@ -3486,6 +3486,31 @@ textarea::placeholder {
   gap: 8px;
 }
 
+/*
+ * Players to add, cash out or bring back, between hands. On a short screen
+ * the list shrinks and scrolls, so the boxes below it keep their height.
+ */
+.table-change-list {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 1;
+  gap: 8px;
+  min-height: 132px;
+  max-height: 45vh;
+  overflow-y: auto;
+}
+
+.table-change-list > .contender {
+  flex-shrink: 0;
+}
+
+/* A sheet taller than the screen scrolls; its boxes never get squashed. */
+.sheet > input,
+.sheet > select,
+.sheet > .field {
+  flex-shrink: 0;
+}
+
 .standing-row {
   display: flex;
   align-items: center;
