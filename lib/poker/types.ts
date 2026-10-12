@@ -81,7 +81,13 @@ export type Hand = {
    * or fold. Older hands lack it, and everyone may raise.
    */
   raiseOpen?: boolean[];
+  /**
+   * Stacks at the deal. A player who buys in during the hand counts as having
+   * had the new stack already, since they sit the hand out.
+   */
   stacksBeforeHand: number[];
+  /** Players who bought in during this hand; they play from the next one. */
+  boughtIn?: number[];
   dealerIndex: number;
   smallBlindIndex: number;
   bigBlindIndex: number;

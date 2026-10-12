@@ -1742,21 +1742,27 @@ export function PokerLedger({
   }
 
   function buyIn(playerIndex: number) {
-    if (!game || game.hand) return;
+    if (!game) return;
     const amount = nextBuyIn(game, playerIndex);
     if (amount === null) return;
     const player = game.players[playerIndex];
+    // During a hand they sit it out and play from the next deal.
+    const handNo = game.hand?.no;
     ask(
-      `Buy in ${player.name} for ${money(amount)}?`,
+      handNo
+        ? `Buy in ${player.name} for ${money(amount)}? They sit out this hand and play from the next one.`
+        : `Buy in ${player.name} for ${money(amount)}?`,
       `Buy In · ${money(amount)}`,
       () => {
         const next = structuredClone(game);
         const confirmedAmount = buyInPlayer(next, playerIndex);
         if (confirmedAmount === null) return;
         const confirmedPlayer = next.players[playerIndex];
+        // Not "Hand N:" during a hand, so cancelling it keeps the line, like
+        // the buy-in.
         recordWin(
           next,
-          `Hand ${next.handNo}: ${confirmedPlayer.name} buys in for ${money(confirmedAmount)}`,
+          `${handNo ? `During hand ${handNo}` : `Hand ${next.handNo}`}: ${confirmedPlayer.name} buys in for ${money(confirmedAmount)}`,
         );
         setGame(next);
         showToast(
@@ -2561,6 +2567,45 @@ function TurnSeatsIcon() {
       <path d="M20 12a8 8 0 1 1-2.34-5.66" />
       <path d="M20 4v4.5h-4.5" />
       <circle cx="12" cy="12" r="2" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
+function PencilIcon() {
+  return (
+    <svg
+      className="pencil-icon"
+      viewBox="0 0 24 24"
+      width="16"
+      height="16"
+      aria-hidden="true"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16z" />
+      <path d="m13.5 6.5 4 4" />
+    </svg>
+  );
+}
+
+function UndoIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width="18"
+      height="18"
+      aria-hidden="true"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M9 14 4 9l5-5" />
+      <path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11" />
     </svg>
   );
 }
@@ -6389,7 +6434,7 @@ function GameScreen(props: GameViewProps) {
                   roundClosed={playerIndex === closer}
                   flash={flashFor(game, props.lastTurn, playerIndex)}
                   onAct={props.onAct}
-                  onUndo={props.onUndoAction}
+                  onBuyIn={props.onBuyIn}
                 />
               ))}
               {hand.stage < lastStage ? (
@@ -6417,6 +6462,7 @@ function GameScreen(props: GameViewProps) {
               )}
             </>
           )}
+          <UndoTurnButton game={game} onUndo={props.onUndoAction} />
           <button
             className="glass-button full danger-text"
             type="button"
@@ -7557,6 +7603,7 @@ function TableHand({
   blindSchedule,
   onAct,
   onUndoAction,
+  onBuyIn,
   onNextStage,
   onPickWinner,
   onBeginSplit,
@@ -7571,8 +7618,6 @@ function TableHand({
   blindSchedule: ReactNode;
 }) {
   const { money } = useMoney();
-  // The seat tapped for its Undo; it clears once that seat can't undo.
-  const [picked, setPicked] = useState<number | null>(null);
   // Places the seats are turned clockwise to match the real table; the deal
   // order is unchanged.
   const [turn, setTurn] = useState(() => readTableTurn(game.startedAt));
@@ -7595,18 +7640,18 @@ function TableHand({
   const potCount = multiPot ? potsFor(game).pots.length : 1;
   const crowded = game.players.length > 6;
   const current = hand.currentPlayer;
-  const undoSeat =
-    picked !== null && hand.last[picked] && !splitting ? picked : null;
+  // A player bust at the deal can buy in by tapping their seat.
+  const canBuyIn = (index: number) =>
+    !splitting && nextBuyIn(game, index) !== null;
 
   function tapSeat(index: number) {
-    if (showdown) {
-      if (!hand?.in[index] || multiPot) return;
-      if (splitting) onToggleSplit(index);
-      else onPickWinner(index);
+    if (canBuyIn(index)) {
+      onBuyIn(index);
       return;
     }
-    if (!hand?.last[index]) return;
-    setPicked((seat) => (seat === index ? null : index));
+    if (!showdown || !hand?.in[index] || multiPot) return;
+    if (splitting) onToggleSplit(index);
+    else onPickWinner(index);
   }
 
   return (
@@ -7702,11 +7747,12 @@ function TableHand({
           const flash = showdown ? undefined : flashFor(game, lastTurn, index);
           const contender = showdown && !folded;
           const inSplit = hand.splitSel?.includes(index) ?? false;
-          const tappable = showdown
-            ? contender && !multiPot
-            : Boolean(hand.last[index]) && !splitting;
-          const status = folded
-            ? "Folded"
+          const buyable = canBuyIn(index);
+          const tappable = buyable || (showdown && contender && !multiPot);
+          const status = buyable
+            ? "Tap to buy in"
+            : folded
+            ? seatStatus(game, index, money)
             : isTurn
               ? "To act"
               : showdown
@@ -7721,10 +7767,9 @@ function TableHand({
                     .replace("Small blind", "SB")
                     .replace("Big blind", "BB");
           const state = [
-            folded ? "folded" : "",
+            folded && !buyable ? "folded" : "",
             isTurn ? "turn" : "",
             contender ? (inSplit ? "in-split" : "contender") : "",
-            undoSeat === index ? "picked" : "",
             flash ? "just-acted" : "",
           ]
             .filter(Boolean)
@@ -7760,30 +7805,6 @@ function TableHand({
 
       {blindSchedule ? <div className="table-schedule">{blindSchedule}</div> : null}
 
-      {undoSeat !== null ? (
-        <div className="glass table-undo">
-          <Avatar
-            name={game.players[undoSeat].name}
-            playerId={game.players[undoSeat].id}
-            size="small"
-          />
-          <span className="seat-copy">
-            <b>{game.players[undoSeat].name}</b>
-            <small>{seatStatus(game, undoSeat, money)}</small>
-          </span>
-          <button
-            className="pill-button"
-            type="button"
-            onClick={() => {
-              setPicked(null);
-              onUndoAction(undoSeat);
-            }}
-          >
-            Undo
-          </button>
-        </div>
-      ) : null}
-
       {splitting ? (
         <SplitView
           game={game}
@@ -7808,7 +7829,6 @@ function TableHand({
           playerIndex={current}
           dock
           onAct={onAct}
-          onUndo={onUndoAction}
         />
       ) : null}
 
@@ -7821,6 +7841,7 @@ function TableHand({
           Deal {STAGES[hand.stage + 1]}
         </button>
       ) : null}
+      <UndoTurnButton game={game} tall onUndo={onUndoAction} />
       <button
         className="glass-button full tall danger-text"
         type="button"
@@ -7828,13 +7849,83 @@ function TableHand({
       >
         Cancel hand
       </button>
-      {!showdown && !splitting ? (
-        <p className="dashed-button full tall table-hint">
-          Tap on player to undo their action.
-        </p>
-      ) : null}
     </>
   );
+}
+
+/**
+ * One Undo for the live hand, in both views: it takes back the latest action
+ * this street and names it, like "Undo Asha's call". Hidden before anyone
+ * acts and while a pot is being split.
+ */
+function UndoTurnButton({
+  game,
+  tall = false,
+  onUndo,
+}: {
+  game: GameState;
+  tall?: boolean;
+  onUndo: (playerIndex: number) => void;
+}) {
+  const seat = game.hand?.splitSel ? null : latestActor(game);
+  const action = seat === null ? null : game.hand?.last[seat];
+  if (seat === null || !action) return null;
+  // First name only, unless another player shares it ("Arjun S.").
+  const name = game.players[seat].name;
+  const first = name.split(" ")[0];
+  const shared = game.players.some(
+    (player, index) => index !== seat && player.name.split(" ")[0] === first,
+  );
+  return (
+    <button
+      className={`glass-button full ${tall ? "tall " : ""}undo-turn`}
+      type="button"
+      onClick={() => onUndo(seat)}
+    >
+      <UndoIcon />
+      {/* Cased here: the house capitalising would also lift the "s" in
+          "Arjun S.'s". */}
+      Undo {titleCase(shared ? name : first)}&apos;s{" "}
+      {titleCase(actionNoun(action))}
+    </button>
+  );
+}
+
+/**
+ * The seat whose action this street came last, or null before anyone acts.
+ * The log is newest first, so the earliest line is the latest action.
+ */
+function latestActor(game: GameState) {
+  const hand = game.hand;
+  if (!hand) return null;
+  let seat: number | null = null;
+  let newest = Infinity;
+  hand.last.forEach((action, index) => {
+    if (!action) return;
+    const at = game.log.indexOf(action.line);
+    if (at >= 0 && at < newest) {
+      newest = at;
+      seat = index;
+    }
+  });
+  return seat;
+}
+
+/** Every word starting with a capital, like the house style. */
+function titleCase(text: string) {
+  return text.replace(/(^|\s)(\S)/g, (_, gap, letter) => gap + letter.toUpperCase());
+}
+
+/** A short name for an action, as in "Undo Asha's raise". */
+function actionNoun(action: PlayerAction) {
+  if (action.type === "bet") {
+    return action.line.includes(" raises to ")
+      ? "raise"
+      : action.line.includes(" bets ")
+        ? "bet"
+        : "call";
+  }
+  return action.type === "all-in" ? "all in" : action.type;
 }
 
 function seatStatus(
@@ -7845,7 +7936,12 @@ function seatStatus(
   const hand = game.hand!;
   const player = game.players[playerIndex];
   const committed = hand.committed[playerIndex];
-  if (!hand.in[playerIndex]) return "Folded";
+  if (!hand.in[playerIndex]) {
+    if (hand.boughtIn?.includes(playerIndex)) return "Next hand";
+    // Bust when the hand was dealt, so never in it.
+    if (!(hand.stacksBeforeHand[playerIndex] > 0)) return "Busted";
+    return "Folded";
+  }
   if (player.stack === 0) return `All in ${money(committed)}`;
   const last = hand.last[playerIndex];
   if (last) {
@@ -7887,7 +7983,7 @@ function PlayerRow({
   game,
   playerIndex,
   onAct,
-  onUndo,
+  onBuyIn,
   roundClosed = false,
   dock = false,
   flash,
@@ -7895,7 +7991,8 @@ function PlayerRow({
   game: GameState;
   playerIndex: number;
   onAct: GameViewProps["onAct"];
-  onUndo: (playerIndex: number) => void;
+  /** Offered on the card of a player who was bust when the hand was dealt. */
+  onBuyIn?: (playerIndex: number) => void;
   /** This player's action closed the round; keep the card open but locked. */
   roundClosed?: boolean;
   /** Set while this player's action is the latest; its status flashes. */
@@ -7927,7 +8024,6 @@ function PlayerRow({
   // Raises are shown as the total they reach, like "raise to 1,300",
   // while the box and slider stay as chips to put in now.
   const raising = hand.roundHigh > 0;
-  const canUndo = hand.last[playerIndex] && !hand.splitSel;
   const hasAmount = amount.trim() !== "";
   const stops = betStops(minimum, player.stack);
   // Text that isn't an amount (like "1.234" in cents) bets nothing, which
@@ -7959,15 +8055,6 @@ function PlayerRow({
           >
             {seatStatus(game, playerIndex, money)}
           </span>
-          {canUndo ? (
-            <button
-              className="pill-button"
-              type="button"
-              onClick={() => onUndo(playerIndex)}
-            >
-              Undo
-            </button>
-          ) : null}
         </div>
         <div className="bet-panel" aria-hidden="true" inert>
           <div className="bet-summary">
@@ -7977,8 +8064,12 @@ function PlayerRow({
               Deal <b>{STAGES[hand.stage + 1]}</b> next
             </p>
             <label className="bet-input">
-              <span>{symbol.trim()}</span>
-              <input type="number" disabled placeholder="—" />
+              <span className="bet-input-caption">Enter amount</span>
+              <span className="bet-input-box">
+                <span className="bet-input-symbol">{symbol.trim()}</span>
+                <input type="number" disabled placeholder="—" />
+                <PencilIcon />
+              </span>
             </label>
           </div>
           <input className="bet-range" type="range" disabled defaultValue={0} />
@@ -8007,8 +8098,13 @@ function PlayerRow({
   }
 
   if (folded || done || !isTurn) {
+    const buyIn =
+      onBuyIn && !hand.splitSel ? nextBuyIn(game, playerIndex) : null;
+    // Not faded while they can buy in, so the button doesn't look disabled.
     return (
-      <div className={`glass seat-card ${folded ? "folded" : ""}`}>
+      <div
+        className={`glass seat-card ${folded && buyIn === null ? "folded" : ""}`}
+      >
         <div className="seat-main">
           <Avatar name={player.name} playerId={player.id} role={role} />
           <div className="seat-copy">
@@ -8021,13 +8117,13 @@ function PlayerRow({
           >
             {seatStatus(game, playerIndex, money)}
           </span>
-          {canUndo ? (
+          {buyIn !== null ? (
             <button
               className="pill-button"
               type="button"
-              onClick={() => onUndo(playerIndex)}
+              onClick={() => onBuyIn?.(playerIndex)}
             >
-              Undo
+              Buy in · {money(buyIn)}
             </button>
           ) : null}
         </div>
@@ -8104,19 +8200,25 @@ function PlayerRow({
             />
           ) : null}
           {raiseClosed ? null : (
+            // A boxed field with a caption and pencil, so it reads as
+            // something to type in rather than a figure on display.
             <label className="bet-input">
-              <span>{symbol.trim()}</span>
-              <input
-                type="text"
-                inputMode={unit === "cents" ? "decimal" : "numeric"}
-                autoComplete="off"
-                placeholder={stops[0] === undefined ? "" : chipsToInput(stops[0], unit)}
-                aria-label={
-                  raising ? "Chips to put in for the raise" : "Bet amount"
-                }
-                value={amount}
-                onChange={(event) => setAmount(event.target.value)}
-              />
+              <span className="bet-input-caption">Enter amount</span>
+              <span className="bet-input-box">
+                <span className="bet-input-symbol">{symbol.trim()}</span>
+                <input
+                  type="text"
+                  inputMode={unit === "cents" ? "decimal" : "numeric"}
+                  autoComplete="off"
+                  placeholder={stops[0] === undefined ? "" : chipsToInput(stops[0], unit)}
+                  aria-label={
+                    raising ? "Chips to put in for the raise" : "Bet amount"
+                  }
+                  value={amount}
+                  onChange={(event) => setAmount(event.target.value)}
+                />
+                <PencilIcon />
+              </span>
             </label>
           )}
         </div>

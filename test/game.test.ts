@@ -4,6 +4,7 @@ import { describe, test } from "node:test";
 import {
   applyRaiseRules,
   awardPots,
+  handContributions,
   handRake,
   hasSidePots,
   normalizeRakeRules,
@@ -607,7 +608,7 @@ describe("buy-ins", () => {
     assert.deepEqual(game.players[0].buyIns, [10_000, 5_000, 10_000]);
   });
 
-  test("offers no buy-in during a hand or past the buy-in limit", () => {
+  test("offers no buy-in past the buy-in limit", () => {
     const game = gameState();
     game.startStack = 1;
     game.players[0].stack = 0;
@@ -617,11 +618,54 @@ describe("buy-ins", () => {
     game.players[0].buyIns = Array(63).fill(1);
     assert.equal(nextBuyIn(game, 0), 1);
 
-    game.startStack = 100_000;
-    game.players[0].buyIns = [100_000];
+  });
+
+  test("during a hand, buys in only a player bust at the deal", () => {
+    const game = gameState();
+    game.startStack = 10_000;
+    game.players[0].stack = 0;
     dealNewHand(game);
-    assert.equal(nextBuyIn(game, 0), null);
-    assert.equal(buyInPlayer(game, 0), null);
+    const hand = game.hand!;
+    assert.equal(hand.in[0], false);
+    const allIn = hand.in.findIndex((inHand, index) => inHand && index !== 0);
+    game.players[allIn].stack = 0;
+    assert.equal(nextBuyIn(game, allIn), null, "not someone all in");
+
+    assert.equal(buyInPlayer(game, 0), 10_000);
+    assert.equal(game.players[0].stack, 10_000);
+    assert.equal(hand.in[0], false, "sits the hand out");
+    assert.equal(hand.stacksBeforeHand[0], 10_000);
+    assert.deepEqual(hand.boughtIn, [0]);
+    assert.equal(handContributions(game)[0], 0);
+  });
+
+  test("a buy-in during a hand survives cancelling it", () => {
+    const game = gameState();
+    game.startStack = 10_000;
+    game.players[0].stack = 0;
+    dealNewHand(game);
+    buyInPlayer(game, 0);
+
+    cancelCurrentHand(game);
+    assert.equal(game.players[0].buyIns?.length, 2);
+    assert.equal(game.hand?.in[0], true, "dealt into the hand again");
+  });
+
+  test("undoing the hand before takes back a buy-in during this one", () => {
+    const game = gameState();
+    game.startStack = 10_000;
+    game.players[0].stack = 0;
+    dealNewHand(game);
+    game.lastHand = completedHandRecord(game);
+    game.hand = null;
+    dealNewHand(game);
+    buyInPlayer(game, 0);
+    game.log.unshift(`During hand ${game.hand!.no}: P0 buys in`);
+
+    undoLastHand(game);
+    assert.equal(game.players[0].stack, 0);
+    assert.equal(game.players[0].buyIns?.length ?? 1, 1);
+    assert.equal(game.log.some((line) => line.startsWith("During hand")), false);
   });
 });
 

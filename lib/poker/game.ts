@@ -111,7 +111,16 @@ export function editRebuyRules(game: GameState, rules: RebuyRules | null) {
 
 export function nextBuyIn(game: GameState, playerIndex: number) {
   const player = game.players[playerIndex];
-  if (!player || game.hand || player.stack !== 0) return null;
+  const hand = game.hand;
+  if (!player || player.stack !== 0) return null;
+  // During a hand, only a player who was bust when it was dealt (not one who
+  // is all in); they sit the hand out.
+  if (
+    hand &&
+    (hand.in[playerIndex] || (hand.stacksBeforeHand[playerIndex] ?? 0) > 0)
+  ) {
+    return null;
+  }
   if (rebuyBlockReason(game, playerIndex)) return null;
   // Every rebuy is the full starting stack.
   const amount = game.startStack;
@@ -130,6 +139,13 @@ export function buyInPlayer(game: GameState, playerIndex: number) {
   const player = game.players[playerIndex];
   player.buyIns = [...playerBuyIns(game, playerIndex), amount];
   player.stack = amount;
+  const hand = game.hand;
+  if (hand) {
+    // They put nothing in this hand, so their stack at the deal is the new
+    // one: finishing, cancelling or undoing the hand keeps the buy-in.
+    hand.stacksBeforeHand[playerIndex] = amount;
+    hand.boughtIn = [...(hand.boughtIn ?? []), playerIndex];
+  }
   return amount;
 }
 
@@ -669,7 +685,10 @@ export function undoLastHand(game: GameState, now = Date.now()) {
   game.log = game.log.filter(
     (line) =>
       !belongsToHand(line, undoneNumber) &&
-      (!currentHandNumber || !belongsToHand(line, currentHandNumber)),
+      (!currentHandNumber ||
+        (!belongsToHand(line, currentHandNumber) &&
+          // Buy-ins during the next hand are taken back with it.
+          !line.startsWith(`During hand ${currentHandNumber}:`))),
   );
   game.handNo = undoneNumber - 1;
   if (last.dealerIndexBefore !== undefined) {

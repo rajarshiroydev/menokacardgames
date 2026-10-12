@@ -2811,28 +2811,53 @@ textarea::placeholder {
 
 .bet-input {
   display: flex;
-  align-items: baseline;
-  gap: 2px;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
   min-width: 0;
+}
+
+.bet-input-caption {
+  color: var(--ink2);
+  font-size: 11px;
+  line-height: 1;
+}
+
+.bet-input-box {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 10px;
+  border: 1.5px solid var(--ink3);
+  border-radius: var(--rs);
+  background: var(--glass2);
   color: var(--g);
   font-family: var(--fd);
   font-weight: 900;
   font-variation-settings: "opsz" 72;
+  cursor: text;
+  transition: border-color 0.15s, box-shadow 0.15s;
 }
 
-.bet-input span {
-  font-size: 24px;
+.bet-input-box:focus-within {
+  border-color: var(--g);
+  box-shadow: 0 0 0 3px color-mix(in oklch, var(--g) 22%, transparent);
+}
+
+.bet-input-symbol {
+  font-size: 22px;
+  line-height: 1;
 }
 
 .bet-input input {
-  width: 6.2ch;
+  width: 5.2ch;
   min-width: 0;
-  padding: 0 0 2px;
+  padding: 0;
   border: 0;
-  border-bottom: 2px solid var(--line);
   background: none;
   color: var(--g);
-  font-size: 32px;
+  font: inherit;
+  font-size: 28px;
   line-height: 1;
   text-align: right;
   outline: none;
@@ -2851,8 +2876,10 @@ textarea::placeholder {
   opacity: 0.55;
 }
 
-.bet-input input:focus {
-  border-bottom-color: var(--g);
+.bet-input .pencil-icon {
+  flex: none;
+  margin-left: 2px;
+  color: var(--ink2);
 }
 
 .bet-range {
@@ -2877,10 +2904,16 @@ textarea::placeholder {
   font-weight: 700;
 }
 
+/* White, so the picked size doesn't compete with the green Bet button. */
 .quick-sizes button.selected {
-  border-color: var(--g);
-  background: var(--g);
-  color: var(--onacc);
+  border-color: #fff;
+  background: #fff;
+  color: #070a0c;
+}
+
+/* On light cards a white button needs an outline to stand out. */
+:root[data-theme="light"] .quick-sizes button.selected {
+  border-color: var(--ink);
 }
 
 .action-row {
@@ -3297,8 +3330,7 @@ textarea::placeholder {
     0 0 24px var(--g);
 }
 
-.table-seat.contender .table-seat-ring,
-.table-seat.picked .table-seat-ring {
+.table-seat.contender .table-seat-ring {
   background: var(--b);
   box-shadow: 0 0 0 5px color-mix(in oklch, var(--b) 22%, transparent);
 }
@@ -3416,16 +3448,12 @@ textarea::placeholder {
   margin-top: -6px;
 }
 
-.table-undo {
+.undo-turn {
   display: flex;
+  text-transform: none;
   align-items: center;
-  gap: 12px;
-  padding: 10px 14px;
-  border-color: var(--b);
-}
-
-.table-hint {
-  margin: 0;
+  justify-content: center;
+  gap: 8px;
 }
 
 .seat-card.dock .seat-copy b {

@@ -42,6 +42,18 @@ export const CHANGELOG: ChangelogEntry[] = [
       },
       {
         tag: "improved",
+        text: "Easier undo. One button names what it takes back, like \"Undo Asha's call\", in both List and Table view. Tap again to step further back.",
+      },
+      {
+        tag: "improved",
+        text: "The bet amount now looks like a box you can type in, with an \"Enter amount\" label.",
+      },
+      {
+        tag: "new",
+        text: "Forgot a rebuy before dealing? Tap a busted player during the hand to buy them in. They sit that hand out and play from the next one.",
+      },
+      {
+        tag: "improved",
         text: "Side pots fill themselves in. Pick the main pot's winner and every side pot they're in follows automatically.",
       },
       {
