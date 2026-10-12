@@ -297,6 +297,8 @@ type ModalState =
       /** Shown as a list under the message, for confirmations with several facts. */
       points?: string[];
       confirmLabel: string;
+      /** Dismiss button text; defaults to "Cancel". */
+      dismissLabel?: string;
       danger?: boolean;
       onConfirm: () => void;
     }
@@ -1792,16 +1794,19 @@ export function PokerLedger({
 
   function cancelHand() {
     if (!game?.hand) return;
-    ask(
-      `Cancel hand ${game.hand.no}? Everyone gets their money back, including the blinds.`,
-      "Cancel hand",
-      () => {
+    setModal({
+      kind: "confirm",
+      message: `Cancel hand ${game.hand.no}? Everyone gets their money back, including the blinds.`,
+      confirmLabel: "Cancel hand",
+      // "Cancel" next to "Cancel hand" would be ambiguous.
+      dismissLabel: "Keep playing",
+      onConfirm: () => {
         const next = structuredClone(game);
         if (!cancelCurrentHand(next)) return;
         setGame(next);
         showToast("Hand cancelled");
       },
-    );
+    });
   }
 
   function undoHand() {
@@ -9792,7 +9797,7 @@ function Modal({
           {state.confirmLabel}
         </button>
         <button className="ghost" onClick={onClose}>
-          Never mind
+          {(state.kind === "confirm" && state.dismissLabel) || "Cancel"}
         </button>
       </div>
     </div>
