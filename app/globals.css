@@ -1737,6 +1737,21 @@ textarea::placeholder {
   white-space: nowrap;
 }
 
+/* A player's own buy-in in the seating order, when amounts are chosen. */
+.seat-row .seat-amount {
+  flex: 0 0 104px;
+  width: 104px;
+  height: 36px;
+  padding: 0 10px;
+  font-size: 15px;
+  font-weight: 700;
+  text-align: right;
+}
+
+.seat-row .seat-amount.invalid {
+  border-color: var(--neg);
+}
+
 .seat-drag-handle {
   display: grid;
   place-items: center;
@@ -2671,6 +2686,7 @@ textarea::placeholder {
   color: var(--ink2);
   font-size: 12px;
   text-align: center;
+  overflow-wrap: anywhere;
 }
 
 .blind-timer.due {
@@ -3289,12 +3305,14 @@ textarea::placeholder {
 }
 
 .table-blinds {
+  /* Stays inside the felt: very large blinds wrap instead of being cut off. */
+  max-width: 62%;
   padding: 4px 10px;
-  border-radius: 999px;
+  border-radius: 14px;
   background: rgba(0, 0, 0, 0.28);
   font-size: 11px;
   font-weight: 700;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
 .table-chips {
@@ -3525,6 +3543,31 @@ textarea::placeholder {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+/*
+ * Players to add, cash out or bring back, between hands. On a short screen
+ * the list shrinks and scrolls, so the boxes below it keep their height.
+ */
+.table-change-list {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 1;
+  gap: 8px;
+  min-height: 132px;
+  max-height: 45vh;
+  overflow-y: auto;
+}
+
+.table-change-list > .contender {
+  flex-shrink: 0;
+}
+
+/* A sheet taller than the screen scrolls; its boxes never get squashed. */
+.sheet > input,
+.sheet > select,
+.sheet > .field {
+  flex-shrink: 0;
 }
 
 .standing-row {

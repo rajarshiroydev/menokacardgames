@@ -19,6 +19,11 @@
       ],
       "port": 3006,
       "autoPort": true
+    },
+    {
+      "name": "testbed-running",
+      "url": "http://localhost:3006",
+      "port": 3006
     }
   ]
 }

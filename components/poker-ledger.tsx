@@ -65,6 +65,12 @@ import {
   totalBuyIns,
   undoLastHand,
   editRebuyRules,
+  cashOutPlayer,
+  canJoinGame,
+  dealablePlayerCount,
+  joinGame,
+  MAX_GAME_PLAYERS,
+  returnToTable,
   mostRebuysUsed,
   rebuyBlockReason,
   upcomingBigBlinds,
@@ -72,6 +78,8 @@ import {
 import {
   describeMaxRebuys,
   describeRebuyRules,
+  isUnusualBuyIn,
+  isValidBuyIn,
   MAX_REBUYS,
   normalizeRebuyRules,
 } from "@/lib/poker/buy-ins";
@@ -301,8 +309,12 @@ type ModalState =
       /** Shown as a list under the message, for confirmations with several facts. */
       points?: string[];
       confirmLabel: string;
+      /** Dismiss button text; defaults to "Cancel". */
+      dismissLabel?: string;
       danger?: boolean;
       onConfirm: () => void;
+      /** A link under the message for another way to go on, such as a different amount. */
+      alternative?: { label: string; onChoose: () => void };
     }
   | {
       kind: "recent-sign-in";
@@ -662,6 +674,9 @@ export function PokerLedger({
   const [modal, setModal] = useState<ModalState | null>(null);
   const [editingBlinds, setEditingBlinds] = useState(false);
   const [editingRebuys, setEditingRebuys] = useState(false);
+  const [tableSheet, setTableSheet] = useState<"add" | "cash-out" | null>(null);
+  // The busted player whose own buy-in amount is being typed.
+  const [buyingIn, setBuyingIn] = useState<number | null>(null);
   const [legacyGame, setLegacyGame] = useState<GameState | null>(null);
   const [legacySessions, setLegacySessions] = useState<PokerSession[]>([]);
   const [reviewingLegacySessions, setReviewingLegacySessions] =
@@ -1114,6 +1129,11 @@ export function PokerLedger({
       /** The house's cut; null is no rake. */
       rakeRules: RakeRules | null;
       players: PlayerProfile[];
+      /**
+       * Each player's own first buy-in, in seat order, when players choose
+       * their amounts; null is the starting stack for everyone.
+       */
+      buyIns: number[] | null;
       /** Draw the first dealer now; otherwise seat 1 deals first. */
       randomDealer: boolean;
     }) => {
@@ -1140,6 +1160,14 @@ export function PokerLedger({
           (input.blinds.raiseType === "multiply" ? 1 : 0)
       ) {
         showToast("Blind increase must make the blinds bigger");
+        return;
+      }
+      if (
+        input.buyIns &&
+        (input.buyIns.length !== input.players.length ||
+          !input.buyIns.every(isValidBuyIn))
+      ) {
+        showToast("Every player's buy-in must be more than 0");
         return;
       }
       if (input.rakeRules && !normalizeRakeRules(input.rakeRules)) {
@@ -1177,16 +1205,20 @@ export function PokerLedger({
         }],
         blindLevels: [],
         startStack: input.stack,
+        ...(input.buyIns ? { customBuyIns: true } : {}),
         ...(rebuyRules ? { rebuyRules } : {}),
         ...(input.bigBlindAnte ? { bigBlindAnte: true } : {}),
         ...(rakeRules ? { rakeRules } : {}),
         startedAt,
-        players: input.players.map((player) => ({
-          id: player.id,
-          name: player.name,
-          stack: input.stack,
-          buyIns: [input.stack],
-        })),
+        players: input.players.map((player, index) => {
+          const amount = input.buyIns?.[index] ?? input.stack;
+          return {
+            id: player.id,
+            name: player.name,
+            stack: amount,
+            buyIns: [amount],
+          };
+        }),
         hand: null,
         handNo: 0,
         // The first hand deals from the seat after this one.
@@ -1744,31 +1776,44 @@ export function PokerLedger({
     if (!game) return;
     const amount = nextBuyIn(game, playerIndex);
     if (amount === null) return;
+    // Players who choose their own amount type it in the buy-in sheet.
+    if (game.customBuyIns) {
+      setBuyingIn(playerIndex);
+      return;
+    }
     const player = game.players[playerIndex];
     // During a hand they sit it out and play from the next deal.
     const handNo = game.hand?.no;
-    ask(
-      handNo
+    setModal({
+      kind: "confirm",
+      message: handNo
         ? `Buy in ${player.name} for ${money(amount)}? They sit out this hand and play from the next one.`
         : `Buy in ${player.name} for ${money(amount)}?`,
-      `Buy In · ${money(amount)}`,
-      () => {
-        const next = structuredClone(game);
-        const confirmedAmount = buyInPlayer(next, playerIndex);
-        if (confirmedAmount === null) return;
-        const confirmedPlayer = next.players[playerIndex];
-        // Not "Hand N:" during a hand, so cancelling it keeps the line, like
-        // the buy-in.
-        recordWin(
-          next,
-          `${handNo ? `During hand ${handNo}` : `Hand ${next.handNo}`}: ${confirmedPlayer.name} buys in for ${money(confirmedAmount)}`,
-        );
-        setGame(next);
-        showToast(
-          `${confirmedPlayer.name} buys in for ${money(confirmedAmount)}`,
-        );
+      confirmLabel: `Buy In · ${money(amount)}`,
+      onConfirm: () => confirmBuyIn(playerIndex, amount),
+      alternative: {
+        label: "Change amount",
+        onChoose: () => setBuyingIn(playerIndex),
       },
+    });
+  }
+
+  function confirmBuyIn(playerIndex: number, amount: number) {
+    if (!game) return;
+    const handNo = game.hand?.no;
+    const next = structuredClone(game);
+    const confirmedAmount = buyInPlayer(next, playerIndex, amount);
+    if (confirmedAmount === null) return;
+    const confirmedPlayer = next.players[playerIndex];
+    // Not "Hand N:" during a hand, so cancelling it keeps the line, like
+    // the buy-in.
+    recordWin(
+      next,
+      `${handNo ? `During hand ${handNo}` : `Hand ${next.handNo}`}: ${confirmedPlayer.name} buys in for ${money(confirmedAmount)}`,
     );
+    setGame(next);
+    setBuyingIn(null);
+    showToast(`${confirmedPlayer.name} buys in for ${money(confirmedAmount)}`);
   }
 
   function saveBlindSchedule(schedule: BlindSchedule | null) {
@@ -1798,18 +1843,63 @@ export function PokerLedger({
     showToast(pausing ? "Blind clock paused" : "Blind clock resumed");
   }
 
+  function addLatePlayer(playerId: string, seat: number, amount: number) {
+    if (!game || game.hand) return;
+    const profile = players.find((player) => player.id === playerId);
+    if (!profile) return;
+    const next = structuredClone(game);
+    if (!joinGame(next, { id: profile.id, name: profile.name }, seat, amount)) {
+      return;
+    }
+    setGame(next);
+    setTableSheet(null);
+    showToast(`${profile.name} joins for ${money(amount)}`);
+  }
+
+  function cashOut(playerIndex: number) {
+    if (!game || game.hand) return;
+    const player = game.players[playerIndex];
+    if (!player || player.left) return;
+    // The confirmation replaces the sheet rather than opening under it.
+    setTableSheet(null);
+    ask(
+      `Cash out ${player.name} with ${money(player.stack)}? They can return later.`,
+      `Cash Out · ${money(player.stack)}`,
+      () => {
+        const next = structuredClone(game);
+        if (!cashOutPlayer(next, playerIndex)) return;
+        setGame(next);
+        showToast(`${player.name} cashed out with ${money(player.stack)}`);
+      },
+    );
+  }
+
+  function returnPlayer(playerIndex: number) {
+    if (!game || game.hand) return;
+    const player = game.players[playerIndex];
+    if (!player?.left) return;
+    const next = structuredClone(game);
+    if (!returnToTable(next, playerIndex)) return;
+    setGame(next);
+    setTableSheet(null);
+    showToast(`${player.name} is back with ${money(player.stack)}`);
+  }
+
   function cancelHand() {
     if (!game?.hand) return;
-    ask(
-      `Cancel hand ${game.hand.no}? Everyone gets their money back, including the blinds.`,
-      "Cancel hand",
-      () => {
+    setModal({
+      kind: "confirm",
+      message: `Cancel hand ${game.hand.no}? Everyone gets their money back, including the blinds.`,
+      confirmLabel: "Cancel hand",
+      // "Cancel" next to "Cancel hand" would be ambiguous.
+      dismissLabel: "Keep playing",
+      onConfirm: () => {
         const next = structuredClone(game);
         if (!cancelCurrentHand(next)) return;
         setGame(next);
         showToast("Hand cancelled");
       },
-    );
+    });
   }
 
   function undoHand() {
@@ -1878,7 +1968,9 @@ export function PokerLedger({
         name: player.name,
         net: endStacks[index] - totalBuyIns(game, index),
         end: endStacks[index],
-        ...(player.buyIns && player.buyIns.length > 1
+        // Only a single starting-stack buy-in can be left out.
+        ...(player.buyIns &&
+        (player.buyIns.length > 1 || player.buyIns[0] !== game.startStack)
           ? { buyIns: player.buyIns }
           : {}),
       })),
@@ -2297,6 +2389,8 @@ export function PokerLedger({
             onEditBlinds={() => setEditingBlinds(true)}
             onToggleBlindClock={toggleBlindClock}
             onEditRebuys={() => setEditingRebuys(true)}
+            onAddPlayer={() => setTableSheet("add")}
+            onCashOut={() => setTableSheet("cash-out")}
             liveSharing={Boolean(liveToken)}
             liveFailing={liveFailing}
             onShareLive={() => setSharingLive(true)}
@@ -2347,6 +2441,31 @@ export function PokerLedger({
             game={game}
             onClose={() => setEditingRebuys(false)}
             onSave={saveRebuyRules}
+          />
+        ) : null}
+        {tableSheet === "add" && game && !game.hand ? (
+          <JoinGameSheet
+            game={game}
+            roster={players}
+            selfPlayerId={profile.selfPlayerId}
+            onClose={() => setTableSheet(null)}
+            onAdd={addLatePlayer}
+          />
+        ) : null}
+        {buyingIn !== null && game && nextBuyIn(game, buyingIn) !== null ? (
+          <BuyInSheet
+            game={game}
+            playerIndex={buyingIn}
+            onClose={() => setBuyingIn(null)}
+            onBuyIn={(amount) => confirmBuyIn(buyingIn, amount)}
+          />
+        ) : null}
+        {tableSheet === "cash-out" && game && !game.hand ? (
+          <CashOutSheet
+            game={game}
+            onClose={() => setTableSheet(null)}
+            onCashOut={cashOut}
+            onReturn={returnPlayer}
           />
         ) : null}
       </ChipUnitContext.Provider>
@@ -2868,7 +2987,8 @@ function HomeLiveCard({
   const me = selfPlayerId
     ? game.players.find((player) => player.id === selfPlayerId)
     : undefined;
-  const leader = game.players.reduce<Player | null>(
+  const seated = game.players.filter((player) => !player.left);
+  const leader = seated.reduce<Player | null>(
     (best, player) => (!best || player.stack > best.stack ? player : best),
     null,
   );
@@ -2905,7 +3025,7 @@ function HomeLiveCard({
           <span>
             <small>At the table</small>
             <b>
-              {game.players.length} player{game.players.length === 1 ? "" : "s"}
+              {seated.length} player{seated.length === 1 ? "" : "s"}
             </b>
           </span>
         )}
@@ -3314,6 +3434,7 @@ function SetupView({
     bigBlindAnte: boolean;
     rakeRules: RakeRules | null;
     players: PlayerProfile[];
+    buyIns: number[] | null;
     randomDealer: boolean;
   }) => void;
 }) {
@@ -3337,6 +3458,11 @@ function SetupView({
     DEFAULT_BLIND_SCHEDULE.raiseBy,
   );
   const [customStack, setCustomStack] = useState(false);
+  // Own amounts: each player can buy in for a different amount, with the
+  // starting stack as the default. Typed amounts are kept by player.
+  const [ownAmounts, setOwnAmounts] = useState(false);
+  const [seatAmounts, setSeatAmounts] = useState<Record<string, number>>({});
+  const [showOwnAmountsHelp, setShowOwnAmountsHelp] = useState(false);
   const [customAnte, setCustomAnte] = useState(false);
   // Odd blinds: off keeps the usual half. A chip picks a share of the big
   // blind, so it follows big blind changes; Other is a fixed amount.
@@ -3447,7 +3573,9 @@ function SetupView({
     (schedule.every >= 1 &&
       schedule.raiseBy > (schedule.raiseType === "multiply" ? 1 : 0));
   // The game's unit, from every amount typed or picked (all in hundredths).
+  const amountFor = (playerId: string) => seatAmounts[playerId] ?? stack;
   const chipUnit = chipUnitFor(stack, [
+    ...(ownAmounts ? selectedIds.map(amountFor) : []),
     ante,
     risingBlinds && blindRaiseType === "add" ? blindRaiseBy : null,
     rebuyRules.closeAtBigBlind,
@@ -3729,10 +3857,15 @@ function SetupView({
         closeAtBigBlind: closeAt === null ? null : inUnit(closeAt, chipUnit),
       },
       players: selectedPlayers,
+      buyIns: ownAmounts
+        ? selectedIds.map((id) => inUnit(amountFor(id), chipUnit))
+        : null,
       randomDealer,
     });
   }
 
+  const amountsValid =
+    !ownAmounts || selectedIds.every((id) => amountFor(id) >= 1);
   const selectionComplete =
     playerCount >= 2 &&
     playerCount <= MAX_SEATS &&
@@ -3930,6 +4063,21 @@ function SetupView({
                       </span>
                       <Avatar name={seatName} playerId={selectedId} size="small" />
                       <span className="seat-name">{seatName}</span>
+                      {ownAmounts ? (
+                        <ChipInput
+                          className={`field seat-amount${
+                            amountFor(selectedId) >= 1 ? "" : " invalid"
+                          }`}
+                          aria-label={`${seatName}'s buy-in`}
+                          value={amountFor(selectedId)}
+                          onChange={(chips) =>
+                            setSeatAmounts((amounts) => ({
+                              ...amounts,
+                              [selectedId]: chips,
+                            }))
+                          }
+                        />
+                      ) : null}
                       <button
                         className="seat-drag-handle"
                         type="button"
@@ -3966,8 +4114,42 @@ function SetupView({
         <section className="glass card">
           <div className="card-row">
             <span className="label">Starting stack</span>
-            <span className="card-note">First buy-in {money(stack)}</span>
+            <div className="heading-with-info">
+              <label className="switch-row">
+                <span>Own amounts</span>
+                <button
+                  className="switch"
+                  type="button"
+                  role="switch"
+                  aria-checked={ownAmounts}
+                  aria-label="Own amounts"
+                  onClick={() => setOwnAmounts((on) => !on)}
+                />
+              </label>
+              <button
+                className="info-button"
+                type="button"
+                aria-label="About own amounts"
+                onClick={() => setShowOwnAmountsHelp(true)}
+              >
+                i
+              </button>
+            </div>
           </div>
+          {showOwnAmountsHelp ? (
+            <InfoSheet
+              label="About own amounts"
+              onClose={() => setShowOwnAmountsHelp(false)}
+            >
+              <p>
+                <b>Own Amounts Off:</b> everyone buys in for the same amount.
+              </p>
+              <p>
+                <b>Own Amounts On:</b> each player can buy in for a different
+                amount.
+              </p>
+            </InfoSheet>
+          ) : null}
           <Segmented
             label="Starting stack"
             columns={6}
@@ -3996,6 +4178,16 @@ function SetupView({
               value={stack}
               onChange={chooseStack}
             />
+          ) : null}
+          <p className="muted small-note">
+            {ownAmounts
+              ? `Each player buys in for ${money(stack)} unless you change their amount in the seating order.`
+              : `Everyone buys in for ${money(stack)}.`}
+          </p>
+          {ownAmounts && !amountsValid ? (
+            <p className="field-error" role="alert">
+              Every player&apos;s buy-in must be more than 0.
+            </p>
           ) : null}
         </section>
 
@@ -4030,9 +4222,10 @@ function SetupView({
               onClose={() => setShowOddBlindsHelp(false)}
             >
               <p>
-                By default the small blind is <b>half the big blind</b>, rounded
-                down. Turn on odd blinds to pick a different small blind, such
-                as {money(4_000)} with a {money(10_000)} big blind.
+                <b>Odd Blinds Off:</b> the small blind is half the big blind.
+              </p>
+              <p>
+                <b>Odd Blinds On:</b> you choose the small blind.
               </p>
             </InfoSheet>
           ) : null}
@@ -4383,7 +4576,8 @@ function SetupView({
             </p>
           ) : (
             <p className="muted small-note">
-              A busted player can buy back in for the starting stack,{" "}
+              A busted player can buy back in for{" "}
+              {ownAmounts ? "any amount, usually " : "the starting stack, "}
               {money(stack)}
               {setupRebuyRules.maxRebuys === 0
                 ? ", but not in this game."
@@ -4401,6 +4595,7 @@ function SetupView({
           type="submit"
           disabled={
             !selectionComplete ||
+            !amountsValid ||
             stack < 1 ||
             ante < 1 ||
             !scheduleValid ||
@@ -6257,6 +6452,8 @@ type GameViewProps = {
   onEditBlinds: () => void;
   onToggleBlindClock: () => void;
   onEditRebuys: () => void;
+  onAddPlayer: () => void;
+  onCashOut: () => void;
   liveSharing: boolean;
   liveFailing: boolean;
   onShareLive: () => void;
@@ -6277,7 +6474,7 @@ function GameScreen(props: GameViewProps) {
   const hand = game.hand;
   const net = (index: number) =>
     game.players[index].stack - totalBuyIns(game, index);
-  const enoughPlayers = game.players.filter((player) => player.stack > 0).length >= 2;
+  const enoughPlayers = dealablePlayerCount(game) >= 2;
   // Timed levels run on the clock between hands too, so keep the countdown
   // live, unless the host paused it.
   const now = useBlindClock(
@@ -6396,6 +6593,22 @@ function GameScreen(props: GameViewProps) {
                 </button>
               ) : null}
               <BuyInOptions game={game} onBuyIn={props.onBuyIn} />
+              <div className="button-pair">
+                <button
+                  className="glass-button"
+                  type="button"
+                  onClick={props.onAddPlayer}
+                >
+                  Add player
+                </button>
+                <button
+                  className="glass-button"
+                  type="button"
+                  onClick={props.onCashOut}
+                >
+                  Cash out
+                </button>
+              </div>
               <button
                 className="glass-button full"
                 type="button"
@@ -6474,7 +6687,12 @@ function GameScreen(props: GameViewProps) {
                   .filter((index) => hand.in[index] || index === closer),
                 ...game.players
                   .map((_, index) => index)
-                  .filter((index) => !hand.in[index] && index !== closer),
+                  .filter(
+                    (index) =>
+                      !hand.in[index] &&
+                      index !== closer &&
+                      !game.players[index].left,
+                  ),
               ].map((playerIndex) => (
                 <PlayerRow
                   key={`${hand.no}-${hand.stage}-${playerIndex}-${hand.acted[playerIndex]}`}
@@ -6557,7 +6775,10 @@ function GameScreen(props: GameViewProps) {
               <span className="standing-rank">{rank + 1}</span>
               <div className="standing-name">
                 <b>{player.name}</b>
-                <small>Invested {money(totalBuyIns(game, index))}</small>
+                <small>
+                  {player.left ? "Cashed out · " : ""}Invested{" "}
+                  {money(totalBuyIns(game, index))}
+                </small>
               </div>
               <div className="standing-values">
                 <b>{money(player.stack)}</b>
@@ -6909,6 +7130,315 @@ function RebuyEditor({
           Cancel
         </button>
       </form>
+    </div>
+  );
+}
+
+/**
+ * The amount box for a player choosing their own buy-in, in the game's chip
+ * unit, with a warning for amounts far from the starting stack.
+ */
+function BuyInAmountField({
+  game,
+  id,
+  value,
+  onChange,
+}: {
+  game: GameState;
+  id: string;
+  value: number;
+  onChange: (chips: number) => void;
+}) {
+  const { money } = useMoney();
+  return (
+    <>
+      <label className="label" htmlFor={id}>
+        Buy-in amount
+      </label>
+      <ChipInput className="field" id={id} value={value} onChange={onChange} />
+      {!isValidBuyIn(value) ? (
+        <p className="field-error" role="alert">
+          The buy-in must be more than 0.
+        </p>
+      ) : isUnusualBuyIn(value, game.startStack) ? (
+        <p className="field-error" role="note">
+          That&apos;s far from the usual {money(game.startStack)}. Check the
+          amount before you confirm.
+        </p>
+      ) : (
+        <p className="muted small-note">
+          The usual buy-in is {money(game.startStack)}.
+        </p>
+      )}
+    </>
+  );
+}
+
+function BuyInSheet({
+  game,
+  playerIndex,
+  onClose,
+  onBuyIn,
+}: {
+  game: GameState;
+  playerIndex: number;
+  onClose: () => void;
+  onBuyIn: (amount: number) => void;
+}) {
+  const { money } = useMoney();
+  const player = game.players[playerIndex];
+  const [amount, setAmount] = useState(game.startStack);
+  const valid = isValidBuyIn(amount);
+
+  function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (valid) onBuyIn(amount);
+  }
+
+  return (
+    <div
+      className="modal show"
+      role="presentation"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <form
+        className="sheet profile-sheet"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="buy-in-title"
+        onSubmit={submit}
+      >
+        <span className="sheet-grabber" aria-hidden="true" />
+        <h2 id="buy-in-title">Buy In {player.name}</h2>
+        {game.hand ? (
+          <p className="muted small-note">
+            They sit out this hand and play from the next one.
+          </p>
+        ) : null}
+        <BuyInAmountField
+          game={game}
+          id="buy-in-amount"
+          value={amount}
+          onChange={setAmount}
+        />
+        <button className="primary full" type="submit" disabled={!valid}>
+          {valid ? `Buy In · ${money(amount)}` : "Buy In"}
+        </button>
+        <button className="ghost full" type="button" onClick={onClose}>
+          Cancel
+        </button>
+      </form>
+    </div>
+  );
+}
+
+function JoinGameSheet({
+  game,
+  roster,
+  selfPlayerId,
+  onClose,
+  onAdd,
+}: {
+  game: GameState;
+  roster: PlayerProfile[];
+  selfPlayerId: string | null;
+  onClose: () => void;
+  onAdd: (playerId: string, seat: number, amount: number) => void;
+}) {
+  const { money } = useMoney();
+  const full = game.players.length >= MAX_GAME_PLAYERS;
+  const candidates = [
+    ...roster.filter((player) => player.id === selfPlayerId),
+    ...roster.filter((player) => player.id !== selfPlayerId),
+  ].filter((player) => canJoinGame(game, player));
+  // A late player sits on the left of someone still at the table, which is
+  // the next seat clockwise, the way the deal goes; the value is where they
+  // go in the seat order.
+  const seats = game.players.flatMap((player, index) =>
+    player.left ? [] : [{ player, index }],
+  );
+  const [chosenId, setChosenId] = useState<string | null>(null);
+  const [seat, setSeat] = useState(() => (seats.at(-1)?.index ?? -1) + 1);
+  const [amount, setAmount] = useState(game.startStack);
+  const chosen = candidates.find((player) => player.id === chosenId);
+  const amountValid = isValidBuyIn(amount);
+
+  function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (chosen && amountValid) onAdd(chosen.id, seat, amount);
+  }
+
+  return (
+    <div
+      className="modal show"
+      role="presentation"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <form
+        className="sheet profile-sheet"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="add-player-title"
+        onSubmit={submit}
+      >
+        <span className="sheet-grabber" aria-hidden="true" />
+        <h2 id="add-player-title">Add Player</h2>
+        <p className="muted small-note">
+          They&apos;re dealt in from the next hand.
+        </p>
+        {full ? (
+          <p className="field-error" role="alert">
+            A game can have up to {MAX_GAME_PLAYERS} players, counting anyone
+            who cashed out.
+          </p>
+        ) : !candidates.length ? (
+          <p className="muted small-note">
+            Everyone on your list is in this game. Add a guest on Profile, then
+            come back to the table.
+          </p>
+        ) : (
+          <>
+            <span className="label">Who&apos;s joining</span>
+            <div className="table-change-list">
+              {candidates.map((player) => (
+                <button
+                  className={`contender${player.id === chosenId ? " selected" : ""}`}
+                  key={player.id}
+                  type="button"
+                  aria-pressed={player.id === chosenId}
+                  onClick={() => setChosenId(player.id)}
+                >
+                  <Avatar name={player.name} playerId={player.id} size="small" />
+                  <span className="contender-name">{player.name}</span>
+                  {player.id === selfPlayerId ? (
+                    <span className="you-tag">You</span>
+                  ) : null}
+                </button>
+              ))}
+            </div>
+            <label className="label" htmlFor="late-seat">
+              Seat
+            </label>
+            <select
+              className="select-control"
+              id="late-seat"
+              value={seat}
+              onChange={(event) => setSeat(Number(event.target.value))}
+            >
+              {seats.map(({ player, index }) => (
+                <option key={player.id || index} value={index + 1}>
+                  Left of {player.name}
+                  {index === game.dealerIndex ? " (dealer last hand)" : ""}
+                </option>
+              ))}
+            </select>
+            <BuyInAmountField
+              game={game}
+              id="late-amount"
+              value={amount}
+              onChange={setAmount}
+            />
+          </>
+        )}
+        <button
+          className="primary full"
+          type="submit"
+          disabled={full || !chosen || !amountValid}
+        >
+          {chosen && amountValid
+            ? `Add ${chosen.name} · ${money(amount)}`
+            : "Add player"}
+        </button>
+        <button className="ghost full" type="button" onClick={onClose}>
+          Cancel
+        </button>
+      </form>
+    </div>
+  );
+}
+
+function CashOutSheet({
+  game,
+  onClose,
+  onCashOut,
+  onReturn,
+}: {
+  game: GameState;
+  onClose: () => void;
+  onCashOut: (playerIndex: number) => void;
+  onReturn: (playerIndex: number) => void;
+}) {
+  const { money } = useMoney();
+  const seated = game.players.flatMap((player, index) =>
+    player.left ? [] : [{ player, index }],
+  );
+  const gone = game.players.flatMap((player, index) =>
+    player.left ? [{ player, index }] : [],
+  );
+
+  return (
+    <div
+      className="modal show"
+      role="presentation"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <div
+        className="sheet profile-sheet"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="cash-out-title"
+      >
+        <span className="sheet-grabber" aria-hidden="true" />
+        <h2 id="cash-out-title">Cash Out</h2>
+        <p className="muted small-note">
+          Pick who&apos;s leaving. The chips in front of them become their
+          result for the game.
+        </p>
+        <div className="table-change-list">
+          {seated.map(({ player, index }) => (
+            <button
+              className="contender"
+              key={player.id || index}
+              type="button"
+              onClick={() => onCashOut(index)}
+            >
+              <Avatar name={player.name} playerId={player.id} size="small" />
+              <span className="contender-name">{player.name}</span>
+              <span className="contender-amount">{money(player.stack)}</span>
+            </button>
+          ))}
+        </div>
+        {gone.length ? (
+          <>
+            <span className="label">Left the table</span>
+            <div className="table-change-list">
+              {gone.map(({ player, index }) => (
+                <button
+                  className="contender"
+                  key={player.id || index}
+                  type="button"
+                  onClick={() => onReturn(index)}
+                >
+                  <Avatar name={player.name} playerId={player.id} size="small" />
+                  <span className="contender-name">{player.name}</span>
+                  <span className="contender-amount">
+                    Return · {money(player.stack)}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </>
+        ) : null}
+        <button className="ghost full" type="button" onClick={onClose}>
+          Close
+        </button>
+      </div>
     </div>
   );
 }
@@ -7480,7 +8010,9 @@ function BuyInOptions({
     <div className="buy-in-options">
       <span className="label">Buy in</span>
       <p className="muted small-note">
-        A busted player can buy back in for the starting stack.
+        {game.customBuyIns
+          ? `A busted player can buy back in for any amount, usually ${money(game.startStack)}.`
+          : "A busted player can buy back in for the starting stack."}
         {rules ? ` ${rules}.` : ""}
       </p>
       {offers.map(({ player, index, amount }) => (
@@ -7492,7 +8024,9 @@ function BuyInOptions({
         >
           <Avatar name={player.name} playerId={player.id} size="small" />
           <span className="contender-name">{player.name}</span>
-          <span className="contender-amount">Buy in · {money(amount)}</span>
+          <span className="contender-amount">
+            {game.customBuyIns ? "Buy in" : `Buy in · ${money(amount)}`}
+          </span>
         </button>
       ))}
       {blocked.map(({ player, index, reason }) => (
@@ -7672,8 +8206,13 @@ function TableHand({
   const [turn, setTurn] = useState(() => readTableTurn(game.startedAt));
   const hand = game.hand;
   if (!hand) return null;
-  const count = game.players.length;
-  const place = (index: number) => seatPosition((index + turn) % count, count);
+  // Players who cashed out have left the table, so they get no seat.
+  const seats = game.players.flatMap((player, index) =>
+    player.left ? [] : [index],
+  );
+  const count = seats.length;
+  const place = (index: number) =>
+    seatPosition((seats.indexOf(index) + turn) % count, count);
 
   function turnSeats() {
     const next = (turn + 1) % count;
@@ -7687,7 +8226,7 @@ function TableHand({
   // With side pots the winners are picked per pot on the card below.
   const multiPot = showdown && hasSidePots(game);
   const potCount = multiPot ? potsFor(game).pots.length : 1;
-  const crowded = game.players.length > 6;
+  const crowded = count > 6;
   const current = hand.currentPlayer;
   // A player bust at the deal can buy in by tapping their seat.
   const canBuyIn = (index: number) =>
@@ -7789,7 +8328,8 @@ function TableHand({
                 </span>
               );
             })}
-        {game.players.map((player, index) => {
+        {seats.map((index) => {
+          const player = game.players[index];
           const spot = place(index);
           const folded = !hand.in[index];
           const isTurn = !showdown && current === index;
@@ -7986,6 +8526,7 @@ function seatStatus(
   const player = game.players[playerIndex];
   const committed = hand.committed[playerIndex];
   if (!hand.in[playerIndex]) {
+    if (player.left) return "Cashed out";
     if (hand.boughtIn?.includes(playerIndex)) return "Next hand";
     // Bust when the hand was dealt, so never in it.
     if (!(hand.stacksBeforeHand[playerIndex] > 0)) return "Busted";
@@ -8172,7 +8713,7 @@ function PlayerRow({
               type="button"
               onClick={() => onBuyIn?.(playerIndex)}
             >
-              Buy in · {money(buyIn)}
+              {game.customBuyIns ? "Buy in" : `Buy in · ${money(buyIn)}`}
             </button>
           ) : null}
         </div>
@@ -9832,6 +10373,18 @@ function Modal({
             state.message
           )}
         </div>
+        {state.kind === "confirm" && state.alternative ? (
+          <button
+            className="text-button"
+            type="button"
+            onClick={() => {
+              state.alternative?.onChoose();
+              onConfirm();
+            }}
+          >
+            {state.alternative.label}
+          </button>
+        ) : null}
         <button
           className={
             state.kind === "confirm" && state.danger ? "danger" : "primary"
@@ -9841,7 +10394,7 @@ function Modal({
           {state.confirmLabel}
         </button>
         <button className="ghost" onClick={onClose}>
-          Never mind
+          {(state.kind === "confirm" && state.dismissLabel) || "Cancel"}
         </button>
       </div>
     </div>

@@ -7,18 +7,25 @@ export const MAX_BUY_INS = 64;
 export const MAX_REBUYS = MAX_BUY_INS - 1;
 
 /**
- * A rebuy is the full starting stack. Before 24 September 2026 a rebuy was
- * half the previous buy-in, rounded down; saved games, old backups and games
- * already in progress can still contain those amounts, so both are accepted.
+ * Any buy-in, first or rebuy, is a positive whole number of chips. The
+ * starting stack is only the default: since 12 October 2026 a game can let
+ * players choose their own amounts. Older games used the starting stack, or
+ * half the previous buy-in for rebuys before 24 September 2026; both fit.
  */
-export function isValidRebuy(
-  amount: number,
-  previous: number,
-  startStack: number,
-) {
+export function isValidBuyIn(amount: unknown): amount is number {
+  return typeof amount === "number" && Number.isSafeInteger(amount) && amount > 0;
+}
+
+/**
+ * A buy-in this many times the starting stack, or this many times smaller,
+ * is likely a typo, so the app asks the host to check it. It is still allowed.
+ */
+export const UNUSUAL_BUY_IN_FACTOR = 5;
+
+export function isUnusualBuyIn(amount: number, startStack: number) {
   return (
-    amount > 0 &&
-    (amount === startStack || amount === Math.floor(previous / 2))
+    amount > startStack * UNUSUAL_BUY_IN_FACTOR ||
+    amount * UNUSUAL_BUY_IN_FACTOR < startStack
   );
 }
 

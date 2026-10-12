@@ -26,8 +26,20 @@ export const CHANGE_TAG_LABELS: Record<ChangeTag, string> = {
 export const CHANGELOG: ChangelogEntry[] = [
   {
     date: "2026-10-12",
-    title: "Ante, rake and smarter side pots",
+    title: "Late joins, own buy-ins, ante and rake",
     items: [
+      {
+        tag: "new",
+        text: "Own amounts. Turn it on at setup and each player can buy in for a different amount. Forgot to turn it on? A late player can still pick their amount, and a rebuy has a Change amount link. Standings still compare everyone fairly by their return on what they put in.",
+      },
+      {
+        tag: "new",
+        text: "Late arrivals. Between hands, tap Add player, pick who's joining, where they sit and what they buy in for. They play from the next hand.",
+      },
+      {
+        tag: "new",
+        text: "Leaving early. Between hands, tap Cash out and pick who's going. The chips in front of them become their result. Tapped by mistake, or they came back? Return seats them again with the same chips.",
+      },
       {
         tag: "new",
         text: "Big blind ante. Turn it on at setup and the big blind also puts in one big blind for the whole table each hand.",

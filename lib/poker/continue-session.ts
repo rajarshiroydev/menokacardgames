@@ -28,7 +28,8 @@ function levelForBigBlind(plan: BlindPlan, bigBlind: number) {
  * buy-ins; hand numbers carry on. The dealer isn't saved, so the next one is
  * drawn at random. A timed blind schedule restarts its clock at the current
  * big blind on the next hand, so time away from the table doesn't raise it.
- * Rebuy limits carry over; the host can change them between hands. The ante
+ * Rebuy limits carry over; the host can change them between hands. Chosen
+ * buy-in amounts stay allowed when the saved game has any. The ante
  * and rake rules carry over too, and the house keeps the rake it took.
  */
 export function gameFromSession(
@@ -69,6 +70,13 @@ export function gameFromSession(
     blindPlans: plans,
     blindLevels: history.levels.map((level) => ({ ...level })),
     startStack: session.startStack,
+    // Saved games don't record the setting, so amounts other than the
+    // starting stack mean players chose their own and can carry on doing so.
+    ...(session.results.some((result) =>
+      (result.buyIns ?? []).some((amount) => amount !== session.startStack),
+    )
+      ? { customBuyIns: true }
+      : {}),
     ...(session.rebuyRules ? { rebuyRules: { ...session.rebuyRules } } : {}),
     ...(session.bigBlindAnte ? { bigBlindAnte: true } : {}),
     ...(session.rakeRules ? { rakeRules: { ...session.rakeRules } } : {}),
@@ -165,18 +173,26 @@ export function continuationError(
   if (incoming.ended <= saved.ended) {
     return "The continued game must end after the saved game";
   }
+  // Everyone saved must still be there; players who joined late are new
+  // results, and a late seat can move the others along.
+  const incomingById = new Map(
+    incoming.results.flatMap((result) =>
+      result.playerId ? [[result.playerId, result] as const] : [],
+    ),
+  );
   if (
-    incoming.results.length !== saved.results.length ||
-    incoming.results.some(
-      (result, index) =>
-        !result.playerId || result.playerId !== saved.results[index].playerId,
+    incoming.results.some((result) => !result.playerId) ||
+    incomingById.size !== incoming.results.length ||
+    saved.results.some(
+      (result) => !result.playerId || !incomingById.has(result.playerId),
     )
   ) {
-    return "The continued game must keep the same players in the same seats";
+    return "The continued game must keep every saved player";
   }
-  const keptBuyIns = saved.results.every((result, index) => {
+  const keptBuyIns = saved.results.every((result) => {
     const before = result.buyIns ?? [saved.startStack];
-    const after = incoming.results[index].buyIns ?? [incoming.startStack];
+    const later = incomingById.get(result.playerId!)!;
+    const after = later.buyIns ?? [incoming.startStack];
     return startsWith(after.map(String), before.map(String));
   });
   if (!keptBuyIns) {

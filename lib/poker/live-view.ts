@@ -1,6 +1,6 @@
 import { isAvatarId } from "../avatars.ts";
 import { deriveSessionAccounting } from "./accounting.ts";
-import { isValidRebuy, MAX_BUY_INS, parseRebuyRules } from "./buy-ins.ts";
+import { MAX_BUY_INS, parseRebuyRules } from "./buy-ins.ts";
 import { smallBlindFor } from "./game.ts";
 import { type ChipUnit, isChipUnit } from "./money.ts";
 import { cleanPlayerName } from "./player-validation.ts";
@@ -35,6 +35,8 @@ export type LiveSnapshotPlayer = {
   buyIns: number[];
   /** Chips at the start of the current hand, or `stack` between hands. */
   settledStack: number;
+  /** Cashed out and left the table; `stack` is what they left with. */
+  left?: boolean;
 };
 
 export type LiveSnapshot = {
@@ -62,6 +64,8 @@ export type LiveStanding = {
   invested: number;
   net: number;
   rebuys: number;
+  /** Cashed out and left the table; absent while seated. */
+  left?: boolean;
 };
 
 export type LiveView = {
@@ -109,6 +113,7 @@ export function buildLiveSnapshot(
         stack: player.stack,
         buyIns,
         settledStack,
+        ...(player.left ? { left: true } : {}),
       };
     }),
   };
@@ -173,17 +178,10 @@ export function validateLiveSnapshot(input: unknown): LiveSnapshot {
     ) {
       throw new Error(`${name} must have 1 to ${MAX_BUY_INS} buy-ins`);
     }
+    // Players may choose their own amounts; each must be at least 1 chip.
     const buyIns = player.buyIns.map((amount) =>
       asChips(amount, `${name}'s buy-in`, 1),
     );
-    if (buyIns[0] !== startStack) {
-      throw new Error(`${name}'s first buy-in must be the starting stack`);
-    }
-    buyIns.slice(1).forEach((amount, index) => {
-      if (!isValidRebuy(amount, buyIns[index], startStack)) {
-        throw new Error(`${name}'s rebuy amount is not allowed`);
-      }
-    });
     const stack = asChips(player.stack, `${name}'s stack`);
     const settledStack = asChips(player.settledStack, `${name}'s stack`);
     if (!snapshot.handInProgress && stack !== settledStack) {
@@ -194,7 +192,20 @@ export function validateLiveSnapshot(input: unknown): LiveSnapshot {
     }
     // An avatar the server doesn't know is dropped; the page draws a stand-in.
     const avatar = isAvatarId(player.avatar) ? player.avatar : undefined;
-    return { name, ...(avatar ? { avatar } : {}), stack, buyIns, settledStack };
+    if (player.left !== undefined && player.left !== true) {
+      throw new Error(`Invalid table status for ${name}`);
+    }
+    if (player.left && stack !== settledStack) {
+      throw new Error(`${name} left the table and can't be in a hand`);
+    }
+    return {
+      name,
+      ...(avatar ? { avatar } : {}),
+      stack,
+      buyIns,
+      settledStack,
+      ...(player.left ? { left: true } : {}),
+    };
   });
 
   return {
@@ -237,6 +248,7 @@ export function deriveLiveView(snapshot: LiveSnapshot): LiveView {
     invested: result.invested,
     net: result.net,
     rebuys: result.buyIns.length - 1,
+    ...(snapshot.players[index].left ? { left: true } : {}),
   }));
   rows.sort(
     (a, b) =>
