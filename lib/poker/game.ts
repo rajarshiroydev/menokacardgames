@@ -1,5 +1,6 @@
 import {
   describeRebuyRules,
+  isValidBuyIn,
   MAX_BUY_INS,
   normalizeRebuyRules,
   rebuyBlock,
@@ -184,23 +185,25 @@ export function joinGame(
   game: GameState,
   player: { id?: string; name: string },
   seat: number,
+  amount = game.startStack,
 ) {
-  if (!canJoinGame(game, player)) return false;
+  if (!canJoinGame(game, player) || !isValidBuyIn(amount)) return false;
   if (!Number.isInteger(seat) || seat < 0 || seat > game.players.length) {
     return false;
   }
   game.players.splice(seat, 0, {
     ...(player.id ? { id: player.id } : {}),
     name: player.name,
-    stack: game.startStack,
-    buyIns: [game.startStack],
+    stack: amount,
+    buyIns: [amount],
   });
+  noteBuyInAmount(game, amount);
   // The button stays with the same player.
   if (seat <= game.dealerIndex) game.dealerIndex += 1;
   game.lastHand = null;
   tableLog(
     game,
-    `${player.name} joins and buys in for ${formatChips(game.startStack, game.chipUnit, game.currency)}`,
+    `${player.name} joins and buys in for ${formatChips(amount, game.chipUnit, game.currency)}`,
   );
   return true;
 }
@@ -235,9 +238,34 @@ export function returnToTable(game: GameState, playerIndex: number) {
   return true;
 }
 
-export function buyInPlayer(game: GameState, playerIndex: number) {
-  const amount = nextBuyIn(game, playerIndex);
-  if (amount === null) return null;
+/**
+ * Records a buy-in amount other than the starting stack: from then on the
+ * game lets players choose their own amounts, so the host isn't stuck with
+ * the setup choice when someone arrives with a different amount.
+ */
+function noteBuyInAmount(game: GameState, amount: number) {
+  if (amount !== game.startStack) game.customBuyIns = true;
+}
+
+/**
+ * Buys a busted player back in for `amount`, which defaults to the starting
+ * stack (`nextBuyIn`). Returns the amount, or null when not allowed.
+ */
+export function buyInPlayer(
+  game: GameState,
+  playerIndex: number,
+  chosen?: number,
+) {
+  const offered = nextBuyIn(game, playerIndex);
+  if (offered === null) return null;
+  const amount = chosen ?? offered;
+  if (
+    !isValidBuyIn(amount) ||
+    !Number.isSafeInteger(totalBuyIns(game, playerIndex) + amount)
+  ) {
+    return null;
+  }
+  noteBuyInAmount(game, amount);
   const player = game.players[playerIndex];
   player.buyIns = [...playerBuyIns(game, playerIndex), amount];
   player.stack = amount;

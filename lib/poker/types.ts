@@ -223,7 +223,15 @@ export type GameState = {
   blindLevelStartedAt?: number;
   blindPlans?: BlindPlan[];
   blindLevels?: BlindLevelRecord[];
+  /** The default buy-in, offered for every buy-in unless changed. */
   startStack: number;
+  /**
+   * Players choose their own buy-in amounts, with the starting stack as the
+   * default: turned on at setup, or by the first rebuy or late join for a
+   * different amount. It only changes how buy-ins are offered; any positive
+   * amount is accepted either way. Absent is the same amount for everyone.
+   */
+  customBuyIns?: boolean;
   /** Rebuy limits chosen at setup or edited between hands; absent is none. */
   rebuyRules?: RebuyRules;
   /** The big blind also posts an ante of one big blind each hand. */

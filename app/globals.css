@@ -1737,6 +1737,21 @@ textarea::placeholder {
   white-space: nowrap;
 }
 
+/* A player's own buy-in in the seating order, when amounts are chosen. */
+.seat-row .seat-amount {
+  flex: 0 0 104px;
+  width: 104px;
+  height: 36px;
+  padding: 0 10px;
+  font-size: 15px;
+  font-weight: 700;
+  text-align: right;
+}
+
+.seat-row .seat-amount.invalid {
+  border-color: var(--neg);
+}
+
 .seat-drag-handle {
   display: grid;
   place-items: center;

@@ -151,6 +151,23 @@ describe("live view validation", () => {
     );
   });
 
+  test("accepts buy-ins players chose themselves", () => {
+    const view = deriveLiveView(
+      validateLiveSnapshot(
+        snapshot({
+          players: [
+            { name: "Debraj", stack: 9_000, buyIns: [5_000], settledStack: 9_000 },
+            { name: "Rajarshi", stack: 16_000, buyIns: [10_000, 10_000], settledStack: 16_000 },
+          ],
+        }),
+      ),
+    );
+    assert.deepEqual(
+      view.standings.map((row) => [row.name, row.invested, row.net]),
+      [["Debraj", 5_000, 4_000], ["Rajarshi", 20_000, -4_000]],
+    );
+  });
+
   test("accepts a valid snapshot and cleans names", () => {
     const input = snapshot();
     input.players[0].name = "  Debraj   Das ";
@@ -165,10 +182,13 @@ describe("live view validation", () => {
     ["a string stack", (input) => {
       (input.players[0] as unknown as { stack: string }).stack = "100";
     }],
-    ["a first buy-in other than the starting stack", (input) => {
-      input.players[0].buyIns = [5_000];
+    ["a buy-in of nothing", (input) => {
+      input.players[0].buyIns = [0];
+      input.players[0].stack = input.players[0].settledStack = 4_000;
     }],
-    ["a made-up rebuy", (input) => { input.players[0].buyIns = [10_000, 777]; }],
+    ["a fractional rebuy", (input) => {
+      input.players[0].buyIns = [10_000, 0.5];
+    }],
     ["too many buy-ins", (input) => {
       input.players[0].buyIns = Array(65).fill(10_000);
     }],

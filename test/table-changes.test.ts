@@ -1,7 +1,9 @@
 import { strict as assert } from "node:assert";
 import { describe, it } from "node:test";
 
+import { isUnusualBuyIn } from "../lib/poker/buy-ins.ts";
 import {
+  buyInPlayer,
   canJoinGame,
   cashOutPlayer,
   dealablePlayerCount,
@@ -154,5 +156,55 @@ describe("cash out", () => {
     assert.equal(returnToTable(game, 0), false);
     dealNewHand(game, 2);
     assert.equal(game.hand?.in[0], true);
+  });
+});
+
+describe("players choosing their own buy-in", () => {
+  function custom(): GameState {
+    return { ...betweenHands(), customBuyIns: true };
+  }
+
+  it("takes any positive amount for a rebuy", () => {
+    const fixed = betweenHands();
+    fixed.players[1].stack = 0;
+    assert.equal(buyInPlayer(fixed, 1), 10_000);
+    assert.equal(fixed.customBuyIns, undefined);
+
+    const game = custom();
+    game.players[1].stack = 0;
+    assert.equal(buyInPlayer(game, 1, 0), null);
+    assert.equal(buyInPlayer(game, 1, 2.5), null);
+    assert.equal(buyInPlayer(game, 1, 4_000), 4_000);
+    assert.deepEqual(game.players[1].buyIns, [10_000, 4_000]);
+    assert.equal(game.players[1].stack, 4_000);
+  });
+
+  it("switches a game to own amounts at the first different amount", () => {
+    const rebuy = betweenHands();
+    rebuy.players[1].stack = 0;
+    assert.equal(buyInPlayer(rebuy, 1, 5_000), 5_000);
+    assert.equal(rebuy.customBuyIns, true);
+
+    const late = betweenHands();
+    assert.equal(joinGame(late, { id: "d", name: "Dev" }, 3, 10_000), true);
+    assert.equal(late.customBuyIns, undefined);
+    assert.equal(joinGame(late, { id: "e", name: "Esha" }, 4, 20_000), true);
+    assert.equal(late.customBuyIns, true);
+  });
+
+  it("seats a late player with their own amount", () => {
+    const game = custom();
+    assert.equal(joinGame(game, { id: "d", name: "Dev" }, 3, 20_000), true);
+    assert.deepEqual(game.players[3].buyIns, [20_000]);
+    assert.equal(game.log[0], "Before hand 4: Dev joins and buys in for ₹20,000");
+    assert.equal(joinGame(custom(), { id: "d", name: "Dev" }, 3, 0), false);
+  });
+
+  it("flags amounts far from the starting stack", () => {
+    assert.equal(isUnusualBuyIn(10_000, 10_000), false);
+    assert.equal(isUnusualBuyIn(50_000, 10_000), false);
+    assert.equal(isUnusualBuyIn(50_001, 10_000), true);
+    assert.equal(isUnusualBuyIn(2_000, 10_000), false);
+    assert.equal(isUnusualBuyIn(1_999, 10_000), true);
   });
 });

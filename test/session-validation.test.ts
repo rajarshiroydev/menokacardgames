@@ -106,11 +106,22 @@ describe("session validation", () => {
       () => validateSession({
         ...validSession,
         results: [
-          { name: "Raj", net: -12000, end: 5000, buyIns: [10000, 7000] },
+          { name: "Raj", net: -12000, end: 5000, buyIns: [10000, 0] },
           { name: "Sam", net: 12000, end: 22000 },
         ],
       }),
-      /Invalid buy-in sequence/,
+      /buy-in amount|Invalid buy-in sequence/,
+    );
+  });
+
+  test("accepts amounts players chose themselves", () => {
+    const results = [
+      { name: "Raj", net: -2000, end: 15000, buyIns: [5000, 12000] },
+      { name: "Sam", net: 2000, end: 22000, buyIns: [20000] },
+    ];
+    assert.deepEqual(
+      validateSession({ ...validSession, results }).results,
+      results,
     );
   });
 
@@ -122,13 +133,6 @@ describe("session validation", () => {
     assert.deepEqual(
       validateSession({ ...validSession, results }).results,
       results,
-    );
-    assert.throws(
-      () => validateSession({
-        ...validSession,
-        results: [{ ...results[0], buyIns: [10000, 6000] }, results[1]],
-      }),
-      /Invalid buy-in sequence/,
     );
     assert.throws(
       () => validateSession({

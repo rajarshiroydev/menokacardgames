@@ -1,6 +1,6 @@
 import { deriveSessionAccounting } from "./accounting.ts";
 import {
-  isValidRebuy,
+  isValidBuyIn,
   MAX_BUY_INS,
   parseRebuyRules,
 } from "./buy-ins.ts";
@@ -244,12 +244,8 @@ export function validateSession(input: unknown): PokerSession {
       const parsedBuyIns = result.buyIns.map((amount, index) =>
         asSafeInteger(amount, "buy-in amount", { min: index === 0 ? 0 : 1 }),
       );
-      const validRebuys = parsedBuyIns.every(
-        (amount, index) =>
-          index === 0 ||
-          isValidRebuy(amount, parsedBuyIns[index - 1], startStack),
-      );
-      if (parsedBuyIns[0] !== startStack || !validRebuys) {
+      // Amounts are the player's own choice; only rebuys must be positive.
+      if (!parsedBuyIns.slice(1).every(isValidBuyIn)) {
         throw new Error("Invalid buy-in sequence");
       }
       const invested = parsedBuyIns.reduce(

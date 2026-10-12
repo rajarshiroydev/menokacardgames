@@ -52,7 +52,7 @@ const GROUPS: FeatureGroup[] = [
       },
       {
         name: "Stacks and blinds",
-        text: "Choose a starting stack and the app suggests a big blind to match. Small stacks (under 1,000) count in cents automatically.",
+        text: "Choose a starting stack and the app suggests a big blind to match. Small stacks (under 1,000) count in cents automatically. Turn on Own amounts to let each player buy in for a different amount.",
       },
       {
         name: "Odd blinds",

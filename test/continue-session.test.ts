@@ -148,6 +148,17 @@ describe("gameFromSession", () => {
   });
 });
 
+describe("chosen buy-in amounts", () => {
+  it("stay allowed when the saved game has amounts other than the stack", () => {
+    const fixed = gameFromSession(saved, [], "INR", NOW, () => 0);
+    assert.equal(fixed.customBuyIns, undefined);
+    const mixed: SavedSession = structuredClone(saved);
+    mixed.results[2] = { playerId: "p3", name: "Ana", net: 0, end: 5000, buyIns: [5000] };
+    mixed.results[0] = { ...mixed.results[0], net: 10000, end: 30000 };
+    assert.equal(gameFromSession(mixed, [], "INR", NOW, () => 0).customBuyIns, true);
+  });
+});
+
 describe("continuationError", () => {
   it("accepts the same game played on", () => {
     assert.equal(continuationError(saved, continued()), null);
