@@ -141,6 +141,17 @@ export type RakeRules = {
   cap: number;
 };
 
+/**
+ * What chips cost in money: `chips` stored chips (in the game's chip unit)
+ * cost `cents` hundredths of the host's currency. A game without one counts
+ * a chip as one unit of the currency, as every game did before it existed.
+ * Only results and settling up use it; the rules of play never do.
+ */
+export type ChipValue = {
+  chips: number;
+  cents: number;
+};
+
 export type BlindSchedule = {
   /** Levels advance every `every` hands, or every `every` minutes. */
   unit: "hands" | "minutes";
@@ -236,6 +247,11 @@ export type GameState = {
   chipUnit?: ChipUnit;
   /** Odd blinds chosen at setup; without it the small blind is half. */
   smallBlindRatio?: SmallBlindRatio;
+  /**
+   * What the chips cost, chosen at setup; absent is a chip per unit of the
+   * currency. With it the game shows plain chip counts, not money.
+   */
+  chipValue?: ChipValue;
   gameName?: string;
   sessionLabel?: string;
   /** Big blind for the current level. */
@@ -310,6 +326,12 @@ export type PokerSession = {
   ended: number;
   /** "cents" when every amount is in hundredths; absent is whole chips. */
   chipUnit?: ChipUnit;
+  /**
+   * What the chips cost; absent is a chip per unit of the currency. Set at
+   * setup or later from Settle up; it isn't part of the game's content, so a
+   * retried save matches whatever value is saved.
+   */
+  chipValue?: ChipValue;
   ante: number;
   blindHistory?: BlindHistory;
   startStack: number;

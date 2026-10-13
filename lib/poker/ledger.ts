@@ -1,7 +1,7 @@
 import { isValidBuyIn, MAX_BUY_INS } from "./buy-ins.ts";
 import { canJoinGame, MAX_GAME_PLAYERS, totalBuyIns } from "./game.ts";
-import { formatChips, type ChipUnit } from "./money.ts";
-import type { GameState, LedgerStep, PokerSession } from "./types";
+import { chipCurrency, formatChips, type ChipUnit } from "./money.ts";
+import type { ChipValue, GameState, LedgerStep, PokerSession } from "./types";
 
 /**
  * Quick ledger: a game recorded without hands. The host notes buy-ins as
@@ -19,7 +19,7 @@ export function isLedgerGame(game: Pick<GameState, "kind"> | null | undefined) {
 }
 
 function money(game: GameState, chips: number) {
-  return formatChips(chips, game.chipUnit, game.currency);
+  return formatChips(chips, game.chipUnit, chipCurrency(game.currency, game.chipValue));
 }
 
 function snapshot(game: GameState) {
@@ -62,6 +62,8 @@ export function createLedgerGame(input: {
   sessionLabel: string;
   currency: string;
   chipUnit: ChipUnit;
+  /** What the chips cost; null is a chip per unit of the currency. */
+  chipValue?: ChipValue | null;
   startStack: number;
   players: Array<{ id?: string; name: string }>;
   buyIns: number[] | null;
@@ -88,6 +90,7 @@ export function createLedgerGame(input: {
     sessionLabel: gameName || input.sessionLabel,
     currency: input.currency,
     ...(input.chipUnit === "cents" ? { chipUnit: input.chipUnit } : {}),
+    ...(input.chipValue ? { chipValue: { ...input.chipValue } } : {}),
     ante: 0,
     baseAnte: 0,
     blinds: null,
@@ -291,6 +294,7 @@ export function ledgerSession(
     date: game.startedAt,
     ended: Math.max(ended, game.startedAt),
     ...(game.chipUnit === "cents" ? { chipUnit: game.chipUnit } : {}),
+    ...(game.chipValue ? { chipValue: game.chipValue } : {}),
     ante: 0,
     startStack: game.startStack,
     hands: 0,

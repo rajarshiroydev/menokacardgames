@@ -49,6 +49,7 @@ describe("group standings for a linked friend", () => {
     const own = buildStandings(
       group.sessions.map((session) => ({
         ...session,
+        chipValue: session.chipValue ?? undefined,
         ended: session.date,
         ante: 0,
         results: session.results.map(({ buyIns, ...rest }) =>

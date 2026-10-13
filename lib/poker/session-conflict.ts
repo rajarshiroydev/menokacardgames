@@ -39,6 +39,8 @@ function canonicalContent(session: PokerSession, name: string) {
     date: session.date,
     ended: session.ended,
     chipUnit: session.chipUnit ?? "whole",
+    // The chip value is left out: it can be changed after saving (Settle
+    // up), so a retried save or a re-imported export still matches.
     ante: session.ante,
     startStack: session.startStack,
     hands: session.hands,

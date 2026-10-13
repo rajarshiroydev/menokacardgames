@@ -423,7 +423,8 @@ textarea::placeholder {
   pointer-events: none;
 }
 
-.money-field > .field {
+/* As specific as `.sheet input`, which comes earlier, so it also wins in sheets. */
+.money-field > input.field {
   padding-left: 32px;
 }
 
@@ -6885,4 +6886,66 @@ td > .admin-badge:first-child,
   color: var(--ink3);
   font-size: 12px;
   text-align: center;
+}
+
+/* Settle up (a saved game's results in money and who pays whom). */
+.settle-value {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 16px;
+  border: 1px solid var(--gb);
+  border-radius: 14px;
+  background: var(--field);
+}
+
+.settle-value-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+/* "10,000 chips = ₹1,000": both sides of the price at the same size. */
+.settle-equation {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 10px;
+  font-family: var(--fd);
+  font-size: clamp(22px, 7.4vw, 28px);
+  font-weight: 900;
+  font-variation-settings: "opsz" 72;
+  line-height: 1.05;
+  text-transform: uppercase;
+}
+
+.settle-equals {
+  color: var(--ink2);
+  font-weight: 600;
+}
+
+.settle-price {
+  color: var(--g);
+}
+
+.settle-value-note {
+  color: var(--ink2);
+  font-size: 13px;
+}
+
+.settle-change {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+}
+
+.settle-change svg {
+  width: 13px;
+  height: 13px;
+}
+
+.settle-sheet .result-name .muted {
+  font-size: 13px;
 }

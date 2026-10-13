@@ -28,8 +28,16 @@ export const CHANGE_TAG_LABELS: Record<ChangeTag, string> = {
 export const CHANGELOG: ChangelogEntry[] = [
   {
     date: "2026-10-13",
-    title: "Quick ledger and Who wins?",
+    title: "Quick ledger, settle up and Who wins?",
     items: [
+      {
+        tag: "new",
+        text: "Settle up. After you save a game, Pokerize shows everyone's result in money and who pays whom, with the fewest payments possible. Share the list to your group chat in one tap. Settle up is also on every saved game in Games. No money goes through the app.",
+      },
+      {
+        tag: "new",
+        text: "Chip value. Chips don't cost what's printed on them? At setup, turn on Chips cost money and say what a buy-in costs, for example ₹500 for 10,000 chips. The table counts chips, and results, standings and settle up show real money. Forgot? Set the price later from Settle up.",
+      },
       {
         tag: "new",
         text: "Quick ledger. Don't want to play every hand in the app? Tap Quick ledger on Home, note buy-ins, rebuys and anyone who cashes out, then count everyone's chips at the end. It counts in the standings just like any other game.",

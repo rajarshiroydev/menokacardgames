@@ -53,6 +53,11 @@ export type LiveSnapshot = {
   rebuyRules?: RebuyRules;
   /** Chips the house has raked so far; absent is none. */
   rake?: number;
+  /**
+   * The chips have a value, so they show as plain counts, not money. The
+   * value itself stays on the host's device.
+   */
+  plainChips?: boolean;
   players: LiveSnapshotPlayer[];
 };
 
@@ -80,6 +85,8 @@ export type LiveView = {
   smallBlind?: number;
   rebuyRules?: RebuyRules;
   rake?: number;
+  /** Amounts are plain chip counts; absent is chips shown as money. */
+  plainChips?: boolean;
   standings: LiveStanding[];
 };
 
@@ -100,6 +107,7 @@ export function buildLiveSnapshot(
     smallBlind: smallBlindFor(game.ante, game.smallBlindRatio),
     ...(game.rebuyRules ? { rebuyRules: game.rebuyRules } : {}),
     ...(game.rake ? { rake: game.rake } : {}),
+    ...(game.chipValue ? { plainChips: true } : {}),
     players: game.players.map((player, index) => {
       const buyIns = player.buyIns?.length ? [...player.buyIns] : [game.startStack];
       const before = hand?.stacksBeforeHand[index];
@@ -218,6 +226,7 @@ export function validateLiveSnapshot(input: unknown): LiveSnapshot {
     ...(smallBlind === undefined ? {} : { smallBlind }),
     ...(rebuyRules ? { rebuyRules } : {}),
     ...(rake > 0 ? { rake } : {}),
+    ...(snapshot.plainChips === true ? { plainChips: true } : {}),
     players,
   };
 }
@@ -271,6 +280,7 @@ export function deriveLiveView(snapshot: LiveSnapshot): LiveView {
     ...(snapshot.smallBlind === undefined ? {} : { smallBlind: snapshot.smallBlind }),
     ...(snapshot.rebuyRules ? { rebuyRules: snapshot.rebuyRules } : {}),
     ...(snapshot.rake ? { rake: snapshot.rake } : {}),
+    ...(snapshot.plainChips ? { plainChips: true } : {}),
     standings,
   };
 }

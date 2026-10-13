@@ -24,7 +24,35 @@ export function isCurrencyCode(value: unknown): value is CurrencyCode {
   return CURRENCIES.some((currency) => currency.code === value);
 }
 
-function currencyInfo(code: string | undefined) {
+const PLAIN_CHIPS_PREFIX = "chips:";
+
+/**
+ * A display code that formats amounts as plain chip counts ("10,000", no
+ * sign), grouped the way `code` groups money. For games with a chip value
+ * (lib/poker/settle-up.ts), where a chip isn't a unit of the currency.
+ */
+export function plainChipsCode(code: string | undefined) {
+  return `${PLAIN_CHIPS_PREFIX}${code ?? DEFAULT_CURRENCY}`;
+}
+
+/** The code a game's chips are formatted with: plain chips when they have a value. */
+export function chipCurrency(
+  currency: string | undefined,
+  chipValue: unknown,
+) {
+  return chipValue ? plainChipsCode(currency) : currency;
+}
+
+function currencyInfo(code: string | undefined): {
+  symbol: string;
+  locale: string;
+} {
+  if (code?.startsWith(PLAIN_CHIPS_PREFIX)) {
+    return {
+      ...currencyInfo(code.slice(PLAIN_CHIPS_PREFIX.length)),
+      symbol: "",
+    };
+  }
   return (
     CURRENCIES.find((currency) => currency.code === code) ?? CURRENCIES[0]
   );
@@ -95,14 +123,15 @@ export function chipsToInput(chips: number, unit: ChipUnit | undefined) {
 /**
  * "₹1,00,000" for rupees, "$100,000" for dollars. An amount with a
  * fractional part shows two decimals ("$0.25", "$1.50"); a whole one shows
- * none ("$1").
+ * none ("$1"). `maxDigits` allows more for a rate ("₹0.0167" a chip).
  */
-export function formatMoney(value: number, code?: string) {
+export function formatMoney(value: number, code?: string, maxDigits = 2) {
   const { symbol, locale } = currencyInfo(code);
-  const hasCents = Math.round(Number(value) * 100) % 100 !== 0;
+  const scale = 10 ** maxDigits;
+  const hasCents = Math.round(Number(value) * scale) % scale !== 0;
   return `${symbol}${Number(value).toLocaleString(locale, {
     minimumFractionDigits: hasCents ? 2 : 0,
-    maximumFractionDigits: hasCents ? 2 : 0,
+    maximumFractionDigits: hasCents ? maxDigits : 0,
   })}`;
 }
 

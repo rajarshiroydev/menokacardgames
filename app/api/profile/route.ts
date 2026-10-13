@@ -42,6 +42,13 @@ async function handleGet() {
             'startStack', session.starting_stack,
             'hands', session.hands,
             'rake', session.rake,
+            'chipValue', CASE
+              WHEN session.chip_value_chips IS NULL THEN NULL
+              ELSE jsonb_build_object(
+                'chips', session.chip_value_chips,
+                'cents', session.chip_value_cents
+              )
+            END,
             'results', normalized.results
           )
           ORDER BY session.played_at, session.created_at

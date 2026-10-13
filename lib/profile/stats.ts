@@ -1,6 +1,6 @@
 import type { GroupSessions } from "../friends/group-standings.ts";
 import { deriveSessionAccounting } from "../poker/accounting.ts";
-import { chipsInCents } from "../poker/money.ts";
+import { normalizeChipValue, sessionMoney } from "../poker/settle-up.ts";
 import { sessionReturn } from "../poker/standings.ts";
 
 /** Games shown as bars on the profile card. */
@@ -68,8 +68,13 @@ export function buildProfileStats(
       );
       if (index === -1) continue;
       let invested: number;
+      let netCents: number;
       try {
         invested = deriveSessionAccounting(session).results[index].invested;
+        netCents = sessionMoney({
+          ...session,
+          chipValue: normalizeChipValue(session.chipValue) ?? undefined,
+        }).results[index].net;
       } catch {
         continue;
       }
@@ -78,7 +83,7 @@ export function buildProfileStats(
       if (value === null) continue;
       games.push({
         date: session.date,
-        net: chipsInCents(net, session.chipUnit),
+        net: netCents,
         return: value,
         currency: ledger.currency,
       });

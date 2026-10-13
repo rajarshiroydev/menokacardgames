@@ -16,7 +16,12 @@ import {
   validateSession,
 } from "@/lib/poker/session-validation";
 import type { ChipUnit } from "@/lib/poker/money";
-import type { PokerSession, SessionResult } from "@/lib/poker/types";
+import { parseChipValue } from "@/lib/poker/settle-up";
+import type {
+  ChipValue,
+  PokerSession,
+  SessionResult,
+} from "@/lib/poker/types";
 import {
   readJsonBody,
   SESSION_BATCH_BODY_LIMIT,
@@ -44,6 +49,8 @@ type SessionRow = {
   big_blind_ante: boolean;
   rake_rules: PokerSession["rakeRules"] | null;
   rake: number | string;
+  chip_value_chips: number | string | null;
+  chip_value_cents: number | string | null;
   results: PokerSession["results"];
 };
 
@@ -73,6 +80,14 @@ function mapSession(row: SessionRow): SavedSession {
     ...(row.big_blind_ante ? { bigBlindAnte: true } : {}),
     ...(row.rake_rules ? { rakeRules: row.rake_rules } : {}),
     ...(Number(row.rake) > 0 ? { rake: Number(row.rake) } : {}),
+    ...(row.chip_value_chips !== null && row.chip_value_cents !== null
+      ? {
+          chipValue: {
+            chips: Number(row.chip_value_chips),
+            cents: Number(row.chip_value_cents),
+          },
+        }
+      : {}),
     hands: Number(row.hands),
     results: row.results,
   };
@@ -103,6 +118,8 @@ function selectSessions(
           big_blind_ante,
           rake_rules,
           rake,
+          chip_value_chips,
+          chip_value_cents,
           normalized.results,
           discarded_at
         FROM poker_sessions AS session
@@ -426,6 +443,8 @@ async function handlePost(request: Request) {
               big_blind_ante,
               rake_rules,
               rake,
+              chip_value_chips,
+              chip_value_cents,
               results
               ) SELECT
                 ${ownerId}::uuid,
@@ -444,6 +463,8 @@ async function handlePost(request: Request) {
                 ${session.bigBlindAnte === true},
                 ${session.rakeRules ? JSON.stringify(session.rakeRules) : null}::jsonb,
                 ${session.rake ?? 0},
+                ${session.chipValue?.chips ?? null}::bigint,
+                ${session.chipValue?.cents ?? null}::bigint,
                 ${JSON.stringify(session.results)}::jsonb
               FROM allocated
               ON CONFLICT (owner_id, id) WHERE owner_id IS NOT NULL DO NOTHING
@@ -801,10 +822,14 @@ async function handlePatch(request: Request) {
     const body = (read.body ?? {}) as {
       action?: unknown;
       id?: unknown;
+      chipValue?: unknown;
     };
     const id = String(body?.id || "");
     if (!/^[A-Za-z0-9._:-]{1,100}$/.test(id)) {
       return json({ error: "Invalid session id" }, 400);
+    }
+    if (body.action === "chip-value") {
+      return setChipValue(authUserId, ownerId, id, body.chipValue);
     }
     if (body.action !== "discard" && body.action !== "restore") {
       return json({ error: "Invalid session action" }, 400);
@@ -847,6 +872,61 @@ async function handlePatch(request: Request) {
     console.error("sessions PATCH error", error);
     return json({ error: "Could not update the session" }, 500);
   }
+}
+
+/**
+ * Sets or clears what a saved game's chips cost (Settle up). Only that
+ * changes: chips, results and the game's other details stay as saved. The
+ * value before is kept in an audit event, for debugging and recovery.
+ */
+async function setChipValue(
+  authUserId: string,
+  ownerId: string,
+  id: string,
+  input: unknown,
+) {
+  let chipValue: ChipValue | undefined;
+  try {
+    chipValue = parseChipValue(input);
+  } catch (error) {
+    return json(
+      { error: error instanceof Error ? error.message : "Invalid chip value" },
+      400,
+    );
+  }
+  const [, result] = await runAsAuthenticatedUser(authUserId, (sql) => [
+    sql`
+      INSERT INTO audit_events (
+        owner_id, actor_auth_user_id, action, target_kind, target_id, details
+      )
+      SELECT
+        ${ownerId}::uuid,
+        ${authUserId}::uuid,
+        'session.chip_value',
+        'session',
+        session.id,
+        jsonb_build_object(
+          'previousChips', session.chip_value_chips,
+          'previousCents', session.chip_value_cents,
+          'chips', ${chipValue?.chips ?? null}::bigint,
+          'cents', ${chipValue?.cents ?? null}::bigint
+        )
+      FROM poker_sessions AS session
+      WHERE session.owner_id = ${ownerId}::uuid
+        AND session.id = ${id}
+    `,
+    sql`
+      UPDATE poker_sessions
+      SET
+        chip_value_chips = ${chipValue?.chips ?? null}::bigint,
+        chip_value_cents = ${chipValue?.cents ?? null}::bigint
+      WHERE owner_id = ${ownerId}::uuid
+        AND id = ${id}
+      RETURNING id
+    `,
+  ]);
+  if (!result.length) return json({ error: "Saved game not found" }, 404);
+  return json({ id, chipValue: chipValue ?? null });
 }
 
 async function handleDelete(request: Request) {

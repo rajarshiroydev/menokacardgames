@@ -5,7 +5,7 @@ import {
   normalizeRebuyRules,
   rebuyBlock,
 } from "./buy-ins.ts";
-import { formatChips } from "./money.ts";
+import { chipCurrency, formatChips } from "./money.ts";
 import type {
   BlindHistory,
   BlindPlan,
@@ -104,7 +104,7 @@ export function editRebuyRules(game: GameState, rules: RebuyRules | null) {
   // Not "Hand N:", so undoing that hand keeps this line, like the change.
   game.log.unshift(
     `Before hand ${game.handNo + 1}: rebuy rules changed to ${(
-      describeRebuyRules(stored, game.currency, game.chipUnit) ?? "Unlimited rebuys"
+      describeRebuyRules(stored, chipCurrency(game.currency, game.chipValue), game.chipUnit) ?? "Unlimited rebuys"
     ).replace(/^./, (first) => first.toLowerCase())}`,
   );
   game.log = game.log.slice(0, 80);
@@ -203,7 +203,7 @@ export function joinGame(
   game.lastHand = null;
   tableLog(
     game,
-    `${player.name} joins and buys in for ${formatChips(amount, game.chipUnit, game.currency)}`,
+    `${player.name} joins and buys in for ${formatChips(amount, game.chipUnit, chipCurrency(game.currency, game.chipValue))}`,
   );
   return true;
 }
@@ -220,7 +220,7 @@ export function cashOutPlayer(game: GameState, playerIndex: number) {
   game.lastHand = null;
   tableLog(
     game,
-    `${player.name} cashes out with ${formatChips(player.stack, game.chipUnit, game.currency)}`,
+    `${player.name} cashes out with ${formatChips(player.stack, game.chipUnit, chipCurrency(game.currency, game.chipValue))}`,
   );
   return true;
 }
@@ -233,7 +233,7 @@ export function returnToTable(game: GameState, playerIndex: number) {
   game.lastHand = null;
   tableLog(
     game,
-    `${player.name} returns to the table with ${formatChips(player.stack, game.chipUnit, game.currency)}`,
+    `${player.name} returns to the table with ${formatChips(player.stack, game.chipUnit, chipCurrency(game.currency, game.chipValue))}`,
   );
   return true;
 }
@@ -776,8 +776,8 @@ function applyBlindLevel(game: GameState, handNo: number, now: number) {
       `Hand ${handNo}: blinds ${bigBlind > previousBigBlind ? "up" : "set"} to ${formatChips(
         smallBlindFor(bigBlind, game.smallBlindRatio),
         game.chipUnit,
-        game.currency,
-      )}/${formatChips(bigBlind, game.chipUnit, game.currency)} (level ${level + 1})`,
+        chipCurrency(game.currency, game.chipValue),
+      )}/${formatChips(bigBlind, game.chipUnit, chipCurrency(game.currency, game.chipValue))} (level ${level + 1})`,
     );
     game.log = game.log.slice(0, 80);
   }
@@ -1165,7 +1165,7 @@ export function takeRake(game: GameState) {
   if (!hand || rake <= 0) return 0;
   game.rake = (game.rake ?? 0) + rake;
   game.log.unshift(
-    `Hand ${hand.no}: house rake ${formatChips(rake, game.chipUnit, game.currency)}`,
+    `Hand ${hand.no}: house rake ${formatChips(rake, game.chipUnit, chipCurrency(game.currency, game.chipValue))}`,
   );
   game.log = game.log.slice(0, 80);
   return rake;
@@ -1315,7 +1315,7 @@ export function awardPots(game: GameState, winners: number[][]) {
   const record = completedHandRecord(game);
   const name = (index: number) => game.players[index].name;
   const money = (value: number) =>
-    formatChips(value, game.chipUnit, game.currency);
+    formatChips(value, game.chipUnit, chipCurrency(game.currency, game.chipValue));
   const lines: string[] = [];
   if (rake > 0) {
     game.rake = (game.rake ?? 0) + rake;

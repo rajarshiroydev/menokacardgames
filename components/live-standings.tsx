@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 
 import { formatChipChange, smallBlindFor } from "@/lib/poker/game";
 import { describeRebuyRules } from "@/lib/poker/buy-ins";
-import { chipsToAmount, formatChips } from "@/lib/poker/money";
+import { chipsToAmount, formatChips, plainChipsCode } from "@/lib/poker/money";
 import {
   LIVE_VIEW_POLL_MS,
   LIVE_VIEW_REQUEST_TIMEOUT_MS,
@@ -170,7 +170,9 @@ export function LiveStandings({ token }: { token: string }) {
   const { view, failed } = state;
   const age = now - view.updatedAt;
   const stale = failed || age > LIVE_VIEW_STALE_MS;
-  const rebuyNote = describeRebuyRules(view.rebuyRules, view.currency, view.chipUnit);
+  // Chips with a value are counts, not money (lib/poker/settle-up.ts).
+  const code = view.plainChips ? plainChipsCode(view.currency) : view.currency;
+  const rebuyNote = describeRebuyRules(view.rebuyRules, code, view.chipUnit);
 
   return (
     <main className="ledger-shell live-shell">
@@ -187,14 +189,14 @@ export function LiveStandings({ token }: { token: string }) {
       <section className="glass card live-blinds" aria-label="Current blinds">
         <span className="blinds-label">Blinds</span>
         <span className="live-blinds-value">
-          {formatChips(view.smallBlind ?? smallBlindFor(view.bigBlind), view.chipUnit, view.currency)}
+          {formatChips(view.smallBlind ?? smallBlindFor(view.bigBlind), view.chipUnit, code)}
           <span className="blinds-separator"> / </span>
-          {formatChips(view.bigBlind, view.chipUnit, view.currency)}
+          {formatChips(view.bigBlind, view.chipUnit, code)}
         </span>
         {rebuyNote ? <span className="muted small-note">{rebuyNote}</span> : null}
         {view.rake ? (
           <span className="muted small-note">
-            House rake so far {formatChips(view.rake, view.chipUnit, view.currency)}
+            House rake so far {formatChips(view.rake, view.chipUnit, code)}
           </span>
         ) : null}
       </section>
@@ -228,7 +230,7 @@ export function LiveStandings({ token }: { token: string }) {
               <b>{row.name}</b>
               <span className="live-stack">
                 <small>{row.left ? "Cashed out" : "Stack"}</small>
-                {formatChips(row.stack, view.chipUnit, view.currency)}
+                {formatChips(row.stack, view.chipUnit, code)}
               </span>
             </span>
             <span className="live-values">
@@ -236,7 +238,7 @@ export function LiveStandings({ token }: { token: string }) {
                 {row.net > 0 ? "▲ " : row.net < 0 ? "▼ " : ""}
                 {formatChipChange(chipsToAmount(row.net, view.chipUnit))}
               </b>
-              <small>Buy-In {formatChips(row.invested, view.chipUnit, view.currency)}</small>
+              <small>Buy-In {formatChips(row.invested, view.chipUnit, code)}</small>
               {row.rebuys > 0 ? (
                 <small>
                   {row.rebuys} rebuy{row.rebuys === 1 ? "" : "s"}

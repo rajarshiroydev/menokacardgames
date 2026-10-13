@@ -118,12 +118,17 @@ import {
 import {
   type ChipUnit,
   chipsToInput,
+  chipCurrency,
+  chipScale,
   CURRENCIES,
   currencySymbol,
   DEFAULT_CURRENCY,
   formatChips,
+  formatMoney,
   formatSignedChips,
+  formatSignedMoney,
   parseChips,
+  plainChipsCode,
 } from "@/lib/poker/money";
 import {
   accountGameStorageKey,
@@ -193,8 +198,17 @@ import {
 } from "@/lib/poker/import-plan";
 import { deriveSessionAccounting } from "@/lib/poker/accounting";
 import { playerNameKey } from "@/lib/poker/player-validation";
+import {
+  HOUSE_NAME,
+  MAX_CHIP_VALUE_CENTS,
+  normalizeChipValue,
+  sessionMoney,
+  settleSession,
+  type Settlement,
+} from "@/lib/poker/settle-up";
 import type {
   BlindSchedule,
+  ChipValue,
   GameState,
   Player,
   PlayerAction,
@@ -240,6 +254,27 @@ function buildAvatarLookup(
   return (playerId, name) =>
     (playerId && byId.get(playerId)) ||
     (name ? byName.get(name.trim().toLowerCase()) : undefined);
+}
+
+/**
+ * A game's amounts: its chip unit, and plain chip counts instead of money
+ * when its chips have a value (they aren't a unit of the currency then).
+ */
+function GameAmounts({
+  game,
+  children,
+}: {
+  game: Pick<GameState, "chipUnit" | "chipValue">;
+  children: ReactNode;
+}) {
+  const currency = useContext(CurrencyContext);
+  return (
+    <CurrencyContext.Provider value={chipCurrency(currency, game.chipValue) ?? currency}>
+      <ChipUnitContext.Provider value={game.chipUnit ?? "whole"}>
+        {children}
+      </ChipUnitContext.Provider>
+    </CurrencyContext.Provider>
+  );
 }
 
 function useMoney() {
@@ -294,6 +329,64 @@ function ChipInput({
       }}
     />
   );
+}
+
+/**
+ * A money amount in the host's currency, such as what a buy-in costs. It
+ * reports hundredths, whatever the game's chip unit is.
+ */
+function PriceInput({
+  id,
+  label,
+  value,
+  onChange,
+}: {
+  id: string;
+  label: string;
+  value: number | null;
+  onChange: (cents: number) => void;
+}) {
+  const currency = useContext(CurrencyContext);
+  return (
+    <div className="money-field">
+      <span aria-hidden="true">{currencySymbol(currency).trim()}</span>
+      <ChipUnitContext.Provider value="cents">
+        <ChipInput
+          className="field"
+          id={id}
+          aria-label={label}
+          placeholder="0"
+          value={value}
+          onChange={onChange}
+        />
+      </ChipUnitContext.Provider>
+    </div>
+  );
+}
+
+/** "₹500", from hundredths of the currency. */
+function formatCents(cents: number, currency: string) {
+  return formatMoney(cents / 100, currency);
+}
+
+/** What one chip costs: "1 chip = ₹0.05", to four decimals at most. */
+function describePerChip(
+  value: ChipValue,
+  unit: ChipUnit | undefined,
+  currency: string,
+) {
+  const perChip = (value.cents * chipScale(unit)) / value.chips / 100;
+  return `1 chip = ${formatMoney(perChip, currency, 4)}`;
+}
+
+/** A chip value as the host set it: "10,000 chips = ₹500". */
+function describeChipValue(
+  value: ChipValue,
+  unit: ChipUnit | undefined,
+  currency: string,
+) {
+  const chipsShown = formatChips(value.chips, unit, plainChipsCode(currency));
+  return `${chipsShown} chip${value.chips === chipScale(unit) ? "" : "s"} = ${formatCents(value.cents, currency)}`;
 }
 
 type View =
@@ -585,6 +678,9 @@ function normalizeGameState(input: unknown): GameState | null {
     data.players.forEach((player) => {
       player.buyIns ??= [data.startStack];
     });
+    if (data.chipValue !== undefined && !normalizeChipValue(data.chipValue)) {
+      delete data.chipValue;
+    }
     if (data.lastHand) {
       data.lastHand.buyInsBefore ??= data.players.map((player) => [
         ...(player.buyIns ?? [data.startStack]),
@@ -673,7 +769,7 @@ function awardPot(game: GameState, playerIndex: number, automatic = false) {
     `Hand ${hand.no}: ${game.players[playerIndex].name} wins ${formatChips(
       pot,
       game.chipUnit,
-      game.currency,
+      chipCurrency(game.currency, game.chipValue),
     )}${automatic ? " (others folded)" : ""}`,
   );
   game.lastHand = record;
@@ -705,7 +801,7 @@ export function PokerLedger({
   const [game, setGame] = useState<GameState | null>(null);
   // Messages about the game in progress, in its own chip unit.
   const money = (value: number) =>
-    formatChips(value, game?.chipUnit, currency);
+    formatChips(value, game?.chipUnit, chipCurrency(currency, game?.chipValue));
   const [history, setHistory] = useState<PokerSession[]>([]);
   const [discardedSessions, setDiscardedSessions] = useState<PokerSession[]>(
     [],
@@ -746,6 +842,8 @@ export function PokerLedger({
   const [ready, setReady] = useState(false);
   const [toast, setToast] = useState("");
   const [modal, setModal] = useState<ModalState | null>(null);
+  // The saved game whose Settle up sheet is open, by ID.
+  const [settlingId, setSettlingId] = useState<string | null>(null);
   const [editingBlinds, setEditingBlinds] = useState(false);
   const [editingRebuys, setEditingRebuys] = useState(false);
   const [tableSheet, setTableSheet] = useState<"add" | "cash-out" | null>(null);
@@ -1372,6 +1470,8 @@ export function PokerLedger({
       bigBlindAnte: boolean;
       /** The house's cut; null is no rake. */
       rakeRules: RakeRules | null;
+      /** What the chips cost; null is a chip per unit of the currency. */
+      chipValue: ChipValue | null;
       players: PlayerProfile[];
       /**
        * Each player's own first buy-in, in seat order, when players choose
@@ -1387,6 +1487,7 @@ export function PokerLedger({
           sessionLabel: `Game ${nextSessionNumber}`,
           currency,
           chipUnit: input.chipUnit,
+          chipValue: normalizeChipValue(input.chipValue),
           startStack: input.stack,
           players: input.players.map((player) => ({
             id: player.id,
@@ -1445,6 +1546,7 @@ export function PokerLedger({
         ? normalizeRakeRules(input.rakeRules)
         : null;
       const gameName = input.name.trim();
+      const chipValue = normalizeChipValue(input.chipValue);
       const startedAt = Date.now();
       const firstDealer = input.randomDealer
         ? Math.floor(Math.random() * input.players.length)
@@ -1454,6 +1556,7 @@ export function PokerLedger({
         sessionLabel: gameName || `Game ${nextSessionNumber}`,
         currency,
         ...(input.chipUnit === "cents" ? { chipUnit: input.chipUnit } : {}),
+        ...(chipValue ? { chipValue } : {}),
         ante: input.ante,
         baseAnte: input.ante,
         // Only an odd choice is stored, so half keeps its exact old rounding.
@@ -2238,6 +2341,8 @@ export function PokerLedger({
       navigate("history", { replace: true });
       await refreshHistory();
       showToast("Session saved");
+      // The end of the night is when people settle up.
+      setSettlingId(session.id);
     } catch (error) {
       showToast(
         error instanceof Error ? error.message : "Session was not saved",
@@ -2304,6 +2409,8 @@ export function PokerLedger({
       date: game.startedAt,
       ended: Date.now(),
       ...(game.chipUnit === "cents" ? { chipUnit: game.chipUnit } : {}),
+      // Saving a continued game leaves the saved chip value as it is.
+      ...(game.chipValue ? { chipValue: game.chipValue } : {}),
       ante: startingBigBlind(game),
       ...(game.blindPlans && game.blindLevels
         ? {
@@ -2365,6 +2472,7 @@ export function PokerLedger({
       navigate("history", { replace: true });
       await refreshHistory();
       showToast("Session saved");
+      setSettlingId(session.id);
     } catch (error) {
       showToast(
         error instanceof Error ? error.message : "Session was not saved",
@@ -2438,6 +2546,24 @@ export function PokerLedger({
       showToast(
         error instanceof Error ? error.message : "Session Was Not Updated",
       );
+    }
+  }
+
+  /** Sets or clears a saved game's chip value; true when it was saved. */
+  async function saveChipValue(id: string, chipValue: ChipValue | null) {
+    try {
+      await sessionsApi("", {
+        method: "PATCH",
+        body: JSON.stringify({ action: "chip-value", id, chipValue }),
+      });
+      await refreshHistory();
+      showToast(chipValue ? "Chip value saved" : "Chip value cleared");
+      return true;
+    } catch (error) {
+      showToast(
+        error instanceof Error ? error.message : "Chip value was not saved",
+      );
+      return false;
     }
   }
 
@@ -2606,6 +2732,10 @@ export function PokerLedger({
     />
   );
 
+  const settlingSession = settlingId
+    ? history.find((session) => session.id === settlingId)
+    : undefined;
+
   return (
     <CurrencyContext.Provider value={currency}>
     <AvatarContext.Provider value={avatarLookup}>
@@ -2690,6 +2820,7 @@ export function PokerLedger({
             onRetry={() => void refreshHistory()}
             onDiscard={discardSession}
             onContinue={continueSession}
+            onSettle={setSettlingId}
             onRestore={(id) => void updateSessionState(id, "restore")}
             onDeletePermanently={deleteSessionPermanently}
             onExport={exportData}
@@ -2826,7 +2957,18 @@ export function PokerLedger({
           onConfirm={() => setModal(null)}
         />
       ) : null}
-      <ChipUnitContext.Provider value={game?.chipUnit ?? "whole"}>
+      {settlingSession ? (
+        <SettleUpSheet
+          key={settlingSession.id}
+          session={settlingSession}
+          onCopied={() => showToast("Copied")}
+          onSaveChipValue={(value) =>
+            saveChipValue(settlingSession.id, value)
+          }
+          onClose={() => setSettlingId(null)}
+        />
+      ) : null}
+      <GameAmounts game={game ?? {}}>
         {game?.winnerAnnouncement ? (
           <WinnerCard
             announcement={game.winnerAnnouncement}
@@ -2891,7 +3033,7 @@ export function PokerLedger({
             onReturn={returnPlayer}
           />
         ) : null}
-      </ChipUnitContext.Provider>
+      </GameAmounts>
       {sharingLive && game ? (
         <LiveShareSheet
           token={liveToken}
@@ -3270,9 +3412,9 @@ function HomeView({
           />
         ) : null}
         {game ? (
-          <ChipUnitContext.Provider value={game.chipUnit ?? "whole"}>
+          <GameAmounts game={game}>
             <HomeLiveCard game={game} selfPlayerId={selfPlayerId} onOpen={onGame} />
-          </ChipUnitContext.Provider>
+          </GameAmounts>
         ) : (
           <>
             <button
@@ -3668,8 +3810,23 @@ function HomeLastSession({
       null,
     );
   if (!session || !session.results.length) return null;
-  const signedMoney = (value: number) =>
-    formatSignedChips(value, session.chipUnit, currency);
+  // Results in money at the game's chip value; chips if they don't balance.
+  let moneyNets: Map<PokerSession["results"][number], number> | null = null;
+  try {
+    const inMoney = sessionMoney(session);
+    moneyNets = new Map(
+      session.results.map((result, index) => [
+        result,
+        inMoney.results[index].net,
+      ]),
+    );
+  } catch {
+    moneyNets = null;
+  }
+  const signedMoney = (result: PokerSession["results"][number]) =>
+    moneyNets?.has(result)
+      ? formatSignedMoney(moneyNets.get(result)! / 100, currency)
+      : formatSignedChips(result.net, session.chipUnit, currency);
 
   let invested = new Map<string, number>();
   try {
@@ -3716,7 +3873,7 @@ function HomeLastSession({
           <span className="home-last-main">
             <small className="literal-text">{details.join(" · ")}</small>
             <strong className={toneClass(featured.net)}>
-              {signedMoney(featured.net)}
+              {signedMoney(featured)}
             </strong>
             <small>
               {mine ? "Your result" : (
@@ -3733,7 +3890,7 @@ function HomeLastSession({
             <span className="home-last-winner">
               <small>Top winner</small>
               <b className="literal-text">{winner.name}</b>
-              <em className={toneClass(winner.net)}>{signedMoney(winner.net)}</em>
+              <em className={toneClass(winner.net)}>{signedMoney(winner)}</em>
             </span>
           ) : null}
         </span>
@@ -3761,7 +3918,7 @@ function HomeLastSession({
                     ) : null}
                   </span>
                 </span>
-                <b className={toneClass(result.net)}>{signedMoney(result.net)}</b>
+                <b className={toneClass(result.net)}>{signedMoney(result)}</b>
               </span>
             );
           })}
@@ -3966,7 +4123,7 @@ function ImportReview({
                   {formatDate(session.date)} ·{" "}
                   {session.kind === "ledger"
                     ? "Quick ledger"
-                    : `Big Blind ${formatChips(session.ante, session.chipUnit, currency)}`}
+                    : `Big Blind ${formatChips(session.ante, session.chipUnit, chipCurrency(currency, session.chipValue))}`}
                   {" · "}
                   {session.results.map((result) => result.name).join(", ")}
                 </small>
@@ -4043,16 +4200,25 @@ function SetupView({
     rebuyRules: RebuyRules | null;
     bigBlindAnte: boolean;
     rakeRules: RakeRules | null;
+    chipValue: ChipValue | null;
     players: PlayerProfile[];
     buyIns: number[] | null;
     randomDealer: boolean;
   }) => void;
 }) {
-  const { currency, symbol } = useMoney();
+  const { currency } = useMoney();
+  // Chip value: off, a chip is one unit of the currency, as always; on, a
+  // buy-in of the starting stack costs `buyInPrice` hundredths, and chip
+  // amounts in this form show as plain counts.
+  const [chipValueOn, setChipValueOn] = useState(false);
+  const [buyInPrice, setBuyInPrice] = useState<number | null>(null);
+  const [showChipValueHelp, setShowChipValueHelp] = useState(false);
+  const chipsCode = chipCurrency(currency, chipValueOn) ?? currency;
+  const symbol = currencySymbol(chipsCode);
   // Every amount in this form is in hundredths, so 0.25 and 10,000 use the
   // same boxes. The game's chip unit follows from them when it starts
   // (lib/poker/stakes.ts); nobody picks it.
-  const money = (value: number) => formatChips(value, "cents", currency);
+  const money = (value: number) => formatChips(value, "cents", chipsCode);
   const ledger = kind === "ledger";
   const [name, setName] = useState("");
   const [stack, setStack] = useState(DEFAULT_STACK);
@@ -4456,6 +4622,7 @@ function SetupView({
     const closeAt = setupRebuyRules.closeAtBigBlind;
     onStart({
       kind,
+      chipValue: setupChipValue,
       bigBlindAnte,
       rakeRules: rakeOn
         ? {
@@ -4483,6 +4650,15 @@ function SetupView({
 
   const amountsValid =
     !ownAmounts || selectedIds.every((id) => amountFor(id) >= 1);
+  const setupChipValue: ChipValue | null =
+    chipValueOn && buyInPrice
+      ? { chips: inUnit(stack, chipUnit), cents: buyInPrice }
+      : null;
+  const chipValueValid =
+    !chipValueOn ||
+    (buyInPrice !== null &&
+      buyInPrice >= 1 &&
+      buyInPrice <= MAX_CHIP_VALUE_CENTS);
   const selectionComplete =
     playerCount >= 2 &&
     playerCount <= MAX_SEATS &&
@@ -4813,6 +4989,74 @@ function SetupView({
             <p className="field-error" role="alert">
               Every player&apos;s buy-in must be more than 0.
             </p>
+          ) : null}
+        </section>
+
+        <section className="glass card">
+          <div className="card-row">
+            <span className="label">Chip value</span>
+            <div className="heading-with-info">
+              <label className="switch-row">
+                <span>Chips cost money</span>
+                <button
+                  className="switch"
+                  type="button"
+                  role="switch"
+                  aria-checked={chipValueOn}
+                  aria-label="Chips cost money"
+                  onClick={() => setChipValueOn((on) => !on)}
+                />
+              </label>
+              <button
+                className="info-button"
+                type="button"
+                aria-label="About chip value"
+                onClick={() => setShowChipValueHelp(true)}
+              >
+                i
+              </button>
+            </div>
+          </div>
+          {showChipValueHelp ? (
+            <InfoSheet
+              label="About chip value"
+              onClose={() => setShowChipValueHelp(false)}
+            >
+              <p>
+                <b>Chips Cost Money On:</b> say what a buy-in costs, for
+                example {formatCents(50_000, currency)} for 10,000 chips. The
+                table counts chips; results and Settle up show money at that
+                price.
+              </p>
+              <p>
+                <b>Chips Cost Money Off:</b> one chip is{" "}
+                {formatCents(100, currency)}. You can set a price later from
+                Settle up on the saved game.
+              </p>
+            </InfoSheet>
+          ) : null}
+          {chipValueOn ? (
+            <>
+              <label className="label" htmlFor="buy-in-price">
+                A {money(stack)}-chip buy-in costs
+              </label>
+              <PriceInput
+                id="buy-in-price"
+                label="What a buy-in costs"
+                value={buyInPrice}
+                onChange={setBuyInPrice}
+              />
+              {chipValueValid && setupChipValue ? (
+                <p className="muted small-note">
+                  {describePerChip(setupChipValue, chipUnit, currency)}. Results
+                  and Settle up show money at this price.
+                </p>
+              ) : (
+                <p className="muted small-note">
+                  Enter what a buy-in costs.
+                </p>
+              )}
+            </>
           ) : null}
         </section>
 
@@ -5225,6 +5469,7 @@ function SetupView({
           disabled={
             !selectionComplete ||
             !amountsValid ||
+            !chipValueValid ||
             stack < 1 ||
             (!ledger &&
               (ante < 1 ||
@@ -7092,9 +7337,9 @@ type GameViewProps = {
 /** The game screen, with its amounts in the game's own chip unit. */
 function GameView(props: GameViewProps) {
   return (
-    <ChipUnitContext.Provider value={props.game.chipUnit ?? "whole"}>
+    <GameAmounts game={props.game}>
       <GameScreen {...props} />
-    </ChipUnitContext.Provider>
+    </GameAmounts>
   );
 }
 
@@ -7749,7 +7994,7 @@ function RebuyEditor({
           </p>
         ) : (
           <p className="muted rule-note">
-            {describeRebuyRules(effective, game.currency, game.chipUnit) ?? "Unlimited rebuys"}
+            {describeRebuyRules(effective, chipCurrency(game.currency, game.chipValue), game.chipUnit) ?? "Unlimited rebuys"}
             .{closedNow ? " Rebuys are closed from now on." : ""}
           </p>
         )}
@@ -8096,9 +8341,9 @@ type LedgerViewProps = {
 /** A quick ledger's screen, with its amounts in the game's own chip unit. */
 function LedgerView(props: LedgerViewProps) {
   return (
-    <ChipUnitContext.Provider value={props.game.chipUnit ?? "whole"}>
+    <GameAmounts game={props.game}>
       <LedgerScreen {...props} />
-    </ChipUnitContext.Provider>
+    </GameAmounts>
   );
 }
 
@@ -9054,7 +9299,7 @@ function BuyInOptions({
     return reason ? [{ player, index, reason }] : [];
   });
   if (!offers.length && !blocked.length) return null;
-  const rules = describeRebuyRules(game.rebuyRules, game.currency, game.chipUnit);
+  const rules = describeRebuyRules(game.rebuyRules, chipCurrency(game.currency, game.chipValue), game.chipUnit);
 
   return (
     <div className="buy-in-options">
@@ -10321,24 +10566,32 @@ function ExpandingList<T>({
 }
 
 /** A saved game's card, with its amounts in that game's chip unit. */
-function SessionCard(props: Parameters<typeof SessionCardBody>[0]) {
+function SessionCard(
+  props: Omit<Parameters<typeof SessionCardBody>[0], "moneyCurrency">,
+) {
+  const currency = useContext(CurrencyContext);
   return (
-    <ChipUnitContext.Provider value={props.session.chipUnit ?? "whole"}>
-      <SessionCardBody {...props} />
-    </ChipUnitContext.Provider>
+    <GameAmounts game={props.session}>
+      <SessionCardBody {...props} moneyCurrency={currency} />
+    </GameAmounts>
   );
 }
 
 function SessionCardBody({
   session,
+  moneyCurrency,
   discarded = false,
   onContinue,
+  onSettle,
   onRestore,
   onDeletePermanently,
 }: {
   session: PokerSession;
+  /** The host's currency; chip amounts may be plain counts (GameAmounts). */
+  moneyCurrency: string;
   discarded?: boolean;
   onContinue?: (id: string) => void;
+  onSettle?: (id: string) => void;
   /** Not shown for now: the Discard button is hidden (user decision 2026-10-01). */
   onDiscard?: (id: string) => void;
   onRestore?: (id: string) => void;
@@ -10346,6 +10599,20 @@ function SessionCardBody({
 }) {
   const { currency, unit, money, signedMoney } = useMoney();
   const sortedResults = [...session.results].sort((a, b) => b.net - a.net);
+  // Results in money, at the chip value; chips if they don't balance.
+  const netMoney = useMemo(() => {
+    try {
+      const inMoney = sessionMoney(session);
+      return new Map(
+        session.results.map((result, index) => [
+          result,
+          inMoney.results[index].net,
+        ]),
+      );
+    } catch {
+      return null;
+    }
+  }, [session]);
   const ledger = session.kind === "ledger";
   const blinds = ledger ? null : sessionBlindHistory(session);
   const lastBigBlind = blinds?.levels.at(-1)!.bigBlind ?? 0;
@@ -10364,6 +10631,11 @@ function SessionCardBody({
               : `${session.hands} hands · Big blind ${money(session.ante)}`}{" "}
             · {session.results.length} players
           </p>
+          {session.chipValue ? (
+            <p className="muted session-meta">
+              {describeChipValue(session.chipValue, session.chipUnit, moneyCurrency)}
+            </p>
+          ) : null}
           {session.rebuyRules ? (
             <p className="muted session-meta">
               {describeRebuyRules(session.rebuyRules, currency, session.chipUnit)}
@@ -10400,15 +10672,28 @@ function SessionCardBody({
                 Delete
               </button>
             </>
-          ) : onContinue && !ledger ? (
-            <button
-              className="pill-button"
-              type="button"
-              onClick={() => onContinue(session.id)}
-            >
-              Continue game
-            </button>
-          ) : null}
+          ) : (
+            <>
+              {onSettle ? (
+                <button
+                  className="pill-button"
+                  type="button"
+                  onClick={() => onSettle(session.id)}
+                >
+                  Settle up
+                </button>
+              ) : null}
+              {onContinue && !ledger ? (
+                <button
+                  className="pill-button"
+                  type="button"
+                  onClick={() => onContinue(session.id)}
+                >
+                  Continue game
+                </button>
+              ) : null}
+            </>
+          )}
           {/* Discard is hidden until users ask for it back (user decision
               2026-10-01); onDiscard and discardSession stay for that. */}
         </div>
@@ -10463,12 +10748,290 @@ function SessionCardBody({
               ) : null}
             </span>
             <span className={`result-amount ${toneClass(result.net)}`}>
-              {signedMoney(result.net)}
+              {netMoney?.has(result)
+                ? formatSignedMoney(netMoney.get(result)! / 100, moneyCurrency)
+                : signedMoney(result.net)}
             </span>
           </div>
         ))}
       </div>
     </article>
+  );
+}
+
+/** The text Share sends: the game, its chip value and who pays whom. */
+function settlementText(
+  session: PokerSession,
+  settlement: Settlement,
+  currency: string,
+) {
+  const lines = [
+    `Settle up · ${session.name || `Game ${session.sessionNumber ?? ""}`.trim()} (${formatDate(session.date)})`,
+  ];
+  if (session.chipValue) {
+    lines.push(describeChipValue(session.chipValue, session.chipUnit, currency));
+  }
+  lines.push("");
+  if (settlement.transfers.length) {
+    for (const transfer of settlement.transfers) {
+      lines.push(
+        `${transfer.from} pays ${transfer.to} ${formatCents(transfer.cents, currency)}`,
+      );
+    }
+  } else {
+    lines.push("Nobody owes anything.");
+  }
+  return lines.join("\n");
+}
+
+/**
+ * Settle up for a saved game: everyone's result in money at the chip value,
+ * and who pays whom with the fewest transfers (lib/poker/settle-up.ts). The
+ * chip value can be set or changed here. No money moves through the app.
+ */
+function SettleUpSheet({
+  session,
+  onSaveChipValue,
+  onCopied,
+  onClose,
+}: {
+  session: PokerSession;
+  onSaveChipValue: (value: ChipValue | null) => Promise<boolean>;
+  onCopied: () => void;
+  onClose: () => void;
+}) {
+  const currency = useContext(CurrencyContext);
+  const value = session.chipValue;
+  // Prices are asked for the starting stack, the buy-in people know.
+  const stackPrice = value
+    ? Math.round((value.cents * session.startStack) / value.chips)
+    : null;
+  const [editing, setEditing] = useState(false);
+  const [price, setPrice] = useState<number | null>(stackPrice);
+  const [saving, setSaving] = useState(false);
+  const settlement = useMemo(() => {
+    try {
+      return settleSession(session);
+    } catch {
+      return null;
+    }
+  }, [session]);
+  const cash = (cents: number) => formatCents(cents, currency);
+  const stackChips = formatChips(
+    session.startStack,
+    session.chipUnit,
+    plainChipsCode(currency),
+  );
+  const priceValid =
+    price !== null && price >= 1 && price <= MAX_CHIP_VALUE_CENTS;
+  const canShare = typeof navigator !== "undefined" && "share" in navigator;
+
+  async function save(next: ChipValue | null) {
+    setSaving(true);
+    const saved = await onSaveChipValue(next);
+    setSaving(false);
+    if (saved) setEditing(false);
+  }
+
+  async function share() {
+    if (!settlement) return;
+    const text = settlementText(session, settlement, currency);
+    if (canShare) {
+      try {
+        await navigator.share({ text });
+      } catch {
+        // The host closed the share sheet.
+      }
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(text);
+      onCopied();
+    } catch {
+      // Clipboard blocked: the list is on screen to copy by hand.
+    }
+  }
+
+  return (
+    <div
+      className="modal show"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <div
+        className="sheet settle-sheet"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="settle-title"
+      >
+        <h2 id="settle-title">Settle Up</h2>
+        <p className="muted rule-note">
+          {session.name || `Game ${session.sessionNumber ?? ""}`} ·{" "}
+          {formatDate(session.date)}
+        </p>
+
+        <div className={`settle-value${editing ? " editing" : ""}`}>
+          {editing ? (
+            <>
+              <span className="label">Chip value</span>
+              <label className="label" htmlFor="settle-price">
+                A {stackChips}-chip buy-in costs
+              </label>
+              <PriceInput
+                id="settle-price"
+                label="What a buy-in costs"
+                value={price}
+                onChange={setPrice}
+              />
+              {priceValid ? (
+                <p className="muted small-note">
+                  {describePerChip(
+                    { chips: session.startStack, cents: price! },
+                    session.chipUnit,
+                    currency,
+                  )}
+                </p>
+              ) : null}
+              <div className="button-pair">
+                <button
+                  className="ghost"
+                  type="button"
+                  disabled={saving}
+                  onClick={() => setEditing(false)}
+                >
+                  Cancel
+                </button>
+                <button
+                  className="primary"
+                  type="button"
+                  disabled={!priceValid || saving}
+                  onClick={() =>
+                    void save({ chips: session.startStack, cents: price! })
+                  }
+                >
+                  {saving ? "Saving…" : "Save price"}
+                </button>
+              </div>
+              {value ? (
+                <button
+                  className="text-button"
+                  type="button"
+                  disabled={saving}
+                  onClick={() => void save(null)}
+                >
+                  Clear the price (1 chip = {cash(100)})
+                </button>
+              ) : null}
+            </>
+          ) : (
+            <>
+              <div className="settle-value-head">
+                <span className="label">Chip value</span>
+                <button
+                  className="pill-button settle-change"
+                  type="button"
+                  onClick={() => {
+                    setPrice(stackPrice);
+                    setEditing(true);
+                  }}
+                >
+                  <PencilIcon />
+                  {value ? "Change" : "Set price"}
+                </button>
+              </div>
+              {value && stackPrice !== null ? (
+                <>
+                  <p className="settle-equation">
+                    <span>{stackChips} chips</span>
+                    <span className="settle-equals" aria-label="cost">
+                      =
+                    </span>
+                    <span className="settle-price">{cash(stackPrice)}</span>
+                  </p>
+                  <span className="settle-value-note">
+                    {describePerChip(value, session.chipUnit, currency)}
+                  </span>
+                </>
+              ) : (
+                <>
+                  <p className="settle-equation">
+                    <span>1 chip</span>
+                    <span className="settle-equals" aria-label="is">
+                      =
+                    </span>
+                    <span className="settle-price">{cash(100)}</span>
+                  </p>
+                  <span className="settle-value-note">
+                    No price set. Change it if chips cost something else.
+                  </span>
+                </>
+              )}
+            </>
+          )}
+        </div>
+
+        {settlement ? (
+          <>
+            <span className="label">Results</span>
+            <div className="rows">
+              {settlement.players.map((player) => (
+                <div className="result-row" key={player.name}>
+                  <span className="result-name">{player.name}</span>
+                  <span className={`result-amount ${toneClass(player.net)}`}>
+                    {formatSignedMoney(player.net / 100, currency)}
+                  </span>
+                </div>
+              ))}
+              {settlement.house ? (
+                <div className="result-row">
+                  <span className="result-name">{HOUSE_NAME} (rake)</span>
+                  <span className="result-amount pos">
+                    {formatSignedMoney(settlement.house / 100, currency)}
+                  </span>
+                </div>
+              ) : null}
+            </div>
+
+            <span className="label">Who pays whom</span>
+            {settlement.transfers.length ? (
+              <div className="rows">
+                {settlement.transfers.map((transfer) => (
+                  <div
+                    className="result-row"
+                    key={`${transfer.from}>${transfer.to}`}
+                  >
+                    <span className="result-name">
+                      {transfer.from} <span className="muted">pays</span>{" "}
+                      {transfer.to}
+                    </span>
+                    <span className="result-amount">{cash(transfer.cents)}</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="muted small-note">Nobody owes anything.</p>
+            )}
+            <button
+              className="primary full"
+              type="button"
+              disabled={editing}
+              onClick={() => void share()}
+            >
+              {canShare ? "Share" : "Copy"}
+            </button>
+          </>
+        ) : (
+          <p className="field-error">
+            This game&apos;s saved chips don&apos;t add up, so it can&apos;t be
+            settled.
+          </p>
+        )}
+        <button className="ghost full" type="button" onClick={onClose}>
+          Done
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -11021,6 +11584,7 @@ function SessionsView({
   onRetry,
   onDiscard,
   onContinue,
+  onSettle,
   onRestore,
   onDeletePermanently,
   onExport,
@@ -11033,6 +11597,7 @@ function SessionsView({
   onRetry: () => void;
   onDiscard: (id: string) => void;
   onContinue: (id: string) => void;
+  onSettle: (id: string) => void;
   onRestore: (id: string) => void;
   onDeletePermanently: (id: string) => void;
   onExport: () => void;
@@ -11066,6 +11631,7 @@ function SessionsView({
               session={session}
               onDiscard={onDiscard}
               onContinue={onContinue}
+              onSettle={onSettle}
             />
           )}
           more={(count) => `Show ${count} more game${count === 1 ? "" : "s"}`}

@@ -1,5 +1,5 @@
 import { deriveSessionAccounting } from "./accounting.ts";
-import { chipsInCents } from "./money.ts";
+import { sessionMoney, type MoneyResult } from "./settle-up.ts";
 import type { PokerSession, SessionResult } from "./types";
 
 /** Bump when the ranking formula or eligibility rules change. */
@@ -103,8 +103,9 @@ type Accumulator = StandingsEntry & { returns: number[] };
 /**
  * Ranks players by the arithmetic mean of their eligible session returns.
  * Each session counts equally regardless of chip scale. Invested and net are
- * added up in hundredths, so games counted in cents and in whole chips add
- * exactly, and converted to currency units at the end.
+ * money: each game's chips at its chip value (lib/poker/settle-up.ts), added
+ * up in hundredths so games counted in cents and in whole chips add exactly,
+ * and converted to currency units at the end.
  */
 export function buildStandings(sessions: PokerSession[]): Standings {
   const timeline = chronological(sessions);
@@ -112,14 +113,21 @@ export function buildStandings(sessions: PokerSession[]): Standings {
   const series = new Map<string, StandingsSeries>();
 
   timeline.forEach((session, timelineIndex) => {
-    const cents = (chips: number) => chipsInCents(chips, session.chipUnit);
     let invested: Map<SessionResult, number> | null = null;
+    let money: Map<SessionResult, MoneyResult> | null = null;
     try {
       const accounting = deriveSessionAccounting(session);
       invested = new Map(
         session.results.map((result, index) => [
           result,
           accounting.results[index].invested,
+        ]),
+      );
+      const inMoney = sessionMoney(session);
+      money = new Map(
+        session.results.map((result, index) => [
+          result,
+          inMoney.results[index],
         ]),
       );
     } catch {
@@ -173,11 +181,13 @@ export function buildStandings(sessions: PokerSession[]): Standings {
       }
 
       player.eligibleSessions += 1;
-      player.invested += cents(playerInvested ?? 0);
-      player.net += cents(result.net);
+      // Eligible means the chips balance, so the money is known.
+      const resultMoney = money?.get(result) ?? { net: 0, invested: 0 };
+      player.invested += resultMoney.invested;
+      player.net += resultMoney.net;
       player.hands += session.hands;
       if (result.net > 0) player.profitableSessions += 1;
-      eligibleNet.set(key, cents(result.net));
+      eligibleNet.set(key, resultMoney.net);
       player.returns.push(value);
       player.bestReturn = Math.max(player.bestReturn ?? value, value);
       player.worstReturn = Math.min(player.worstReturn ?? value, value);

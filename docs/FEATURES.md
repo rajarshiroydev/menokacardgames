@@ -6,7 +6,7 @@ This is a plain-language list of everything Pokerize can do today. It is written
 
 **Keeping this list current:** whenever a feature is added, changed or removed, update its entry here in the same piece of work, and change the date above. If a rule has a specific number (a time limit, a minimum, a maximum), write the number down, because those are the details that get forgotten.
 
-**A note on money:** the app is a chip ledger. Small-stakes games (a stack under 1,000) count in cents automatically (section 4); amounts with cents show two decimals (₹0.25, ₹1.50) and whole amounts none (₹1). Totals across games, such as standings and your all-time net, add both kinds exactly; your Profile's all-time net drops the cents from ₹1,000 up so it fits. It does not handle real money or payments, and it doesn't deal or track cards in play; the Who Wins? checker (section 17) only reads the cards you type into it, and keeps none. Each host picks a currency on their Profile (section 3); every amount in their games, standings and live link is shown with that currency's sign as a label for chips. Nothing is ever converted between currencies.
+**A note on money:** the app is a chip ledger. Small-stakes games (a stack under 1,000) count in cents automatically (section 4); amounts with cents show two decimals (₹0.25, ₹1.50) and whole amounts none (₹1). Totals across games, such as standings and your all-time net, add both kinds exactly; your Profile's all-time net drops the cents from ₹1,000 up so it fits. It does not handle real money or payments, and it doesn't deal or track cards in play; the Who Wins? checker (section 17) only reads the cards you type into it, and keeps none. Each host picks a currency on their Profile (section 3); every amount in their games, standings and live link is shown with that currency's sign as a label for chips. Nothing is ever converted between currencies. **Chip value** (since 13 October 2026, section 4) changes this for one game: when the host says what a buy-in costs (for example ₹500 for 10,000 chips), that game shows plain chip counts while it's played, and its results, standings, Profile totals and **Settle up** (section 11) show money at that price.
 
 ---
 
@@ -48,7 +48,7 @@ The **Profile** tab replaced the Players tab on 30 September 2026. From the top:
 
 - **Your avatar** next to your name. Tap it (it has a small ✎ badge) to choose another; see **Avatars** below.
 - **Your name**, large, with an **⋯** account menu beside it: "Signed in as" your email, **Edit name** and **Sign out** (Delete My Account moved to Settings on 5 October 2026). **Edit name** turns the name into a box with **Save** (1 to 40 characters; Escape cancels). Under the name: "Playing since" the month of your first counted game, or "No games yet".
-- **All-time net**: everything you've won or lost, in your currency. It's green when you're ahead and red when you're behind.
+- **All-time net**: everything you've won or lost, in your currency. Games with a chip value count at that price (section 4). It's green when you're ahead and red when you're behind.
 - **Last 10**: one small bar for each of your latest games (up to 10, in your currency), green up for a win and red down for a loss, taller for bigger results. Hover or long-press a bar for its date and result.
 - **Three tiles:** **Games played**, **Avg return** (your average session return, section 12, to one decimal) and **Profitable** (games you finished ahead, for example 15/24).
 - **Which games count.** Every game you played in: the games you host yourself (as your own player, see "You" below) and the games your friends host where they've linked you (section 20). A game counts exactly when it would count in that host's standings.
@@ -104,6 +104,12 @@ The **Profile** tab replaced the Players tab on 30 September 2026. From the top:
 - **Seating Order.** Once two or more are seated, a **Seating Order** list shows the seats in order. Drag a player by the grip (⠿) to change seats, or use the arrow keys on the grip. A **Randomize dealer** switch beside the heading is **on by default**: the first dealer is drawn at random from the seated players when **Deal First Hand** is pressed, so nobody sees it during setup. Off, seat 1 deals first. Either way the dealer then moves round the table in seat order. Its **i** button opens a sheet with two lines, **Randomize Dealer On** (chosen at random when the game starts) and **Randomize Dealer Off** (seat 1 deals first); it closes with **Got it**, a tap outside it or Escape, like the other **i** sheets.
 - **Starting stack / first buy-in.** Two rows of quick choices: 20, 50, 100, 200, 500 and 1K, then 2K, 5K, 10K (the default), 20K, 50K and **Other** to type any amount (up to two decimals, at least 0.01). A line under the choices says "Everyone buys in for ₹10,000."
 - **Own amounts** (since 12 October 2026). A switch beside the Starting Stack heading, **off by default**, with an **i** that reads "Own Amounts Off: everyone buys in for the same amount." and "Own Amounts On: each player can buy in for a different amount." Off, everyone buys in for the starting stack, as before. On, the starting stack becomes the usual amount and every seated player in the **Seating Order** gets an amount box beside their name, filled with the starting stack; type a different amount for anyone ("Each player buys in for ₹10,000 unless you change their amount in the seating order."). Typed amounts stay with the player if you change the starting stack; the others follow it. Each amount must be more than 0, or a message shows and Deal First Hand stays unavailable. An amount with cents makes a cents game, as other amounts do. The same game then lets rebuys and late players choose their amount too (section 8). The big blind choices still follow the starting stack.
+- **Chip value** (since 13 October 2026). A card under the starting stack, in both setups, with a **Chips cost money** switch, **off by default**, and an **i** that reads "Chips Cost Money On: say what a buy-in costs, for example ₹500 for 10,000 chips. The table counts chips; results and Settle up show money at that price." and "Chips Cost Money Off: one chip is ₹1. You can set a price later from Settle up on the saved game."
+  - **Off:** one chip is one unit of your currency, exactly as before.
+  - **On:** a box "A 10,000-chip buy-in costs" (the starting stack) takes the price in your currency, up to two decimals and at least ₹0.01 (at most ₹1,00,00,00,000). A note shows what one chip costs, to four decimals at most, for example "1 chip = ₹0.05". Start stays unavailable until a price is typed.
+  - The price is stored as that many chips for that much money, so own amounts, rebuys and late joins of any size are priced the same way.
+  - **While the game is played** every chip amount shows as a plain number without the currency sign: stacks, blinds, bets, pots, buy-ins, cash-outs, the log and this setup's own amounts. The same goes for Home's live card and the live standings link (section 19), which never gets the price itself.
+  - The rules of play, the chip unit (section 4, cents) and the ranking (section 12) don't change with it.
 - **Big blind.** Follows the stack: choosing a stack picks the usual big blind for it, 1/100 of the stack (₹100 for 10K, ₹0.50 for 50), and offers four choices, 1/200, 1/100, 1/50 and 1/20 of the stack (for 10K: ₹50, ₹100, ₹200 and ₹500; for 50: ₹0.25, ₹0.50, ₹1 and ₹2.50), plus **Other** to type any amount. Choosing another stack resets the big blind, a typed small blind, an "add" blind increase and the rebuy closing blind to suit it.
 - **Cents, without asking** (since 5 October 2026). Nobody chooses whole chips or cents. A stack under 1,000, or any amount typed with cents, makes a game where every amount (stacks, blinds, bets, pots, buy-ins and results) can have up to two decimals, in steps of 0.01. Other games count in whole chips, exactly as before, and amounts worked out from a whole stack (big blind choices, small blind shares) are whole. A game keeps its kind for its whole life, including when it's continued.
 - **Odd blinds.** A switch beside the Big Blind heading, off by default. An **i** button beside it reads "Odd Blinds Off: the small blind is half the big blind." and "Odd Blinds On: you choose the small blind."
@@ -237,7 +243,7 @@ The **Profile** tab replaced the Players tab on 30 September 2026. From the top:
 
 ## 11. Saving a game and game history
 
-- **Finish And Save Session** saves the game to your private history. It needs at least one completed hand. If a hand is still in progress, it's refunded and doesn't count in the saved results. After saving, the app opens the standings.
+- **Finish And Save Session** saves the game to your private history. It needs at least one completed hand. If a hand is still in progress, it's refunded and doesn't count in the saved results. After saving, the app opens the standings with **Settle up** for that game on top (below).
 - **Saving twice is safe.** If a save is retried, for example after a network problem, the game is still saved only once and doesn't use up a second game number.
 - **A different game can't hide behind a retry.** A retry only counts as the same save if it describes the same game: the same times, stakes, hands, blinds, rebuy limits, players in the same seats, buy-ins and final chips. If a save arrives with the ID of an already saved game but different details, it is refused with "A different session with the same ID is already saved" and nothing is changed.
 - **The server double-checks every save.** A game is rejected if the chip totals don't add up, the same player appears twice, a player made more rebuys than the game's limit, or a number is invalid. A bad game can't reach your history.
@@ -245,7 +251,9 @@ The **Profile** tab replaced the Players tab on 30 September 2026. From the top:
   - name or number, date, number of hands, big blind and number of players (a quick ledger shows "Quick ledger" instead of hands and big blind, and has no blind history)
   - the rebuy limits, when the game had any (for example "Up to 1 rebuy each")
   - the ante and rake, when the game had them (for example "Big blind ante · 5% rake, up to ₹300 · house took ₹120")
-  - each player's result, biggest winner first with a green **Win** tag (when they finished ahead), written as "+₹8,000" or "−₹2,000"
+  - the chip value, when the game has one (for example "10,000 chips = ₹500")
+  - each player's result in money, biggest winner first with a green **Win** tag (when they finished ahead), written as "+₹8,000" or "−₹2,000". Without a chip value that's the chips, as always; with one it's the chips at that price (so +12,000 chips at ₹500 for 10,000 reads "+₹600"). Blinds and buy-ins on the card stay in chips (plain numbers when the game has a chip value)
+  - a **Settle up** button (since 13 October 2026), beside **Continue game** on games played hand by hand
   - total buy-ins for any player who bought in more than once
   - blind history, for every game (tap to open): each plan, the blinds used from each hand, and the blinds it finished at. Games saved before 18 September 2026 kept no record, and blinds couldn't change then, so they show fixed blinds at their starting big blind with a half-size small blind
 - **No Discard button for now.** Since 1 October 2026 game cards have no **Discard** button (it may come back if people ask). Games discarded before then stay in a faded "Discarded" list under the saved games.
@@ -261,6 +269,16 @@ The **Profile** tab replaced the Players tab on 30 September 2026. From the top:
   - Blinds carry on from where the game finished. Blinds that go up every few hands keep counting hands. Blinds that go up every few minutes restart their clock at the current blinds, so time away from the table doesn't raise them.
   - Until it's saved again, the saved game stays exactly as it was. **Discard Game** on a continued game throws away only the hands played since.
   - **Finish And Save Session** updates the same game: same number, name and date, with the new end time, hands, results and blind history; standings and friends' groups follow. If no new hand was completed, it offers **Close game** instead, which ends the continued game and leaves the saved game exactly as it was. If the saved game was changed or discarded since it was continued (for example from another device), nothing is saved: "This game changed since you continued it".
+
+- **Settle up** (since 13 October 2026). Saving a game (hand by hand, a continued game, or a quick ledger) opens it straight away over the standings; **Settle up** on any saved game card opens it again. From the top:
+  - the game's name and date
+  - **Chip value**: a box headed **Chip value** with a **Change** button (pencil icon) on the right, then the price as one large line, "10,000 CHIPS = ₹500" (the price in green), with "1 chip = ₹0.05" under it. Without a price it reads "1 CHIP = ₹1" and "No price set. Change it if chips cost something else.", with **Set price**. The button opens a box "A 10,000-chip buy-in costs" (the game's starting stack) with **Cancel** and **Save price**, and, when a price is set, **Clear the price (1 chip = ₹1)**. Saving changes only the price: chips, results and buy-ins stay as saved, and the card, standings and Profile totals follow straight away. It works for games saved before chip values existed too.
+  - **Results**: everyone's result in money, biggest winner first; with rake, a line "The house (rake)" with what the house took.
+  - **Who pays whom**: lines such as "Bikram pays Asha ₹500", largest first, with the fewest payments that settle everyone (at most one fewer than the people owed or owing). Players who broke even don't appear; "Nobody owes anything." when nobody owes. With rake, players also pay "The house". Two players with the same name are told apart as "Arjun" and "Arjun (2)".
+  - There are no payment links, and no note under the list (removed at the user's request).
+  - **Share** opens the phone's share menu with a text such as "Settle up · Game 14 (13 Oct 2026)", the chip value and each payment; where there's no share menu the button reads **Copy** and copies the same text ("Copied"). **Done** closes the sheet.
+  - **Rounding:** amounts are worked out to the paisa (cent). When a price doesn't divide evenly, results are rounded so they still add up exactly to zero (to minus the rake with rake); a leftover paisa goes to the result closest to the next one up.
+  - A game whose saved chips don't add up says it can't be settled.
 
 ## 12. Standings and ranking
 
@@ -285,8 +303,8 @@ The **Profile** tab replaced the Players tab on 30 September 2026. From the top:
   - **Sessions:** games played, for example 24. If some can't be ranked, it adds how many were, for example "24 (23 ranked)"
   - **Profitable:** games they finished ahead, with the percentage
   - **Hands:** total hands dealt in the games they played (a player who joined late or left early is counted for the whole game)
-  - **Invested:** total chips put in
-  - **Net:** total won or lost, in the host's currency
+  - **Invested:** total put in, in money: each game's chips at its chip value (section 4), or a chip per unit of the currency without one
+  - **Net:** total won or lost, in the host's currency, counted the same way
 - **Games that can't be ranked.** If a game's saved chip totals don't add up, or a player put in no chips, that game is left out of the ranking. The row says which game and why, for example "Not ranked: Game 12 — the saved chip totals do not add up". All the other stats on the row count only ranked games, so they always describe the same games. A player with no rankable games shows as "Unranked", never as 0%.
 - **Standings graph:**
   - Its title, **Average Return**, sits above the graph's card, styled like the **Player Standings** heading, with no subtitle.
@@ -365,6 +383,7 @@ The **Profile** tab replaced the Players tab on 30 September 2026. From the top:
 
 - **Share the game with the table.** During a game, the **Session Standings** card has a **Share live standings** button. **Create live link** makes a link and shows it as a QR code, with **Share link** (the phone's share menu, for example WhatsApp) and **Copy link**.
 - **No sign-in for players.** Anyone who opens the link sees a read-only page. From the top: the game name, the current blinds in large type (with the rebuy limits underneath, when the game has any), then every player's card with rank, their avatar (as in the host's list), stack (in large type; labelled "Cashed out" instead of "Stack" for a player who left, section 8), net ▲/▼ and **Buy-In** (everything they've bought in, including rebuys, with the number of rebuys), and finally the hand status (for example "Hand 12 in progress" or "After hand 12") with when it was last updated.
+- **Chip value.** In a game with a chip value (section 4) the page shows plain chip counts without the currency sign. The price isn't sent to the link.
 - **When the numbers change.** Stacks update after every action, so a player can check their chips before betting. Net and rank change only when a hand ends, so the order doesn't jump around during a hand.
 - **How fast.** The host's phone sends each change about a second after the host stops tapping, at most once every 3 seconds. Players' phones check every 5 seconds while the page is open on screen, and at once when they come back to it (after unlocking the phone, switching back from another app, or getting the network back). A check that gets no answer within 8 seconds is dropped and tried again, so a bad connection can't stop the page from updating.
 - **Is the host still connected?** The page says "Updated 12s ago". While the host's phone is on, it also checks in once a minute when nothing has changed. After 2½ minutes without any update, the page warns that the host's phone may be offline or asleep. If instead the player's own phone can't reach the app, the page says "This phone can't reach the app" and keeps trying.
@@ -446,6 +465,7 @@ Added 5 October 2026 (user request).
 
 Added 13 October 2026 (user request). For hosts who don't want to play every hand in the app: they note who bought in for how much and who left with what, then count the chips at the end. It starts from Home's **Quick ledger** card (sections 2 and 4).
 
+- **Chip value** works as in section 4: with a price, the quick ledger shows plain chip counts and its results and Settle up show money.
 - **Setup.** Pick 2 to 10 players and the usual buy-in (the same stack choices as section 4, small amounts count in cents the same way). **Own amounts** gives each player their own first buy-in. There are no blinds, ante, rake, rebuy limits, seats or dealer.
 - **The screen.** Headed **Quick Ledger**. A **Buy-Ins** card says how many are at the table and shows three totals: **Bought in** (every buy-in by everyone), **Cashed out** (chips taken by players who left) and **On the table** (bought in less cashed out, which the final count must match), with **Add player** and **Cash out** buttons. Below, **Players** lists everyone with their buy-ins ("2 buy-ins · ₹20,000") and the usual buy-in.
 - **Rebuys.** **+ Buy in** on a player's row opens the buy-in sheet with the usual amount filled in; any amount above 0 can be typed (with the same warning for amounts far from the usual). Anyone at the table can buy more at any time, busted or not, up to 63 rebuys. A different amount turns on own amounts for the rest of the game, as in section 8.
@@ -454,7 +474,7 @@ Added 13 October 2026 (user request). For hosts who don't want to play every han
 - **Undo.** A button under the players names the latest change ("Undo: Asha Host cashes out with ₹18,000") and takes it back, along with its log line. Tapping again steps further back, up to the last **30** changes.
 - **Log.** The newest changes are listed under **Log**, newest first (the 6 newest, then **Show all**).
 - **Count Chips And Finish** opens **Count The Chips**: a box for each player still at the table (empty counts as 0), each showing what they bought and, once typed, their net. Cashed-out players are listed with what they left with. A line below compares the count with the chips on the table, for example "Counted ₹28,000 of ₹27,000 · ₹1,000 over" (or "short") in red, and **Balanced** in green when they match. **Save Game** works only when it balances; **Back to buy-ins** returns without losing the typed counts until the screen is left.
-- **Saving.** Save asks first ("Save this game? It goes to your games and counts towards the standings."), then opens the standings. Each player finishes with their count, or with what they cashed out with. The server checks the chips balance exactly, as for any game.
+- **Saving.** Save asks first ("Save this game? It goes to your games and counts towards the standings."), then opens the standings with **Settle up** on top (section 11). Each player finishes with their count, or with what they cashed out with. The server checks the chips balance exactly, as for any game.
 - **Standings.** A quick ledger ranks exactly like a game played hand by hand: each player's return on what they put in (section 12). It adds 0 to a player's hands.
 - **Saved game card.** Reads "Quick ledger" instead of hands and big blind, with no blind history and no **Continue game** button: a saved quick ledger can't be reopened.
 - **Home.** While one is on, the Home card shows **Live**, the game name and "Quick ledger", the total bought in, how many are at the table, your own buy-ins (or the number of players) and the total cashed out, and **Back to the game**. Last session reads "Quick ledger" instead of the hand count.
@@ -466,6 +486,9 @@ Added 13 October 2026 (user request). For hosts who don't want to play every han
 ## Known gaps
 
 These are known limitations, not planned features. Planned work is in the [feature plan](./FEATURE-PLAN.md).
+
+- The admin dashboard (section 21) still shows every game's amounts as chips with the currency sign, without the chip value.
+- A game's chip value can't be changed while it's being played; set it at setup or afterwards from **Settle up**.
 
 - A game in progress is backed up only every 10 seconds at most, so a restore can miss the last few actions; the host's phone must also have been online since them.
 - Friend requests don't send phone notifications or emails; people see them in the Profile tab's bell. The bell can't yet say when a request you sent was declined, and what counts as new is remembered per device.

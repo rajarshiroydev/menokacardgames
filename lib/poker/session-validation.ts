@@ -6,6 +6,7 @@ import {
 } from "./buy-ins.ts";
 import { normalizeRakeRules } from "./game.ts";
 import { isChipUnit } from "./money.ts";
+import { parseChipValue } from "./settle-up.ts";
 import type {
   BlindHistory,
   BlindSchedule,
@@ -225,6 +226,7 @@ export function validateSession(input: unknown): PokerSession {
     throw new Error("The rake doesn't match the game's rake rules");
   }
   const chipUnit = parseChipUnit(candidate.chipUnit);
+  const chipValue = parseChipValue(candidate.chipValue);
   const name = String(candidate.name || "").trim();
   if (name.length > MAX_GAME_NAME_LENGTH) {
     throw new Error(
@@ -303,6 +305,7 @@ export function validateSession(input: unknown): PokerSession {
     date,
     ended,
     ...(chipUnit === "cents" ? { chipUnit } : {}),
+    ...(chipValue ? { chipValue } : {}),
     ante,
     ...(blindHistory ? { blindHistory } : {}),
     startStack,

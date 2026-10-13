@@ -59,6 +59,10 @@ const GROUPS: FeatureGroup[] = [
         text: "Choose a starting stack and the app suggests a big blind to match. Small stacks (under 1,000) count in cents automatically. Turn on Own amounts to let each player buy in for a different amount.",
       },
       {
+        name: "Chip value",
+        text: "Say what a buy-in costs, for example ₹500 for 10,000 chips. The table counts chips; results, standings and settle up show real money.",
+      },
+      {
         name: "Odd blinds",
         text: "Want a small blind that isn't half the big blind? Turn on odd blinds and pick it.",
       },
@@ -146,6 +150,10 @@ const GROUPS: FeatureGroup[] = [
       {
         name: "Game history",
         text: "The Games tab lists every saved game with results, buy-ins and the blinds used.",
+      },
+      {
+        name: "Settle up",
+        text: "See everyone's result in money and who pays whom, with the fewest payments possible, then share the list with the table. No money goes through the app.",
       },
       {
         name: "Continue a game",

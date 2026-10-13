@@ -4,7 +4,8 @@ import {
   standingsKey,
 } from "../poker/standings.ts";
 import { type ChipUnit, DEFAULT_CURRENCY } from "../poker/money.ts";
-import type { PokerSession, SessionResult } from "../poker/types";
+import { normalizeChipValue } from "../poker/settle-up.ts";
+import type { ChipValue, PokerSession, SessionResult } from "../poker/types";
 import { fallbackAvatarId } from "../avatars.ts";
 
 /** One linked host's saved games, as `public.friend_group_sessions()` returns them. */
@@ -24,6 +25,8 @@ export type GroupSessions = {
     hands: number;
     /** Chips the house raked (migration 0023); absent or 0 is none. */
     rake?: number;
+    /** What the chips cost (migration 0026); absent or null is none. */
+    chipValue?: ChipValue | null;
     /**
      * `avatar` is what the player shows as in the host's list (migration
      * 0015). `accountId` is the account that player is, if any (migration
@@ -112,6 +115,9 @@ export function buildGroupStandings(group: GroupSessions): GroupStandings {
     ante: 0,
     startStack: session.startStack,
     ...(session.rake ? { rake: Number(session.rake) } : {}),
+    ...(normalizeChipValue(session.chipValue)
+      ? { chipValue: normalizeChipValue(session.chipValue)! }
+      : {}),
     hands: session.hands,
     results: session.results.map((result) => ({
       playerId: result.playerId,

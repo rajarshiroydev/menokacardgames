@@ -60,6 +60,7 @@ export function gameFromSession(
     sessionLabel: label,
     currency,
     ...(session.chipUnit === "cents" ? { chipUnit: session.chipUnit } : {}),
+    ...(session.chipValue ? { chipValue: { ...session.chipValue } } : {}),
     ...(history.smallBlindRatio
       ? { smallBlindRatio: { ...history.smallBlindRatio } }
       : {}),
