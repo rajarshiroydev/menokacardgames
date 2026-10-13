@@ -9,6 +9,7 @@ import { isChipUnit } from "./money.ts";
 import type {
   BlindHistory,
   BlindSchedule,
+  GameKind,
   PokerSession,
   RakeRules,
   SessionResult,
@@ -151,6 +152,13 @@ export function parseChipUnit(value: unknown) {
   return value;
 }
 
+/** A saved game's kind; absent or null is a game played hand by hand. */
+export function parseGameKind(value: unknown): GameKind | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (value !== "ledger") throw new Error("Invalid game kind");
+  return value;
+}
+
 export function parseBigBlindAnte(value: unknown) {
   if (value === undefined || value === null || value === false) return false;
   if (value !== true) throw new Error("Invalid big blind ante");
@@ -177,13 +185,30 @@ export function validateSession(input: unknown): PokerSession {
     throw new Error("Invalid session id");
   }
 
+  const kind = parseGameKind(candidate.kind);
+  const ledger = kind === "ledger";
   const date = asSafeInteger(candidate.date, "date", { min: 1 });
   const ended = asSafeInteger(candidate.ended, "ended", { min: date });
-  const ante = asSafeInteger(candidate.ante, "ante", { min: 1 });
+  // A quick ledger has no blinds and deals no hands, so both are 0.
+  const ante = asSafeInteger(candidate.ante, "ante", { min: ledger ? 0 : 1 });
   const startStack = asSafeInteger(candidate.startStack, "starting stack", {
     min: 1,
   });
-  const hands = asSafeInteger(candidate.hands, "hands", { min: 1 });
+  const hands = asSafeInteger(candidate.hands, "hands", { min: ledger ? 0 : 1 });
+  if (
+    ledger &&
+    (ante !== 0 ||
+      hands !== 0 ||
+      (candidate.blindHistory ?? null) !== null ||
+      (candidate.rebuyRules ?? null) !== null ||
+      (candidate.bigBlindAnte ?? false) !== false ||
+      (candidate.rakeRules ?? null) !== null ||
+      (candidate.rake ?? 0) !== 0)
+  ) {
+    throw new Error(
+      "A quick ledger game has no hands, blinds, ante, rake or rebuy limits",
+    );
+  }
   const blindHistory =
     candidate.blindHistory === undefined || candidate.blindHistory === null
       ? undefined
@@ -272,6 +297,7 @@ export function validateSession(input: unknown): PokerSession {
   });
 
   const session = {
+    ...(ledger ? { kind } : {}),
     id,
     ...(name ? { name } : {}),
     date,

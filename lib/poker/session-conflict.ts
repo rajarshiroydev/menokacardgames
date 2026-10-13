@@ -35,6 +35,7 @@ function canonicalBlindHistory(history: BlindHistory | undefined) {
 function canonicalContent(session: PokerSession, name: string) {
   return JSON.stringify({
     name,
+    kind: session.kind ?? "hands",
     date: session.date,
     ended: session.ended,
     chipUnit: session.chipUnit ?? "whole",

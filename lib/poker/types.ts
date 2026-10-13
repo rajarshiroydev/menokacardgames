@@ -13,6 +13,22 @@ export type Player = {
   left?: boolean;
 };
 
+/**
+ * How a game is recorded. "ledger" is a quick ledger: buy-ins, cash-outs and
+ * the final chip count only, with no hands, blinds or dealer. Absent is a
+ * game played hand by hand.
+ */
+export type GameKind = "ledger";
+
+/** A quick-ledger change that Undo can take back (lib/poker/ledger.ts). */
+export type LedgerStep = {
+  /** The log line the change wrote, removed again by Undo. */
+  line: string;
+  /** Everyone as they were before the change. */
+  players: Player[];
+  customBuyIns: boolean;
+};
+
 export type PlayerProfile = {
   id: string;
   name: string;
@@ -202,6 +218,15 @@ export type ContinuedSession = {
 };
 
 export type GameState = {
+  /**
+   * "ledger" for a quick ledger. Such a game never deals a hand: `hand` stays
+   * null, `handNo` 0, `ante` 0 and the blind fields empty, and a seated
+   * player's `stack` is 0 until they cash out (their chips are counted when
+   * the game is saved).
+   */
+  kind?: GameKind;
+  /** Quick ledger only: changes Undo can take back, newest first. */
+  ledgerUndo?: LedgerStep[];
   /** The host's currency when the game started; older games lack it (INR). */
   currency?: string;
   /**
@@ -273,6 +298,11 @@ export type SessionResult = {
 
 export type PokerSession = {
   id: string;
+  /**
+   * "ledger" for a quick ledger game: `hands` and `ante` are 0, and there is
+   * no blind history, ante, rake or rebuy limit. Absent is hand by hand.
+   */
+  kind?: GameKind;
   name?: string;
   sessionNumber?: number;
   discardedAt?: number;

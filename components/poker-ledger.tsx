@@ -62,6 +62,7 @@ import {
   smallBlindFor,
   STAGES,
   startingBigBlind,
+  playerBuyIns,
   totalBuyIns,
   undoLastHand,
   editRebuyRules,
@@ -84,6 +85,20 @@ import {
   normalizeRebuyRules,
 } from "@/lib/poker/buy-ins";
 import { gameFromSession } from "@/lib/poker/continue-session";
+import {
+  createLedgerGame,
+  isLedgerGame,
+  ledgerBuyIn,
+  ledgerCashOut,
+  ledgerCountGap,
+  ledgerJoin,
+  ledgerReturn,
+  ledgerSeated,
+  ledgerSession,
+  ledgerTotals,
+  ledgerUndoLine,
+  undoLedgerStep,
+} from "@/lib/poker/ledger";
 import {
   GAME_BACKUP_MIN_INTERVAL_MS,
   GAME_BACKUP_QUIET_MS,
@@ -734,6 +749,8 @@ export function PokerLedger({
   const [editingBlinds, setEditingBlinds] = useState(false);
   const [editingRebuys, setEditingRebuys] = useState(false);
   const [tableSheet, setTableSheet] = useState<"add" | "cash-out" | null>(null);
+  // Which setup Table Setup shows: Home has a button for each kind of game.
+  const [setupKind, setSetupKind] = useState<"hands" | "ledger">("hands");
   // The busted player whose own buy-in amount is being typed.
   const [buyingIn, setBuyingIn] = useState<number | null>(null);
   const [legacyGame, setLegacyGame] = useState<GameState | null>(null);
@@ -1341,6 +1358,7 @@ export function PokerLedger({
 
   const startGame = useCallback(
     (input: {
+      kind: "hands" | "ledger";
       name: string;
       /** "cents" when every amount below is in hundredths. */
       chipUnit: ChipUnit;
@@ -1363,6 +1381,28 @@ export function PokerLedger({
       /** Draw the first dealer now; otherwise seat 1 deals first. */
       randomDealer: boolean;
     }) => {
+      if (input.kind === "ledger") {
+        const ledgerGame = createLedgerGame({
+          gameName: input.name,
+          sessionLabel: `Game ${nextSessionNumber}`,
+          currency,
+          chipUnit: input.chipUnit,
+          startStack: input.stack,
+          players: input.players.map((player) => ({
+            id: player.id,
+            name: player.name,
+          })),
+          buyIns: input.buyIns,
+          startedAt: Date.now(),
+        });
+        if (!ledgerGame) {
+          showToast("Every player's buy-in must be more than 0");
+          return;
+        }
+        setGame(ledgerGame);
+        navigate("game", { replace: true });
+        return;
+      }
       if (input.ante <= 0) {
         showToast("Big blind must be greater than 0");
         return;
@@ -2111,6 +2151,100 @@ export function PokerLedger({
     showToast(`${player.name} is back with ${money(player.stack)}`);
   }
 
+  function addLedgerBuyIn(playerIndex: number, amount: number) {
+    if (!game) return;
+    const next = structuredClone(game);
+    if (!ledgerBuyIn(next, playerIndex, amount)) return;
+    setGame(next);
+    setBuyingIn(null);
+    showToast(`${next.players[playerIndex].name} buys in for ${money(amount)}`);
+  }
+
+  function addLedgerPlayer(playerId: string, amount: number) {
+    if (!game) return;
+    const profile = players.find((player) => player.id === playerId);
+    if (!profile) return;
+    const next = structuredClone(game);
+    if (!ledgerJoin(next, { id: profile.id, name: profile.name }, amount)) {
+      return;
+    }
+    setGame(next);
+    setTableSheet(null);
+    showToast(`${profile.name} joins for ${money(amount)}`);
+  }
+
+  function cashOutLedgerPlayer(playerIndex: number, chips: number) {
+    if (!game) return;
+    const player = game.players[playerIndex];
+    if (!player || player.left) return;
+    // The confirmation replaces the sheet rather than opening under it.
+    setTableSheet(null);
+    ask(
+      `Cash out ${player.name} with ${money(chips)}? That's their result for the game.`,
+      `Cash Out · ${money(chips)}`,
+      () => {
+        const next = structuredClone(game);
+        if (!ledgerCashOut(next, playerIndex, chips)) return;
+        setGame(next);
+        showToast(`${player.name} cashed out with ${money(chips)}`);
+      },
+    );
+  }
+
+  function returnLedgerPlayer(playerIndex: number) {
+    if (!game) return;
+    const player = game.players[playerIndex];
+    if (!player?.left) return;
+    const next = structuredClone(game);
+    if (!ledgerReturn(next, playerIndex)) return;
+    setGame(next);
+    setTableSheet(null);
+    showToast(`${player.name} is back at the table`);
+  }
+
+  function undoLedger() {
+    if (!game) return;
+    const next = structuredClone(game);
+    const line = undoLedgerStep(next);
+    if (!line) return;
+    setGame(next);
+    showToast(`Undone: ${line}`);
+  }
+
+  function saveLedgerGame(counts: Array<number | null>) {
+    if (!game) return;
+    let session: PokerSession;
+    try {
+      session = ledgerSession(game, counts, Date.now());
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Check the count");
+      return;
+    }
+    ask(
+      "Save this game? It goes to your games and counts towards the standings.",
+      "Save game",
+      () => void saveLedgerSession(session),
+    );
+  }
+
+  async function saveLedgerSession(session: PokerSession) {
+    showToast("Saving to shared ledger…");
+    try {
+      await sessionsApi("", {
+        method: "POST",
+        body: JSON.stringify({ sessions: [session] }),
+      });
+      setGame(null);
+      navigate("history", { replace: true });
+      await refreshHistory();
+      showToast("Session saved");
+    } catch (error) {
+      showToast(
+        error instanceof Error ? error.message : "Session was not saved",
+      );
+    }
+  }
+
   function cancelHand() {
     if (!game?.hand) return;
     setModal({
@@ -2145,8 +2279,10 @@ export function PokerLedger({
     ask(
       game?.continues
         ? `Stop continuing ${game.sessionLabel || "this game"}? Hands played since are lost; the saved game stays as it was.`
-        : "Reset everything and start a new game? All current stacks are lost.",
-      "Reset game",
+        : isLedgerGame(game)
+          ? "Discard this game? Its buy-ins and cash-outs are lost."
+          : "Reset everything and start a new game? All current stacks are lost.",
+      isLedgerGame(game) ? "Discard game" : "Reset game",
       () => {
         endLiveSharing();
         if (game) forgetGameBackup(game);
@@ -2419,7 +2555,9 @@ export function PokerLedger({
       ? null
       : view === "game" && game
         ? {
-            title: game.hand
+            title: isLedgerGame(game)
+              ? "Quick Ledger"
+              : game.hand
               ? game.hand.stage === STAGES.length - 1 &&
                 !pendingIndexes(game).length
                 ? "Showdown"
@@ -2427,7 +2565,7 @@ export function PokerLedger({
               : "Between Hands",
           }
         : view === "setup"
-          ? { title: "Table Setup" }
+          ? { title: setupKind === "ledger" ? "New Quick Ledger" : "Table Setup" }
           : view === "history"
             ? { title: "Standings" }
             : view === "sessions"
@@ -2456,7 +2594,10 @@ export function PokerLedger({
       onDeleteBackup={deleteGameBackup}
       onAdoptLegacyGame={offerLegacyGameAdoption}
       onGame={() => navigate(game ? "game" : "setup")}
-      onSetup={() => navigate("setup")}
+      onSetup={(kind) => {
+        setSetupKind(kind);
+        navigate("setup");
+      }}
       onSessions={() => navigate("sessions")}
       onReviewRequests={openPlayers}
       onOpenHands={openHands}
@@ -2606,6 +2747,8 @@ export function PokerLedger({
           />
         ) : view === "setup" ? (
           <SetupView
+            key={setupKind}
+            kind={setupKind}
             players={players}
             selfPlayerId={profile.selfPlayerId}
             loading={playersLoading}
@@ -2613,6 +2756,17 @@ export function PokerLedger({
             onRetry={() => void refreshPlayers()}
             suggestedName={`Game ${nextSessionNumber}`}
             onStart={startGame}
+          />
+        ) : game && isLedgerGame(game) ? (
+          <LedgerView
+            game={game}
+            onBuyIn={(playerIndex) => setBuyingIn(playerIndex)}
+            onAddPlayer={() => setTableSheet("add")}
+            onCashOut={() => setTableSheet("cash-out")}
+            onReturn={returnLedgerPlayer}
+            onUndo={undoLedger}
+            onSave={saveLedgerGame}
+            onDiscard={discardGame}
           />
         ) : game ? (
           <GameView
@@ -2656,6 +2810,8 @@ export function PokerLedger({
         }}
         onSelect={(target) => {
           if (target === "play") {
+            // The tab opens the usual hand-by-hand setup; Home has both.
+            if (!game && view !== "setup") setSetupKind("hands");
             navigate(game ? "game" : "setup");
           } else if (target !== view) {
             navigate(target);
@@ -2697,18 +2853,37 @@ export function PokerLedger({
             roster={players}
             selfPlayerId={profile.selfPlayerId}
             onClose={() => setTableSheet(null)}
-            onAdd={addLatePlayer}
+            onAdd={(playerId, seat, amount) =>
+              isLedgerGame(game)
+                ? addLedgerPlayer(playerId, amount)
+                : addLatePlayer(playerId, seat, amount)
+            }
           />
         ) : null}
-        {buyingIn !== null && game && nextBuyIn(game, buyingIn) !== null ? (
+        {buyingIn !== null &&
+        game &&
+        (isLedgerGame(game)
+          ? game.players[buyingIn] && !game.players[buyingIn].left
+          : nextBuyIn(game, buyingIn) !== null) ? (
           <BuyInSheet
             game={game}
             playerIndex={buyingIn}
             onClose={() => setBuyingIn(null)}
-            onBuyIn={(amount) => confirmBuyIn(buyingIn, amount)}
+            onBuyIn={(amount) =>
+              isLedgerGame(game)
+                ? addLedgerBuyIn(buyingIn, amount)
+                : confirmBuyIn(buyingIn, amount)
+            }
           />
         ) : null}
-        {tableSheet === "cash-out" && game && !game.hand ? (
+        {tableSheet === "cash-out" && game && isLedgerGame(game) ? (
+          <LedgerCashOutSheet
+            game={game}
+            onClose={() => setTableSheet(null)}
+            onCashOut={cashOutLedgerPlayer}
+            onReturn={returnLedgerPlayer}
+          />
+        ) : tableSheet === "cash-out" && game && !game.hand ? (
           <CashOutSheet
             game={game}
             onClose={() => setTableSheet(null)}
@@ -3054,7 +3229,7 @@ function HomeView({
   onDeleteBackup: (backup: GameBackupSummary) => void;
   onAdoptLegacyGame: () => void;
   onGame: () => void;
-  onSetup: () => void;
+  onSetup: (kind: "hands" | "ledger") => void;
   onSessions: () => void;
   onReviewRequests: () => void;
   onOpenHands: () => void;
@@ -3099,21 +3274,44 @@ function HomeView({
             <HomeLiveCard game={game} selfPlayerId={selfPlayerId} onOpen={onGame} />
           </ChipUnitContext.Provider>
         ) : (
-          <button className="home-start-card" type="button" onClick={onSetup}>
-            <span className="home-start-watermark" aria-hidden="true">
-              ♠
-            </span>
-            <span className="home-start-kicker">No game running</span>
-            <span className="home-start-row">
-              <span>
-                <strong>Start a game</strong>
-                <small>Seat players, set stacks, deal</small>
+          <>
+            <button
+              className="home-start-card"
+              type="button"
+              onClick={() => onSetup("hands")}
+            >
+              <span className="home-start-watermark" aria-hidden="true">
+                ♠
               </span>
-              <span className="home-start-go" aria-hidden="true">
-                ♦
+              <span className="home-start-kicker">No game running</span>
+              <span className="home-start-row">
+                <span>
+                  <strong>Start a game</strong>
+                  <small>Seat players, set stacks, deal</small>
+                </span>
+                <span className="home-start-go" aria-hidden="true">
+                  ♦
+                </span>
               </span>
-            </span>
-          </button>
+            </button>
+            <button
+              className="glass home-ledger-card"
+              type="button"
+              onClick={() => onSetup("ledger")}
+            >
+              <span className="home-ledger-watermark" aria-hidden="true">
+                ♣
+              </span>
+              <span className="home-ledger-copy">
+                <span className="home-ledger-kicker">Just the money</span>
+                <strong>Quick ledger</strong>
+                <small>Buy-ins and cash-outs, then count the chips</small>
+              </span>
+              <span className="home-ledger-go" aria-hidden="true">
+                ♣
+              </span>
+            </button>
+          </>
         )}
 
         {legacyGame || legacySessionCount ? (
@@ -3282,9 +3480,11 @@ function UnfinishedGameCard({
           {backup.name}
         </h2>
         <p>
-          {backup.handInProgress
-            ? `Hand ${backup.handNo} in progress`
-            : `${backup.handNo} hand${backup.handNo === 1 ? "" : "s"} played`}{" "}
+          {backup.ledger
+            ? "Quick ledger"
+            : backup.handInProgress
+              ? `Hand ${backup.handNo} in progress`
+              : `${backup.handNo} hand${backup.handNo === 1 ? "" : "s"} played`}{" "}
           · {backup.players} players
           {now === null ? "" : ` · saved ${timeAgo(backup.updatedAt, now)}`}
           {backup.thisDevice ? "" : " on another device"}
@@ -3313,6 +3513,9 @@ function HomeLiveCard({
   onOpen: () => void;
 }) {
   const { money } = useMoney();
+  if (isLedgerGame(game)) {
+    return <HomeLedgerCard game={game} selfPlayerId={selfPlayerId} onOpen={onOpen} />;
+  }
   const hand = game.hand;
   const blinds = blindStatus(game);
   const name = game.sessionLabel || game.gameName;
@@ -3380,6 +3583,67 @@ function HomeLiveCard({
   );
 }
 
+/** Home's card while a quick ledger is on: the chips bought and who's in. */
+function HomeLedgerCard({
+  game,
+  selfPlayerId,
+  onOpen,
+}: {
+  game: GameState;
+  selfPlayerId: string | null;
+  onOpen: () => void;
+}) {
+  const { money } = useMoney();
+  const totals = ledgerTotals(game);
+  const seated = ledgerSeated(game);
+  const name = game.sessionLabel || game.gameName;
+  const myIndex = selfPlayerId
+    ? game.players.findIndex((player) => player.id === selfPlayerId)
+    : -1;
+
+  return (
+    <button className="glass home-live-card" type="button" onClick={onOpen}>
+      <span className="home-live-glow" aria-hidden="true" />
+      <span className="home-live-top">
+        <span className="live-pill">
+          <span aria-hidden="true" />
+          Live
+        </span>
+        <span className="home-live-meta">
+          {[name, "Quick ledger"].filter(Boolean).join(" · ")}
+        </span>
+      </span>
+      <span className="home-live-pot-row">
+        <span>
+          <span className="home-kicker">Bought in</span>
+          <span className="home-live-pot">{money(totals.bought)}</span>
+        </span>
+        <span className="home-live-blinds">
+          {seated.length} at the table
+        </span>
+      </span>
+      <span className="home-live-stats">
+        {myIndex >= 0 ? (
+          <span>
+            <small>Your buy-ins</small>
+            <b>{money(totalBuyIns(game, myIndex))}</b>
+          </span>
+        ) : (
+          <span>
+            <small>Players</small>
+            <b>{game.players.length}</b>
+          </span>
+        )}
+        <span>
+          <small>Cashed out</small>
+          <b>{money(totals.cashedOut)}</b>
+        </span>
+      </span>
+      <span className="home-live-cta">Back to the game</span>
+    </button>
+  );
+}
+
 /** Your most recent saved game: your result, the top winner, everyone's net. */
 function HomeLastSession({
   history,
@@ -3435,7 +3699,9 @@ function HomeLastSession({
     (session.sessionNumber ? `Game ${session.sessionNumber}` : "Game");
   const details = [
     title,
-    `${session.hands} hand${session.hands === 1 ? "" : "s"}`,
+    session.kind === "ledger"
+      ? "Quick ledger"
+      : `${session.hands} hand${session.hands === 1 ? "" : "s"}`,
     `${results.length} player${results.length === 1 ? "" : "s"}`,
   ];
 
@@ -3697,8 +3963,10 @@ function ImportReview({
               <span>
                 <strong>{session.name || "Saved Game"}</strong>
                 <small>
-                  {formatDate(session.date)} · Big Blind{" "}
-                  {formatChips(session.ante, session.chipUnit, currency)}
+                  {formatDate(session.date)} ·{" "}
+                  {session.kind === "ledger"
+                    ? "Quick ledger"
+                    : `Big Blind ${formatChips(session.ante, session.chipUnit, currency)}`}
                   {" · "}
                   {session.results.map((result) => result.name).join(", ")}
                 </small>
@@ -3745,6 +4013,7 @@ function ImportReview({
 }
 
 function SetupView({
+  kind,
   players,
   selfPlayerId,
   loading,
@@ -3753,6 +4022,8 @@ function SetupView({
   suggestedName,
   onStart,
 }: {
+  /** The kind of game this sets up, chosen on Home. */
+  kind: "hands" | "ledger";
   players: PlayerProfile[];
   /** Your own player, listed first and marked You. */
   selfPlayerId: string | null;
@@ -3761,6 +4032,8 @@ function SetupView({
   onRetry: () => void;
   suggestedName: string;
   onStart: (input: {
+    /** How the game is recorded: hand by hand, or a quick ledger. */
+    kind: "hands" | "ledger";
     name: string;
     chipUnit: ChipUnit;
     stack: number;
@@ -3780,6 +4053,7 @@ function SetupView({
   // same boxes. The game's chip unit follows from them when it starts
   // (lib/poker/stakes.ts); nobody picks it.
   const money = (value: number) => formatChips(value, "cents", currency);
+  const ledger = kind === "ledger";
   const [name, setName] = useState("");
   const [stack, setStack] = useState(DEFAULT_STACK);
   const [ante, setAnte] = useState(() => defaultBigBlind(DEFAULT_STACK));
@@ -3911,12 +4185,17 @@ function SetupView({
       schedule.raiseBy > (schedule.raiseType === "multiply" ? 1 : 0));
   // The game's unit, from every amount typed or picked (all in hundredths).
   const amountFor = (playerId: string) => seatAmounts[playerId] ?? stack;
+  // A quick ledger has only buy-ins, so the blind amounts don't count.
   const chipUnit = chipUnitFor(stack, [
     ...(ownAmounts ? selectedIds.map(amountFor) : []),
-    ante,
-    risingBlinds && blindRaiseType === "add" ? blindRaiseBy : null,
-    rebuyRules.closeAtBigBlind,
-    oddBlinds && customSmallBlind ? smallBlindAmount : null,
+    ...(ledger
+      ? []
+      : [
+          ante,
+          risingBlinds && blindRaiseType === "add" ? blindRaiseBy : null,
+          rebuyRules.closeAtBigBlind,
+          oddBlinds && customSmallBlind ? smallBlindAmount : null,
+        ]),
   ]);
   /** The plan in the game's unit, which rounds its levels like the game will. */
   const scheduleInUnit = (plan: BlindSchedule | null) =>
@@ -4176,6 +4455,7 @@ function SetupView({
     }
     const closeAt = setupRebuyRules.closeAtBigBlind;
     onStart({
+      kind,
       bigBlindAnte,
       rakeRules: rakeOn
         ? {
@@ -4322,28 +4602,30 @@ function SetupView({
           {playerCount > 1 ? (
             <>
               <div className="card-row seat-order-heading">
-                <span className="label">Seating Order</span>
-                <div className="heading-with-info">
-                  <label className="switch-row">
-                    <span>Randomize dealer</span>
+                <span className="label">{ledger ? "Players" : "Seating Order"}</span>
+                {ledger ? null : (
+                  <div className="heading-with-info">
+                    <label className="switch-row">
+                      <span>Randomize dealer</span>
+                      <button
+                        className="switch"
+                        type="button"
+                        role="switch"
+                        aria-checked={randomDealer}
+                        aria-label="Randomize dealer"
+                        onClick={() => setRandomDealer((on) => !on)}
+                      />
+                    </label>
                     <button
-                      className="switch"
+                      className="info-button"
                       type="button"
-                      role="switch"
-                      aria-checked={randomDealer}
-                      aria-label="Randomize dealer"
-                      onClick={() => setRandomDealer((on) => !on)}
-                    />
-                  </label>
-                  <button
-                    className="info-button"
-                    type="button"
-                    aria-label="About randomize dealer"
-                    onClick={() => setShowDealerHelp(true)}
-                  >
-                    i
-                  </button>
-                </div>
+                      aria-label="About randomize dealer"
+                      onClick={() => setShowDealerHelp(true)}
+                    >
+                      i
+                    </button>
+                  </div>
+                )}
               </div>
               {showDealerHelp ? (
                 <InfoSheet
@@ -4395,9 +4677,11 @@ function SetupView({
                           : undefined
                       }
                     >
-                      <span className="seat-number" aria-hidden="true">
-                        {index + 1}
-                      </span>
+                      {ledger ? null : (
+                        <span className="seat-number" aria-hidden="true">
+                          {index + 1}
+                        </span>
+                      )}
                       <Avatar name={seatName} playerId={selectedId} size="small" />
                       <span className="seat-name">{seatName}</span>
                       {ownAmounts ? (
@@ -4415,31 +4699,33 @@ function SetupView({
                           }
                         />
                       ) : null}
-                      <button
-                        className="seat-drag-handle"
-                        type="button"
-                        disabled={loading || Boolean(error)}
-                        aria-label={`Move seat ${index + 1}, ${seatName}. Drag or use arrow keys.`}
-                        onPointerDown={(event) => startSeatDrag(event, index)}
-                        onPointerMove={moveSeatDrag}
-                        onPointerUp={endSeatDrag}
-                        onPointerCancel={cancelSeatDrag}
-                        onLostPointerCapture={cancelSeatDrag}
-                        onKeyDown={(event) => {
-                          if (event.key === "ArrowUp" && index > 0) {
-                            event.preventDefault();
-                            moveSeat(index, index - 1);
-                          } else if (
-                            event.key === "ArrowDown" &&
-                            index < playerCount - 1
-                          ) {
-                            event.preventDefault();
-                            moveSeat(index, index + 1);
-                          }
-                        }}
-                      >
-                        <span aria-hidden="true">⠿</span>
-                      </button>
+                      {ledger ? null : (
+                        <button
+                          className="seat-drag-handle"
+                          type="button"
+                          disabled={loading || Boolean(error)}
+                          aria-label={`Move seat ${index + 1}, ${seatName}. Drag or use arrow keys.`}
+                          onPointerDown={(event) => startSeatDrag(event, index)}
+                          onPointerMove={moveSeatDrag}
+                          onPointerUp={endSeatDrag}
+                          onPointerCancel={cancelSeatDrag}
+                          onLostPointerCapture={cancelSeatDrag}
+                          onKeyDown={(event) => {
+                            if (event.key === "ArrowUp" && index > 0) {
+                              event.preventDefault();
+                              moveSeat(index, index - 1);
+                            } else if (
+                              event.key === "ArrowDown" &&
+                              index < playerCount - 1
+                            ) {
+                              event.preventDefault();
+                              moveSeat(index, index + 1);
+                            }
+                          }}
+                        >
+                          <span aria-hidden="true">⠿</span>
+                        </button>
+                      )}
                     </div>
                   );
                 })}
@@ -4450,7 +4736,7 @@ function SetupView({
 
         <section className="glass card">
           <div className="card-row">
-            <span className="label">Starting stack</span>
+            <span className="label">{ledger ? "Buy-in" : "Starting stack"}</span>
             <div className="heading-with-info">
               <label className="switch-row">
                 <span>Own amounts</span>
@@ -4518,7 +4804,9 @@ function SetupView({
           ) : null}
           <p className="muted small-note">
             {ownAmounts
-              ? `Each player buys in for ${money(stack)} unless you change their amount in the seating order.`
+              ? `Each player buys in for ${money(stack)} unless you change their amount in the ${
+                  ledger ? "player list" : "seating order"
+                }.`
               : `Everyone buys in for ${money(stack)}.`}
           </p>
           {ownAmounts && !amountsValid ? (
@@ -4528,404 +4816,408 @@ function SetupView({
           ) : null}
         </section>
 
-        <section className="glass card">
-          <div className="card-row">
-            <span className="label">Big blind</span>
-            <div className="heading-with-info">
-              <label className="switch-row">
-                <span>Odd blinds</span>
-                <button
-                  className="switch"
-                  type="button"
-                  role="switch"
-                  aria-checked={oddBlinds}
-                  aria-label="Odd blinds"
-                  onClick={() => setOddBlinds((on) => !on)}
-                />
-              </label>
-              <button
-                className="info-button"
-                type="button"
-                aria-label="About odd blinds"
-                onClick={() => setShowOddBlindsHelp(true)}
-              >
-                i
-              </button>
-            </div>
-          </div>
-          {showOddBlindsHelp ? (
-            <InfoSheet
-              label="About odd blinds"
-              onClose={() => setShowOddBlindsHelp(false)}
-            >
-              <p>
-                <b>Odd Blinds Off:</b> the small blind is half the big blind.
-              </p>
-              <p>
-                <b>Odd Blinds On:</b> you choose the small blind.
-              </p>
-            </InfoSheet>
-          ) : null}
-          <Segmented
-            label="Big blind"
-            options={[
-              ...anteChoices.map((value) => ({ value, label: money(value) })),
-              { value: "other" as const, label: "Other" },
-            ]}
-            value={customAnte || !antePreset ? "other" : ante}
-            onChange={(value) => {
-              if (value === "other") {
-                setCustomAnte(true);
-              } else {
-                setCustomAnte(false);
-                setAnte(value);
-              }
-            }}
-          />
-          {customAnte || !antePreset ? (
-            <ChipInput
-              className="field"
-              id="ante"
-              aria-label="Big blind amount"
-              value={ante}
-              onChange={setAnte}
-            />
-          ) : null}
-          {oddBlinds ? (
-            <>
-              <span className="label">Small blind</span>
+        {ledger ? null : (
+          <>
+            <section className="glass card">
+              <div className="card-row">
+                <span className="label">Big blind</span>
+                <div className="heading-with-info">
+                  <label className="switch-row">
+                    <span>Odd blinds</span>
+                    <button
+                      className="switch"
+                      type="button"
+                      role="switch"
+                      aria-checked={oddBlinds}
+                      aria-label="Odd blinds"
+                      onClick={() => setOddBlinds((on) => !on)}
+                    />
+                  </label>
+                  <button
+                    className="info-button"
+                    type="button"
+                    aria-label="About odd blinds"
+                    onClick={() => setShowOddBlindsHelp(true)}
+                  >
+                    i
+                  </button>
+                </div>
+              </div>
+              {showOddBlindsHelp ? (
+                <InfoSheet
+                  label="About odd blinds"
+                  onClose={() => setShowOddBlindsHelp(false)}
+                >
+                  <p>
+                    <b>Odd Blinds Off:</b> the small blind is half the big blind.
+                  </p>
+                  <p>
+                    <b>Odd Blinds On:</b> you choose the small blind.
+                  </p>
+                </InfoSheet>
+              ) : null}
               <Segmented
-                label="Small blind"
+                label="Big blind"
                 options={[
-                  ...smallBlindOptions.map((option) => ({
-                    value: option.amount,
-                    label: money(option.amount),
-                  })),
+                  ...anteChoices.map((value) => ({ value, label: money(value) })),
                   { value: "other" as const, label: "Other" },
                 ]}
-                value={customSmallBlind ? "other" : sharedSmallBlind.amount}
+                value={customAnte || !antePreset ? "other" : ante}
                 onChange={(value) => {
                   if (value === "other") {
-                    setCustomSmallBlind(true);
-                    setSmallBlindAmount(sharedSmallBlind.amount);
-                    return;
+                    setCustomAnte(true);
+                  } else {
+                    setCustomAnte(false);
+                    setAnte(value);
                   }
-                  setCustomSmallBlind(false);
-                  const picked = smallBlindOptions.find(
-                    (option) => option.amount === value,
-                  );
-                  if (picked) setSmallBlindShare(picked.percent);
                 }}
               />
-              {customSmallBlind ? (
+              {customAnte || !antePreset ? (
                 <ChipInput
                   className="field"
-                  aria-label="Small blind amount"
-                  value={smallBlindAmount}
-                  onChange={setSmallBlindAmount}
+                  id="ante"
+                  aria-label="Big blind amount"
+                  value={ante}
+                  onChange={setAnte}
                 />
               ) : null}
-              {smallBlindValid ? null : (
-                <p className="field-error" role="alert">
-                  The small blind must be from {money(1)} up to the big blind.
-                </p>
-              )}
-            </>
-          ) : null}
-        </section>
-
-        <section className="glass card">
-          <div className="card-row">
-            <span className="label">Blind levels</span>
-            <span className="card-note">{blindLevelNote}</span>
-          </div>
-          <Segmented
-            label="Blind levels"
-            options={[
-              { value: "fixed", label: "Fixed" },
-              { value: "hands", label: "By Hands" },
-              { value: "minutes", label: "By Minutes" },
-            ]}
-            value={risingBlinds ? blindUnit : "fixed"}
-            onChange={chooseBlindLevels}
-          />
-          {risingBlinds ? (
-            <>
-              <Segmented
-                label="How the big blind rises"
-                options={[
-                  { value: "multiply", label: "Multiply" },
-                  { value: "add", label: "Add fixed amount" },
-                ]}
-                value={blindRaiseType}
-                onChange={(nextType) => {
-                  setBlindRaiseType(nextType);
-                  setBlindRaiseBy(
-                    nextType === "multiply" ? 2 : Math.max(1, ante),
-                  );
-                }}
-              />
-              <div className="field-grid">
-                <div>
-                  <label className="label" htmlFor="blind-every">
-                    Every ({blindUnit})
-                  </label>
-                  <input
-                    className="field"
-                    id="blind-every"
-                    type="number"
-                    inputMode="numeric"
-                    min="1"
-                    value={blindEvery}
-                    onChange={(event) =>
-                      setBlindEvery(Number(event.target.value))
-                    }
-                  />
-                </div>
-                <div>
-                  <label className="label" htmlFor="blind-raise-by">
-                    {blindRaiseType === "multiply" ? "Multiply by" : `Add ${symbol.trim()}`}
-                  </label>
-                  {blindRaiseType === "multiply" ? (
-                    <input
-                      className="field"
-                      id="blind-raise-by"
-                      type="number"
-                      inputMode="decimal"
-                      min="1.1"
-                      step="0.1"
-                      value={blindRaiseBy}
-                      onChange={(event) =>
-                        setBlindRaiseBy(Number(event.target.value))
+              {oddBlinds ? (
+                <>
+                  <span className="label">Small blind</span>
+                  <Segmented
+                    label="Small blind"
+                    options={[
+                      ...smallBlindOptions.map((option) => ({
+                        value: option.amount,
+                        label: money(option.amount),
+                      })),
+                      { value: "other" as const, label: "Other" },
+                    ]}
+                    value={customSmallBlind ? "other" : sharedSmallBlind.amount}
+                    onChange={(value) => {
+                      if (value === "other") {
+                        setCustomSmallBlind(true);
+                        setSmallBlindAmount(sharedSmallBlind.amount);
+                        return;
                       }
-                    />
-                  ) : (
+                      setCustomSmallBlind(false);
+                      const picked = smallBlindOptions.find(
+                        (option) => option.amount === value,
+                      );
+                      if (picked) setSmallBlindShare(picked.percent);
+                    }}
+                  />
+                  {customSmallBlind ? (
                     <ChipInput
                       className="field"
-                      id="blind-raise-by"
-                      value={blindRaiseBy}
-                      onChange={setBlindRaiseBy}
+                      aria-label="Small blind amount"
+                      value={smallBlindAmount}
+                      onChange={setSmallBlindAmount}
                     />
+                  ) : null}
+                  {smallBlindValid ? null : (
+                    <p className="field-error" role="alert">
+                      The small blind must be from {money(1)} up to the big blind.
+                    </p>
                   )}
-                </div>
-              </div>
-              <p className="muted small-note">
-                {scheduleValid ? (
-                  <>
-                    Big blind: {ladder
-                      .map((bigBlind) => money(bigBlind))
-                      .join(", ")}
-                    , …
-                    {blindUnit === "minutes"
-                      ? " Timed levels apply when the next hand is dealt."
-                      : ""}
-                  </>
-                ) : (
-                  <>
-                    Set an interval of at least 1 and an increase that makes the
-                    blinds bigger.
-                  </>
-                )}
-              </p>
-            </>
-          ) : null}
-        </section>
-
-        <section className="glass card">
-          <div className="card-row">
-            <span className="label">Ante</span>
-            <div className="heading-with-info">
-              <label className="switch-row">
-                <span>Big blind ante</span>
-                <button
-                  className="switch"
-                  type="button"
-                  role="switch"
-                  aria-checked={bigBlindAnte}
-                  aria-label="Big blind ante"
-                  onClick={() => setBigBlindAnte((on) => !on)}
-                />
-              </label>
-              <button
-                className="info-button"
-                type="button"
-                aria-label="About the big blind ante"
-                onClick={() => setShowAnteHelp(true)}
-              >
-                i
-              </button>
-            </div>
-          </div>
-          {showAnteHelp ? (
-            <InfoSheet
-              label="About the big blind ante"
-              onClose={() => setShowAnteHelp(false)}
-            >
-              <p>
-                <b>Big Blind Ante On:</b> each hand the big blind also puts in
-                an ante of one big blind for the whole table. It goes to the
-                main pot and doesn&apos;t count toward their bet.
-              </p>
-              <p>
-                <b>Big Blind Ante Off:</b> no ante, only the blinds.
-              </p>
-            </InfoSheet>
-          ) : null}
-          {bigBlindAnte ? (
-            <p className="muted small-note">
-              Each hand the big blind also puts in an ante of one big blind (
-              {money(Math.max(1, ante))} to start) for the whole table. It goes
-              to the main pot and doesn&apos;t count toward their bet.
-            </p>
-          ) : null}
-        </section>
-
-        <section className="glass card">
-          <div className="card-row">
-            <span className="label">Rake</span>
-            <div className="heading-with-info">
-              <label className="switch-row">
-                <span>House rake</span>
-                <button
-                  className="switch"
-                  type="button"
-                  role="switch"
-                  aria-checked={rakeOn}
-                  aria-label="House rake"
-                  onClick={() => setRakeOn((on) => !on)}
-                />
-              </label>
-              <button
-                className="info-button"
-                type="button"
-                aria-label="About the house rake"
-                onClick={() => setShowRakeHelp(true)}
-              >
-                i
-              </button>
-            </div>
-          </div>
-          {showRakeHelp ? (
-            <InfoSheet
-              label="About the house rake"
-              onClose={() => setShowRakeHelp(false)}
-            >
-              <p>
-                <b>House Rake On:</b> the house takes a share of each pot that
-                sees a flop, up to the most per hand. No flop, no rake. The
-                rake leaves the game, so results add up to minus it.
-              </p>
-              <p>
-                <b>House Rake Off:</b> no rake, every chip stays with the
-                players.
-              </p>
-            </InfoSheet>
-          ) : null}
-          {rakeOn ? (
-            <>
-              <Segmented
-                label="Share of each pot"
-                columns={5}
-                options={[
-                  ...RAKE_PERCENTS.map((percent) => ({
-                    value: percent,
-                    label: `${percent}%`,
-                  })),
-                  { value: "other" as const, label: "Other" },
-                ]}
-                value={customRake ? "other" : rakePercent}
-                onChange={(value) => {
-                  if (value === "other") {
-                    setCustomRake(true);
-                  } else {
-                    setCustomRake(false);
-                    setRakePercent(value);
-                  }
-                }}
-              />
-              {customRake ? (
-                <div className="percent-field">
-                  <input
-                    className="field"
-                    id="rake-percent"
-                    type="number"
-                    inputMode="decimal"
-                    min="0.1"
-                    max="10"
-                    step="0.1"
-                    aria-label="Rake percent"
-                    value={Number.isFinite(rakePercent) ? rakePercent : ""}
-                    onChange={(event) =>
-                      setRakePercent(Number(event.target.value))
-                    }
-                  />
-                  <span aria-hidden="true">%</span>
-                </div>
+                </>
               ) : null}
-              <label className="label" htmlFor="rake-cap">
-                Most per hand
-              </label>
-              <div className="money-field">
-                <span aria-hidden="true">{symbol.trim()}</span>
-                <ChipInput
-                  className="field"
-                  id="rake-cap"
-                  value={rakeCap}
-                  onChange={setTypedRakeCap}
-                />
-              </div>
-            </>
-          ) : null}
-          {rakeOn && !rakePercentValid ? (
-            <p className="field-error" role="alert">
-              Rake must be 0.1% to 10%, in steps of 0.1.
-            </p>
-          ) : rakeOn && !rakeCapValid ? (
-            <p className="field-error" role="alert">
-              Set the most the house takes in a hand.
-            </p>
-          ) : rakeOn ? (
-            <p className="muted small-note">
-              The house takes {rakePercent}% of each pot that sees a flop, up to{" "}
-              {money(rakeCap)} a hand. No flop, no rake. The rake leaves the
-              game, so results add up to minus it.
-            </p>
-          ) : null}
-        </section>
+            </section>
 
-        <section className="glass card">
-          <div className="card-row">
-            <span className="label">Rebuys</span>
-            <span className="card-note">
-              {describeMaxRebuys(setupRebuyRules.maxRebuys)}
-            </span>
-          </div>
-          <RebuyRulesFields
-            rules={rebuyRules}
-            onChange={setRebuyRules}
-            closeOptions={rebuyCloseOptions}
-            showClose={Boolean(schedule) && scheduleValid}
-            idPrefix="setup"
-          />
-          {rebuyError ? (
-            <p className="field-error" role="alert">
-              {rebuyError}
-            </p>
-          ) : (
-            <p className="muted small-note">
-              A busted player can buy back in for{" "}
-              {ownAmounts ? "any amount, usually " : "the starting stack, "}
-              {money(stack)}
-              {setupRebuyRules.maxRebuys === 0
-                ? ", but not in this game."
-                : setupRebuyRules.closeAtBigBlind !== null
-                  ? `, until the big blind reaches ${money(
-                      setupRebuyRules.closeAtBigBlind,
-                    )}.`
-                  : "."}
-            </p>
-          )}
-        </section>
+            <section className="glass card">
+              <div className="card-row">
+                <span className="label">Blind levels</span>
+                <span className="card-note">{blindLevelNote}</span>
+              </div>
+              <Segmented
+                label="Blind levels"
+                options={[
+                  { value: "fixed", label: "Fixed" },
+                  { value: "hands", label: "By Hands" },
+                  { value: "minutes", label: "By Minutes" },
+                ]}
+                value={risingBlinds ? blindUnit : "fixed"}
+                onChange={chooseBlindLevels}
+              />
+              {risingBlinds ? (
+                <>
+                  <Segmented
+                    label="How the big blind rises"
+                    options={[
+                      { value: "multiply", label: "Multiply" },
+                      { value: "add", label: "Add fixed amount" },
+                    ]}
+                    value={blindRaiseType}
+                    onChange={(nextType) => {
+                      setBlindRaiseType(nextType);
+                      setBlindRaiseBy(
+                        nextType === "multiply" ? 2 : Math.max(1, ante),
+                      );
+                    }}
+                  />
+                  <div className="field-grid">
+                    <div>
+                      <label className="label" htmlFor="blind-every">
+                        Every ({blindUnit})
+                      </label>
+                      <input
+                        className="field"
+                        id="blind-every"
+                        type="number"
+                        inputMode="numeric"
+                        min="1"
+                        value={blindEvery}
+                        onChange={(event) =>
+                          setBlindEvery(Number(event.target.value))
+                        }
+                      />
+                    </div>
+                    <div>
+                      <label className="label" htmlFor="blind-raise-by">
+                        {blindRaiseType === "multiply" ? "Multiply by" : `Add ${symbol.trim()}`}
+                      </label>
+                      {blindRaiseType === "multiply" ? (
+                        <input
+                          className="field"
+                          id="blind-raise-by"
+                          type="number"
+                          inputMode="decimal"
+                          min="1.1"
+                          step="0.1"
+                          value={blindRaiseBy}
+                          onChange={(event) =>
+                            setBlindRaiseBy(Number(event.target.value))
+                          }
+                        />
+                      ) : (
+                        <ChipInput
+                          className="field"
+                          id="blind-raise-by"
+                          value={blindRaiseBy}
+                          onChange={setBlindRaiseBy}
+                        />
+                      )}
+                    </div>
+                  </div>
+                  <p className="muted small-note">
+                    {scheduleValid ? (
+                      <>
+                        Big blind: {ladder
+                          .map((bigBlind) => money(bigBlind))
+                          .join(", ")}
+                        , …
+                        {blindUnit === "minutes"
+                          ? " Timed levels apply when the next hand is dealt."
+                          : ""}
+                      </>
+                    ) : (
+                      <>
+                        Set an interval of at least 1 and an increase that makes the
+                        blinds bigger.
+                      </>
+                    )}
+                  </p>
+                </>
+              ) : null}
+            </section>
+
+            <section className="glass card">
+              <div className="card-row">
+                <span className="label">Ante</span>
+                <div className="heading-with-info">
+                  <label className="switch-row">
+                    <span>Big blind ante</span>
+                    <button
+                      className="switch"
+                      type="button"
+                      role="switch"
+                      aria-checked={bigBlindAnte}
+                      aria-label="Big blind ante"
+                      onClick={() => setBigBlindAnte((on) => !on)}
+                    />
+                  </label>
+                  <button
+                    className="info-button"
+                    type="button"
+                    aria-label="About the big blind ante"
+                    onClick={() => setShowAnteHelp(true)}
+                  >
+                    i
+                  </button>
+                </div>
+              </div>
+              {showAnteHelp ? (
+                <InfoSheet
+                  label="About the big blind ante"
+                  onClose={() => setShowAnteHelp(false)}
+                >
+                  <p>
+                    <b>Big Blind Ante On:</b> each hand the big blind also puts in
+                    an ante of one big blind for the whole table. It goes to the
+                    main pot and doesn&apos;t count toward their bet.
+                  </p>
+                  <p>
+                    <b>Big Blind Ante Off:</b> no ante, only the blinds.
+                  </p>
+                </InfoSheet>
+              ) : null}
+              {bigBlindAnte ? (
+                <p className="muted small-note">
+                  Each hand the big blind also puts in an ante of one big blind (
+                  {money(Math.max(1, ante))} to start) for the whole table. It goes
+                  to the main pot and doesn&apos;t count toward their bet.
+                </p>
+              ) : null}
+            </section>
+
+            <section className="glass card">
+              <div className="card-row">
+                <span className="label">Rake</span>
+                <div className="heading-with-info">
+                  <label className="switch-row">
+                    <span>House rake</span>
+                    <button
+                      className="switch"
+                      type="button"
+                      role="switch"
+                      aria-checked={rakeOn}
+                      aria-label="House rake"
+                      onClick={() => setRakeOn((on) => !on)}
+                    />
+                  </label>
+                  <button
+                    className="info-button"
+                    type="button"
+                    aria-label="About the house rake"
+                    onClick={() => setShowRakeHelp(true)}
+                  >
+                    i
+                  </button>
+                </div>
+              </div>
+              {showRakeHelp ? (
+                <InfoSheet
+                  label="About the house rake"
+                  onClose={() => setShowRakeHelp(false)}
+                >
+                  <p>
+                    <b>House Rake On:</b> the house takes a share of each pot that
+                    sees a flop, up to the most per hand. No flop, no rake. The
+                    rake leaves the game, so results add up to minus it.
+                  </p>
+                  <p>
+                    <b>House Rake Off:</b> no rake, every chip stays with the
+                    players.
+                  </p>
+                </InfoSheet>
+              ) : null}
+              {rakeOn ? (
+                <>
+                  <Segmented
+                    label="Share of each pot"
+                    columns={5}
+                    options={[
+                      ...RAKE_PERCENTS.map((percent) => ({
+                        value: percent,
+                        label: `${percent}%`,
+                      })),
+                      { value: "other" as const, label: "Other" },
+                    ]}
+                    value={customRake ? "other" : rakePercent}
+                    onChange={(value) => {
+                      if (value === "other") {
+                        setCustomRake(true);
+                      } else {
+                        setCustomRake(false);
+                        setRakePercent(value);
+                      }
+                    }}
+                  />
+                  {customRake ? (
+                    <div className="percent-field">
+                      <input
+                        className="field"
+                        id="rake-percent"
+                        type="number"
+                        inputMode="decimal"
+                        min="0.1"
+                        max="10"
+                        step="0.1"
+                        aria-label="Rake percent"
+                        value={Number.isFinite(rakePercent) ? rakePercent : ""}
+                        onChange={(event) =>
+                          setRakePercent(Number(event.target.value))
+                        }
+                      />
+                      <span aria-hidden="true">%</span>
+                    </div>
+                  ) : null}
+                  <label className="label" htmlFor="rake-cap">
+                    Most per hand
+                  </label>
+                  <div className="money-field">
+                    <span aria-hidden="true">{symbol.trim()}</span>
+                    <ChipInput
+                      className="field"
+                      id="rake-cap"
+                      value={rakeCap}
+                      onChange={setTypedRakeCap}
+                    />
+                  </div>
+                </>
+              ) : null}
+              {rakeOn && !rakePercentValid ? (
+                <p className="field-error" role="alert">
+                  Rake must be 0.1% to 10%, in steps of 0.1.
+                </p>
+              ) : rakeOn && !rakeCapValid ? (
+                <p className="field-error" role="alert">
+                  Set the most the house takes in a hand.
+                </p>
+              ) : rakeOn ? (
+                <p className="muted small-note">
+                  The house takes {rakePercent}% of each pot that sees a flop, up to{" "}
+                  {money(rakeCap)} a hand. No flop, no rake. The rake leaves the
+                  game, so results add up to minus it.
+                </p>
+              ) : null}
+            </section>
+
+            <section className="glass card">
+              <div className="card-row">
+                <span className="label">Rebuys</span>
+                <span className="card-note">
+                  {describeMaxRebuys(setupRebuyRules.maxRebuys)}
+                </span>
+              </div>
+              <RebuyRulesFields
+                rules={rebuyRules}
+                onChange={setRebuyRules}
+                closeOptions={rebuyCloseOptions}
+                showClose={Boolean(schedule) && scheduleValid}
+                idPrefix="setup"
+              />
+              {rebuyError ? (
+                <p className="field-error" role="alert">
+                  {rebuyError}
+                </p>
+              ) : (
+                <p className="muted small-note">
+                  A busted player can buy back in for{" "}
+                  {ownAmounts ? "any amount, usually " : "the starting stack, "}
+                  {money(stack)}
+                  {setupRebuyRules.maxRebuys === 0
+                    ? ", but not in this game."
+                    : setupRebuyRules.closeAtBigBlind !== null
+                      ? `, until the big blind reaches ${money(
+                          setupRebuyRules.closeAtBigBlind,
+                        )}.`
+                      : "."}
+                </p>
+              )}
+            </section>
+          </>
+        )}
 
         <button
           className="cta"
@@ -4934,15 +5226,16 @@ function SetupView({
             !selectionComplete ||
             !amountsValid ||
             stack < 1 ||
-            ante < 1 ||
-            !scheduleValid ||
-            !smallBlindValid ||
-            !rakeCapValid ||
-            !rakePercentValid ||
-            Boolean(rebuyError)
+            (!ledger &&
+              (ante < 1 ||
+                !scheduleValid ||
+                !smallBlindValid ||
+                !rakeCapValid ||
+                !rakePercentValid ||
+                Boolean(rebuyError)))
           }
         >
-          Deal First Hand
+          {ledger ? "Start Quick Ledger" : "Deal First Hand"}
         </button>
       </form>
     </ChipUnitContext.Provider>
@@ -7585,6 +7878,8 @@ function JoinGameSheet({
   onAdd: (playerId: string, seat: number, amount: number) => void;
 }) {
   const { money } = useMoney();
+  // A quick ledger has no seats or deal: the player is just added.
+  const ledger = isLedgerGame(game);
   const full = game.players.length >= MAX_GAME_PLAYERS;
   const candidates = [
     ...roster.filter((player) => player.id === selfPlayerId),
@@ -7624,9 +7919,11 @@ function JoinGameSheet({
       >
         <span className="sheet-grabber" aria-hidden="true" />
         <h2 id="add-player-title">Add Player</h2>
-        <p className="muted small-note">
-          They&apos;re dealt in from the next hand.
-        </p>
+        {ledger ? null : (
+          <p className="muted small-note">
+            They&apos;re dealt in from the next hand.
+          </p>
+        )}
         {full ? (
           <p className="field-error" role="alert">
             A game can have up to {MAX_GAME_PLAYERS} players, counting anyone
@@ -7657,22 +7954,26 @@ function JoinGameSheet({
                 </button>
               ))}
             </div>
-            <label className="label" htmlFor="late-seat">
-              Seat
-            </label>
-            <select
-              className="select-control"
-              id="late-seat"
-              value={seat}
-              onChange={(event) => setSeat(Number(event.target.value))}
-            >
-              {seats.map(({ player, index }) => (
-                <option key={player.id || index} value={index + 1}>
-                  Left of {player.name}
-                  {index === game.dealerIndex ? " (dealer last hand)" : ""}
-                </option>
-              ))}
-            </select>
+            {ledger ? null : (
+              <>
+                <label className="label" htmlFor="late-seat">
+                  Seat
+                </label>
+                <select
+                  className="select-control"
+                  id="late-seat"
+                  value={seat}
+                  onChange={(event) => setSeat(Number(event.target.value))}
+                >
+                  {seats.map(({ player, index }) => (
+                    <option key={player.id || index} value={index + 1}>
+                      Left of {player.name}
+                      {index === game.dealerIndex ? " (dealer last hand)" : ""}
+                    </option>
+                  ))}
+                </select>
+              </>
+            )}
             <BuyInAmountField
               game={game}
               id="late-amount"
@@ -7776,6 +8077,418 @@ function CashOutSheet({
           Close
         </button>
       </div>
+    </div>
+  );
+}
+
+type LedgerViewProps = {
+  game: GameState;
+  onBuyIn: (playerIndex: number) => void;
+  onAddPlayer: () => void;
+  onCashOut: () => void;
+  onReturn: (playerIndex: number) => void;
+  onUndo: () => void;
+  /** Chips counted for each player still at the table, by player index. */
+  onSave: (counts: Array<number | null>) => void;
+  onDiscard: () => void;
+};
+
+/** A quick ledger's screen, with its amounts in the game's own chip unit. */
+function LedgerView(props: LedgerViewProps) {
+  return (
+    <ChipUnitContext.Provider value={props.game.chipUnit ?? "whole"}>
+      <LedgerScreen {...props} />
+    </ChipUnitContext.Provider>
+  );
+}
+
+function LedgerScreen({
+  game,
+  onBuyIn,
+  onAddPlayer,
+  onCashOut,
+  onReturn,
+  onUndo,
+  onSave,
+  onDiscard,
+}: LedgerViewProps) {
+  const { money, signedMoney } = useMoney();
+  const [counting, setCounting] = useState(false);
+  // Chips counted for each player at the table, by player index; empty is 0.
+  const [counts, setCounts] = useState<Array<number | null>>([]);
+  const [showFullLog, setShowFullLog] = useState(false);
+  const totals = ledgerTotals(game);
+  const seated = ledgerSeated(game);
+  const undoLine = ledgerUndoLine(game);
+  const logLines = showFullLog ? game.log : game.log.slice(0, 6);
+  const boughtNote = (index: number) => {
+    const buyIns = playerBuyIns(game, index);
+    return `${buyIns.length} buy-in${buyIns.length === 1 ? "" : "s"} · ${money(
+      totalBuyIns(game, index),
+    )}`;
+  };
+
+  if (counting) {
+    const gap = ledgerCountGap(game, counts);
+    return (
+      <div className="stack-list game-view ledger-view">
+        <section className="glass card">
+          <span className="eyebrow">Final count</span>
+          <h2 className="card-title">Count The Chips</h2>
+          <p className="muted small-note">
+            Enter the chips in front of everyone still at the table. Together
+            they must come to the chips on the table.
+          </p>
+          <div className="rows">
+            {seated.map((index) => {
+              const player = game.players[index];
+              const count = counts[index] ?? null;
+              const net = (count ?? 0) - totalBuyIns(game, index);
+              return (
+                <div className="ledger-row" key={player.id || index}>
+                  <Avatar name={player.name} playerId={player.id} size="small" />
+                  <div className="standing-name">
+                    <b>{player.name}</b>
+                    <small>
+                      Bought {money(totalBuyIns(game, index))}
+                      {count !== null ? (
+                        <>
+                          {" · "}
+                          <span className={toneClass(net)}>
+                            {signedMoney(net)}
+                          </span>
+                        </>
+                      ) : null}
+                    </small>
+                  </div>
+                  <ChipInput
+                    className="field ledger-count"
+                    aria-label={`${player.name}'s chips`}
+                    placeholder="0"
+                    value={count}
+                    onChange={(chips) =>
+                      setCounts((current) => {
+                        const next = [...current];
+                        next[index] = chips;
+                        return next;
+                      })
+                    }
+                  />
+                </div>
+              );
+            })}
+            {game.players.map((player, index) =>
+              player.left ? (
+                <div className="ledger-row left" key={player.id || index}>
+                  <Avatar name={player.name} playerId={player.id} size="small" />
+                  <div className="standing-name">
+                    <b>{player.name}</b>
+                    <small>
+                      Cashed out ·{" "}
+                      <span className={toneClass(player.stack - totalBuyIns(game, index))}>
+                        {signedMoney(player.stack - totalBuyIns(game, index))}
+                      </span>
+                    </small>
+                  </div>
+                  <span className="ledger-amount">{money(player.stack)}</span>
+                </div>
+              ) : null,
+            )}
+          </div>
+          <div
+            className={`ledger-balance${gap === 0 ? " balanced" : ""}`}
+            role="status"
+          >
+            <span>
+              Counted {money(totals.onTable - gap)} of {money(totals.onTable)}
+            </span>
+            <b>
+              {gap === 0
+                ? "Balanced"
+                : gap > 0
+                  ? `${money(gap)} short`
+                  : `${money(-gap)} over`}
+            </b>
+          </div>
+        </section>
+        <button
+          className="cta"
+          type="button"
+          disabled={gap !== 0}
+          onClick={() => onSave(counts)}
+        >
+          Save Game
+        </button>
+        <button
+          className="glass-button full"
+          type="button"
+          onClick={() => setCounting(false)}
+        >
+          Back to buy-ins
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="stack-list game-view ledger-view">
+      <section className="glass card between-card">
+        <span className="eyebrow">
+          {seated.length} at the table
+        </span>
+        <h2 className="card-title">Buy-Ins</h2>
+        <div className="profile-tiles ledger-tiles">
+          <div>
+            <strong>{money(totals.bought)}</strong>
+            <small>Bought in</small>
+          </div>
+          <div>
+            <strong>{money(totals.cashedOut)}</strong>
+            <small>Cashed out</small>
+          </div>
+          <div>
+            <strong className="blue">{money(totals.onTable)}</strong>
+            <small>On the table</small>
+          </div>
+        </div>
+        <div className="button-pair">
+          <button className="glass-button" type="button" onClick={onAddPlayer}>
+            Add player
+          </button>
+          <button className="glass-button" type="button" onClick={onCashOut}>
+            Cash out
+          </button>
+        </div>
+      </section>
+
+      <section className="glass card">
+        <div className="card-row">
+          <h2 className="card-title">Players</h2>
+          <span className="card-note">Usual buy-in {money(game.startStack)}</span>
+        </div>
+        <div className="rows">
+          {game.players.map((player, index) => (
+            <div
+              className={`ledger-row${player.left ? " left" : ""}`}
+              key={player.id || index}
+            >
+              <Avatar name={player.name} playerId={player.id} size="small" />
+              <div className="standing-name">
+                <b>{player.name}</b>
+                <small>
+                  {player.left ? (
+                    <>
+                      Cashed out with {money(player.stack)} ·{" "}
+                      <span
+                        className={toneClass(player.stack - totalBuyIns(game, index))}
+                      >
+                        {signedMoney(player.stack - totalBuyIns(game, index))}
+                      </span>
+                    </>
+                  ) : (
+                    boughtNote(index)
+                  )}
+                </small>
+              </div>
+              {player.left ? (
+                <button
+                  className="pill-button"
+                  type="button"
+                  onClick={() => onReturn(index)}
+                >
+                  Return
+                </button>
+              ) : (
+                <button
+                  className="pill-button"
+                  type="button"
+                  aria-label={`Buy in ${player.name} again`}
+                  onClick={() => onBuyIn(index)}
+                >
+                  + Buy in
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {undoLine ? (
+        <button
+          className="glass-button full undo-turn ledger-undo"
+          type="button"
+          onClick={onUndo}
+        >
+          <UndoIcon />
+          <span>Undo: {undoLine}</span>
+        </button>
+      ) : null}
+      <button
+        className="cta"
+        type="button"
+        onClick={() => {
+          setCounting(true);
+          window.scrollTo({ top: 0 });
+        }}
+      >
+        Count Chips And Finish
+      </button>
+      <button
+        className="glass-button full danger-text"
+        type="button"
+        onClick={onDiscard}
+      >
+        Discard game
+      </button>
+
+      {game.log.length ? (
+        <section className="glass card">
+          <span className="label">Log</span>
+          <div className="rows log">
+            {logLines.map((line, index) => (
+              <div key={`${line}-${index}`}>{line}</div>
+            ))}
+          </div>
+          {game.log.length > 6 ? (
+            <button
+              className="text-button"
+              type="button"
+              onClick={() => setShowFullLog((shown) => !shown)}
+            >
+              {showFullLog ? "Show fewer" : `Show all ${game.log.length} lines`}
+            </button>
+          ) : null}
+        </section>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * Cash out in a quick ledger: pick who's leaving, then type the chips they
+ * leave with. Players who left can come back from here too.
+ */
+function LedgerCashOutSheet({
+  game,
+  onClose,
+  onCashOut,
+  onReturn,
+}: {
+  game: GameState;
+  onClose: () => void;
+  onCashOut: (playerIndex: number, chips: number) => void;
+  onReturn: (playerIndex: number) => void;
+}) {
+  const { money } = useMoney();
+  const [chosen, setChosen] = useState<number | null>(null);
+  const [chips, setChips] = useState<number | null>(null);
+  const seated = ledgerSeated(game);
+  const gone = game.players.flatMap((player, index) =>
+    player.left ? [index] : [],
+  );
+  const player = chosen === null ? null : game.players[chosen];
+
+  function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (chosen !== null && chips !== null) onCashOut(chosen, chips);
+  }
+
+  return (
+    <div
+      className="modal show"
+      role="presentation"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <form
+        className="sheet profile-sheet"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="ledger-cash-out-title"
+        onSubmit={submit}
+      >
+        <span className="sheet-grabber" aria-hidden="true" />
+        <h2 id="ledger-cash-out-title">Cash Out</h2>
+        <p className="muted small-note">
+          Pick who&apos;s leaving, then count the chips they leave with. That&apos;s
+          their result for the game.
+        </p>
+        {seated.length ? (
+          <div className="table-change-list">
+            {seated.map((index) => (
+              <button
+                className={`contender${index === chosen ? " selected" : ""}`}
+                key={game.players[index].id || index}
+                type="button"
+                aria-pressed={index === chosen}
+                onClick={() => setChosen(index)}
+              >
+                <Avatar
+                  name={game.players[index].name}
+                  playerId={game.players[index].id}
+                  size="small"
+                />
+                <span className="contender-name">{game.players[index].name}</span>
+                <span className="contender-amount muted">
+                  Bought {money(totalBuyIns(game, index))}
+                </span>
+              </button>
+            ))}
+          </div>
+        ) : (
+          <p className="muted small-note">Everyone has cashed out.</p>
+        )}
+        {player ? (
+          <>
+            <label className="label" htmlFor="ledger-cash-out-chips">
+              {player.name}&apos;s chips
+            </label>
+            <ChipInput
+              className="field"
+              id="ledger-cash-out-chips"
+              placeholder="0"
+              value={chips}
+              onChange={setChips}
+            />
+          </>
+        ) : null}
+        <button
+          className="primary full"
+          type="submit"
+          disabled={!player || chips === null}
+        >
+          {player && chips !== null
+            ? `Cash Out · ${money(chips)}`
+            : "Cash out"}
+        </button>
+        {gone.length ? (
+          <>
+            <span className="label">Left the game</span>
+            <div className="table-change-list">
+              {gone.map((index) => (
+                <button
+                  className="contender"
+                  key={game.players[index].id || index}
+                  type="button"
+                  onClick={() => onReturn(index)}
+                >
+                  <Avatar
+                    name={game.players[index].name}
+                    playerId={game.players[index].id}
+                    size="small"
+                  />
+                  <span className="contender-name">{game.players[index].name}</span>
+                  <span className="contender-amount">Return</span>
+                </button>
+              ))}
+            </div>
+          </>
+        ) : null}
+        <button className="ghost full" type="button" onClick={onClose}>
+          Cancel
+        </button>
+      </form>
     </div>
   );
 }
@@ -9633,8 +10346,9 @@ function SessionCardBody({
 }) {
   const { currency, unit, money, signedMoney } = useMoney();
   const sortedResults = [...session.results].sort((a, b) => b.net - a.net);
-  const blinds = sessionBlindHistory(session);
-  const lastBigBlind = blinds.levels.at(-1)!.bigBlind;
+  const ledger = session.kind === "ledger";
+  const blinds = ledger ? null : sessionBlindHistory(session);
+  const lastBigBlind = blinds?.levels.at(-1)!.bigBlind ?? 0;
 
   return (
     <article className={`glass card session-card ${discarded ? "discarded" : ""}`}>
@@ -9644,8 +10358,11 @@ function SessionCardBody({
             {session.name || `Game ${session.sessionNumber || ""}`}
           </h2>
           <p className="muted session-meta">
-            {formatDate(session.date)} · {session.hands} hands · Big blind{" "}
-            {money(session.ante)} · {session.results.length} players
+            {formatDate(session.date)} ·{" "}
+            {ledger
+              ? "Quick ledger"
+              : `${session.hands} hands · Big blind ${money(session.ante)}`}{" "}
+            · {session.results.length} players
           </p>
           {session.rebuyRules ? (
             <p className="muted session-meta">
@@ -9683,7 +10400,7 @@ function SessionCardBody({
                 Delete
               </button>
             </>
-          ) : onContinue ? (
+          ) : onContinue && !ledger ? (
             <button
               className="pill-button"
               type="button"
@@ -9696,33 +10413,35 @@ function SessionCardBody({
               2026-10-01); onDiscard and discardSession stay for that. */}
         </div>
       </div>
-      <details className="session-blind-history">
-        <summary>
-          Blind history · {blinds.levels.length} amount
-          {blinds.levels.length === 1 ? "" : "s"} used · finished at{" "}
-          {money(smallBlindFor(lastBigBlind, blinds.smallBlindRatio))}/
-          {money(lastBigBlind)}
-        </summary>
-        <div className="session-blind-history-content">
-          <b>Plans</b>
-          {blinds.plans.map((plan) => (
-            <div key={plan.effectiveHand}>
-              From hand {plan.effectiveHand}: {money(
-                smallBlindFor(plan.baseBigBlind, blinds.smallBlindRatio),
-              )}/{money(plan.baseBigBlind)} ·{" "}
-              {describeBlindSchedule(plan.schedule, currency, unit)}
-            </div>
-          ))}
-          <b>Blinds used</b>
-          {blinds.levels.map((level) => (
-            <div key={level.handNo}>
-              Hand {level.handNo}: {money(
-                smallBlindFor(level.bigBlind, blinds.smallBlindRatio),
-              )}/{money(level.bigBlind)}
-            </div>
-          ))}
-        </div>
-      </details>
+      {blinds ? (
+        <details className="session-blind-history">
+          <summary>
+            Blind history · {blinds.levels.length} amount
+            {blinds.levels.length === 1 ? "" : "s"} used · finished at{" "}
+            {money(smallBlindFor(lastBigBlind, blinds.smallBlindRatio))}/
+            {money(lastBigBlind)}
+          </summary>
+          <div className="session-blind-history-content">
+            <b>Plans</b>
+            {blinds.plans.map((plan) => (
+              <div key={plan.effectiveHand}>
+                From hand {plan.effectiveHand}: {money(
+                  smallBlindFor(plan.baseBigBlind, blinds.smallBlindRatio),
+                )}/{money(plan.baseBigBlind)} ·{" "}
+                {describeBlindSchedule(plan.schedule, currency, unit)}
+              </div>
+            ))}
+            <b>Blinds used</b>
+            {blinds.levels.map((level) => (
+              <div key={level.handNo}>
+                Hand {level.handNo}: {money(
+                  smallBlindFor(level.bigBlind, blinds.smallBlindRatio),
+                )}/{money(level.bigBlind)}
+              </div>
+            ))}
+          </div>
+        </details>
+      ) : null}
       <div className="rows">
         {sortedResults.map((result, index) => (
           <div

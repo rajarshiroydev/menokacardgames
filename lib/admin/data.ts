@@ -51,6 +51,8 @@ export type AdminGame = {
   currency: string;
   playedAt: number;
   endedAt: number;
+  /** "ledger" for a quick ledger (migration 0025), which has no hands or blinds. */
+  kind?: "hands" | "ledger";
   hands: number;
   /**
    * The game's chip unit (migration 0020). The dashboard shows amounts in

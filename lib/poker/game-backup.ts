@@ -42,6 +42,8 @@ export type GameBackupSummary = {
   /** Whether the backup was written by the device asking. */
   thisDevice: boolean;
   name: string;
+  /** A quick ledger, which has no hands. */
+  ledger: boolean;
   handNo: number;
   handInProgress: boolean;
   players: number;
@@ -115,6 +117,7 @@ export function summarizeGameBackup(
     gameId,
     thisDevice,
     name: state.sessionLabel || state.gameName || "Game",
+    ledger: state.kind === "ledger",
     handNo: state.handNo,
     handInProgress: Boolean(state.hand),
     players: state.players.filter((player) => !player.left).length,

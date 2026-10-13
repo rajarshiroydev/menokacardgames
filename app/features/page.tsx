@@ -47,6 +47,10 @@ const GROUPS: FeatureGroup[] = [
     lead: "Pick who's playing and how the chips work, then deal.",
     features: [
       {
+        name: "Quick ledger",
+        text: "Rather not play every hand in the app? Note only buy-ins, rebuys and players who cash out, then count everyone's chips at the end. It ranks just like a game played hand by hand.",
+      },
+      {
         name: "Seat players",
         text: "Tap players in the order they sit (up to 10), and drag them to change seats. The first dealer is drawn at random unless you switch it off.",
       },

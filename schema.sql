@@ -117,6 +117,39 @@ ALTER TABLE poker_sessions
     rake = 0 OR rake_rules IS NOT NULL
   );
 
+-- Quick ledger games (0025). `game_kind` is 'hands' for a game played hand
+-- by hand and 'ledger' for a quick ledger: buy-ins, cash-outs and a final
+-- chip count, with no hands or blinds. A quick ledger stores ante 0 and
+-- hands 0 and none of the per-hand rules, so the old ante > 0 and hands > 0
+-- checks become part of one check per kind.
+ALTER TABLE poker_sessions
+  ADD COLUMN IF NOT EXISTS game_kind text NOT NULL DEFAULT 'hands'
+  CONSTRAINT poker_sessions_game_kind_known CHECK (
+    game_kind IN ('hands', 'ledger')
+  );
+
+ALTER TABLE poker_sessions
+  DROP CONSTRAINT IF EXISTS poker_sessions_kind_shape;
+ALTER TABLE poker_sessions
+  ADD CONSTRAINT poker_sessions_kind_shape CHECK (
+    CASE game_kind
+      WHEN 'ledger' THEN
+        ante = 0
+        AND hands = 0
+        AND blind_history IS NULL
+        AND rebuy_rules IS NULL
+        AND NOT big_blind_ante
+        AND rake_rules IS NULL
+        AND rake = 0
+      ELSE ante > 0 AND hands > 0
+    END
+  );
+
+ALTER TABLE poker_sessions
+  DROP CONSTRAINT IF EXISTS poker_sessions_ante_check;
+ALTER TABLE poker_sessions
+  DROP CONSTRAINT IF EXISTS poker_sessions_hands_check;
+
 ALTER TABLE poker_sessions
   ADD COLUMN IF NOT EXISTS owner_id uuid REFERENCES accounts(id) ON DELETE CASCADE;
 
@@ -3365,8 +3398,8 @@ BEGIN
 END
 $$;
 
--- Admin dashboard (0018): a game carries its unit, and a player's net across
--- games is added in currency units. Otherwise as 0018.
+-- Admin dashboard (0018): a game carries its unit and kind (0025), and a
+-- player's net across games is added in currency units. Otherwise as 0018.
 CREATE OR REPLACE FUNCTION public.admin_game_row(p_owner uuid, p_record uuid)
 RETURNS jsonb
 LANGUAGE sql
@@ -3384,6 +3417,7 @@ AS $$
     'currency', host.currency,
     'playedAt', public.admin_ms(session.played_at),
     'endedAt', public.admin_ms(session.ended_at),
+    'kind', session.game_kind,
     'hands', session.hands,
     'bigBlind', session.ante,
     'startingStack', session.starting_stack,

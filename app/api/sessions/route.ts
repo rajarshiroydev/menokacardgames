@@ -35,6 +35,7 @@ type SessionRow = {
   played_at: Date | string;
   ended_at: Date | string;
   chip_unit: ChipUnit;
+  game_kind: "hands" | "ledger";
   ante: number | string;
   starting_stack: number | string;
   hands: number | string;
@@ -55,6 +56,7 @@ function json(body: object, status = 200) {
 
 function mapSession(row: SessionRow): SavedSession {
   return {
+    ...(row.game_kind === "ledger" ? { kind: "ledger" as const } : {}),
     id: row.id,
     name: row.game_name?.trim() || `Game ${Number(row.session_number)}`,
     sessionNumber: Number(row.session_number),
@@ -92,6 +94,7 @@ function selectSessions(
           played_at,
           ended_at,
           chip_unit,
+          game_kind,
           ante,
           starting_stack,
           hands,
@@ -414,6 +417,7 @@ async function handlePost(request: Request) {
               played_at,
               ended_at,
               chip_unit,
+              game_kind,
               ante,
               starting_stack,
               hands,
@@ -431,6 +435,7 @@ async function handlePost(request: Request) {
                 ${new Date(session.date).toISOString()},
                 ${new Date(session.ended).toISOString()},
                 ${session.chipUnit ?? "whole"},
+                ${session.kind ?? "hands"},
                 ${session.ante},
                 ${session.startStack},
                 ${session.hands},

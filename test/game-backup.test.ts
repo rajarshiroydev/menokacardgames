@@ -103,6 +103,7 @@ describe("summarizeGameBackup", () => {
         gameId: "s1760000000000",
         thisDevice: false,
         name: "Game 79",
+        ledger: false,
         handNo: 12,
         handInProgress: false,
         players: 2,

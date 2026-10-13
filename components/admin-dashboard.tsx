@@ -328,7 +328,8 @@ function OverviewView({
                       <span className="admin-list-main">
                         <strong>{game.name ?? `Game ${game.number ?? ""}`.trim()}</strong>
                         <span className="muted">
-                          {game.hostName} · {game.results.length} players · {game.hands} hands
+                          {game.hostName} · {game.results.length} players ·{" "}
+                          {game.kind === "ledger" ? "Quick ledger" : `${game.hands} hands`}
                         </span>
                       </span>
                       <span className="admin-list-side">
@@ -865,8 +866,10 @@ function GameTable({
                   <td>{formatDateTime(game.playedAt)}</td>
                   <td>{formatDuration(game.endedAt - game.playedAt)}</td>
                   <td className="num">{game.results.length}</td>
-                  <td className="num">{game.hands}</td>
-                  <td className="num">{formatMoney(game.bigBlind, game.currency)}</td>
+                  <td className="num">{game.kind === "ledger" ? "—" : game.hands}</td>
+                  <td className="num">
+                    {game.kind === "ledger" ? "Ledger" : formatMoney(game.bigBlind, game.currency)}
+                  </td>
                   <td className="num">{formatMoney(gamePot(game), game.currency)}</td>
                   <td>
                     {winner ? (

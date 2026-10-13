@@ -152,6 +152,9 @@ export function continuationError(
   saved: PokerSession,
   incoming: PokerSession,
 ): string | null {
+  if (saved.kind === "ledger" || incoming.kind === "ledger") {
+    return "Quick ledger games can't be continued";
+  }
   if (
     incoming.id !== saved.id ||
     incoming.date !== saved.date ||

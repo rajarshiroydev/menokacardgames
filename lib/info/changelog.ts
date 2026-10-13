@@ -36,8 +36,12 @@ export const CHANGELOG: ChangelogEntry[] = [
   },
   {
     date: "2026-10-12",
-    title: "Backups, late joins, own buy-ins, ante and rake",
+    title: "Quick ledger, backups, late joins, own buy-ins, ante and rake",
     items: [
+      {
+        tag: "new",
+        text: "Quick ledger. Don't want to play every hand in the app? Tap Quick ledger on Home, note buy-ins, rebuys and anyone who cashes out, then count everyone's chips at the end. It counts in the standings just like any other game.",
+      },
       {
         tag: "new",
         text: "Your game is backed up while you play. If your phone dies, open Pokerize on another phone or laptop and tap Restore game on Home to carry on from the same hand.",
