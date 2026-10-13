@@ -25,6 +25,16 @@ export const CHANGE_TAG_LABELS: Record<ChangeTag, string> = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    date: "2026-10-13",
+    title: "Who wins?",
+    items: [
+      {
+        tag: "new",
+        text: "Who wins? Not sure whose hand is best? Tap Who wins? on Home, pick the players, enter the five community cards and each player's two cards, then tap Check winner. Pokerize names the winner and explains why, kickers and split pots included. Nothing is saved.",
+      },
+    ],
+  },
+  {
     date: "2026-10-12",
     title: "Backups, late joins, own buy-ins, ante and rake",
     items: [

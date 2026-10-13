@@ -132,6 +132,7 @@ import { signOut } from "@/app/auth/sign-in/actions";
 import { AvatarArt } from "@/components/avatar-art";
 import { AvatarPicker, randomAvatarId } from "@/components/avatar-picker";
 import { BrandMark } from "@/components/brand-mark";
+import { emptyWhoWinsDraft, HandChecker } from "@/components/hand-checker";
 import { NotificationBell } from "@/components/notification-bell";
 import { SettingsView } from "@/components/settings-view";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -288,7 +289,8 @@ type View =
   | "sessions"
   | "profile"
   | "settings"
-  | "hands";
+  | "hands"
+  | "whoWins";
 const VIEWS: readonly View[] = [
   "home",
   "setup",
@@ -298,6 +300,7 @@ const VIEWS: readonly View[] = [
   "profile",
   "settings",
   "hands",
+  "whoWins",
 ];
 
 /**
@@ -306,7 +309,9 @@ const VIEWS: readonly View[] = [
  * player here.
  */
 function showsPlayerList(view: View) {
-  return view === "home" || view === "profile" || view === "setup";
+  return (
+    view === "home" || view === "profile" || view === "setup" || view === "whoWins"
+  );
 }
 
 type ModalState =
@@ -719,6 +724,8 @@ export function PokerLedger({
     playersRef.current = players;
   });
   const [view, setView] = useState<View>("home");
+  // Held here, not in Who Wins?, so the cards outlast a visit to another screen.
+  const [whoWinsDraft, setWhoWinsDraft] = useState(emptyWhoWinsDraft);
   /** The standings card "View standings" opens; cleared when Ranks closes. */
   const [rankFocus, setRankFocus] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
@@ -2399,6 +2406,10 @@ export function PokerLedger({
     navigate("hands");
   }
 
+  function openWhoWins() {
+    navigate("whoWins");
+  }
+
   function closeModal() {
     setModal(null);
   }
@@ -2427,6 +2438,8 @@ export function PokerLedger({
                   ? { title: "Settings" }
                   : view === "hands"
                     ? { title: "Hand Rankings" }
+                  : view === "whoWins"
+                    ? { title: "Who Wins?" }
                   : null;
   const homeView = (
     <HomeView
@@ -2447,6 +2460,7 @@ export function PokerLedger({
       onSessions={() => navigate("sessions")}
       onReviewRequests={openPlayers}
       onOpenHands={openHands}
+      onOpenWhoWins={openWhoWins}
       onReviewLegacySessions={() => setReviewingLegacySessions(true)}
     />
   );
@@ -2581,6 +2595,15 @@ export function PokerLedger({
           <SettingsView email={accountEmail} onDeleteAccount={deleteAccount} />
         ) : view === "hands" ? (
           <PokerHandsChart />
+        ) : view === "whoWins" ? (
+          <HandChecker
+            draft={whoWinsDraft}
+            setDraft={setWhoWinsDraft}
+            knownPlayers={[
+              ...players.filter((player) => player.id === profile.selfPlayerId),
+              ...players.filter((player) => player.id !== profile.selfPlayerId),
+            ].map((player) => player.name)}
+          />
         ) : view === "setup" ? (
           <SetupView
             players={players}
@@ -2747,7 +2770,7 @@ const TABS: ReadonlyArray<{ target: TabTarget; icon: ReactNode; label: string }>
 
 function tabForView(view: View): TabTarget {
   if (view === "setup" || view === "game") return "play";
-  if (view === "hands") return "home";
+  if (view === "hands" || view === "whoWins") return "home";
   if (view === "settings") return "profile";
   return view;
 }
@@ -3015,6 +3038,7 @@ function HomeView({
   onSessions,
   onReviewRequests,
   onOpenHands,
+  onOpenWhoWins,
   onReviewLegacySessions,
 }: {
   game: GameState | null;
@@ -3034,6 +3058,7 @@ function HomeView({
   onSessions: () => void;
   onReviewRequests: () => void;
   onOpenHands: () => void;
+  onOpenWhoWins: () => void;
   onReviewLegacySessions: () => void;
 }) {
   const [hour, setHour] = useState<number | null>(null);
@@ -3166,6 +3191,17 @@ function HomeView({
             <span className="home-link-copy">
               <b>Hand rankings</b>
               <small>Royal flush to high card</small>
+            </span>
+          </button>
+          <button className="glass home-link-row" type="button" onClick={onOpenWhoWins}>
+            <span className="home-mini-cards" aria-hidden="true">
+              <span>?</span>
+              <span className="red">A♥</span>
+              <span>K♣</span>
+            </span>
+            <span className="home-link-copy">
+              <b>Who wins?</b>
+              <small>Enter the cards, see the winning hand and why</small>
             </span>
           </button>
         </div>

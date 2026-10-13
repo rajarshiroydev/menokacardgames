@@ -4238,6 +4238,334 @@ textarea::placeholder {
 }
 
 /* ------------------------------------------------------------------
+   Who Wins? (hand checker)
+   ------------------------------------------------------------------ */
+
+.who-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.who-head small {
+  font-size: 12px;
+  text-align: right;
+}
+
+.who-slot {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: inherit;
+}
+
+.who-slot > .mini-card {
+  width: 100%;
+}
+
+.who-slot-empty {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 5 / 7;
+  border: 1.5px dashed var(--ink3);
+  border-radius: 8px;
+  color: var(--ink3);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.who-slot.active .who-slot-empty,
+.who-slot.active > .mini-card {
+  border: 2px solid var(--g);
+  color: var(--g);
+}
+
+.who-seats {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Each player in a box of their own: name on top, their two cards below. */
+.who-seat {
+  display: grid;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid var(--gb);
+  border-radius: var(--rs);
+  background: var(--glass);
+}
+
+.who-seat-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.who-seat .field,
+.who-seat .select-control {
+  flex: 1;
+  height: 44px;
+}
+
+.who-hole .who-slot-empty {
+  font-size: 20px;
+  font-weight: 500;
+}
+
+/* The same size as the board's cards: a fifth of the card's width. */
+.who-hole {
+  display: grid;
+  grid-template-columns: repeat(2, clamp(44px, 15vw, 58px));
+  gap: 6px;
+}
+
+.who-remove {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--glass2);
+  color: var(--ink2);
+  font-size: 18px;
+  line-height: 1;
+}
+
+.who-actions {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.who-hint {
+  padding: 0 4px;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.who-warning {
+  margin: 0;
+  padding: 0 4px;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+/* The winner's name leads; their hand sits under it, quieter. */
+.who-winner {
+  display: grid;
+  gap: 4px;
+}
+
+.who-winner-name {
+  font-family: var(--fd);
+  font-size: 26px;
+  font-weight: 900;
+  line-height: 1.05;
+  overflow-wrap: anywhere;
+}
+
+.who-winner-hand {
+  color: var(--g);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+/* Each reason a callout of its own, edged green; tips edged blue. */
+.who-reasons {
+  display: grid;
+  gap: 6px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.who-reasons li {
+  padding: 10px 12px;
+  border-left: 3px solid var(--g);
+  border-radius: 4px var(--rs) var(--rs) 4px;
+  background: color-mix(in srgb, var(--g) 9%, transparent);
+  color: var(--ink);
+  font-size: 14px;
+  line-height: 1.45;
+  /* Explanations read as sentences, like the info pages' long text. */
+  text-transform: none;
+}
+
+.who-reasons.tips li {
+  border-left-color: var(--b);
+  background: color-mix(in srgb, var(--b) 9%, transparent);
+  color: var(--ink2);
+}
+
+/* All seven at a capped size, so the list stays compact. */
+.who-cards {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 42px));
+  gap: 4px;
+}
+
+.who-cards .mini-card {
+  padding: 3px 4px;
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+.who-cards .mini-card-suit {
+  font-size: 14px;
+}
+
+.mini-card.hole {
+  border: 2px solid var(--b);
+}
+
+.who-ranking {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.who-ranking li {
+  display: grid;
+  gap: 8px;
+  padding: 12px 0;
+}
+
+.who-ranking li + li {
+  border-top: 1px solid var(--gb);
+}
+
+
+
+.who-ranking-copy {
+  min-width: 0;
+}
+
+.who-ranking-copy b {
+  display: block;
+  font-size: 15px;
+}
+
+.who-ranking-copy small {
+  color: var(--ink2);
+  font-size: 12px;
+}
+
+/* How to read the cards: a tiny outlined card and a tiny faded one. */
+.who-key {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: var(--rs);
+  background: var(--glass);
+  color: var(--ink2);
+  font-size: 12px;
+  list-style: none;
+}
+
+.who-key li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.who-key .mini-card {
+  flex: none;
+  width: 14px;
+  padding: 0;
+  border-radius: 3px;
+}
+
+/* The picker repeats the part being picked: the community cards across the
+   sheet's full width, a player's two at the same card size (two of five
+   columns), so each chosen card shows up as it's tapped. */
+.who-picker-group {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.who-picker-group .label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.who-picker-cards {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.who-picker-seat .who-slot-empty {
+  font-size: 20px;
+  font-weight: 500;
+}
+
+.who-suits button {
+  font-size: 22px;
+}
+
+.who-suits button.red:not(.selected) {
+  color: var(--neg);
+}
+
+.who-ranks {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 6px;
+}
+
+.who-rank {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-height: 52px;
+  padding: 0;
+  border: 1px solid var(--gb);
+  border-radius: 8px;
+  background: var(--glass2);
+  color: var(--ink);
+  font-size: 16px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.who-rank.red {
+  color: var(--neg);
+}
+
+.who-rank .mini-card-suit {
+  align-self: center;
+  font-size: 14px;
+}
+
+/* Already chosen: outlined, and a second tap takes it out. */
+.who-rank.selected {
+  border: 2px solid var(--g);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--g) 22%, transparent);
+}
+
+.who-rank:disabled {
+  opacity: 0.25;
+}
+
+/* ------------------------------------------------------------------
    Sheets and dialogs
    ------------------------------------------------------------------ */
 

@@ -109,6 +109,10 @@ const GROUPS: FeatureGroup[] = [
         name: "Showdown",
         text: "Pick the winner, split a pot between players who tie, or award each side pot separately; side pots follow the main pot's winner automatically. Confetti included.",
       },
+      {
+        name: "Who wins?",
+        text: "Not sure whose hand is best? Pick the players, enter the community cards and their two cards each, tap Check winner, and Pokerize names the winning hand and explains why in plain words, kickers and split pots included.",
+      },
     ],
   },
   {
