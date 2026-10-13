@@ -32,7 +32,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     items: [
       {
         tag: "new",
-        text: "Settle up. After you save a game, Pokerize shows everyone's result in money and who pays whom, with the fewest payments possible. Share the list to your group chat in one tap. Settle up is also on every saved game in Games. No money goes through the app.",
+        text: "Settle up. After you save a game, Pokerize shows everyone's result in money and who pays whom, with the fewest payments possible. Share the list to your group chat in one tap. Settle up is also on every saved game in Games.",
       },
       {
         tag: "new",
