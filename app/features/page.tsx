@@ -153,7 +153,7 @@ const GROUPS: FeatureGroup[] = [
       },
       {
         name: "Settle up",
-        text: "See everyone's result in money and who pays whom, with the fewest payments possible, then share the list with the table. No money goes through the app.",
+        text: "See everyone's result in money and who pays whom, with the fewest payments possible, then share the list with the table.",
       },
       {
         name: "Continue a game",
