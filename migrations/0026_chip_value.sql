@@ -13,10 +13,15 @@ ALTER TABLE poker_sessions
   DROP CONSTRAINT IF EXISTS poker_sessions_chip_value_shape;
 ALTER TABLE poker_sessions
   ADD CONSTRAINT poker_sessions_chip_value_shape CHECK (
-    (chip_value_chips IS NULL AND chip_value_cents IS NULL)
-    OR (
-      chip_value_chips >= 1
-      AND chip_value_cents BETWEEN 1 AND 100000000000
+    -- Both or neither: compared as booleans, since a check that comes out
+    -- NULL passes and would let a half-set value through.
+    (chip_value_chips IS NULL) = (chip_value_cents IS NULL)
+    AND (
+      chip_value_chips IS NULL
+      OR (
+        chip_value_chips >= 1
+        AND chip_value_cents BETWEEN 1 AND 100000000000
+      )
     )
   );
 
