@@ -44,11 +44,15 @@ export const CHANGELOG: ChangelogEntry[] = [
       },
       {
         tag: "new",
-        text: "Quick ledger. Don't want to play every hand in the app? Tap Quick ledger on Home, note buy-ins, rebuys and anyone who cashes out, then count everyone's chips at the end. It counts in the standings just like any other game.",
+        text: "Quick ledger. Don't want to play every hand in the app? Tap Start a game on Home, choose Quick ledger, note buy-ins, rebuys and anyone who cashes out, then count everyone's chips at the end. It counts in the standings just like any other game.",
       },
       {
         tag: "new",
         text: "Who wins? Not sure whose hand is best? Tap Who wins? on Home, pick the players, enter the five community cards and each player's two cards, then tap Check winner. Pokerize names the winner and explains why, kickers and split pots included. Nothing is saved.",
+      },
+      {
+        tag: "improved",
+        text: "One place to start a game. Start a game on Home and the Play tab now open the same New Game screen, where you choose hand by hand or a quick ledger. Tournaments are coming soon.",
       },
       {
         tag: "improved",

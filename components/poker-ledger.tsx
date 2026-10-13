@@ -391,6 +391,7 @@ function describeChipValue(
 
 type View =
   | "home"
+  | "newGame"
   | "setup"
   | "game"
   | "history"
@@ -401,6 +402,7 @@ type View =
   | "whoWins";
 const VIEWS: readonly View[] = [
   "home",
+  "newGame",
   "setup",
   "game",
   "history",
@@ -1006,11 +1008,21 @@ export function PokerLedger({
   );
 
   const navigate = useCallback(
-    (nextView: View, options: { replace?: boolean } = {}) => {
+    (
+      nextView: View,
+      options: { replace?: boolean; setupKind?: "hands" | "ledger" } = {},
+    ) => {
       setView(nextView);
       if (nextView !== "history") setRankFocus(null);
+      if (options.setupKind) setSetupKind(options.setupKind);
       refreshForView(nextView);
-      const state = { ...window.history.state, appView: nextView };
+      // The setup kind rides in the history entry, so back and forward
+      // reopen the setup that was chosen there.
+      const state = {
+        ...window.history.state,
+        appView: nextView,
+        setupKind: options.setupKind,
+      };
       if (options.replace) {
         window.history.replaceState(state, "");
       } else {
@@ -1109,6 +1121,10 @@ export function PokerLedger({
       const nextView = event.state?.appView;
       setModal(null);
       const view = VIEWS.includes(nextView) ? nextView : "home";
+      const kind = event.state?.setupKind;
+      if (view === "setup" && (kind === "hands" || kind === "ledger")) {
+        setSetupKind(kind);
+      }
       setView(view);
       refreshForView(view);
       window.scrollTo(0, 0);
@@ -2690,6 +2706,8 @@ export function PokerLedger({
                 : `Hand ${game.hand.no}`
               : "Between Hands",
           }
+        : view === "newGame"
+          ? { title: "New Game" }
         : view === "setup"
           ? { title: setupKind === "ledger" ? "New Quick Ledger" : "Table Setup" }
           : view === "history"
@@ -2719,11 +2737,8 @@ export function PokerLedger({
       onRestoreBackup={(backup) => void restoreGameBackup(backup)}
       onDeleteBackup={deleteGameBackup}
       onAdoptLegacyGame={offerLegacyGameAdoption}
-      onGame={() => navigate(game ? "game" : "setup")}
-      onSetup={(kind) => {
-        setSetupKind(kind);
-        navigate("setup");
-      }}
+      onGame={() => navigate(game ? "game" : "newGame")}
+      onNewGame={() => navigate("newGame")}
       onSessions={() => navigate("sessions")}
       onReviewRequests={openPlayers}
       onOpenHands={openHands}
@@ -2876,6 +2891,10 @@ export function PokerLedger({
               ...players.filter((player) => player.id !== profile.selfPlayerId),
             ].map((player) => player.name)}
           />
+        ) : view === "newGame" ? (
+          <NewGameView
+            onChoose={(kind) => navigate("setup", { setupKind: kind })}
+          />
         ) : view === "setup" ? (
           <SetupView
             key={setupKind}
@@ -2941,9 +2960,13 @@ export function PokerLedger({
         }}
         onSelect={(target) => {
           if (target === "play") {
-            // The tab opens the usual hand-by-hand setup; Home has both.
-            if (!game && view !== "setup") setSetupKind("hands");
-            navigate(game ? "game" : "setup");
+            // The game in progress, or the New Game choice. On the choice or
+            // a setup already, it stays put: back returns to the choice.
+            if (game) {
+              if (view !== "game") navigate("game");
+            } else if (view !== "newGame" && view !== "setup") {
+              navigate("newGame");
+            }
           } else if (target !== view) {
             navigate(target);
           }
@@ -3086,7 +3109,7 @@ const TABS: ReadonlyArray<{ target: TabTarget; icon: ReactNode; label: string }>
 ];
 
 function tabForView(view: View): TabTarget {
-  if (view === "setup" || view === "game") return "play";
+  if (view === "newGame" || view === "setup" || view === "game") return "play";
   if (view === "hands" || view === "whoWins") return "home";
   if (view === "settings") return "profile";
   return view;
@@ -3359,6 +3382,78 @@ function shortDay(timestamp: number) {
   return `${part({ weekday: "short" })} ${date.getDate()} ${part({ month: "short" })}`;
 }
 
+/** The ways to record a game, offered as equals; tournaments come later. */
+const GAME_KINDS: ReadonlyArray<{
+  kind: "hands" | "ledger" | "tournament";
+  kicker: string;
+  title: string;
+  text: string;
+  suit: string;
+}> = [
+  {
+    kind: "hands",
+    kicker: "Blinds and bets",
+    title: "Hand by hand",
+    text: "Seat players, set stacks, deal",
+    suit: "♦",
+  },
+  {
+    kind: "ledger",
+    kicker: "Just the money",
+    title: "Quick ledger",
+    text: "Buy-ins and cash-outs, then count the chips",
+    suit: "♣",
+  },
+  {
+    kind: "tournament",
+    kicker: "Last one standing",
+    title: "Tournament",
+    text: "Rising blinds, play to a winner",
+    suit: "♥",
+  },
+];
+
+/** The choice of how to record a game, before its setup. */
+function NewGameView({
+  onChoose,
+}: {
+  onChoose: (kind: "hands" | "ledger") => void;
+}) {
+  return (
+    <section className="new-game-view">
+      {GAME_KINDS.map((option) => {
+        const { kind } = option;
+        const soon = kind === "tournament";
+        return (
+          <button
+            key={kind}
+            className={`glass game-kind-card game-kind-${kind}`}
+            type="button"
+            disabled={soon}
+            onClick={soon ? undefined : () => onChoose(kind)}
+          >
+            <span className="game-kind-watermark" aria-hidden="true">
+              {option.suit}
+            </span>
+            <span className="game-kind-copy">
+              <span className="game-kind-kicker">{option.kicker}</span>
+              <strong>{option.title}</strong>
+              <small>{option.text}</small>
+            </span>
+            {soon ? (
+              <span className="game-kind-soon">Coming soon</span>
+            ) : (
+              <span className="game-kind-go" aria-hidden="true">
+                {option.suit}
+              </span>
+            )}
+          </button>
+        );
+      })}
+    </section>
+  );
+}
+
 function HomeView({
   game,
   displayName,
@@ -3373,7 +3468,7 @@ function HomeView({
   onDeleteBackup,
   onAdoptLegacyGame,
   onGame,
-  onSetup,
+  onNewGame,
   onSessions,
   onReviewRequests,
   onOpenHands,
@@ -3393,7 +3488,7 @@ function HomeView({
   onDeleteBackup: (backup: GameBackupSummary) => void;
   onAdoptLegacyGame: () => void;
   onGame: () => void;
-  onSetup: (kind: "hands" | "ledger") => void;
+  onNewGame: () => void;
   onSessions: () => void;
   onReviewRequests: () => void;
   onOpenHands: () => void;
@@ -3438,44 +3533,21 @@ function HomeView({
             <HomeLiveCard game={game} selfPlayerId={selfPlayerId} onOpen={onGame} />
           </GameAmounts>
         ) : (
-          <>
-            <button
-              className="home-start-card"
-              type="button"
-              onClick={() => onSetup("hands")}
-            >
-              <span className="home-start-watermark" aria-hidden="true">
-                ♠
+          <button className="home-start-card" type="button" onClick={onNewGame}>
+            <span className="home-start-watermark" aria-hidden="true">
+              ♠
+            </span>
+            <span className="home-start-kicker">No game running</span>
+            <span className="home-start-row">
+              <span>
+                <strong>Start a game</strong>
+                <small>Hand by hand, or a quick ledger</small>
               </span>
-              <span className="home-start-kicker">No game running</span>
-              <span className="home-start-row">
-                <span>
-                  <strong>Start a game</strong>
-                  <small>Seat players, set stacks, deal</small>
-                </span>
-                <span className="home-start-go" aria-hidden="true">
-                  ♦
-                </span>
+              <span className="home-start-go" aria-hidden="true">
+                ♦
               </span>
-            </button>
-            <button
-              className="glass home-ledger-card"
-              type="button"
-              onClick={() => onSetup("ledger")}
-            >
-              <span className="home-ledger-watermark" aria-hidden="true">
-                ♣
-              </span>
-              <span className="home-ledger-copy">
-                <span className="home-ledger-kicker">Just the money</span>
-                <strong>Quick ledger</strong>
-                <small>Buy-ins and cash-outs, then count the chips</small>
-              </span>
-              <span className="home-ledger-go" aria-hidden="true">
-                ♣
-              </span>
-            </button>
-          </>
+            </span>
+          </button>
         )}
 
         {legacyGame || legacySessionCount ? (

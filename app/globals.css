@@ -1358,8 +1358,16 @@ textarea::placeholder {
   font-size: 22px;
 }
 
-/* Home's second way to start: a quick ledger, quieter than the game card. */
-.home-ledger-card {
+/* New Game: the ways to record a game, as equal cards in their own colour. */
+/* Rows share the tallest card's height, so wrapped text never makes one bigger. */
+.new-game-view {
+  display: grid;
+  grid-auto-rows: 1fr;
+  gap: 12px;
+}
+
+.game-kind-card {
+  --kind: var(--g);
   position: relative;
   display: flex;
   align-items: center;
@@ -1371,33 +1379,51 @@ textarea::placeholder {
   text-align: left;
 }
 
-.home-ledger-watermark {
+.game-kind-ledger {
+  --kind: var(--b);
+}
+
+.game-kind-tournament {
+  --kind: var(--ink3);
+}
+
+/* Coming soon: the card stays readable, only its words are dimmed. */
+.game-kind-card:disabled {
+  cursor: default;
+  opacity: 1;
+}
+
+.game-kind-card:disabled .game-kind-copy {
+  opacity: 0.6;
+}
+
+.game-kind-watermark {
   position: absolute;
   top: -26px;
   right: 56px;
-  color: var(--b);
+  color: var(--kind);
   font-size: 110px;
   line-height: 1;
-  opacity: 0.08;
+  opacity: 0.1;
   pointer-events: none;
 }
 
-.home-ledger-copy {
+.game-kind-copy {
   position: relative;
   flex: 1;
   min-width: 0;
 }
 
-.home-ledger-kicker {
+.game-kind-kicker {
   display: block;
-  color: var(--b);
+  color: var(--kind);
   font-size: 11px;
   font-weight: 800;
   letter-spacing: 0.2em;
   text-transform: uppercase;
 }
 
-.home-ledger-copy strong {
+.game-kind-copy strong {
   display: block;
   margin-top: 6px;
   font-family: var(--fd);
@@ -1408,7 +1434,7 @@ textarea::placeholder {
   text-transform: uppercase;
 }
 
-.home-ledger-copy small {
+.game-kind-copy small {
   display: block;
   margin-top: 6px;
   color: var(--ink2);
@@ -1416,7 +1442,7 @@ textarea::placeholder {
   font-weight: 500;
 }
 
-.home-ledger-go {
+.game-kind-go {
   position: relative;
   display: grid;
   flex: none;
@@ -1424,9 +1450,22 @@ textarea::placeholder {
   width: 44px;
   height: 44px;
   border-radius: 50%;
-  background: var(--b);
+  background: var(--kind);
   color: var(--onacc);
   font-size: 20px;
+}
+
+.game-kind-soon {
+  position: relative;
+  flex: none;
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--ink2);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 /* Friend request notice. */
