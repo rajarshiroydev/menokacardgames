@@ -36,6 +36,10 @@ export const CHANGELOG: ChangelogEntry[] = [
       },
       {
         tag: "new",
+        text: "Results card. Tap Share on any saved game for a picture of the night: the winner, everyone's result in chips and their return, ready to post in your group chat.",
+      },
+      {
+        tag: "new",
         text: "Chip value. Chips don't cost what's printed on them? At setup, turn on Chips cost money and say what a buy-in costs, for example ₹500 for 10,000 chips. The table counts chips, and results, standings and settle up show real money. Forgot? Set the price later from Settle up.",
       },
       {
@@ -48,7 +52,7 @@ export const CHANGELOG: ChangelogEntry[] = [
       },
       {
         tag: "improved",
-        text: "Tidier saved games. Each game in Games now shows just the date, how it was played and how many players. Tap Details for the rest: hands, blinds, chip value, rebuys, ante, rake and blind history.",
+        text: "Tidier saved games. Each game in Games now shows just the date, how it was played and how many players, with Share at the top and Details, Settle up and Continue game along the bottom. Tap Details for the rest: hands, blinds, chip value, rebuys, ante, rake and blind history.",
       },
     ],
   },

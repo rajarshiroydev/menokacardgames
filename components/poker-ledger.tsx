@@ -3284,6 +3284,28 @@ function PencilIcon() {
   );
 }
 
+/** An arrow leaving a tray: share. */
+function ShareIcon() {
+  return (
+    <svg
+      className="share-icon"
+      viewBox="0 0 24 24"
+      width="16"
+      height="16"
+      aria-hidden="true"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M12 15V3" />
+      <path d="m7 8 5-5 5 5" />
+      <path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7" />
+    </svg>
+  );
+}
+
 function UndoIcon() {
   return (
     <svg
@@ -10650,6 +10672,9 @@ function SessionCardBody({
     ]);
   }
 
+  const hasDetails = details.length > 0 || blinds !== null;
+  const [showDetails, setShowDetails] = useState(false);
+
   return (
     <article className={`glass card session-card ${discarded ? "discarded" : ""}`}>
       <div className="session-head">
@@ -10663,6 +10688,54 @@ function SessionCardBody({
             {session.results.length} players
           </p>
         </div>
+        {/* The results card needs chips that add up, like Settle up. */}
+        {!discarded && netMoney ? (
+          <ShareResultsButton
+            session={session}
+            className="pill-button share-pill"
+            label="Share"
+          />
+        ) : null}
+      </div>
+      <div className="rows">
+        {sortedResults.map((result, index) => (
+          <div
+            className="result-row"
+            key={`${result.playerId || result.name}-${index}`}
+          >
+            {index === 0 && result.net > 0 ? (
+              <span className="win-tag">Win</span>
+            ) : null}
+            <span className="result-name">
+              {result.name}
+              {result.buyIns && result.buyIns.length > 1 ? (
+                <small>
+                  Buy-ins{" "}
+                  {money(
+                    result.buyIns.reduce((sum, amount) => sum + amount, 0),
+                  )}
+                </small>
+              ) : null}
+            </span>
+            <span className={`result-amount ${toneClass(result.net)}`}>
+              {netMoney?.has(result)
+                ? formatSignedMoney(netMoney.get(result)! / 100, moneyCurrency)
+                : signedMoney(result.net)}
+            </span>
+          </div>
+        ))}
+      </div>
+      <div className="session-foot">
+        {hasDetails ? (
+          <button
+            className="session-details-toggle"
+            type="button"
+            aria-expanded={showDetails}
+            onClick={() => setShowDetails((open) => !open)}
+          >
+            Details
+          </button>
+        ) : null}
         <div className="session-actions">
           {discarded ? (
             <>
@@ -10707,72 +10780,41 @@ function SessionCardBody({
               2026-10-01); onDiscard and discardSession stay for that. */}
         </div>
       </div>
-      {details.length || blinds ? (
-        <details className="session-details">
-          <summary>Details</summary>
-          <div className="session-details-content">
-            {details.length ? (
-              <dl>
-                {details.map(([label, value]) => (
-                  <div key={label}>
-                    <dt>{label}</dt>
-                    <dd>{value}</dd>
-                  </div>
-                ))}
-              </dl>
-            ) : null}
-            {blinds ? (
-              <>
-                <b>Blind plans</b>
-                {blinds.plans.map((plan) => (
-                  <div key={plan.effectiveHand}>
-                    From hand {plan.effectiveHand}: {money(
-                      smallBlindFor(plan.baseBigBlind, blinds.smallBlindRatio),
-                    )}/{money(plan.baseBigBlind)} ·{" "}
-                    {describeBlindSchedule(plan.schedule, currency, unit)}
-                  </div>
-                ))}
-                <b>Blind history</b>
-                {blinds.levels.map((level) => (
-                  <div key={level.handNo}>
-                    Hand {level.handNo}: {money(
-                      smallBlindFor(level.bigBlind, blinds.smallBlindRatio),
-                    )}/{money(level.bigBlind)}
-                  </div>
-                ))}
-              </>
-            ) : null}
-          </div>
-        </details>
+      {hasDetails && showDetails ? (
+        <div className="session-details-content">
+          {details.length ? (
+            <dl>
+              {details.map(([label, value]) => (
+                <div key={label}>
+                  <dt>{label}</dt>
+                  <dd>{value}</dd>
+                </div>
+              ))}
+            </dl>
+          ) : null}
+          {blinds ? (
+            <>
+              <b>Blind plans</b>
+              {blinds.plans.map((plan) => (
+                <div key={plan.effectiveHand}>
+                  From hand {plan.effectiveHand}: {money(
+                    smallBlindFor(plan.baseBigBlind, blinds.smallBlindRatio),
+                  )}/{money(plan.baseBigBlind)} ·{" "}
+                  {describeBlindSchedule(plan.schedule, currency, unit)}
+                </div>
+              ))}
+              <b>Blind history</b>
+              {blinds.levels.map((level) => (
+                <div key={level.handNo}>
+                  Hand {level.handNo}: {money(
+                    smallBlindFor(level.bigBlind, blinds.smallBlindRatio),
+                  )}/{money(level.bigBlind)}
+                </div>
+              ))}
+            </>
+          ) : null}
+        </div>
       ) : null}
-      <div className="rows">
-        {sortedResults.map((result, index) => (
-          <div
-            className="result-row"
-            key={`${result.playerId || result.name}-${index}`}
-          >
-            {index === 0 && result.net > 0 ? (
-              <span className="win-tag">Win</span>
-            ) : null}
-            <span className="result-name">
-              {result.name}
-              {result.buyIns && result.buyIns.length > 1 ? (
-                <small>
-                  Buy-ins{" "}
-                  {money(
-                    result.buyIns.reduce((sum, amount) => sum + amount, 0),
-                  )}
-                </small>
-              ) : null}
-            </span>
-            <span className={`result-amount ${toneClass(result.net)}`}>
-              {netMoney?.has(result)
-                ? formatSignedMoney(netMoney.get(result)! / 100, moneyCurrency)
-                : signedMoney(result.net)}
-            </span>
-          </div>
-        ))}
-      </div>
     </article>
   );
 }
@@ -10834,6 +10876,13 @@ function SettleUpSheet({
       return null;
     }
   }, [session]);
+  // Settle up opens right after a save, when people want the card: have it
+  // ready so its preview opens at once.
+  useEffect(() => {
+    if (!settlement) return;
+    const timer = setTimeout(() => prefetchResultsCard(session), 1000);
+    return () => clearTimeout(timer);
+  }, [session, settlement]);
   const cash = (cents: number) => formatCents(cents, currency);
   const stackChips = formatChips(
     session.startStack,
@@ -11030,20 +11079,237 @@ function SettleUpSheet({
             ) : (
               <p className="muted small-note">Nobody owes anything.</p>
             )}
-            <button
-              className="primary full"
-              type="button"
-              disabled={editing}
-              onClick={() => void share()}
-            >
-              {canShare ? "Share" : "Copy"}
-            </button>
+            <div className="button-pair">
+              <button
+                className="primary"
+                type="button"
+                disabled={editing}
+                onClick={() => void share()}
+              >
+                {canShare ? "Share list" : "Copy list"}
+              </button>
+              <ShareResultsButton
+                session={session}
+                className="ghost share-button"
+                label="Results card"
+              />
+            </div>
           </>
         ) : (
           <p className="field-error">
             This game&apos;s saved chips don&apos;t add up, so it can&apos;t be
             settled.
           </p>
+        )}
+        <button className="ghost full" type="button" onClick={onClose}>
+          Done
+        </button>
+      </div>
+    </div>
+  );
+}
+
+const CARD_SHARE_TEXT = `Scored with ${APP_NAME} · https://pokerize.app`;
+/** A loaded card is reused this long, so renames show up soon after. */
+const CARD_CACHE_MS = 5 * 60_000;
+
+/**
+ * Results card pictures (drawn by the server, see app/api/sessions/[id]/card),
+ * kept for this page so a preview opens at once. Keyed by the game's results:
+ * a continued game saved again gets a new picture.
+ */
+const resultsCards = new Map<string, { file: Promise<File>; at: number }>();
+
+function resultsCardKey(session: PokerSession) {
+  return [
+    session.id,
+    session.ended,
+    ...session.results.map((result) => `${result.playerId ?? result.name}=${result.net}`),
+  ].join("|");
+}
+
+function loadResultsCard(session: PokerSession): Promise<File> {
+  const key = resultsCardKey(session);
+  const cached = resultsCards.get(key);
+  if (cached && Date.now() - cached.at < CARD_CACHE_MS) return cached.file;
+  let timeZone = "";
+  try {
+    timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  } catch {
+    // The server falls back to India time.
+  }
+  const file = fetch(
+    `/api/sessions/${encodeURIComponent(session.id)}/card?tz=${encodeURIComponent(timeZone)}`,
+    { cache: "no-store" },
+  ).then(async (response) => {
+    if (!response.ok) throw new Error(`card ${response.status}`);
+    const blob = await response.blob();
+    const name =
+      /filename="([^"]+)"/.exec(
+        response.headers.get("Content-Disposition") ?? "",
+      )?.[1] ?? "results.png";
+    return new File([blob], name, { type: "image/png" });
+  });
+  resultsCards.set(key, { file, at: Date.now() });
+  file.catch(() => {
+    if (resultsCards.get(key)?.file === file) resultsCards.delete(key);
+  });
+  return file;
+}
+
+/** Loads a card in the background, ready for a tap; failures wait for the tap. */
+function prefetchResultsCard(session: PokerSession) {
+  loadResultsCard(session).catch(() => undefined);
+}
+
+function canShareFile(file: File) {
+  return (
+    typeof navigator !== "undefined" &&
+    typeof navigator.canShare === "function" &&
+    navigator.canShare({ files: [file] })
+  );
+}
+
+function saveFile(file: File) {
+  const url = URL.createObjectURL(file);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = file.name;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
+}
+
+function sessionTitle(session: PokerSession) {
+  return session.name || `Game ${session.sessionNumber ?? ""}`.trim();
+}
+
+/** Opens the game's results card, to look at and then share. */
+function ShareResultsButton({
+  session,
+  className,
+  label,
+}: {
+  session: PokerSession;
+  className: string;
+  label: string;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button className={className} type="button" onClick={() => setOpen(true)}>
+        <ShareIcon />
+        {label}
+      </button>
+      {/* On the body: a game card's glass would otherwise hold the sheet. */}
+      {open
+        ? createPortal(
+            <ResultsCardSheet session={session} onClose={() => setOpen(false)} />,
+            document.body,
+          )
+        : null}
+    </>
+  );
+}
+
+/**
+ * A game's results card, shown before sharing. Share is only offered once
+ * the picture has loaded: iOS Safari refuses to share once a tap has waited
+ * on the network.
+ */
+function ResultsCardSheet({
+  session,
+  onClose,
+}: {
+  session: PokerSession;
+  onClose: () => void;
+}) {
+  const [card, setCard] = useState<{ file: File; url: string } | null>(null);
+  const [failed, setFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
+  const title = sessionTitle(session);
+
+  useEffect(() => {
+    let cancelled = false;
+    let url: string | null = null;
+    loadResultsCard(session)
+      .then((file) => {
+        if (cancelled) return;
+        url = URL.createObjectURL(file);
+        setCard({ file, url });
+      })
+      .catch(() => {
+        if (!cancelled) setFailed(true);
+      });
+    return () => {
+      cancelled = true;
+      if (url) URL.revokeObjectURL(url);
+    };
+  }, [session, attempt]);
+
+  const shareable = card !== null && canShareFile(card.file);
+
+  async function share() {
+    if (!card) return;
+    if (!shareable) {
+      saveFile(card.file);
+      return;
+    }
+    try {
+      await navigator.share({
+        files: [card.file],
+        title,
+        text: CARD_SHARE_TEXT,
+      });
+    } catch {
+      // The host closed the share menu.
+    }
+  }
+
+  return (
+    <div
+      className="modal show"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <div
+        className="sheet results-card-sheet"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="results-card-title"
+      >
+        <h2 id="results-card-title">Results Card</h2>
+        <div className="results-card-frame">
+          {card ? (
+            // A plain <img>: it's a local blob, so next/image adds nothing.
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={card.url} alt={`Results card for ${title}`} />
+          ) : failed ? (
+            <p className="field-error">Couldn&apos;t make the card.</p>
+          ) : (
+            <p className="muted">Making the card…</p>
+          )}
+        </div>
+        {failed ? (
+          <button
+            className="primary full"
+            type="button"
+            onClick={() => {
+              setFailed(false);
+              setAttempt((count) => count + 1);
+            }}
+          >
+            Try again
+          </button>
+        ) : (
+          <button
+            className="primary full"
+            type="button"
+            disabled={!card}
+            onClick={() => void share()}
+          >
+            {card && !shareable ? "Save image" : "Share image"}
+          </button>
         )}
         <button className="ghost full" type="button" onClick={onClose}>
           Done
@@ -11626,6 +11892,15 @@ function SessionsView({
     [history],
   );
   const importInput = useRef<HTMLInputElement>(null);
+  const newest = latestSessions[0];
+
+  // The newest game is the one people share: have its card ready so its
+  // preview opens at once.
+  useEffect(() => {
+    if (!newest) return;
+    const timer = setTimeout(() => prefetchResultsCard(newest), 1500);
+    return () => clearTimeout(timer);
+  }, [newest]);
 
   return (
     <div className="stack-list">

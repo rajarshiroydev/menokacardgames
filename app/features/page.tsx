@@ -156,6 +156,10 @@ const GROUPS: FeatureGroup[] = [
         text: "See everyone's result in money and who pays whom, with the fewest payments possible, then share the list with the table.",
       },
       {
+        name: "Results card",
+        text: "Tap Share on a saved game for a picture of the night's results, winner first, to post in your group chat. It shows chips and returns, not money.",
+      },
+      {
         name: "Continue a game",
         text: "Pick a saved game back up another day, with everyone's chips and buy-ins as they were.",
       },
