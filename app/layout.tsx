@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Barlow, Big_Shoulders } from "next/font/google";
 
+import { WebAnalytics } from "@/components/web-analytics";
 import { APP_NAME } from "@/lib/brand";
 import { THEME_STORAGE_KEY } from "@/lib/theme";
 
@@ -69,6 +70,7 @@ export default function RootLayout({
           <span className="pitch-lines" />
         </div>
         {children}
+        <WebAnalytics />
       </body>
     </html>
   );

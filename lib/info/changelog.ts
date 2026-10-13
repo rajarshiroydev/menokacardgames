@@ -4,6 +4,8 @@
  *
  * Add an entry in the same change as any user-visible behaviour, worded for
  * players, not developers. Dates are the day it reached production.
+ * Only list changes players would notice or care about; developer work
+ * (analytics, tooling, refactors) stays out (user decision 2026-10-13).
  */
 export type ChangeTag = "new" | "improved" | "fixed";
 

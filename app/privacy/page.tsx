@@ -106,8 +106,8 @@ export default function PrivacyPage() {
         </p>
         <h3>What we don&apos;t collect</h3>
         <p>
-          No payment details, no contacts, no location, no photos, and no
-          advertising or analytics trackers.
+          No payment details, no contacts, no location, no photos, no cookies
+          for tracking and no advertising trackers.
         </p>
       </InfoSection>
 
@@ -183,7 +183,10 @@ export default function PrivacyPage() {
           </li>
           <li>
             <b>Vercel</b> hosts the app and keeps short-lived request logs for
-            security and fixing faults.
+            security and fixing faults. It also counts page visits without
+            cookies (page address with private links blanked out, referring
+            site, browser, device type and country) so we can see which parts
+            of the app get used.
           </li>
           <li>
             <b>Healthchecks.io</b> watches our daily clean-up job. It receives
