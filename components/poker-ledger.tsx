@@ -4992,73 +4992,6 @@ function SetupView({
           ) : null}
         </section>
 
-        <section className="glass card">
-          <div className="card-row">
-            <span className="label">Chip value</span>
-            <div className="heading-with-info">
-              <label className="switch-row">
-                <span>Chips cost money</span>
-                <button
-                  className="switch"
-                  type="button"
-                  role="switch"
-                  aria-checked={chipValueOn}
-                  aria-label="Chips cost money"
-                  onClick={() => setChipValueOn((on) => !on)}
-                />
-              </label>
-              <button
-                className="info-button"
-                type="button"
-                aria-label="About chip value"
-                onClick={() => setShowChipValueHelp(true)}
-              >
-                i
-              </button>
-            </div>
-          </div>
-          {showChipValueHelp ? (
-            <InfoSheet
-              label="About chip value"
-              onClose={() => setShowChipValueHelp(false)}
-            >
-              <p>
-                <b>Chips Cost Money On:</b> say what a buy-in costs, for
-                example {formatCents(50_000, currency)} for 10,000 chips. The
-                table counts chips; results and Settle up show money at that
-                price.
-              </p>
-              <p>
-                <b>Chips Cost Money Off:</b> one chip is{" "}
-                {formatCents(100, currency)}. You can set a price later from
-                Settle up on the saved game.
-              </p>
-            </InfoSheet>
-          ) : null}
-          {chipValueOn ? (
-            <>
-              <label className="label" htmlFor="buy-in-price">
-                A {money(stack)}-chip buy-in costs
-              </label>
-              <PriceInput
-                id="buy-in-price"
-                label="What a buy-in costs"
-                value={buyInPrice}
-                onChange={setBuyInPrice}
-              />
-              {chipValueValid && setupChipValue ? (
-                <p className="muted small-note">
-                  {describePerChip(setupChipValue, chipUnit, currency)}. Results
-                  and Settle up show money at this price.
-                </p>
-              ) : (
-                <p className="muted small-note">
-                  Enter what a buy-in costs.
-                </p>
-              )}
-            </>
-          ) : null}
-        </section>
 
         {ledger ? null : (
           <>
@@ -5267,6 +5200,113 @@ function SetupView({
 
             <section className="glass card">
               <div className="card-row">
+                <span className="label">Rebuys</span>
+                <span className="card-note">
+                  {describeMaxRebuys(setupRebuyRules.maxRebuys)}
+                </span>
+              </div>
+              <RebuyRulesFields
+                rules={rebuyRules}
+                onChange={setRebuyRules}
+                closeOptions={rebuyCloseOptions}
+                showClose={Boolean(schedule) && scheduleValid}
+                idPrefix="setup"
+              />
+              {rebuyError ? (
+                <p className="field-error" role="alert">
+                  {rebuyError}
+                </p>
+              ) : (
+                <p className="muted small-note">
+                  A busted player can buy back in for{" "}
+                  {ownAmounts ? "any amount, usually " : "the starting stack, "}
+                  {money(stack)}
+                  {setupRebuyRules.maxRebuys === 0
+                    ? ", but not in this game."
+                    : setupRebuyRules.closeAtBigBlind !== null
+                      ? `, until the big blind reaches ${money(
+                          setupRebuyRules.closeAtBigBlind,
+                        )}.`
+                      : "."}
+                </p>
+              )}
+            </section>
+          </>
+        )}
+
+        <section className="glass card">
+          <div className="card-row">
+            <span className="label">Chip value</span>
+            <div className="heading-with-info">
+              <label className="switch-row">
+                <span>Chips cost money</span>
+                <button
+                  className="switch"
+                  type="button"
+                  role="switch"
+                  aria-checked={chipValueOn}
+                  aria-label="Chips cost money"
+                  onClick={() => setChipValueOn((on) => !on)}
+                />
+              </label>
+              <button
+                className="info-button"
+                type="button"
+                aria-label="About chip value"
+                onClick={() => setShowChipValueHelp(true)}
+              >
+                i
+              </button>
+            </div>
+          </div>
+          {showChipValueHelp ? (
+            <InfoSheet
+              label="About chip value"
+              onClose={() => setShowChipValueHelp(false)}
+            >
+              <p>
+                <b>Chips Cost Money On:</b> say what a buy-in costs, for
+                example {formatCents(50_000, currency)} for 10,000 chips. The
+                table counts chips; results and Settle up show money at that
+                price.
+              </p>
+              <p>
+                <b>Chips Cost Money Off:</b> one chip is{" "}
+                {formatCents(100, currency)}. You can set a price later from
+                Settle up on the saved game.
+              </p>
+            </InfoSheet>
+          ) : null}
+          {chipValueOn ? (
+            <>
+              <label className="label" htmlFor="buy-in-price">
+                A {money(stack)}-chip buy-in costs
+              </label>
+              <PriceInput
+                id="buy-in-price"
+                label="What a buy-in costs"
+                value={buyInPrice}
+                onChange={setBuyInPrice}
+              />
+              {chipValueValid && setupChipValue ? (
+                <p className="muted small-note">
+                  {describePerChip(setupChipValue, chipUnit, currency)}. Results
+                  and Settle up show money at this price.
+                </p>
+              ) : (
+                <p className="muted small-note">
+                  Enter what a buy-in costs.
+                </p>
+              )}
+            </>
+          ) : null}
+        </section>
+
+        {/* Usually off, so they come last (user request 2026-10-13). */}
+        {ledger ? null : (
+          <>
+            <section className="glass card">
+              <div className="card-row">
                 <span className="label">Ante</span>
                 <div className="heading-with-info">
                   <label className="switch-row">
@@ -5425,40 +5465,6 @@ function SetupView({
                   game, so results add up to minus it.
                 </p>
               ) : null}
-            </section>
-
-            <section className="glass card">
-              <div className="card-row">
-                <span className="label">Rebuys</span>
-                <span className="card-note">
-                  {describeMaxRebuys(setupRebuyRules.maxRebuys)}
-                </span>
-              </div>
-              <RebuyRulesFields
-                rules={rebuyRules}
-                onChange={setRebuyRules}
-                closeOptions={rebuyCloseOptions}
-                showClose={Boolean(schedule) && scheduleValid}
-                idPrefix="setup"
-              />
-              {rebuyError ? (
-                <p className="field-error" role="alert">
-                  {rebuyError}
-                </p>
-              ) : (
-                <p className="muted small-note">
-                  A busted player can buy back in for{" "}
-                  {ownAmounts ? "any amount, usually " : "the starting stack, "}
-                  {money(stack)}
-                  {setupRebuyRules.maxRebuys === 0
-                    ? ", but not in this game."
-                    : setupRebuyRules.closeAtBigBlind !== null
-                      ? `, until the big blind reaches ${money(
-                          setupRebuyRules.closeAtBigBlind,
-                        )}.`
-                      : "."}
-                </p>
-              )}
             </section>
           </>
         )}
