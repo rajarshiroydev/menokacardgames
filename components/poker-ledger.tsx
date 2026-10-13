@@ -10622,6 +10622,33 @@ function SessionCardBody({
   const ledger = session.kind === "ledger";
   const blinds = ledger ? null : sessionBlindHistory(session);
   const lastBigBlind = blinds?.levels.at(-1)!.bigBlind ?? 0;
+  // Everything but the date, kind and player count sits under Details.
+  const details: [string, string][] = [];
+  if (!ledger) {
+    details.push(["Hands", String(session.hands)]);
+    details.push(["Big blind", money(session.ante)]);
+  }
+  if (blinds) {
+    details.push([
+      "Finished at",
+      `${money(smallBlindFor(lastBigBlind, blinds.smallBlindRatio))}/${money(lastBigBlind)}`,
+    ]);
+  }
+  if (session.chipValue) {
+    details.push([
+      "Chip value",
+      describeChipValue(session.chipValue, session.chipUnit, moneyCurrency),
+    ]);
+  }
+  const rebuys = describeRebuyRules(session.rebuyRules, currency, session.chipUnit);
+  if (session.rebuyRules && rebuys) details.push(["Rebuys", rebuys]);
+  if (session.bigBlindAnte) details.push(["Big blind ante", "On"]);
+  if (session.rakeRules) {
+    details.push([
+      "Rake",
+      `${describeRakeRules(session.rakeRules, money)} · house took ${money(session.rake ?? 0)}`,
+    ]);
+  }
 
   return (
     <article className={`glass card session-card ${discarded ? "discarded" : ""}`}>
@@ -10632,33 +10659,9 @@ function SessionCardBody({
           </h2>
           <p className="muted session-meta">
             {formatDate(session.date)} ·{" "}
-            {ledger
-              ? "Quick ledger"
-              : `${session.hands} hands · Big blind ${money(session.ante)}`}{" "}
-            · {session.results.length} players
+            {ledger ? "Quick ledger" : "Hand by hand"} ·{" "}
+            {session.results.length} players
           </p>
-          {session.chipValue ? (
-            <p className="muted session-meta">
-              {describeChipValue(session.chipValue, session.chipUnit, moneyCurrency)}
-            </p>
-          ) : null}
-          {session.rebuyRules ? (
-            <p className="muted session-meta">
-              {describeRebuyRules(session.rebuyRules, currency, session.chipUnit)}
-            </p>
-          ) : null}
-          {session.bigBlindAnte || session.rakeRules ? (
-            <p className="muted session-meta">
-              {[
-                session.bigBlindAnte ? "Big blind ante" : "",
-                session.rakeRules
-                  ? `${describeRakeRules(session.rakeRules, money)} · house took ${money(session.rake ?? 0)}`
-                  : "",
-              ]
-                .filter(Boolean)
-                .join(" · ")}
-            </p>
-          ) : null}
         </div>
         <div className="session-actions">
           {discarded ? (
@@ -10704,32 +10707,41 @@ function SessionCardBody({
               2026-10-01); onDiscard and discardSession stay for that. */}
         </div>
       </div>
-      {blinds ? (
-        <details className="session-blind-history">
-          <summary>
-            Blind history · {blinds.levels.length} amount
-            {blinds.levels.length === 1 ? "" : "s"} used · finished at{" "}
-            {money(smallBlindFor(lastBigBlind, blinds.smallBlindRatio))}/
-            {money(lastBigBlind)}
-          </summary>
-          <div className="session-blind-history-content">
-            <b>Plans</b>
-            {blinds.plans.map((plan) => (
-              <div key={plan.effectiveHand}>
-                From hand {plan.effectiveHand}: {money(
-                  smallBlindFor(plan.baseBigBlind, blinds.smallBlindRatio),
-                )}/{money(plan.baseBigBlind)} ·{" "}
-                {describeBlindSchedule(plan.schedule, currency, unit)}
-              </div>
-            ))}
-            <b>Blinds used</b>
-            {blinds.levels.map((level) => (
-              <div key={level.handNo}>
-                Hand {level.handNo}: {money(
-                  smallBlindFor(level.bigBlind, blinds.smallBlindRatio),
-                )}/{money(level.bigBlind)}
-              </div>
-            ))}
+      {details.length || blinds ? (
+        <details className="session-details">
+          <summary>Details</summary>
+          <div className="session-details-content">
+            {details.length ? (
+              <dl>
+                {details.map(([label, value]) => (
+                  <div key={label}>
+                    <dt>{label}</dt>
+                    <dd>{value}</dd>
+                  </div>
+                ))}
+              </dl>
+            ) : null}
+            {blinds ? (
+              <>
+                <b>Blind plans</b>
+                {blinds.plans.map((plan) => (
+                  <div key={plan.effectiveHand}>
+                    From hand {plan.effectiveHand}: {money(
+                      smallBlindFor(plan.baseBigBlind, blinds.smallBlindRatio),
+                    )}/{money(plan.baseBigBlind)} ·{" "}
+                    {describeBlindSchedule(plan.schedule, currency, unit)}
+                  </div>
+                ))}
+                <b>Blind history</b>
+                {blinds.levels.map((level) => (
+                  <div key={level.handNo}>
+                    Hand {level.handNo}: {money(
+                      smallBlindFor(level.bigBlind, blinds.smallBlindRatio),
+                    )}/{money(level.bigBlind)}
+                  </div>
+                ))}
+              </>
+            ) : null}
           </div>
         </details>
       ) : null}

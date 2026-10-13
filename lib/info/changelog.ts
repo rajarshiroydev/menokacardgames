@@ -46,6 +46,10 @@ export const CHANGELOG: ChangelogEntry[] = [
         tag: "new",
         text: "Who wins? Not sure whose hand is best? Tap Who wins? on Home, pick the players, enter the five community cards and each player's two cards, then tap Check winner. Pokerize names the winner and explains why, kickers and split pots included. Nothing is saved.",
       },
+      {
+        tag: "improved",
+        text: "Tidier saved games. Each game in Games now shows just the date, how it was played and how many players. Tap Details for the rest: hands, blinds, chip value, rebuys, ante, rake and blind history.",
+      },
     ],
   },
   {
