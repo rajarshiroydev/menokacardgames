@@ -11182,8 +11182,10 @@ function SettleUpSheet({
 }
 
 const CARD_SHARE_TEXT = `Scored with ${APP_NAME} · https://pokerize.app`;
-/** A loaded card is reused this long, so renames show up soon after. */
-const CARD_CACHE_MS = 5 * 60_000;
+/** A loaded card is reused this long, so renames still show up the same day. */
+const CARD_CACHE_MS = 30 * 60_000;
+/** A card request that hasn't finished by then is dropped and tried again. */
+const CARD_TIMEOUT_MS = 20_000;
 
 /**
  * Results card pictures (drawn by the server, see app/api/sessions/[id]/card),
@@ -11200,20 +11202,26 @@ function resultsCardKey(session: PokerSession) {
   ].join("|");
 }
 
-function loadResultsCard(session: PokerSession): Promise<File> {
-  const key = resultsCardKey(session);
-  const cached = resultsCards.get(key);
-  if (cached && Date.now() - cached.at < CARD_CACHE_MS) return cached.file;
+/** A card the server refused (missing game, chips that don't add up). */
+class CardRefused extends Error {}
+
+async function fetchResultsCard(session: PokerSession): Promise<File> {
   let timeZone = "";
   try {
     timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
   } catch {
     // The server falls back to India time.
   }
-  const file = fetch(
-    `/api/sessions/${encodeURIComponent(session.id)}/card?tz=${encodeURIComponent(timeZone)}`,
-    { cache: "no-store" },
-  ).then(async (response) => {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), CARD_TIMEOUT_MS);
+  try {
+    const response = await fetch(
+      `/api/sessions/${encodeURIComponent(session.id)}/card?tz=${encodeURIComponent(timeZone)}`,
+      { cache: "no-store", signal: controller.signal },
+    );
+    if (response.status >= 400 && response.status < 500) {
+      throw new CardRefused(`card ${response.status}`);
+    }
     if (!response.ok) throw new Error(`card ${response.status}`);
     const blob = await response.blob();
     const name =
@@ -11221,6 +11229,24 @@ function loadResultsCard(session: PokerSession): Promise<File> {
         response.headers.get("Content-Disposition") ?? "",
       )?.[1] ?? "results.png";
     return new File([blob], name, { type: "image/png" });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * The game's card, from this page's store or the server. A request that
+ * fails or stalls (a phone network, a server waking up) is tried once more
+ * before giving up; a refusal isn't.
+ */
+function loadResultsCard(session: PokerSession): Promise<File> {
+  const key = resultsCardKey(session);
+  const cached = resultsCards.get(key);
+  if (cached && Date.now() - cached.at < CARD_CACHE_MS) return cached.file;
+  const file = fetchResultsCard(session).catch(async (error) => {
+    if (error instanceof CardRefused) throw error;
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    return fetchResultsCard(session);
   });
   resultsCards.set(key, { file, at: Date.now() });
   file.catch(() => {
@@ -11229,9 +11255,16 @@ function loadResultsCard(session: PokerSession): Promise<File> {
   return file;
 }
 
-/** Loads a card in the background, ready for a tap; failures wait for the tap. */
+let prefetchQueue: Promise<unknown> = Promise.resolve();
+
+/**
+ * Loads a card in the background, ready for a tap, one card at a time so a
+ * list of games doesn't load them all at once. Failures wait for the tap.
+ */
 function prefetchResultsCard(session: PokerSession) {
-  loadResultsCard(session).catch(() => undefined);
+  prefetchQueue = prefetchQueue.then(() =>
+    loadResultsCard(session).catch(() => undefined),
+  );
 }
 
 function canShareFile(file: File) {
@@ -11266,9 +11299,31 @@ function ShareResultsButton({
   label: string;
 }) {
   const [open, setOpen] = useState(false);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+
+  // Load the card once its game is on screen, so the preview is usually
+  // ready by the time Share is tapped.
+  useEffect(() => {
+    const button = buttonRef.current;
+    if (!button || typeof IntersectionObserver === "undefined") return;
+    const observer = new IntersectionObserver((entries) => {
+      if (entries.some((entry) => entry.isIntersecting)) {
+        observer.disconnect();
+        prefetchResultsCard(session);
+      }
+    });
+    observer.observe(button);
+    return () => observer.disconnect();
+  }, [session]);
+
   return (
     <>
-      <button className={className} type="button" onClick={() => setOpen(true)}>
+      <button
+        ref={buttonRef}
+        className={className}
+        type="button"
+        onClick={() => setOpen(true)}
+      >
         <ShareIcon />
         {label}
       </button>
@@ -11964,15 +12019,6 @@ function SessionsView({
     [history],
   );
   const importInput = useRef<HTMLInputElement>(null);
-  const newest = latestSessions[0];
-
-  // The newest game is the one people share: have its card ready so its
-  // preview opens at once.
-  useEffect(() => {
-    if (!newest) return;
-    const timer = setTimeout(() => prefetchResultsCard(newest), 1500);
-    return () => clearTimeout(timer);
-  }, [newest]);
 
   return (
     <div className="stack-list">

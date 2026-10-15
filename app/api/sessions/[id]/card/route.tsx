@@ -19,7 +19,7 @@ import {
   selectSessions,
   type SessionRow,
 } from "@/lib/poker/saved-sessions";
-import { withServerTiming } from "@/lib/server-timing";
+import { timed, withServerTiming } from "@/lib/server-timing";
 
 export const dynamic = "force-dynamic";
 
@@ -183,18 +183,23 @@ async function handleGet(
         ),
       ),
     );
-    return new ImageResponse(
-      <CardImage card={card} logo={logo} avatars={avatars} />,
-      {
-        width: WIDTH,
-        height: HEIGHT,
-        fonts,
-        headers: {
-          "Cache-Control": "private, no-store",
-          "Content-Disposition": `inline; filename="${fileName(card.title)}"`,
-        },
-      },
+    // Drawn in full before replying: ImageResponse otherwise draws while the
+    // body streams, after the 200 is sent, so a drawing error would reach the
+    // phone as a broken download and never reach the logs.
+    const png = await timed("render", () =>
+      new ImageResponse(
+        <CardImage card={card} logo={logo} avatars={avatars} />,
+        { width: WIDTH, height: HEIGHT, fonts },
+      ).arrayBuffer(),
     );
+    return new Response(png, {
+      headers: {
+        "Content-Type": "image/png",
+        "Content-Length": String(png.byteLength),
+        "Cache-Control": "private, no-store",
+        "Content-Disposition": `inline; filename="${fileName(card.title)}"`,
+      },
+    });
   } catch (error) {
     console.error("results card render error", error);
     return json({ error: "Could not draw the card" }, 500);
