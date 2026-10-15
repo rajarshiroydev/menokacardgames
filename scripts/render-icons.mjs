@@ -14,21 +14,45 @@ const browser =
   "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
 const root = resolve(import.meta.dirname, "..");
 const source = join(root, "assets/logo/pokerize-icon.html");
-const master = join(mkdtempSync(join(tmpdir(), "pokerize-icon-")), "1024.png");
+const dir = mkdtempSync(join(tmpdir(), "pokerize-icon-"));
 
-// The page is a 140px tile; scale it up to a 1024px master.
-execFileSync(browser, [
-  "--headless=new",
-  "--disable-gpu",
-  "--hide-scrollbars",
-  "--window-size=140,140",
-  `--force-device-scale-factor=${1024 / 140}`,
-  "--virtual-time-budget=1000",
-  `--screenshot=${master}`,
-  pathToFileURL(source).href,
-]);
+// The page is a 140px tile; scale it up to a 1024px master. `#bare` renders
+// the chip stack alone on a transparent background.
+const render = (name, hash = "") => {
+  const file = join(dir, name);
+  execFileSync(browser, [
+    "--headless=new",
+    "--disable-gpu",
+    "--hide-scrollbars",
+    "--default-background-color=00000000",
+    "--window-size=140,140",
+    `--force-device-scale-factor=${1024 / 140}`,
+    "--virtual-time-budget=1000",
+    `--screenshot=${file}`,
+    pathToFileURL(source).href + hash,
+  ]);
+  return file;
+};
+const tile = render("tile.png");
 
-const png = (size) =>
+// Browser tabs show the icon at 16-32px, where the dark tile reads as a plain
+// square, so tab icons use the bare stack cropped to fill the square.
+const bare = await sharp(render("bare.png", "#bare"))
+  .trim({ threshold: 10 })
+  .toBuffer({ resolveWithObject: true });
+const side = Math.max(bare.info.width, bare.info.height);
+const tabMaster = await sharp(bare.data)
+  .extend({
+    top: Math.floor((side - bare.info.height) / 2),
+    bottom: Math.ceil((side - bare.info.height) / 2),
+    left: Math.floor((side - bare.info.width) / 2),
+    right: Math.ceil((side - bare.info.width) / 2),
+    background: { r: 0, g: 0, b: 0, alpha: 0 },
+  })
+  .png()
+  .toBuffer();
+
+const png = (size, master = tile) =>
   sharp(master)
     .resize(size, size, { kernel: "lanczos3" })
     .ensureAlpha()
@@ -36,18 +60,18 @@ const png = (size) =>
     .toBuffer();
 
 const outputs = {
-  "app/icon.png": 192,
-  "app/apple-icon.png": 180,
-  "public/icons/icon-192.png": 192,
-  "public/icons/icon-512.png": 512,
+  "app/icon.png": [192, tabMaster],
+  "app/apple-icon.png": [180, tile],
+  "public/icons/icon-192.png": [192, tile],
+  "public/icons/icon-512.png": [512, tile],
 };
-for (const [path, size] of Object.entries(outputs)) {
-  writeFileSync(join(root, path), await png(size));
+for (const [path, [size, master]] of Object.entries(outputs)) {
+  writeFileSync(join(root, path), await png(size, master));
 }
 
 // favicon.ico holds RGBA PNG images at 16, 32 and 48 px.
 const sizes = [16, 32, 48];
-const images = await Promise.all(sizes.map(png));
+const images = await Promise.all(sizes.map((size) => png(size, tabMaster)));
 const header = Buffer.alloc(6 + 16 * sizes.length);
 header.writeUInt16LE(0, 0);
 header.writeUInt16LE(1, 2);

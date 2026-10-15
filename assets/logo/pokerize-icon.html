@@ -4,6 +4,9 @@ html,body{margin:0;width:140px;height:140px;overflow:hidden;background:#05080a}
 .tile{width:140px;height:140px;overflow:hidden;display:grid;place-items:center;background:radial-gradient(circle at 50% 70%, oklch(0.84 0.2 152 / .2), #05080a 70%)}
 .p{position:absolute;inset:0}
 .sp{position:absolute;inset:0;background:linear-gradient(165deg, oklch(0.97 0.05 152) 10%, oklch(0.84 0.2 152) 50%, oklch(0.74 0.16 246) 95%)}
+/* #bare: the chip stack alone on a transparent background, for browser-tab icons */
+.bare,.bare body,.bare .tile{background:transparent}
+.bare .p{box-shadow:none!important}
 </style></head><body>
 <div class="tile">
   <div style="zoom:0.42;perspective:1100px;width:220px;height:220px;position:relative;margin-top:44px">
@@ -20,6 +23,7 @@ html,body{margin:0;width:140px;height:140px;overflow:hidden;background:#05080a}
   </div>
 </div>
 <script>
+if(location.hash==='#bare')document.documentElement.classList.add('bare');
 const G='oklch(0.84 0.2 152)',B='oklch(0.74 0.16 246)';
 const gEdge=j=>`repeating-conic-gradient(from 7.5deg, rgba(230,240,235,.92) 0 15deg, ${j%2?'oklch(0.48 0.13 246 / .9)':'oklch(0.52 0.15 152 / .9)'} 15deg 45deg)`;
 const gFace=r=>`radial-gradient(circle, rgba(7,16,20,.9) 0 50%, transparent 50.5%), radial-gradient(circle, transparent 0 53%, rgba(255,255,255,.6) 53% 54.2%, transparent 54.6%), repeating-conic-gradient(from 7.5deg, rgba(255,255,255,.9) 0 15deg, transparent 15deg 45deg), conic-gradient(from ${r}deg, ${G}, ${B}, ${G}, ${B}, ${G})`;
