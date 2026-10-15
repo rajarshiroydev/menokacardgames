@@ -7,6 +7,7 @@ import {
   cardName,
   cardReturn,
   cardTimeZone,
+  cardTitleSize,
   CARD_DEFAULT_TIME_ZONE,
   resultsCard,
 } from "../lib/poker/results-card.ts";
@@ -314,6 +315,36 @@ describe("results card helpers", () => {
     assert.equal(cardName("  Asha   Rao "), "Asha Rao");
     assert.equal(cardName("Abcdefghijklmnopqr"), "Abcdefghijklmnopqr");
     assert.equal(cardName("Abcdefghijklmnopqrs"), "Abcdefghijklmnopq…");
+  });
+
+  it("draws long game names smaller, on two lines at most", () => {
+    assert.deepEqual(cardTitleSize("Game 14"), { fontSize: 72, lines: 1 });
+    assert.deepEqual(cardTitleSize("Diwali Night Showdown"), {
+      fontSize: 72,
+      lines: 1,
+    });
+    assert.deepEqual(cardTitleSize("Recovered session from screenshot"), {
+      fontSize: 56,
+      lines: 1,
+    });
+    assert.deepEqual(cardTitleSize("x".repeat(56)), { fontSize: 56, lines: 2 });
+  });
+
+  it("cuts game names longer than two lines", () => {
+    const card = resultsCard(
+      game(
+        [
+          ["Asha", 1_000],
+          ["Bikram", -1_000],
+        ],
+        {
+          name: "A very long game name that somebody typed out in full because they could",
+        },
+      ),
+      options,
+    );
+    assert.equal(Array.from(card.title).length, 56);
+    assert.match(card.title, /…$/);
   });
 
   it("accepts real time zones only", () => {

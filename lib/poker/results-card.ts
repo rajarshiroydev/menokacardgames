@@ -13,6 +13,8 @@ import type { PokerSession } from "./types";
 
 /** Longest name shown in full; longer ones are cut with "…". */
 export const CARD_NAME_LENGTH = 18;
+/** Longest game name shown in full (names may be 80); two lines at most. */
+export const CARD_TITLE_LENGTH = 56;
 /** The time zone used when the phone's own isn't given or isn't known. */
 export const CARD_DEFAULT_TIME_ZONE = "Asia/Kolkata";
 
@@ -57,14 +59,34 @@ export function cardTimeZone(value: string | null | undefined) {
   }
 }
 
-/** A name cut to CARD_NAME_LENGTH characters, counting each emoji once. */
-export function cardName(name: string) {
-  const characters = Array.from(name.trim().replace(/\s+/g, " "));
-  if (characters.length <= CARD_NAME_LENGTH) return characters.join("");
+/** Text cut to `length` characters with "…", counting each emoji once. */
+function cut(text: string, length: number) {
+  const characters = Array.from(text.trim().replace(/\s+/g, " "));
+  if (characters.length <= length) return characters.join("");
   return `${characters
-    .slice(0, CARD_NAME_LENGTH - 1)
+    .slice(0, length - 1)
     .join("")
     .trimEnd()}…`;
+}
+
+/** A name cut to CARD_NAME_LENGTH characters. */
+export function cardName(name: string) {
+  return cut(name, CARD_NAME_LENGTH);
+}
+
+/**
+ * How big the game's name is drawn, so it never runs into the lines under
+ * it: full size while it fits on one line, smaller after that, and two lines
+ * for the longest names (cut at CARD_TITLE_LENGTH). The card is 952 px wide
+ * inside its margins; capitals in the display face average about 0.45 of the
+ * font size wide (W and M about 0.6). The block grows with the name either
+ * way, so a misjudged name only takes room from the rows, never overlaps.
+ */
+export function cardTitleSize(title: string) {
+  const length = Array.from(title).length;
+  if (length <= 22) return { fontSize: 72, lines: 1 };
+  if (length <= 34) return { fontSize: 56, lines: 1 };
+  return { fontSize: 56, lines: 2 };
 }
 
 /** "3 h 20 min", "45 min", "2 h"; under a minute counts as one. */
@@ -152,7 +174,10 @@ export function resultsCard(
   }
 
   return {
-    title: session.name || `Game ${session.sessionNumber ?? ""}`.trim(),
+    title: cut(
+      session.name || `Game ${session.sessionNumber ?? ""}`,
+      CARD_TITLE_LENGTH,
+    ),
     when: `${date} · ${cardLength(session.ended - session.date)}`,
     played,
     winner: rows[0]?.tone === "pos" && rows[1]?.rank !== 1 ? rows[0] : null,

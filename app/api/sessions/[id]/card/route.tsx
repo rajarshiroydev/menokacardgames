@@ -9,6 +9,7 @@ import { APP_NAME } from "@/lib/brand";
 import { runAsAuthenticatedUser } from "@/lib/poker/database";
 import {
   cardTimeZone,
+  cardTitleSize,
   resultsCard,
   type CardPlayer,
   type ResultsCard,
@@ -230,10 +231,13 @@ function CardImage({
   const winnerPanel = card.winner && card.rows.length <= WINNER_PANEL_MAX_ROWS;
   // Rows share what's left once the fixed parts are placed, so 2 players get
   // roomy rows and 10 still fit.
+  const title = cardTitleSize(card.title);
+  // The name's lines, then the date and how it was played (14 + 2 × 40).
+  const titleBlock = title.lines * title.fontSize + 94;
   const fixed =
     96 +
     36 +
-    150 +
+    titleBlock +
     36 +
     (winnerPanel ? 236 + 36 : 0) +
     16 +
@@ -303,14 +307,15 @@ function CardImage({
           flexGrow: 1,
         }}
       >
-        <div style={{ display: "flex", flexDirection: "column", height: 150 }}>
+        <div style={{ display: "flex", flexDirection: "column" }}>
           <span
             style={{
               fontFamily: DISPLAY,
               fontWeight: 900,
-              fontSize: 72,
+              fontSize: title.fontSize,
               lineHeight: 1,
               textTransform: "uppercase",
+              wordBreak: "break-word",
             }}
           >
             {card.title}
