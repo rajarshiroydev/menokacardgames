@@ -62,6 +62,11 @@ function canonicalContent(session: PokerSession, name: string) {
       end: result.end,
       net: result.net,
       buyIns: result.buyIns ?? [session.startStack],
+      handsPlayed: result.handsPlayed ?? null,
+      joinedHand: result.joinedHand ?? null,
+      joinedAt: result.joinedAt ?? null,
+      leftHand: result.leftHand ?? null,
+      leftAt: result.leftAt ?? null,
     })),
   });
 }

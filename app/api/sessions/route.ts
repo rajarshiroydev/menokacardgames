@@ -127,13 +127,8 @@ function resolveSession(
   for (const result of session.results) {
     const player = findPlayer(result, players);
     if (!player) return null;
-    results.push({
-      playerId: player.id,
-      name: player.name,
-      net: result.net,
-      end: result.end,
-      ...(result.buyIns ? { buyIns: result.buyIns } : {}),
-    });
+    // The saved player's identity, with everything the result recorded.
+    results.push({ ...result, playerId: player.id, name: player.name });
   }
   return { ...session, results };
 }
@@ -367,7 +362,12 @@ async function handlePost(request: Request) {
                 player_name,
                 invested,
                 ending_stack,
-                accounting_status
+                accounting_status,
+                hands_played,
+                joined_hand,
+                joined_at,
+                left_hand,
+                left_at
               )
               SELECT
                 ${ownerId}::uuid,
@@ -377,7 +377,12 @@ async function handlePost(request: Request) {
                 source.value->>'name',
                 (source.value->>'invested')::bigint,
                 (source.value->>'end')::bigint,
-                'verified'
+                'verified',
+                (source.value->>'handsPlayed')::integer,
+                (source.value->>'joinedHand')::integer,
+                timestamptz 'epoch' + (source.value->>'joinedAt')::bigint * interval '1 millisecond',
+                (source.value->>'leftHand')::integer,
+                timestamptz 'epoch' + (source.value->>'leftAt')::bigint * interval '1 millisecond'
               FROM inserted_session
               CROSS JOIN source_results AS source
               RETURNING owner_id, session_record_id, player_id
@@ -639,7 +644,12 @@ async function handlePut(request: Request) {
             player_name,
             invested,
             ending_stack,
-            accounting_status
+            accounting_status,
+            hands_played,
+            joined_hand,
+            joined_at,
+            left_hand,
+            left_at
           )
           SELECT
             ${ownerId}::uuid,
@@ -649,7 +659,12 @@ async function handlePut(request: Request) {
             source.value->>'name',
             (source.value->>'invested')::bigint,
             (source.value->>'end')::bigint,
-            'verified'
+            'verified',
+            (source.value->>'handsPlayed')::integer,
+            (source.value->>'joinedHand')::integer,
+            timestamptz 'epoch' + (source.value->>'joinedAt')::bigint * interval '1 millisecond',
+            (source.value->>'leftHand')::integer,
+            timestamptz 'epoch' + (source.value->>'leftAt')::bigint * interval '1 millisecond'
           FROM source_results AS source
           RETURNING owner_id, session_record_id, player_id
         )

@@ -175,6 +175,65 @@ export function parseRakeRules(value: unknown): RakeRules | undefined {
   return rules;
 }
 
+type PlayerRecord = Pick<
+  SessionResult,
+  "handsPlayed" | "joinedHand" | "joinedAt" | "leftHand" | "leftAt"
+>;
+
+/**
+ * A result's record of the player's time at the table (games that track
+ * players). Hand numbers must fit the game's hands and times its start and
+ * end; quick ledgers have times only. A late joiner's first hand is 2 or
+ * later (hand 1 is the start), and a hand they joined before can't be one
+ * they left after.
+ */
+function parsePlayerRecord(
+  result: Record<string, unknown>,
+  game: { ledger: boolean; hands: number; date: number; ended: number },
+): PlayerRecord {
+  const present = (key: string) => result[key] !== undefined && result[key] !== null;
+  const hand = (key: string, label: string, min: number, max: number) => {
+    if (!present(key)) return undefined;
+    if (game.ledger) throw new Error("A quick ledger game has no hands");
+    const value = asSafeInteger(result[key], label, { min });
+    if (value > max) throw new Error(`${label} is outside the game's hands`);
+    return value;
+  };
+  const time = (key: string, label: string) => {
+    if (!present(key)) return undefined;
+    const value = asSafeInteger(result[key], label, { min: game.date });
+    if (value > game.ended) throw new Error(`${label} is after the game ended`);
+    return value;
+  };
+  const handsPlayed = hand("handsPlayed", "Hands played", 0, game.hands);
+  const joinedHand = hand("joinedHand", "The hand joined at", 2, game.hands + 1);
+  const leftHand = hand("leftHand", "The hand cashed out after", 0, game.hands);
+  const joinedAt = time("joinedAt", "The time joined");
+  const leftAt = time("leftAt", "The time cashed out");
+  if (
+    (joinedHand !== undefined && joinedAt === undefined) ||
+    (leftHand !== undefined && leftAt === undefined)
+  ) {
+    throw new Error("A join or cash-out needs its time");
+  }
+  if (joinedAt !== undefined && leftAt !== undefined && leftAt < joinedAt) {
+    throw new Error("A player can't cash out before joining");
+  }
+  if (
+    handsPlayed !== undefined &&
+    handsPlayed > (leftHand ?? game.hands) - (joinedHand ?? 1) + 1
+  ) {
+    throw new Error("More hands played than the player was at the table for");
+  }
+  return {
+    ...(handsPlayed !== undefined ? { handsPlayed } : {}),
+    ...(joinedHand !== undefined ? { joinedHand } : {}),
+    ...(joinedAt !== undefined ? { joinedAt } : {}),
+    ...(leftHand !== undefined ? { leftHand } : {}),
+    ...(leftAt !== undefined ? { leftAt } : {}),
+  };
+}
+
 export function validateSession(input: unknown): PokerSession {
   if (!input || typeof input !== "object" || Array.isArray(input)) {
     throw new Error("Invalid session");
@@ -295,8 +354,14 @@ export function validateSession(input: unknown): PokerSession {
       net,
       end,
       ...(buyIns ? { buyIns } : {}),
+      ...parsePlayerRecord(result, { ledger, hands, date, ended }),
     };
   });
+  // A hand-by-hand game that tracked players records everyone's hands.
+  const counted = results.filter((result) => result.handsPlayed !== undefined);
+  if (counted.length && counted.length !== results.length) {
+    throw new Error("Every player's hands played must be saved, or none");
+  }
 
   const session = {
     ...(ledger ? { kind } : {}),

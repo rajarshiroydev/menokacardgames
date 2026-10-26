@@ -237,6 +237,31 @@ describe("group standings for a linked friend", () => {
     assert.equal("ante" in buildGroupStandings(group).sharedGames[0], false);
   });
 
+  it("passes each player's late join, cash-out and hands played on (migration 0028)", () => {
+    const tracked: GroupSessions = {
+      ...group,
+      sessions: [
+        {
+          ...group.sessions[1],
+          results: [
+            { ...group.sessions[1].results[0], handsPlayed: 12, leftHand: 12, leftAt: Date.UTC(2026, 8, 8, 2) },
+            // As jsonb sends them: nulls for what isn't set.
+            { ...group.sessions[1].results[1], handsPlayed: 20, joinedHand: null as never },
+          ],
+        },
+      ],
+    };
+    const [game] = buildGroupStandings(tracked).sharedGames;
+    assert.deepEqual(
+      game.results.map(({ handsPlayed, leftHand, leftAt, joinedHand }) => ({ handsPlayed, leftHand, leftAt, joinedHand })),
+      [
+        { handsPlayed: 12, leftHand: 12, leftAt: Date.UTC(2026, 8, 8, 2), joinedHand: undefined },
+        { handsPlayed: 20, leftHand: undefined, leftAt: undefined, joinedHand: undefined },
+      ],
+    );
+    assert.equal("joinedHand" in game.results[1], false);
+  });
+
   it("finds a shared game by start time for its results card", () => {
     const withEnd: GroupSessions = {
       ...group,

@@ -35,6 +35,7 @@ import {
   DEFAULT_BLIND_SCHEDULE,
   editBlindSchedule,
   formatDate,
+  formatTime,
   formatPercent,
   describeRakeRules,
   handRake,
@@ -74,6 +75,7 @@ import {
   returnToTable,
   mostRebuysUsed,
   rebuyBlockReason,
+  savedPlayerRecord,
   upcomingBigBlinds,
 } from "@/lib/poker/game";
 import {
@@ -1616,6 +1618,7 @@ export function PokerLedger({
         // The first hand deals from the seat after this one.
         dealerIndex: firstDealer - 1,
         log: [],
+        tracksPlayers: true,
         _setupCount: input.players.length,
       };
       dealNewHand(nextGame);
@@ -2466,6 +2469,7 @@ export function PokerLedger({
         (player.buyIns.length > 1 || player.buyIns[0] !== game.startStack)
           ? { buyIns: player.buyIns }
           : {}),
+        ...savedPlayerRecord(game, index, completedHands),
       })),
     };
 
@@ -10734,10 +10738,41 @@ function SessionCardBody({
   const blindsKnown = !ledger && session.ante > 0;
   const blinds = blindsKnown ? sessionBlindHistory(session) : null;
   const lastBigBlind = blinds?.levels.at(-1)!.bigBlind ?? 0;
+  // Each player's buy-ins in seat order; none saved means the starting
+  // stack. The first is what they started with (their own amount when the
+  // game let players choose), the rest are rebuys.
+  const buyIns = session.results.map((result) => ({
+    name: result.name,
+    amounts: result.buyIns?.length ? result.buyIns : [session.startStack],
+  }));
+  const sameStart = buyIns.every(
+    (player) => player.amounts[0] === buyIns[0]?.amounts[0],
+  );
+  const rebought = buyIns.filter((player) => player.amounts.length > 1);
   // Everything but the date, kind and player count sits under Details.
   const details: [string, string][] = [];
+  if (sameStart && buyIns.length) {
+    details.push(["Starting stack", money(buyIns[0].amounts[0])]);
+  }
   if (!ledger) details.push(["Hands", String(session.hands)]);
-  if (blindsKnown) details.push(["Big blind", money(session.ante)]);
+  if (blinds) {
+    details.push([
+      "Blinds",
+      `${money(smallBlindFor(session.ante, blinds.smallBlindRatio))}/${money(session.ante)}`,
+    ]);
+  }
+  // Games that tracked players (since 2026-10-26): hands each played, late
+  // joins and cash-outs. Older games have none of these.
+  const handsPlayed = session.results.every(
+    (result) => result.handsPlayed !== undefined,
+  )
+    ? session.results
+    : [];
+  const showHandsPlayed = handsPlayed.some(
+    (result) => result.handsPlayed !== session.hands,
+  );
+  const joined = session.results.filter((result) => result.joinedAt !== undefined);
+  const cashedOut = session.results.filter((result) => result.leftAt !== undefined);
   if (blinds) {
     details.push([
       "Finished at",
@@ -10760,7 +10795,7 @@ function SessionCardBody({
     ]);
   }
 
-  const hasDetails = details.length > 0 || blinds !== null;
+  const hasDetails = details.length > 0 || !sameStart || blinds !== null;
   const [showDetails, setShowDetails] = useState(false);
 
   return (
@@ -10797,14 +10832,6 @@ function SessionCardBody({
             <span className="result-name">
               {result.name}
               {result === you ? <span className="you-tag">You</span> : null}
-              {result.buyIns && result.buyIns.length > 1 ? (
-                <small>
-                  Buy-ins{" "}
-                  {money(
-                    result.buyIns.reduce((sum, amount) => sum + amount, 0),
-                  )}
-                </small>
-              ) : null}
             </span>
             <span className={`result-amount ${toneClass(result.net)}`}>
               {netMoney?.has(result)
@@ -10883,6 +10910,94 @@ function SessionCardBody({
                 </div>
               ))}
             </dl>
+          ) : null}
+          {!sameStart ? (
+            <>
+              <b>Starting stacks</b>
+              <dl>
+                {buyIns.map((player, index) => (
+                  <div key={`${player.name}-${index}`}>
+                    <dt>{player.name}</dt>
+                    <dd>{money(player.amounts[0])}</dd>
+                  </div>
+                ))}
+              </dl>
+            </>
+          ) : null}
+          {rebought.length ? (
+            <>
+              {/* Moved here from beside each name (user request
+                  2026-10-26): every buy-in, then the total. */}
+              <b>Buy-ins</b>
+              <dl>
+                {rebought.map((player, index) => (
+                  <div key={`${player.name}-${index}`}>
+                    <dt>{player.name}</dt>
+                    <dd>
+                      {player.amounts.map(money).join(" + ")} ={" "}
+                      {money(player.amounts.reduce((sum, amount) => sum + amount, 0))}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+            </>
+          ) : null}
+          {showHandsPlayed ? (
+            <>
+              <b>Hands played</b>
+              <dl>
+                {handsPlayed.map((result, index) => (
+                  <div key={`${result.name}-${index}`}>
+                    <dt>{result.name}</dt>
+                    <dd>{result.handsPlayed}</dd>
+                  </div>
+                ))}
+              </dl>
+            </>
+          ) : null}
+          {joined.length ? (
+            <>
+              <b>Joined late</b>
+              <dl>
+                {joined.map((result, index) => (
+                  <div key={`${result.name}-${index}`}>
+                    <dt>{result.name}</dt>
+                    <dd>
+                      {result.joinedHand !== undefined
+                        ? `From hand ${result.joinedHand} · `
+                        : ""}
+                      {/* "am"/"pm" keep their case under Title Case. */}
+                      <span className="literal-text">
+                        {formatTime(result.joinedAt!)}
+                      </span>
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+            </>
+          ) : null}
+          {cashedOut.length ? (
+            <>
+              <b>Cashed out</b>
+              <dl>
+                {cashedOut.map((result, index) => (
+                  <div key={`${result.name}-${index}`}>
+                    <dt>{result.name}</dt>
+                    <dd>
+                      {result.leftHand === undefined
+                        ? ""
+                        : result.leftHand === 0
+                          ? "Before hand 1 · "
+                          : `After hand ${result.leftHand} · `}
+                      <span className="literal-text">
+                        {formatTime(result.leftAt!)}
+                      </span>{" "}
+                      · {money(result.end)}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+            </>
           ) : null}
           {blinds ? (
             <>
@@ -12293,11 +12408,17 @@ function groupGameSession(group: GroupStandings, game: GroupGame) {
     ...(game.rakeRules ? { rakeRules: game.rakeRules } : {}),
     ...(game.rake ? { rake: game.rake } : {}),
     ...(game.chipValue ? { chipValue: game.chipValue } : {}),
+    // Everything the card shows; the avatar and You tag are handled apart.
     results: game.results.map((result) => ({
       name: result.name,
       net: result.net,
       end: result.end,
       ...(result.buyIns ? { buyIns: result.buyIns } : {}),
+      ...(result.handsPlayed !== undefined ? { handsPlayed: result.handsPlayed } : {}),
+      ...(result.joinedHand !== undefined ? { joinedHand: result.joinedHand } : {}),
+      ...(result.joinedAt !== undefined ? { joinedAt: result.joinedAt } : {}),
+      ...(result.leftHand !== undefined ? { leftHand: result.leftHand } : {}),
+      ...(result.leftAt !== undefined ? { leftAt: result.leftAt } : {}),
     })),
   };
   const you = game.results.findIndex((result) => result.isMe);

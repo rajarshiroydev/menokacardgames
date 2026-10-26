@@ -177,7 +177,7 @@ describe("quick ledger count and save", () => {
   function playedGame() {
     const game = newGame();
     ledgerBuyIn(game, 1, 1000); // Arjun: 2,000 in
-    ledgerCashOut(game, 0, 1600); // Asha leaves with 1,600 (+600)
+    ledgerCashOut(game, 0, 1600, START + 1_800_000); // Asha leaves with 1,600 (+600)
     return game; // 4,000 bought, 2,400 on the table
   }
 
@@ -202,7 +202,8 @@ describe("quick ledger count and save", () => {
       startStack: 1000,
       hands: 0,
       results: [
-        { playerId: "p-asha", name: "Asha", net: 600, end: 1600 },
+        // Cashed out half an hour in (games tracking players, 2026-10-26).
+        { playerId: "p-asha", name: "Asha", net: 600, end: 1600, leftAt: START + 1_800_000 },
         { playerId: "p-arjun", name: "Arjun", net: -600, end: 1400, buyIns: [1000, 1000] },
         { playerId: "p-bikram", name: "Bikram", net: 0, end: 1000 },
       ],

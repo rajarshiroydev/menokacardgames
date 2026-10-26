@@ -11,6 +11,23 @@ export type Player = {
    * they left with, which is their result. Absent while seated.
    */
   left?: boolean;
+  /**
+   * Games that track players (`GameState.tracksPlayers`) only. Hands this
+   * player was dealt into; hand-by-hand games only.
+   */
+  handsPlayed?: number;
+  /**
+   * Joined after the game began: the first hand they could be dealt
+   * (hand-by-hand games) and when (ms). Absent for players there from the start.
+   */
+  joinedHand?: number;
+  joinedAt?: number;
+  /**
+   * Cashed out: the last hand dealt before they left (hand-by-hand games)
+   * and when (ms). Cleared if they return to the table.
+   */
+  leftHand?: number;
+  leftAt?: number;
 };
 
 /**
@@ -192,6 +209,8 @@ export type CompletedHand = {
   blindLevelsBefore?: BlindLevelRecord[];
   /** Rake taken in the game before this hand; older records lack it. */
   rakeBefore?: number;
+  /** Each player's hands played before this hand (games that track players). */
+  handsPlayedBefore?: number[];
 };
 
 /**
@@ -301,6 +320,12 @@ export type GameState = {
   lastHand?: CompletedHand | null;
   /** A saved game reopened to play on; saving updates that game. */
   continues?: ContinuedSession;
+  /**
+   * Records each player's hands played, late join and cash-out (games
+   * started from 2026-10-26, and continued games saved with the record).
+   * Absent in older games, which can't know those for hands already played.
+   */
+  tracksPlayers?: true;
   _setupCount: number;
 };
 
@@ -310,6 +335,17 @@ export type SessionResult = {
   net: number;
   end: number;
   buyIns?: number[];
+  /**
+   * Games that tracked players (see `Player`): hands dealt in (hand by hand
+   * only; then every result has it), the first hand a late joiner could
+   * play and when they joined, and the last hand before a cash-out and when.
+   * Times are ms; hands are absent in quick ledgers.
+   */
+  handsPlayed?: number;
+  joinedHand?: number;
+  joinedAt?: number;
+  leftHand?: number;
+  leftAt?: number;
 };
 
 export type PokerSession = {

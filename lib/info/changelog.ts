@@ -31,6 +31,18 @@ export const CHANGELOG: ChangelogEntry[] = [
     title: "Fairer standings and friends' games",
     items: [
       {
+        tag: "improved",
+        text: "A game's Details now show the starting stack (or each player's, when they differ) and every buy-in with its total, so the results list stays clean.",
+      },
+      {
+        tag: "new",
+        text: "Games now remember who joined late, who cashed out and when, and how many hands each player played. Look back at them under Details on any game you play from today, along with the starting small and big blind.",
+      },
+      {
+        tag: "fixed",
+        text: "A continued game with an odd small blind or with rake can be saved again.",
+      },
+      {
         tag: "new",
         text: "See the games you played at a friend's table. On Games, pick a friend's hosted games from the list at the top, just like on Ranks, to see each game you played there with everyone's results, its details, Settle up and its results card to share. Only the host can continue a game or change its chip value.",
       },

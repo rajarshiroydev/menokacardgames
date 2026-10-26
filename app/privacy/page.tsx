@@ -73,7 +73,9 @@ export default function PrivacyPage() {
           </li>
           <li>
             <b>Your games:</b> game names, dates and times, seats, blinds,
-            antes, rake, buy-ins, rebuys, chip counts and results.
+            antes, rake, buy-ins, rebuys, chip counts and results, and, for
+            each player, how many hands they played and when they joined late
+            or cashed out.
           </li>
           <li>
             <b>The game in progress:</b> while you play, your phone sends us a

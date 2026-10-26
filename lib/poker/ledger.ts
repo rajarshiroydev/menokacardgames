@@ -1,5 +1,10 @@
 import { isValidBuyIn, MAX_BUY_INS } from "./buy-ins.ts";
-import { canJoinGame, MAX_GAME_PLAYERS, totalBuyIns } from "./game.ts";
+import {
+  canJoinGame,
+  MAX_GAME_PLAYERS,
+  savedPlayerRecord,
+  totalBuyIns,
+} from "./game.ts";
 import { chipCurrency, formatChips, type ChipUnit } from "./money.ts";
 import type { ChipValue, GameState, LedgerStep, PokerSession } from "./types";
 
@@ -112,6 +117,7 @@ export function createLedgerGame(input: {
     handNo: 0,
     dealerIndex: -1,
     log: [],
+    tracksPlayers: true,
     _setupCount: players.length,
   };
 }
@@ -145,6 +151,7 @@ export function ledgerJoin(
   game: GameState,
   player: { id?: string; name: string },
   amount: number,
+  now = Date.now(),
 ) {
   if (
     !isLedgerGame(game) ||
@@ -159,6 +166,7 @@ export function ledgerJoin(
     name: player.name,
     stack: 0,
     buyIns: [amount],
+    ...(game.tracksPlayers ? { joinedAt: now } : {}),
   });
   noteBuyInAmount(game, amount);
   record(game, before, `${player.name} joins for ${money(game, amount)}`);
@@ -166,7 +174,12 @@ export function ledgerJoin(
 }
 
 /** A player leaves with `chips`, which become their result. */
-export function ledgerCashOut(game: GameState, playerIndex: number, chips: number) {
+export function ledgerCashOut(
+  game: GameState,
+  playerIndex: number,
+  chips: number,
+  now = Date.now(),
+) {
   const player = game.players[playerIndex];
   if (
     !isLedgerGame(game) ||
@@ -180,6 +193,7 @@ export function ledgerCashOut(game: GameState, playerIndex: number, chips: numbe
   const before = snapshot(game);
   player.left = true;
   player.stack = chips;
+  if (game.tracksPlayers) player.leftAt = now;
   record(game, before, `${player.name} cashes out with ${money(game, chips)}`);
   return true;
 }
@@ -194,6 +208,7 @@ export function ledgerReturn(game: GameState, playerIndex: number) {
   const before = snapshot(game);
   const chips = player.stack;
   delete player.left;
+  delete player.leftAt;
   player.stack = 0;
   record(
     game,
@@ -310,6 +325,7 @@ export function ledgerSession(
         ...(buyIns.length > 1 || buyIns[0] !== game.startStack
           ? { buyIns }
           : {}),
+        ...savedPlayerRecord(game, index, 0),
       };
     }),
   };

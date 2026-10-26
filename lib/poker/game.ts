@@ -20,6 +20,7 @@ import type {
   RaiseRecord,
   RakeRules,
   RebuyRules,
+  SessionResult,
   SmallBlindRatio,
 } from "./types";
 
@@ -54,6 +55,14 @@ export function formatDate(timestamp: number) {
     day: "numeric",
     month: "short",
     year: "numeric",
+  });
+}
+
+/** "9:40 pm", in the phone's time zone. */
+export function formatTime(timestamp: number) {
+  return new Date(timestamp).toLocaleTimeString("en-IN", {
+    hour: "numeric",
+    minute: "2-digit",
   });
 }
 
@@ -186,6 +195,7 @@ export function joinGame(
   player: { id?: string; name: string },
   seat: number,
   amount = game.startStack,
+  now = Date.now(),
 ) {
   if (!canJoinGame(game, player) || !isValidBuyIn(amount)) return false;
   if (!Number.isInteger(seat) || seat < 0 || seat > game.players.length) {
@@ -196,6 +206,10 @@ export function joinGame(
     name: player.name,
     stack: amount,
     buyIns: [amount],
+    // Late only once a hand has been dealt; they play from the next one.
+    ...(game.tracksPlayers
+      ? { handsPlayed: 0, ...(game.handNo > 0 ? { joinedHand: game.handNo + 1, joinedAt: now } : {}) }
+      : {}),
   });
   noteBuyInAmount(game, amount);
   // The button stays with the same player.
@@ -213,10 +227,18 @@ export function joinGame(
  * become their result. They stay in the game's list, so saving counts them,
  * but are no longer dealt in.
  */
-export function cashOutPlayer(game: GameState, playerIndex: number) {
+export function cashOutPlayer(
+  game: GameState,
+  playerIndex: number,
+  now = Date.now(),
+) {
   const player = game.players[playerIndex];
   if (game.hand || !player || player.left) return false;
   player.left = true;
+  if (game.tracksPlayers) {
+    player.leftHand = game.handNo;
+    player.leftAt = now;
+  }
   game.lastHand = null;
   tableLog(
     game,
@@ -230,6 +252,8 @@ export function returnToTable(game: GameState, playerIndex: number) {
   const player = game.players[playerIndex];
   if (game.hand || !player?.left) return false;
   delete player.left;
+  delete player.leftHand;
+  delete player.leftAt;
   game.lastHand = null;
   tableLog(
     game,
@@ -859,6 +883,11 @@ function dealHand(game: GameState, now: number) {
     }
   }
   game.dealerIndex = dealerIndex;
+  if (game.tracksPlayers) {
+    game.players.forEach((player, index) => {
+      if (inHand[index]) player.handsPlayed = (player.handsPlayed ?? 0) + 1;
+    });
+  }
 
   game.hand = {
     no: game.handNo,
@@ -929,6 +958,13 @@ export function completedHandRecord(game: GameState): CompletedHand {
       ? structuredClone(hand.blindLevelsBefore)
       : undefined,
     rakeBefore: game.rake ?? 0,
+    ...(game.tracksPlayers
+      ? {
+          handsPlayedBefore: game.players.map(
+            (player, index) => (player.handsPlayed ?? 0) - (hand.in[index] ? 1 : 0),
+          ),
+        }
+      : {}),
   };
 }
 
@@ -952,6 +988,9 @@ export function undoLastHand(game: GameState, now = Date.now()) {
   game.players.forEach((player, index) => {
     player.stack = last.stacksBefore[index] ?? player.stack;
     player.buyIns = last.buyInsBefore?.[index] ?? player.buyIns;
+    // Dealing the hand again counts it again.
+    const handsBefore = last.handsPlayedBefore?.[index];
+    if (handsBefore !== undefined) player.handsPlayed = handsBefore;
   });
   game.log = game.log.filter(
     (line) =>
@@ -1001,6 +1040,10 @@ export function cancelCurrentHand(game: GameState, now = Date.now()) {
   if (!hand) return false;
   game.players.forEach((player, index) => {
     player.stack = hand.stacksBeforeHand[index] ?? player.stack;
+    // Dealing the hand again counts it again.
+    if (game.tracksPlayers && hand.in[index] && player.handsPlayed) {
+      player.handsPlayed -= 1;
+    }
   });
   game.log = game.log.filter((line) => !belongsToHand(line, hand.no));
   game.handNo = hand.no - 1;
@@ -1360,4 +1403,51 @@ export function awardPots(game: GameState, winners: number[][]) {
   };
   game.hand = null;
   return true;
+}
+
+/**
+ * What a saved result records about a player's time at the table, in games
+ * that track players: hands played (hand by hand), a late join and a
+ * cash-out. A hand still in progress at saving is refunded and doesn't
+ * count, so it is taken off, and hand numbers stay within the
+ * `completedHands` saved.
+ */
+export function savedPlayerRecord(
+  game: GameState,
+  playerIndex: number,
+  completedHands: number,
+): Pick<
+  SessionResult,
+  "handsPlayed" | "joinedHand" | "joinedAt" | "leftHand" | "leftAt"
+> {
+  const player = game.players[playerIndex];
+  if (!game.tracksPlayers || !player) return {};
+  const ledger = game.kind === "ledger";
+  const inProgress = game.hand?.in[playerIndex] ? 1 : 0;
+  return {
+    ...(ledger
+      ? {}
+      : {
+          handsPlayed: Math.min(
+            Math.max(0, (player.handsPlayed ?? 0) - inProgress),
+            completedHands,
+          ),
+        }),
+    ...(player.joinedAt !== undefined
+      ? {
+          ...(!ledger && player.joinedHand !== undefined
+            ? { joinedHand: Math.min(player.joinedHand, completedHands + 1) }
+            : {}),
+          joinedAt: player.joinedAt,
+        }
+      : {}),
+    ...(player.left && player.leftAt !== undefined
+      ? {
+          ...(!ledger && player.leftHand !== undefined
+            ? { leftHand: Math.min(player.leftHand, completedHands) }
+            : {}),
+          leftAt: player.leftAt,
+        }
+      : {}),
+  };
 }

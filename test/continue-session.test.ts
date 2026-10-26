@@ -269,4 +269,25 @@ describe("continuationError", () => {
     assert.deepEqual(game.rakeRules, { percent: 5, cap: 500 });
     assert.equal(game.rake, 400);
   });
+
+  it("matches rules that come back from the database in another key order", () => {
+    // jsonb returns {"big","small"} and {"cap","percent"}; the phone sends
+    // {small, big} and {percent, cap}.
+    const fromDatabase: SavedSession = {
+      ...structuredClone(saved),
+      blindHistory: {
+        ...structuredClone(saved.blindHistory!),
+        smallBlindRatio: { big: 100, small: 40 },
+      },
+      rakeRules: { cap: 500, percent: 5 },
+      rake: 400,
+    };
+    assert.equal(
+      continuationError(
+        fromDatabase,
+        continued({ rakeRules: { percent: 5, cap: 500 }, rake: 400 }),
+      ),
+      null,
+    );
+  });
 });

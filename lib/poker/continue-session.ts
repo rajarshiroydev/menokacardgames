@@ -54,6 +54,10 @@ export function gameFromSession(
     });
   }
   const firstDealer = Math.floor(random() * session.results.length);
+  // Hands played are saved for every player of a game that tracked them.
+  const tracked = session.results.every(
+    (result) => result.handsPlayed !== undefined,
+  );
 
   return {
     ...(session.name ? { gameName: session.name } : {}),
@@ -90,6 +94,30 @@ export function gameFromSession(
       buyIns: result.buyIns?.length
         ? [...result.buyIns]
         : [session.startStack],
+      // Saved with the record: players who cashed out stay out, and the
+      // counts carry on. Older games seat everyone again, as before.
+      ...(tracked
+        ? {
+            handsPlayed: result.handsPlayed ?? 0,
+            ...(result.joinedAt !== undefined
+              ? {
+                  ...(result.joinedHand !== undefined
+                    ? { joinedHand: result.joinedHand }
+                    : {}),
+                  joinedAt: result.joinedAt,
+                }
+              : {}),
+            ...(result.leftAt !== undefined
+              ? {
+                  left: true,
+                  ...(result.leftHand !== undefined
+                    ? { leftHand: result.leftHand }
+                    : {}),
+                  leftAt: result.leftAt,
+                }
+              : {}),
+          }
+        : {}),
     })),
     hand: null,
     handNo: session.hands,
@@ -102,6 +130,7 @@ export function gameFromSession(
     ],
     winnerAnnouncement: null,
     lastHand: null,
+    ...(tracked ? { tracksPlayers: true as const } : {}),
     continues: {
       id: session.id,
       sessionNumber: session.sessionNumber,
@@ -136,6 +165,17 @@ function canonicalLevels(history: BlindHistory) {
   );
 }
 
+// Compared by value: the saved copy comes back from Postgres jsonb with its
+// keys in another order ({"big","small"}, {"cap","percent"}), so the same
+// rules would never match as JSON text.
+function ratioKey(ratio: BlindHistory["smallBlindRatio"]) {
+  return ratio ? `${ratio.small}/${ratio.big}` : "";
+}
+
+function rakeKey(rules: PokerSession["rakeRules"]) {
+  return rules ? `${rules.percent}%/${rules.cap}` : "";
+}
+
 function startsWith(list: string[], prefix: string[]) {
   return (
     prefix.length <= list.length &&
@@ -163,8 +203,7 @@ export function continuationError(
     incoming.ante !== saved.ante ||
     (incoming.chipUnit ?? "whole") !== (saved.chipUnit ?? "whole") ||
     Boolean(incoming.bigBlindAnte) !== Boolean(saved.bigBlindAnte) ||
-    JSON.stringify(incoming.rakeRules ?? null) !==
-      JSON.stringify(saved.rakeRules ?? null)
+    rakeKey(incoming.rakeRules) !== rakeKey(saved.rakeRules)
   ) {
     return "The continued game doesn't match the saved game";
   }
@@ -202,6 +241,18 @@ export function continuationError(
   if (!keptBuyIns) {
     return "The continued game must keep every earlier buy-in";
   }
+  // Hands already played stay counted, and a late join stays as it was.
+  const keptRecord = saved.results.every((result) => {
+    const later = incomingById.get(result.playerId!)!;
+    return (
+      (later.handsPlayed ?? 0) >= (result.handsPlayed ?? 0) &&
+      later.joinedHand === result.joinedHand &&
+      later.joinedAt === result.joinedAt
+    );
+  });
+  if (!keptRecord) {
+    return "The continued game must keep every earlier player's record";
+  }
   if (saved.blindHistory) {
     const before = saved.blindHistory;
     const after = incoming.blindHistory;
@@ -209,8 +260,7 @@ export function continuationError(
       !after ||
       !startsWith(canonicalPlans(after), canonicalPlans(before)) ||
       !startsWith(canonicalLevels(after), canonicalLevels(before)) ||
-      JSON.stringify(after.smallBlindRatio ?? null) !==
-        JSON.stringify(before.smallBlindRatio ?? null)
+      ratioKey(after.smallBlindRatio) !== ratioKey(before.smallBlindRatio)
     ) {
       return "The continued game must keep the earlier blinds";
     }

@@ -107,7 +107,7 @@ export function selectSessions(
                   AND (buy_ins.buy_ins->>0)::bigint = session.starting_stack
                 ) THEN '{}'::jsonb
               ELSE jsonb_build_object('buyIns', buy_ins.buy_ins)
-            END
+            END || public.result_seat_record(result)
             ORDER BY result.position
           ) AS results
           FROM session_results AS result
