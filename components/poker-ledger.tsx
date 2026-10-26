@@ -171,8 +171,10 @@ import { DELETION_GRACE_PERIOD_DAYS } from "@/lib/accounts/lifecycle";
 import {
   hostedGameName,
   type GroupGame,
+  type GroupStandingRow,
   type GroupStandings,
 } from "@/lib/friends/group-standings";
+import { INVITE_EXPIRY_DAYS, inviteMessage, invitePath } from "@/lib/friends/invites";
 import { linkableFriends } from "@/lib/friends/link-guest";
 import {
   parseCodeInput,
@@ -2832,9 +2834,15 @@ export function PokerLedger({
           <RanksView
             groups={groups}
             groupsError={groupsError}
+            onToast={showToast}
+            onRequestSent={() => {
+              void refreshFriends();
+              void refreshGroups();
+            }}
             history={history}
             players={[...players, ...discardedPlayers]}
             selfPlayerId={profile.selfPlayerId}
+            hostName={profile.displayName ?? "Your host"}
             focusKey={rankFocus}
             loading={historyLoading}
             error={historyError}
@@ -5742,6 +5750,7 @@ function ProfileView({
   const [renaming, setRenaming] = useState<PlayerProfile | null>(null);
   const [choosingAvatar, setChoosingAvatar] = useState<PlayerProfile | null>(null);
   const [linking, setLinking] = useState<PlayerProfile | null>(null);
+  const [inviting, setInviting] = useState<PlayerProfile | null>(null);
   const [busy, setBusy] = useState("");
   useEffect(() => {
     if (menu === null) return;
@@ -5919,6 +5928,7 @@ function ProfileView({
       ...(friendsFor(player).length
         ? [{ label: "Link to friend…", run: () => setLinking(player) }]
         : []),
+      { label: "Invite to Pokerize", run: () => setInviting(player) },
       { label: "Rename", run: () => setRenaming(player) },
       { label: "Change avatar", run: () => setChoosingAvatar(player) },
       { label: "Remove player", danger: true, run: () => onDiscard(player) },
@@ -6159,6 +6169,14 @@ function ProfileView({
           seed={choosingAvatar.name}
           onPick={(avatar) => onGuestAvatar(choosingAvatar, avatar)}
           onClose={() => setChoosingAvatar(null)}
+        />
+      ) : null}
+      {inviting ? (
+        <InviteSheet
+          guest={inviting}
+          hostName={profile.displayName ?? "Your host"}
+          onToast={onToast}
+          onClose={() => setInviting(null)}
         />
       ) : null}
       {linking ? (
@@ -9284,6 +9302,136 @@ function UserCodeSheet({
   );
 }
 
+/**
+ * Invite to Pokerize, for one of your own guests (migration 0030; user
+ * decisions 2026-10-26: only the host who added a guest can invite them,
+ * never a friend's guest). Makes a one-person link, which works once for
+ * 30 days, and shares it. Whoever opens it, signs in and confirms they're
+ * the guest becomes your friend, with the guest's games.
+ */
+function InviteSheet({
+  guest,
+  hostName,
+  onToast,
+  onClose,
+}: {
+  guest: { id: string; name: string };
+  hostName: string;
+  onToast: (message: string) => void;
+  onClose: () => void;
+}) {
+  const [url, setUrl] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const canShare = typeof navigator !== "undefined" && "share" in navigator;
+  const message = inviteMessage(hostName, guest.name);
+
+  async function create() {
+    if (busy) return;
+    setBusy(true);
+    setError("");
+    try {
+      const response = await fetch("/api/invites", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "create", playerId: guest.id }),
+      });
+      const data = (await response.json().catch(() => ({}))) as {
+        token?: string;
+        error?: string;
+      };
+      if (!response.ok || !data.token) {
+        throw new Error(
+          apiErrorMessage(response.status, data.error, "Could not make the invite"),
+        );
+      }
+      setUrl(`${window.location.origin}${invitePath(data.token)}`);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Could not make the invite");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function share() {
+    try {
+      await navigator.share({ title: "Join me on Pokerize", text: message, url });
+    } catch {
+      // The host closed the share sheet.
+    }
+  }
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(`${message} ${url}`);
+      onToast("Invite Copied");
+    } catch {
+      // Clipboard blocked: the link is still shown for copying by hand.
+    }
+  }
+
+  return (
+    <div
+      className="modal show"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <div
+        className="sheet live-share-sheet"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="invite-title"
+      >
+        <span className="sheet-grabber" aria-hidden="true" />
+        <h2 id="invite-title">Invite to Pokerize</h2>
+        <p className="muted rule-note">
+          Send <span className="literal-text">{guest.name}</span> a link to
+          join. Once they sign in and confirm it&apos;s them, you become
+          friends and every game they played as{" "}
+          <span className="literal-text">{guest.name}</span> moves to their
+          account. The link works once, for {INVITE_EXPIRY_DAYS} days; a new
+          link replaces the last one.
+        </p>
+        {url ? (
+          <>
+            <p className="live-link">{url}</p>
+            {canShare ? (
+              <button className="primary full" type="button" onClick={() => void share()}>
+                Share invite
+              </button>
+            ) : null}
+            <button
+              className={`${canShare ? "ghost" : "primary"} full`}
+              type="button"
+              onClick={() => void copy()}
+            >
+              Copy invite
+            </button>
+          </>
+        ) : (
+          <button
+            className="primary full"
+            type="button"
+            disabled={busy}
+            onClick={() => void create()}
+          >
+            {busy ? "Making link…" : "Make invite link"}
+          </button>
+        )}
+        {error ? (
+          <p className="field-error" role="alert">
+            {error}
+          </p>
+        ) : null}
+        <button className="ghost full" type="button" onClick={onClose}>
+          Close
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function LiveShareSheet({
   token,
   busy,
@@ -11635,6 +11783,8 @@ function StandingCard({
   open,
   onToggle,
   excluded,
+  tag,
+  action,
   markNew,
 }: {
   id?: string;
@@ -11642,6 +11792,14 @@ function StandingCard({
   open: boolean;
   onToggle: () => void;
   excluded?: React.ReactNode;
+  /**
+   * What the player is to you, under their name, as on Profile: Friend or
+   * Guest on your own standings; Friend on a friend's (user requests
+   * 2026-10-26).
+   */
+  tag?: string | null;
+  /** Under the details: Add Friend, or Invite to Pokerize for your guests. */
+  action?: React.ReactNode;
   /** Label new players; off while everyone is shown for lack of regulars. */
   markNew: boolean;
 }) {
@@ -11675,6 +11833,54 @@ function StandingCard({
   if (entry.net !== undefined) {
     stats.push(["Net", signedMoney(entry.net), entry.net]);
   }
+  const status =
+    entry.averageReturn === null
+      ? "Unranked · no verified buy-ins"
+      : markNew && isNewPlayer(entry)
+        ? "Newcomer"
+        : null;
+  const head = (
+    <>
+      <span
+        className={`medal ${
+          entry.rank === 1
+            ? "gold"
+            : entry.rank === 2
+              ? "silver"
+              : entry.rank === 3
+                ? "bronze"
+                : ""
+        }`}
+      >
+        {entry.rank ?? "–"}
+      </span>
+      <Avatar
+        name={entry.name}
+        playerId={entry.playerId}
+        avatar={entry.avatar}
+        size="small"
+      />
+      <span className="standing-name">
+        <b>
+          {entry.name}
+          {entry.isMe ? <span className="you-tag">You</span> : null}
+        </b>
+        {tag || status ? (
+          <small>
+            {tag}
+            {tag && status ? " · " : null}
+            {status}
+          </small>
+        ) : null}
+      </span>
+      <span className={`standing-return ${toneClass(entry.averageReturn)}`}>
+        {entry.averageReturn === null ? "—" : formatPercent(entry.averageReturn)}
+      </span>
+      <span className="chevron" aria-hidden="true">
+        {open ? "▲" : "▼"}
+      </span>
+    </>
+  );
   return (
     <section id={id} className="glass standing-card">
       <button
@@ -11683,42 +11889,7 @@ function StandingCard({
         aria-expanded={open}
         onClick={onToggle}
       >
-        <span
-          className={`medal ${
-            entry.rank === 1
-              ? "gold"
-              : entry.rank === 2
-                ? "silver"
-                : entry.rank === 3
-                  ? "bronze"
-                  : ""
-          }`}
-        >
-          {entry.rank ?? "–"}
-        </span>
-        <Avatar
-          name={entry.name}
-          playerId={entry.playerId}
-          avatar={entry.avatar}
-          size="small"
-        />
-        <span className="standing-name">
-          <b>
-            {entry.name}
-            {entry.isMe ? <span className="you-tag">You</span> : null}
-          </b>
-          {entry.averageReturn === null ? (
-            <small>Unranked · no verified buy-ins</small>
-          ) : markNew && isNewPlayer(entry) ? (
-            <small>Newcomer</small>
-          ) : null}
-        </span>
-        <span className={`standing-return ${toneClass(entry.averageReturn)}`}>
-          {entry.averageReturn === null ? "—" : formatPercent(entry.averageReturn)}
-        </span>
-        <span className="chevron" aria-hidden="true">
-          {open ? "▲" : "▼"}
-        </span>
+        {head}
       </button>
       {open ? (
         <div className="standing-details">
@@ -11731,6 +11902,7 @@ function StandingCard({
             ))}
           </dl>
           {excluded}
+          {action}
         </div>
       ) : null}
     </section>
@@ -11744,11 +11916,16 @@ function StandingCard({
 function RanksView({
   groups,
   groupsError,
+  onToast,
+  onRequestSent,
   ...props
 }: Parameters<typeof StandingsView>[0] & {
   /** Friends' groups, kept by the app so the picker shows at once. */
   groups: GroupStandings[];
   groupsError: string;
+  onToast: (message: string) => void;
+  /** After a friend request from a group's standings: reload friends. */
+  onRequestSent: () => void;
 }) {
   const [selected, setSelected] = useState("mine");
   const group = groups.find((item) => item.hostAccountId === selected);
@@ -11762,7 +11939,15 @@ function RanksView({
         onSelect={setSelected}
       />
       {groupsError ? <p className="muted small-note">{groupsError}</p> : null}
-      {group ? <GroupStandingsView group={group} /> : <StandingsView {...props} />}
+      {group ? (
+        <GroupStandingsView
+          group={group}
+          onToast={onToast}
+          onRequestSent={onRequestSent}
+        />
+      ) : (
+        <StandingsView {...props} onToast={onToast} />
+      )}
     </div>
   );
 }
@@ -11920,7 +12105,15 @@ function hostedGamesTitle(hostName: string | null) {
   return `${hostName ?? "Friend"}'s Hosted Games`;
 }
 
-function GroupStandingsView({ group }: { group: GroupStandings }) {
+function GroupStandingsView({
+  group,
+  onToast,
+  onRequestSent,
+}: {
+  group: GroupStandings;
+  onToast: (message: string) => void;
+  onRequestSent: () => void;
+}) {
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
   const [showAll, setShowAll] = useState(false);
   const [showNew, setShowNew] = useState(false);
@@ -11973,6 +12166,18 @@ function GroupStandingsView({ group }: { group: GroupStandings }) {
             open={expanded.has(index)}
             onToggle={() => toggle(index)}
             markNew={shown.applies}
+            tag={row.account?.relation === "friends" ? "Friend" : null}
+            action={
+              row.account && row.account.relation !== "friends" ? (
+                <StandingFriendRequest
+                  key={`${row.account.id}-${row.account.relation}`}
+                  name={row.name}
+                  account={row.account}
+                  onToast={onToast}
+                  onRequestSent={onRequestSent}
+                />
+              ) : null
+            }
           />
         ))
       ) : (
@@ -12006,32 +12211,56 @@ function StandingsView({
   history,
   players,
   selfPlayerId,
+  hostName,
   focusKey,
   loading,
   error,
   onRetry,
+  onToast,
 }: {
   history: PokerSession[];
   /** Current names: a renamed guest or a friend's chosen name wins over saved ones. */
   players: PlayerProfile[];
   selfPlayerId: string | null;
+  /** Your name, for Invite to Pokerize's message. */
+  hostName: string;
   /** A player's card to open and scroll to, from "View standings". */
   focusKey: string | null;
   loading: boolean;
   error: string;
   onRetry: () => void;
+  onToast: (message: string) => void;
 }) {
+  // Your current guests, who can be invited to Pokerize (migration 0030).
+  const invitable = useMemo(
+    () =>
+      new Map(
+        players
+          .filter(
+            (player) =>
+              !player.discardedAt && !player.linked && player.id !== selfPlayerId,
+          )
+          .map((player) => [player.id, player]),
+      ),
+    [players, selfPlayerId],
+  );
+  const [inviting, setInviting] = useState<PlayerProfile | null>(null);
   const standings = useMemo(() => {
     const built = buildStandings(history);
-    const names = new Map(players.map((player) => [player.id, player.name]));
+    const byId = new Map(players.map((player) => [player.id, player]));
     const selfKey = selfPlayerId ? `id:${selfPlayerId}` : null;
     return {
       ...built,
-      entries: built.entries.map((entry) => ({
-        ...entry,
-        name: (entry.playerId && names.get(entry.playerId)) || entry.name,
-        isMe: entry.key === selfKey,
-      })),
+      entries: built.entries.map((entry) => {
+        const player = entry.playerId ? byId.get(entry.playerId) : undefined;
+        return {
+          ...entry,
+          name: player?.name || entry.name,
+          isMe: entry.key === selfKey,
+          // A friend's account, as on Profile; anyone else is a guest.
+          linked: Boolean(player?.linked),
+        };
+      }),
     };
   }, [history, players, selfPlayerId]);
   // "View standings" on a new player turns new players on, or the card
@@ -12100,6 +12329,20 @@ function StandingsView({
         open={expanded.has(entry.key)}
         onToggle={() => toggle(entry.key)}
         markNew={shown.applies}
+        tag={entry.isMe ? null : entry.linked ? "Friend" : "Guest"}
+        action={
+          entry.playerId && invitable.has(entry.playerId) ? (
+            <div className="standing-action">
+              <button
+                className="glass-button full"
+                type="button"
+                onClick={() => setInviting(invitable.get(entry.playerId!) ?? null)}
+              >
+                Invite to Pokerize
+              </button>
+            </div>
+          ) : null
+        }
         excluded={
           entry.ineligible.length ? (
             <ul className="leaderboard-excluded">
@@ -12163,6 +12406,80 @@ function StandingsView({
         </button>
       ) : null}
       {shown.pinnedSelf ? standingCard(shown.pinnedSelf) : null}
+      {inviting ? (
+        <InviteSheet
+          guest={inviting}
+          hostName={hostName}
+          onToast={onToast}
+          onClose={() => setInviting(null)}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * A friend request to a player in a friend's standings who has an account
+ * and isn't your friend yet: you sat at the same table, so you likely know
+ * them (user request 2026-10-26). Friends are marked Friend under their
+ * name instead, and a request you sent is listed in the Profile bell.
+ */
+function StandingFriendRequest({
+  name,
+  account,
+  onToast,
+  onRequestSent,
+}: {
+  name: string;
+  account: NonNullable<GroupStandingRow["account"]>;
+  onToast: (message: string) => void;
+  onRequestSent: () => void;
+}) {
+  const [relation, setRelation] = useState(account.relation);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  async function send() {
+    if (busy) return;
+    setBusy(true);
+    setError("");
+    try {
+      await friendsApi({ action: "send-coplayer", accountId: account.id });
+      setRelation("request-sent");
+      onToast("Request Sent");
+      onRequestSent();
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "The request was not sent");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // A request you sent shows in the Profile bell, not on the card.
+  if (relation === "friends" || relation === "request-sent") return null;
+  if (relation === "request-received") {
+    return (
+      <p className="standing-action muted">
+        <span className="literal-text">{name}</span> sent you a friend request.
+        Answer it on Profile.
+      </p>
+    );
+  }
+  return (
+    <div className="standing-action">
+      <button
+        className="glass-button full"
+        type="button"
+        disabled={busy}
+        onClick={() => void send()}
+      >
+        {busy ? "Sending…" : "Add Friend"}
+      </button>
+      {error ? (
+        <p className="field-error" role="alert">
+          {error}
+        </p>
+      ) : null}
     </div>
   );
 }

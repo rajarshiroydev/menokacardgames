@@ -5,7 +5,8 @@ import { type FormEvent, useState } from "react";
 import { authClient } from "@/lib/auth/client";
 import { TOO_MANY_REQUESTS_MESSAGE } from "@/lib/security/rate-limit-message";
 
-export function MagicLinkForm() {
+/** `invite`: an invite token, so the email link opens the invite page. */
+export function MagicLinkForm({ invite }: { invite: string | null }) {
   const [sentEmail, setSentEmail] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isPending, setIsPending] = useState(false);
@@ -28,7 +29,10 @@ export function MagicLinkForm() {
     try {
       const { error } = await authClient.signIn.magicLink({
         email,
-        callbackURL: "/auth/callback",
+        // The token rides in the link itself: it may open in another browser.
+        callbackURL: invite
+          ? `/auth/callback?invite=${encodeURIComponent(invite)}`
+          : "/auth/callback",
       });
 
       if (error) {

@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 
 import { auth } from "@/lib/auth/server";
+import { invitePath, isInviteToken } from "@/lib/friends/invites";
 import { testbedPersona } from "@/lib/testbed/personas";
 import { testbedMode, testbedPersonaPassword } from "@/lib/testbed/server";
 
@@ -22,5 +23,6 @@ export async function signInAsPersona(formData: FormData) {
   if (error) {
     redirect(`/auth/sign-in?testbed=${encodeURIComponent(error.code ?? "failed")}`);
   }
-  redirect("/");
+  const invite = formData.get("invite");
+  redirect(isInviteToken(invite) ? invitePath(invite) : "/");
 }

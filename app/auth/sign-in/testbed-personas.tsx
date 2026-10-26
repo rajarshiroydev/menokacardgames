@@ -3,7 +3,13 @@ import { TESTBED_PERSONAS } from "@/lib/testbed/personas";
 import { signInAsPersona } from "./testbed-actions";
 
 /** Testbed mode only: one button per fake persona, in place of email links. */
-export function TestbedPersonas({ error }: { error: string | null }) {
+export function TestbedPersonas({
+  error,
+  invite,
+}: {
+  error: string | null;
+  invite: string | null;
+}) {
   return (
     <div className="testbed-personas">
       <p className="auth-notice" role="note">
@@ -18,6 +24,7 @@ export function TestbedPersonas({ error }: { error: string | null }) {
       {TESTBED_PERSONAS.map((persona) => (
         <form key={persona.key} action={signInAsPersona}>
           <input type="hidden" name="persona" value={persona.key} />
+          {invite ? <input type="hidden" name="invite" value={invite} /> : null}
           <button type="submit" className="testbed-persona">
             <strong>{persona.displayName ?? "New person (no name)"}</strong>
             <small>{persona.setup}</small>

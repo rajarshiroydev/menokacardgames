@@ -198,8 +198,12 @@ const GROUPS: FeatureGroup[] = [
     lead: "Connect with other Pokerize players.",
     features: [
       {
-        name: "Your user code",
-        text: "Every account has a code like 7KQ4-M2XP. Share it, show it as a QR code, or scan a friend's to send a request.",
+        name: "Adding friends",
+        text: "Every account has a code like 7KQ4-M2XP. Share it, show it as a QR code, or scan a friend's to send a request. Or tap Add Friend on anyone you've played with in a friend's standings.",
+      },
+      {
+        name: "Invite your guests",
+        text: "Send a guest a one-person link to join Pokerize. When they sign up and confirm it's them, you become friends and every game they played as your guest moves to their account.",
       },
       {
         name: "Friends and guests",

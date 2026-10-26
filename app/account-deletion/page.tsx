@@ -62,6 +62,7 @@ export default function AccountDeletionPage() {
             friend requests disappear.
           </li>
           <li>Any live standings link you shared stops working.</li>
+          <li>Invite links you made for your guests stop working.</li>
           <li>
             The copy of your game in progress can&apos;t be restored. It is
             deleted after {GAME_BACKUP_EXPIRY_DAYS} days, or comes back if you
@@ -91,7 +92,7 @@ export default function AccountDeletionPage() {
             every player, game, result, buy-in and record in your ledger,
             including the copy of a game in progress;
           </li>
-          <li>your friend requests and friendships.</li>
+          <li>your friend requests, friendships and guest invites.</li>
         </ul>
         <p>
           Our database provider keeps short-term recovery copies for up to{" "}

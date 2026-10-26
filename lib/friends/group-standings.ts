@@ -7,6 +7,7 @@ import { type ChipUnit, DEFAULT_CURRENCY } from "../poker/money.ts";
 import { normalizeChipValue } from "../poker/settle-up.ts";
 import type { ChipValue, GameKind, PokerSession, SessionResult } from "../poker/types";
 import { fallbackAvatarId } from "../avatars.ts";
+import type { FriendRelation } from "./requests.ts";
 
 /** One linked host's saved games, as `public.friend_group_sessions()` returns them. */
 export type GroupSessions = {
@@ -38,7 +39,7 @@ export type GroupSessions = {
     /**
      * `avatar` is what the player shows as in the host's list (migration
      * 0015). `accountId` is the account that player is, if any (migration
-     * 0016); it stays on the server.
+     * 0016); only a standings row's `account` sends it to the phone.
      */
     results: Array<
       Required<Pick<SessionResult, "playerId">> &
@@ -64,6 +65,13 @@ export type GroupStandingRow = {
   hands: number;
   profitableSessions: number;
   isMe: boolean;
+  /**
+   * Set when the player is another person's account, so the reader can send
+   * them a friend request from the standings (user request 2026-10-26; the
+   * account id leaves the server only here). The server checks the shared
+   * game again when the request is sent (migration 0029).
+   */
+  account?: { id: string; relation: Exclude<FriendRelation, "self"> };
 };
 
 /**
@@ -145,6 +153,26 @@ export function playedInGroup(group: GroupSessions): boolean {
 const twoDecimals = (value: number) => Math.round(value * 100) / 100;
 
 /**
+ * How the reader stands with each account, from `public.friend_relations()`
+ * (migration 0029), keyed by account id. Accounts that aren't active are
+ * missing, and get no request.
+ */
+export type FriendRelations = Record<string, FriendRelation>;
+
+/** The accounts of the players in a group's games, for `friend_relations()`. */
+export function groupAccountIds(groups: GroupSessions[]): string[] {
+  const ids = new Set<string>();
+  for (const group of groups) {
+    for (const session of group.sessions) {
+      for (const result of session.results) {
+        if (result.accountId) ids.add(result.accountId);
+      }
+    }
+  }
+  return [...ids];
+}
+
+/**
  * A friend's view of a host's group, built only from the games the friend
  * played in ("what you could have seen at the table", user decision
  * 2026-10-05): the players they sat with, ranked among themselves 1…N with
@@ -155,7 +183,10 @@ const twoDecimals = (value: number) => Math.round(value * 100) / 100;
  * only those games (migration 0022); they are filtered here too. Game,
  * session and player IDs never leave the server.
  */
-export function buildGroupStandings(group: GroupSessions): GroupStandings {
+export function buildGroupStandings(
+  group: GroupSessions,
+  relations: FriendRelations = {},
+): GroupStandings {
   const shared = group.sessions.filter((session) =>
     session.results.some((result) => result.playerId === group.myPlayerId),
   );
@@ -181,9 +212,11 @@ export function buildGroupStandings(group: GroupSessions): GroupStandings {
   }));
   const standings = buildStandings(sessions);
   const avatars = new Map<string, string>();
+  const accounts = new Map<string, string>();
   for (const session of shared) {
     for (const result of session.results) {
       if (result.avatar) avatars.set(result.playerId, result.avatar);
+      if (result.accountId) accounts.set(result.playerId, result.accountId);
     }
   }
   const myKey = standingsKey({ playerId: group.myPlayerId, name: group.myPlayerName });
@@ -200,6 +233,8 @@ export function buildGroupStandings(group: GroupSessions): GroupStandings {
       : null,
     rows: standings.entries.map((entry) => {
       const isMe = entry.key === myKey;
+      const accountId = entry.playerId ? accounts.get(entry.playerId) : undefined;
+      const relation = accountId ? relations[accountId] : undefined;
       return {
         rank: entry.rank,
         name: entry.name,
@@ -214,6 +249,9 @@ export function buildGroupStandings(group: GroupSessions): GroupStandings {
         hands: entry.hands,
         profitableSessions: entry.profitableSessions,
         isMe,
+        ...(!isMe && accountId && relation && relation !== "self"
+          ? { account: { id: accountId, relation } }
+          : {}),
       };
     }),
     chart: standings.entries.map((entry) => {

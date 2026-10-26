@@ -14,6 +14,15 @@ export type FriendNotification =
       unread: boolean;
     }
   | {
+      /** A request you sent that is still waiting (user request 2026-10-26). */
+      kind: "sent";
+      key: string;
+      displayName: string;
+      avatar?: string;
+      at: number;
+      unread: false;
+    }
+  | {
       kind: "friend";
       key: string;
       displayName: string;
@@ -25,10 +34,15 @@ export type FriendNotification =
 /**
  * The notifications the bell lists, newest first, built from the friends
  * overview the app already loads. A waiting request stays unread until it is
- * answered; a new friendship is unread until the bell is opened after it.
+ * answered; a new friendship is unread until the bell is opened after it. A
+ * request you sent is listed while it waits but never counts as new: you
+ * know you sent it.
  */
 export function friendNotifications(
-  overview: Pick<FriendOverview, "received" | "friends"> | null,
+  overview:
+    | (Pick<FriendOverview, "received" | "friends"> &
+        Partial<Pick<FriendOverview, "sent">>)
+    | null,
   seenAt: number,
   now: number,
 ): FriendNotification[] {
@@ -53,7 +67,15 @@ export function friendNotifications(
       at: friend.since,
       unread: friend.since > seenAt,
     }));
-  return [...requests, ...friends].sort((a, b) => b.at - a.at);
+  const sent: FriendNotification[] = (overview.sent ?? []).map((request) => ({
+    kind: "sent",
+    key: `sent:${request.requestId}`,
+    displayName: request.displayName ?? "Someone",
+    avatar: request.avatar,
+    at: request.sentAt,
+    unread: false,
+  }));
+  return [...requests, ...sent, ...friends].sort((a, b) => b.at - a.at);
 }
 
 /** "Just now", "5m", "3h", "2d" or "4w" since a moment. */

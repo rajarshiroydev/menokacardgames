@@ -31,6 +31,14 @@ export const CHANGELOG: ChangelogEntry[] = [
     title: "Fairer standings and friends' games",
     items: [
       {
+        tag: "new",
+        text: "Add friends straight from a friend's standings: open the card of anyone you've played with and tap Add Friend. No code or QR needed. Requests you've sent now wait in the Profile bell. Standings now also mark each player as Friend or Guest, as on Profile.",
+      },
+      {
+        tag: "new",
+        text: "Invite your guests to Pokerize: send a guest a link from their options on Profile or their card on Ranks. When they join and confirm it's them, you become friends and their games move to their account.",
+      },
+      {
         tag: "improved",
         text: "A game's Details now show the starting stack (or each player's, when they differ) and every buy-in with its total, so the results list stays clean.",
       },

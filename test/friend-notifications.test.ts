@@ -52,6 +52,29 @@ describe("friend notifications", () => {
     );
   });
 
+  it("lists requests you sent while they wait, never as new", () => {
+    const list = friendNotifications(
+      {
+        received: [],
+        friends: [],
+        sent: [
+          {
+            requestId: "s1",
+            displayName: "Karan",
+            sentAt: NOW - DAY,
+            myPlayerName: null,
+          },
+        ],
+      },
+      0,
+      NOW,
+    );
+    assert.deepEqual(
+      list.map((item) => [item.kind, item.key, item.unread, item.displayName]),
+      [["sent", "sent:s1", false, "Karan"]],
+    );
+  });
+
   it("marks friendships made after the bell was last opened as unread", () => {
     const list = friendNotifications(
       { received: [], friends: [friend("Old", NOW - 5 * DAY), friend("New", NOW - DAY)] },

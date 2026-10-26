@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { exchangeMagicLinkVerifier } from "@/lib/auth/server";
+import { invitePath, isInviteToken } from "@/lib/friends/invites";
 
 export async function GET(request: Request) {
   const requestUrl = new URL(request.url);
@@ -15,7 +16,11 @@ export async function GET(request: Request) {
     return NextResponse.redirect(new URL("/auth/sign-in?error=INVALID_TOKEN", requestUrl));
   }
 
-  const response = NextResponse.redirect(new URL("/", requestUrl));
+  // Signed in from an invite: back to the invite page (migration 0030).
+  const invite = requestUrl.searchParams.get("invite");
+  const response = NextResponse.redirect(
+    new URL(isInviteToken(invite) ? invitePath(invite) : "/", requestUrl),
+  );
   response.headers.set("Cache-Control", "no-store");
 
   for (const cookie of sessionResponse.headers.getSetCookie()) {

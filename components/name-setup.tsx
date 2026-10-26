@@ -18,8 +18,15 @@ import { ThemeToggle } from "@/components/theme-toggle";
  * show it, so the ledger never opens for a nameless account. The avatar is
  * saved with the name; it starts as the random one the account was given.
  */
-export function NameSetup({ initialAvatar }: { initialAvatar: string }) {
-  const [name, setName] = useState("");
+export function NameSetup({
+  initialAvatar,
+  initialName = "",
+}: {
+  initialAvatar: string;
+  /** From an invite: the name the host knows them by, to keep or change. */
+  initialName?: string;
+}) {
+  const [name, setName] = useState(initialName);
   const [avatar, setAvatar] = useState(initialAvatar);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);

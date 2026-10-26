@@ -4,6 +4,7 @@ import { describe, it } from "node:test";
 import {
   buildGroupStandings,
   findSharedGame,
+  groupAccountIds,
   playedInGroup,
   type GroupSessions,
 } from "../lib/friends/group-standings.ts";
@@ -103,6 +104,43 @@ describe("group standings for a linked friend", () => {
     for (const hidden of ["p-raj", "p-deb", "secret-session"]) {
       assert.equal(sent.includes(hidden), false, hidden);
     }
+  });
+
+  it("offers a friend request only for other players who have an account (migration 0029)", () => {
+    const withAccounts: GroupSessions = {
+      ...group,
+      sessions: group.sessions.map((session) => ({
+        ...session,
+        results: [
+          ...session.results.map((result) => ({
+            ...result,
+            accountId: result.playerId === "p-raj" ? "acct-raj" : "acct-deb",
+          })),
+          { playerId: "p-guest", name: "Guest", net: 0, end: 1000, buyIns: [1000], accountId: null },
+          { playerId: "p-amy", name: "Amy", net: 0, end: 1000, buyIns: [1000], accountId: "acct-amy" },
+        ],
+      })),
+    };
+    assert.deepEqual(groupAccountIds([withAccounts]).sort(), [
+      "acct-amy",
+      "acct-deb",
+      "acct-raj",
+    ]);
+    const rows = buildGroupStandings(withAccounts, {
+      "acct-raj": "friends",
+      "acct-deb": "self",
+      // acct-amy is missing: not an active account.
+    }).rows;
+    const byName = new Map(rows.map((row) => [row.name, row]));
+    assert.deepEqual(byName.get("Rajarshi")?.account, { id: "acct-raj", relation: "friends" });
+    assert.equal(byName.get("Debraj")?.account, undefined);
+    assert.equal(byName.get("Guest")?.account, undefined);
+    assert.equal(byName.get("Amy")?.account, undefined);
+    // Without relations (before the migration) nobody gets a request.
+    assert.equal(
+      buildGroupStandings(withAccounts).rows.some((row) => row.account),
+      false,
+    );
   });
 
   it("uses only games the friend played in: no other players, games or totals", () => {

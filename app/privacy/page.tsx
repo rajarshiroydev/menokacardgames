@@ -8,6 +8,7 @@ import {
   DATA_LOCATION,
   DELETION_GRACE_PERIOD_DAYS,
   GAME_BACKUP_EXPIRY_DAYS,
+  INVITE_EXPIRY_DAYS,
   LIVE_VIEW_EXPIRY_HOURS,
   MINIMUM_AGE,
   OPERATOR_COUNTRY,
@@ -89,6 +90,12 @@ export default function PrivacyPage() {
             are friends with.
           </li>
           <li>
+            <b>Invites:</b> when you invite one of your guests to {APP_NAME},
+            which guest, when, and whether the person who opened the link said
+            it was them. We store only a scrambled copy of the link, never the
+            link itself, and collect no email or phone number for it.
+          </li>
+          <li>
             <b>Records:</b> a log of important account events, such as asking to
             delete or recover your account and friend changes, so we can explain
             what happened if something goes wrong.
@@ -149,6 +156,19 @@ export default function PrivacyPage() {
           <li>
             <b>People with your user code</b> see only your name and avatar,
             never your email.
+          </li>
+          <li>
+            <b>People you played with at a friend&apos;s table</b> can send you
+            a friend request from that friend&apos;s standings, without your
+            code. It shows them only whether you&apos;re already friends or a
+            request is waiting.
+          </li>
+          <li>
+            <b>Anyone with an invite link</b> a host made for one of their
+            guests sees the host&apos;s name and avatar and the guest&apos;s
+            name, until the link is used or {INVITE_EXPIRY_DAYS} days pass.
+            Whoever confirms they are that guest becomes the host&apos;s friend
+            and gets the guest&apos;s games, so send it only to that person.
           </li>
           <li>
             <b>Your friends</b> see your name and avatar, and standings and
@@ -222,6 +242,10 @@ export default function PrivacyPage() {
           <li>
             The copy of a game in progress until you save or discard it, or{" "}
             {GAME_BACKUP_EXPIRY_DAYS} days after its last change.
+          </li>
+          <li>
+            Invite links work for {INVITE_EXPIRY_DAYS} days or until used; the
+            record of an invite stays with your account.
           </li>
           <li>Hosting request logs are kept only for a short time.</li>
         </ul>

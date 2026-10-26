@@ -4220,6 +4220,17 @@ textarea::placeholder {
   font-weight: 600;
 }
 
+.standing-action {
+  display: grid;
+  gap: 8px;
+  margin: 14px 0 0;
+  font-size: 13px;
+}
+
+.standing-action .field-error {
+  margin: 0;
+}
+
 .leaderboard-excluded {
   margin: 12px 0 0;
   padding: 0;
@@ -5190,6 +5201,53 @@ textarea::placeholder {
   border-radius: var(--rs);
   color: var(--ink2);
   font-size: 14px;
+}
+
+/* The invite page (/join/<token>, migration 0030). */
+.invite-link {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+}
+
+.invite-host {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.invite-host img {
+  flex: none;
+  border-radius: 50%;
+  background: var(--glass2);
+}
+
+.invite-card h1 {
+  font-size: 34px;
+}
+
+.invite-question {
+  font-family: var(--fd);
+  font-size: 26px;
+  font-weight: 900;
+  font-variation-settings: "opsz" 72;
+  text-transform: uppercase;
+}
+
+.invite-actions {
+  display: grid;
+  gap: 10px;
+}
+
+.invite-no {
+  min-height: 46px;
+  border: 1px solid var(--gb);
+  border-radius: var(--rs);
+  background: var(--glass);
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 600;
 }
 
 /* Testbed mode only (npm run testbed:dev): one button per fake persona. */

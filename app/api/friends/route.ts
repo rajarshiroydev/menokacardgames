@@ -110,6 +110,22 @@ async function handlePost(request: Request) {
       return json({ sent }, 201);
     }
 
+    // From a friend's standings: someone the caller sat with, by account.
+    // The database checks the shared game (migration 0029).
+    if (action === "send-coplayer") {
+      const accountId = body.accountId;
+      if (typeof accountId !== "string" || !UUID_PATTERN.test(accountId)) {
+        return json({ error: "No such user found" }, 400);
+      }
+      const sent = await callFriendFunction<{ requestId: string }>(
+        authUserId,
+        (sql) => [
+          sql`SELECT public.friend_send_coplayer(${accountId}::uuid) AS result`,
+        ],
+      );
+      return json({ sent }, 201);
+    }
+
     if (
       action === "accept" ||
       action === "decline" ||

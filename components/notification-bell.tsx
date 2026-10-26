@@ -35,7 +35,8 @@ function storeSeenAt(at: number) {
 
 /**
  * The bell beside the theme switch on Profile. It lists friend requests
- * waiting for an answer and friendships made in the last 30 days.
+ * waiting for your answer, requests you sent that are still waiting, and
+ * friendships made in the last 30 days.
  */
 export function NotificationBell({
   overview,
@@ -126,6 +127,10 @@ export function NotificationBell({
                       {item.kind === "request" ? (
                         <>
                           <b>{item.displayName}</b> sent you a friend request
+                        </>
+                      ) : item.kind === "sent" ? (
+                        <>
+                          You sent <b>{item.displayName}</b> a friend request
                         </>
                       ) : (
                         <>

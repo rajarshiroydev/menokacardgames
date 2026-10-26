@@ -7,6 +7,7 @@ import { DELETION_GRACE_PERIOD_DAYS } from "@/lib/accounts/lifecycle";
 import { getHostSession } from "@/lib/auth/server";
 import { APP_NAME } from "@/lib/brand";
 import { MINIMUM_AGE } from "@/lib/info/legal";
+import { isInviteToken, invitePath } from "@/lib/friends/invites";
 import { testbedMode } from "@/lib/testbed/server";
 
 import { MagicLinkForm } from "./magic-link-form";
@@ -19,8 +20,10 @@ export default async function SignInPage({
 }: {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
-  if (await getHostSession()) redirect("/");
   const params = await searchParams;
+  // From an invite page: back there after signing in (migration 0030).
+  const invite = isInviteToken(params.invite) ? params.invite : null;
+  if (await getHostSession()) redirect(invite ? invitePath(invite) : "/");
   const deletionRequested = params.deletion === "requested";
   const testbedError =
     typeof params.testbed === "string" ? params.testbed.slice(0, 60) : null;
@@ -44,9 +47,9 @@ export default async function SignInPage({
           </p>
         ) : null}
         {testbedMode() ? (
-          <TestbedPersonas error={testbedError} />
+          <TestbedPersonas error={testbedError} invite={invite} />
         ) : (
-          <MagicLinkForm />
+          <MagicLinkForm invite={invite} />
         )}
         <p className="auth-legal">
           By signing in you agree to the <Link href="/terms">Terms of Use</Link>{" "}
