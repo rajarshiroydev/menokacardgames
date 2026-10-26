@@ -12707,7 +12707,7 @@ function LeaderboardChart({
     if (value === 0) return "0%";
     return `${value > 0 ? "+" : "−"}${Math.abs(value)}%`;
   };
-  const title = isNet ? "Net Won or Lost" : "Average Return";
+  const title = isNet ? "Net Profit or Loss" : "Average Return";
   const description = isNet
     ? "Each colored line shows the money one player has won or lost so far, after every ranked game. Games they missed keep the line flat."
     : "Each colored line shows one player's running average return after every game, starting at their first ranked game. Games they missed carry the previous average forward. A player's first games can run past the top or bottom edge.";

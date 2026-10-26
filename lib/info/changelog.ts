@@ -64,7 +64,7 @@ export const CHANGELOG: ChangelogEntry[] = [
       },
       {
         tag: "new",
-        text: "Switch the standings graph between Return % and Net to see how much money each player has won or lost over time.",
+        text: "Switch the standings graph between Return % and Net to see each player's net profit or loss over time.",
       },
       {
         tag: "improved",
