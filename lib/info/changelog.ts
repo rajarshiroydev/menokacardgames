@@ -27,6 +27,20 @@ export const CHANGE_TAG_LABELS: Record<ChangeTag, string> = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    date: "2026-10-26",
+    title: "Fairer standings for new players",
+    items: [
+      {
+        tag: "improved",
+        text: "New players no longer jump to the top of the standings after one or two lucky games. Once 3 players have played 5 games, players with 4 games or fewer are hidden until you turn on Newcomers under Player Standings. New groups still see everyone, and you always see your own card.",
+      },
+      {
+        tag: "improved",
+        text: "Each player's standings details now show Total: what they put in plus what they won or lost.",
+      },
+    ],
+  },
+  {
     date: "2026-10-13",
     title: "Quick ledger, settle up and Who wins?",
     items: [

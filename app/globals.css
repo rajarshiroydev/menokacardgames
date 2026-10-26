@@ -4048,6 +4048,14 @@ textarea::placeholder {
   vertical-align: 2px;
 }
 
+/* The Newcomers switch and its "i", on their own row under the heading. */
+.new-players-bar {
+  display: flex;
+  align-items: center;
+  padding: 0 4px;
+  font-size: 13px;
+}
+
 .heading-with-info {
   display: flex;
   align-items: center;

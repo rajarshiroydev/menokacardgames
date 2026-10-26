@@ -261,3 +261,92 @@ export function buildStandings(sessions: PokerSession[]): Standings {
     ),
   };
 }
+
+/**
+ * Players with this many ranked sessions or fewer count as new: a couple of
+ * lucky games can put them above regulars, so the standings hide them unless
+ * the reader turns on "New players" (user request, 2026-10-26; regulars from 5
+ * sessions, not 6, by the user's later decision that day).
+ */
+export const NEW_PLAYER_MAX_SESSIONS = 4;
+
+export function isNewPlayer(entry: Pick<StandingsEntry, "eligibleSessions">) {
+  return entry.eligibleSessions <= NEW_PLAYER_MAX_SESSIONS;
+}
+
+/**
+ * Leaves out new players and ranks the rest 1…N again, sharing a rank between
+ * identical scores as `buildStandings` does. Rows must already be in ranked
+ * order. Returns the kept rows' positions too, for lists kept in step with
+ * the rows (a friend's group sends its graph lines that way).
+ */
+export function withoutNewPlayers<
+  Row extends Pick<StandingsEntry, "rank" | "averageReturn" | "eligibleSessions">,
+>(rows: readonly Row[]): { rows: Row[]; kept: number[] } {
+  const kept = rows.flatMap((row, index) => (isNewPlayer(row) ? [] : [index]));
+  const ranked: Row[] = [];
+  kept.forEach((index, position) => {
+    const row = rows[index];
+    const previous = ranked[position - 1];
+    ranked.push({
+      ...row,
+      rank:
+        row.averageReturn === null
+          ? null
+          : previous && previous.averageReturn === row.averageReturn
+            ? previous.rank
+            : position + 1,
+    });
+  });
+  return { rows: ranked, kept };
+}
+
+/**
+ * New players are hidden only once this many players have more than
+ * `NEW_PLAYER_MAX_SESSIONS` ranked sessions (enough for gold, silver and
+ * bronze). Before that, a new group or a friend who has just joined would see
+ * an empty list, so everyone is shown (user decision 2026-10-26).
+ */
+export const NEW_PLAYER_FILTER_MIN_REGULARS = 3;
+
+type FilterRow = Pick<StandingsEntry, "rank" | "averageReturn" | "eligibleSessions"> & {
+  isMe?: boolean;
+};
+
+/**
+ * What the standings show for the New players switch. `filtering` is whether
+ * new players are hidden: the switch is off and there are enough regulars.
+ * When the reader is new and hidden, their own row comes back unranked as
+ * `pinnedSelf`, so nobody disappears from their own standings.
+ */
+export function filterNewPlayers<Row extends FilterRow>(
+  rows: readonly Row[],
+  showNew: boolean,
+): {
+  rows: Row[];
+  kept: number[];
+  /** False while there are too few regulars for the switch to do anything. */
+  applies: boolean;
+  filtering: boolean;
+  pinnedSelf: Row | null;
+} {
+  const regulars = rows.filter((row) => !isNewPlayer(row)).length;
+  const applies = regulars >= NEW_PLAYER_FILTER_MIN_REGULARS;
+  if (!applies || showNew) {
+    return {
+      rows: [...rows],
+      kept: rows.map((_, index) => index),
+      applies,
+      filtering: false,
+      pinnedSelf: null,
+    };
+  }
+  const shown = withoutNewPlayers(rows);
+  const self = rows.find((row) => row.isMe && isNewPlayer(row));
+  return {
+    ...shown,
+    applies,
+    filtering: true,
+    pinnedSelf: self ? { ...self, rank: null } : null,
+  };
+}

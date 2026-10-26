@@ -180,8 +180,11 @@ import {
 } from "@/lib/auth/recent-sign-in";
 import {
   buildStandings,
+  isNewPlayer,
+  NEW_PLAYER_MAX_SESSIONS,
   sessionReturn,
   standingsKey,
+  filterNewPlayers,
   type IneligibleReason,
   type Standings,
 } from "@/lib/poker/standings";
@@ -11477,12 +11480,15 @@ function StandingCard({
   open,
   onToggle,
   excluded,
+  markNew,
 }: {
   id?: string;
   entry: StandingCardEntry;
   open: boolean;
   onToggle: () => void;
   excluded?: React.ReactNode;
+  /** Label new players; off while everyone is shown for lack of regulars. */
+  markNew: boolean;
 }) {
   const { money, signedMoney } = useMoney();
   const profitableRate = Math.round(
@@ -11501,6 +11507,15 @@ function StandingCard({
   ];
   if (entry.invested !== undefined) {
     stats.push(["Invested", money(entry.invested), null]);
+  }
+  // What they ended with: chips put in plus the result, in hundredths so
+  // amounts with cents add exactly.
+  if (entry.invested !== undefined && entry.net !== undefined) {
+    stats.push([
+      "Total",
+      money(Math.round((entry.invested + entry.net) * 100) / 100),
+      null,
+    ]);
   }
   if (entry.net !== undefined) {
     stats.push(["Net", signedMoney(entry.net), entry.net]);
@@ -11539,6 +11554,8 @@ function StandingCard({
           </b>
           {entry.averageReturn === null ? (
             <small>Unranked · no verified buy-ins</small>
+          ) : markNew && isNewPlayer(entry) ? (
+            <small>Newcomer</small>
           ) : null}
         </span>
         <span className={`standing-return ${toneClass(entry.averageReturn)}`}>
@@ -11657,6 +11674,68 @@ function StandingsHeading({
   );
 }
 
+/**
+ * The Newcomers switch with its "i", on a row of its own under the
+ * standings heading: by the list it filters, not above the graph (user
+ * decision 2026-10-26).
+ */
+function NewPlayersBar({
+  showNew,
+  onShowNewChange,
+  applies,
+}: {
+  showNew: boolean;
+  onShowNewChange: (show: boolean) => void;
+  /** False while there are too few regulars: everyone shows, switch greyed. */
+  applies: boolean;
+}) {
+  const [showHelp, setShowHelp] = useState(false);
+  return (
+    <>
+      <div className="new-players-bar">
+        <div className="heading-with-info">
+          <label className="switch-row">
+            <span>Newcomers</span>
+            <button
+              className="switch"
+              type="button"
+              role="switch"
+              aria-checked={showNew || !applies}
+              aria-label="Show newcomers"
+              disabled={!applies}
+              onClick={() => onShowNewChange(!showNew)}
+            />
+          </label>
+          <button
+            className="info-button"
+            type="button"
+            aria-label="About newcomers"
+            onClick={() => setShowHelp(true)}
+          >
+            i
+          </button>
+        </div>
+      </div>
+      {showHelp ? (
+        <InfoSheet label="About newcomers" onClose={() => setShowHelp(false)}>
+          <ul className="info-sheet-list">
+            <li>
+              Players with {NEW_PLAYER_MAX_SESSIONS + 1} or more sessions are{" "}
+              <b>regulars</b> and are shown in the rankings.
+            </li>
+            <li>
+              Players with fewer than {NEW_PLAYER_MAX_SESSIONS + 1} sessions are{" "}
+              <b>newcomers</b> and are hidden, so a few lucky games can&apos;t
+              put them on top.
+            </li>
+          </ul>
+          <p>Turn this on to include newcomers in the rankings.</p>
+        </InfoSheet>
+      ) : null}
+    </>
+  );
+}
+
 /** "Asha's Hosted Games": the name of another host's group on Ranks. */
 function hostedGamesTitle(hostName: string | null) {
   return `${hostName ?? "Friend"}'s Hosted Games`;
@@ -11665,9 +11744,24 @@ function hostedGamesTitle(hostName: string | null) {
 function GroupStandingsView({ group }: { group: GroupStandings }) {
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
   const [showAll, setShowAll] = useState(false);
-  const rows = group.rows;
+  const [showNew, setShowNew] = useState(false);
+  // The graph's lines follow the rows, so the same players drop out of both.
+  const allLines = useMemo(() => chartLinesFromGroup(group), [group]);
+  const shown = useMemo(() => filterNewPlayers(group.rows, showNew), [group, showNew]);
+  const rows = shown.rows;
+  const lines = useMemo(
+    () => shown.kept.map((index) => allLines[index]),
+    [shown, allLines],
+  );
   const visible = showAll ? rows : rows.slice(0, STANDINGS_START);
   const hostName = group.hostName ?? "Your friend";
+  const newPlayersBar = group.rows.length ? (
+    <NewPlayersBar
+      showNew={showNew}
+      onShowNewChange={setShowNew}
+      applies={shown.applies}
+    />
+  ) : null;
 
   function toggle(index: number) {
     setExpanded((current) => {
@@ -11682,18 +11776,16 @@ function GroupStandingsView({ group }: { group: GroupStandings }) {
   return (
     <CurrencyContext.Provider value={group.currency}>
     <div className="stack-list">
-      {rows.length ? (
-        <LeaderboardChart
-          sessionCount={group.games}
-          lines={chartLinesFromGroup(group)}
-        />
+      {lines.length ? (
+        <LeaderboardChart sessionCount={group.games} lines={lines} />
       ) : null}
-      {rows.length ? (
+      {group.rows.length ? (
         <StandingsHeading
           intro={`Your ranking among the players you've sat with in games hosted by ${hostName}.`}
           hidden={GROUP_HIDDEN_INFO}
         />
       ) : null}
+      {newPlayersBar}
       {rows.length ? (
         visible.map((row, index) => (
           <StandingCard
@@ -11701,6 +11793,7 @@ function GroupStandingsView({ group }: { group: GroupStandings }) {
             entry={row}
             open={expanded.has(index)}
             onToggle={() => toggle(index)}
+            markNew={shown.applies}
           />
         ))
       ) : (
@@ -11716,6 +11809,14 @@ function GroupStandingsView({ group }: { group: GroupStandings }) {
         >
           {showAll ? "Show fewer" : `Show all ${rows.length} players`}
         </button>
+      ) : null}
+      {shown.pinnedSelf ? (
+        <StandingCard
+          entry={shown.pinnedSelf}
+          open={expanded.has(-1)}
+          onToggle={() => toggle(-1)}
+          markNew
+        />
       ) : null}
     </div>
     </CurrencyContext.Provider>
@@ -11754,7 +11855,20 @@ function StandingsView({
       })),
     };
   }, [history, players, selfPlayerId]);
-  const leaderboard = standings.entries;
+  // "View standings" on a new player turns new players on, or the card
+  // it opens would be hidden.
+  const [showNew, setShowNew] = useState(() =>
+    standings.entries.some((entry) => entry.key === focusKey && isNewPlayer(entry)),
+  );
+  const shown = useMemo(
+    () => filterNewPlayers(standings.entries, showNew),
+    [standings, showNew],
+  );
+  const leaderboard = shown.rows;
+  const lines = useMemo(() => {
+    const allLines = chartLinesFromStandings(standings);
+    return shown.kept.map((index) => allLines[index]);
+  }, [standings, shown]);
   const [expanded, setExpanded] = useState<Set<string>>(
     () => new Set(focusKey ? [focusKey] : []),
   );
@@ -11781,6 +11895,13 @@ function StandingsView({
     [history],
   );
   const visible = showAll ? leaderboard : leaderboard.slice(0, STANDINGS_START);
+  const newPlayersBar = (
+    <NewPlayersBar
+      showNew={showNew}
+      onShowNewChange={setShowNew}
+      applies={shown.applies}
+    />
+  );
 
   function toggle(key: string) {
     setExpanded((current) => {
@@ -11789,6 +11910,31 @@ function StandingsView({
       else next.add(key);
       return next;
     });
+  }
+
+  function standingCard(entry: (typeof leaderboard)[number]) {
+    return (
+      <StandingCard
+        key={entry.key}
+        id={`standing-${entry.key}`}
+        entry={entry}
+        open={expanded.has(entry.key)}
+        onToggle={() => toggle(entry.key)}
+        markNew={shown.applies}
+        excluded={
+          entry.ineligible.length ? (
+            <ul className="leaderboard-excluded">
+              {entry.ineligible.map(({ sessionId, reason }) => (
+                <li key={sessionId}>
+                  Not ranked: {sessionTitles.get(sessionId) ?? sessionId}{" "}
+                  — {INELIGIBLE_REASON_TEXT[reason]}
+                </li>
+              ))}
+            </ul>
+          ) : null
+        }
+      />
+    );
   }
 
   if (error) {
@@ -11808,7 +11954,7 @@ function StandingsView({
       </section>
     );
   }
-  if (!leaderboard.length) {
+  if (!standings.entries.length) {
     return (
       <section className="glass card">
         <p className="muted">
@@ -11821,33 +11967,13 @@ function StandingsView({
 
   return (
     <div className="stack-list">
-      <LeaderboardChart
-        sessionCount={standings.timeline.length}
-        lines={chartLinesFromStandings(standings)}
-      />
+      {lines.length ? (
+        <LeaderboardChart sessionCount={standings.timeline.length} lines={lines} />
+      ) : null}
 
       <StandingsHeading intro="This is the overall ranking of everyone who has played in sessions you hosted." />
-      {visible.map((entry) => (
-        <StandingCard
-          key={entry.key}
-          id={`standing-${entry.key}`}
-          entry={entry}
-          open={expanded.has(entry.key)}
-          onToggle={() => toggle(entry.key)}
-          excluded={
-            entry.ineligible.length ? (
-              <ul className="leaderboard-excluded">
-                {entry.ineligible.map(({ sessionId, reason }) => (
-                  <li key={sessionId}>
-                    Not ranked: {sessionTitles.get(sessionId) ?? sessionId}{" "}
-                    — {INELIGIBLE_REASON_TEXT[reason]}
-                  </li>
-                ))}
-              </ul>
-            ) : null
-          }
-        />
-      ))}
+      {newPlayersBar}
+      {visible.map(standingCard)}
       {leaderboard.length > STANDINGS_START ? (
         <button
           className="glass-button full accent-text"
@@ -11857,6 +11983,7 @@ function StandingsView({
           {showAll ? "Show fewer" : `Show all ${leaderboard.length} players`}
         </button>
       ) : null}
+      {shown.pinnedSelf ? standingCard(shown.pinnedSelf) : null}
     </div>
   );
 }

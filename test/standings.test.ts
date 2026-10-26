@@ -1,7 +1,15 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { buildStandings, sessionReturn } from "../lib/poker/standings.ts";
+import {
+  buildStandings,
+  filterNewPlayers,
+  isNewPlayer,
+  NEW_PLAYER_FILTER_MIN_REGULARS,
+  NEW_PLAYER_MAX_SESSIONS,
+  sessionReturn,
+  withoutNewPlayers,
+} from "../lib/poker/standings.ts";
 import type { PokerSession, SessionResult } from "../lib/poker/types.ts";
 
 let nextDate = 1;
@@ -356,5 +364,100 @@ describe("running average return graph", () => {
       standings.timeline.map((item) => item.id),
       ["earlier", "later"],
     );
+  });
+});
+
+describe("hiding new players", () => {
+  const row = (rank: number | null, averageReturn: number | null, eligibleSessions: number) => ({
+    rank,
+    averageReturn,
+    eligibleSessions,
+  });
+
+  it("counts four ranked sessions or fewer as new", () => {
+    assert.equal(NEW_PLAYER_MAX_SESSIONS, 4);
+    assert.equal(isNewPlayer({ eligibleSessions: 4 }), true);
+    assert.equal(isNewPlayer({ eligibleSessions: 5 }), false);
+  });
+
+  it("drops new players and ranks the rest again, keeping ties", () => {
+    const rows = [
+      row(1, 186.25, 2),
+      row(2, 40, 12),
+      row(3, 10, 6),
+      row(3, 10, 9),
+      row(5, -5, 3),
+      row(6, -20, 7),
+      row(null, null, 0),
+    ];
+
+    const { rows: kept, kept: positions } = withoutNewPlayers(rows);
+
+    assert.deepEqual(positions, [1, 2, 3, 5]);
+    assert.deepEqual(
+      kept.map((item) => item.rank),
+      [1, 2, 2, 4],
+    );
+    assert.equal(rows[1].rank, 2, "leaves the input rows alone");
+  });
+});
+
+describe("when new players are hidden", () => {
+  const row = (
+    rank: number | null,
+    averageReturn: number | null,
+    eligibleSessions: number,
+    isMe = false,
+  ) => ({ rank, averageReturn, eligibleSessions, isMe });
+
+  it("shows everyone while there are fewer than three regulars", () => {
+    assert.equal(NEW_PLAYER_FILTER_MIN_REGULARS, 3);
+    const rows = [row(1, 90, 2), row(2, 20, 8), row(3, 5, 6), row(4, -10, 3, true)];
+
+    const result = filterNewPlayers(rows, false);
+
+    assert.equal(result.applies, false);
+    assert.equal(result.filtering, false);
+    assert.deepEqual(result.kept, [0, 1, 2, 3]);
+    assert.deepEqual(result.rows, rows);
+    assert.equal(result.pinnedSelf, null);
+  });
+
+  it("hides new players once three are regulars and pins your own row", () => {
+    const rows = [
+      row(1, 90, 2),
+      row(2, 20, 8),
+      row(3, 5, 6),
+      row(4, -10, 3, true),
+      row(5, -20, 7),
+    ];
+
+    const result = filterNewPlayers(rows, false);
+
+    assert.equal(result.applies, true);
+    assert.equal(result.filtering, true);
+    assert.deepEqual(result.kept, [1, 2, 4]);
+    assert.deepEqual(
+      result.rows.map((item) => item.rank),
+      [1, 2, 3],
+    );
+    assert.deepEqual(result.pinnedSelf, { ...rows[3], rank: null });
+  });
+
+  it("shows everyone, without a pinned row, when the switch is on", () => {
+    const rows = [row(1, 90, 2, true), row(2, 20, 8), row(3, 5, 6), row(4, -20, 7)];
+
+    const result = filterNewPlayers(rows, true);
+
+    assert.equal(result.applies, true);
+    assert.equal(result.filtering, false);
+    assert.deepEqual(result.rows, rows);
+    assert.equal(result.pinnedSelf, null);
+  });
+
+  it("pins nothing when you are a regular", () => {
+    const rows = [row(1, 90, 2), row(2, 20, 8, true), row(3, 5, 6), row(4, -20, 7)];
+
+    assert.equal(filterNewPlayers(rows, false).pinnedSelf, null);
   });
 });
