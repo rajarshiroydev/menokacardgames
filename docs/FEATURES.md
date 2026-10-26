@@ -427,6 +427,15 @@ Everyone who signs in has their own account and can host their own games. Friend
 - **Send request.** You don't choose a player when sending; to tie them to a guest you already record, use **Link to friend…** on that guest after they accept (below). The sheet closes and they appear in your list as "Request sent · waiting", with **Cancel request** in their options.
 - **Limits:** at most **20** of your requests can be waiting at once, and only one request can be waiting between two people, in either direction. If someone declines you, you can't ask them again for **7 days**.
 
+**The Pokerize badge** (since 26 October 2026)
+
+- **What it means.** A small Pokerize chip (green and blue, with a spade) after a name means that player has a Pokerize account, like a verified tick. Screen readers say "On Pokerize"; on a computer, hovering shows the same.
+- **Tapping it** opens a small bubble above it (below it near the top of the screen): "*Name* is on Pokerize", or "You're on Pokerize" on your own. On a friend's standings, for someone who isn't your friend and has no request waiting either way, it adds "Open their card to add them as a friend." It closes on a second tap, a tap anywhere else, Escape, or scrolling. The tap doesn't open a standings card or start Profile's long-press options. The badge stays small but takes taps from a little around it.
+- **Who gets it:** you, your friends, people whose friend request you sent or received, and, in a friend's standings, anyone there who has an active account (whether or not they're your friend). A guest has no badge, even if they have an account somewhere, until a host links them; the app never guesses from names. Locked or deleting accounts have no badge.
+- **Where (only these):** Profile's player list, friend requests on Profile and Home, Find Friend's result, and Ranks (your own and friends' standings).
+- **Not shown** anywhere else: not during a game (setup, the hand-by-hand table, the quick ledger), not on Games (game cards, Details, Settle up), and not on the live standings link or the results card image, which people outside the app can see.
+- **Reading a friend's standings:** a badge with "Friend" is already your friend; a badge alone is on Pokerize and can be sent a request (**Add Friend** in their opened card); no badge is that host's guest, who can't. The Friend and Guest words under names are unchanged.
+
 **Inviting a guest to Pokerize** (since 26 October 2026)
 
 - **Only your own guests.** **Invite to Pokerize** is in a guest's **⋯** options on Profile and inside their opened card on your own standings (Ranks → My Hosted Games). Friends, your own player, removed players and guests in a friend's standings have no invite: only the host who added a guest can invite them.

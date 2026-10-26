@@ -157,6 +157,7 @@ import { AvatarPicker, randomAvatarId } from "@/components/avatar-picker";
 import { BrandMark } from "@/components/brand-mark";
 import { emptyWhoWinsDraft, HandChecker } from "@/components/hand-checker";
 import { NotificationBell } from "@/components/notification-bell";
+import { PokerizeBadge } from "@/components/pokerize-badge";
 import { SettingsView } from "@/components/settings-view";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { AVATARS } from "@/lib/avatars";
@@ -249,6 +250,34 @@ const ChipUnitContext = createContext<ChipUnit>("whole");
  */
 type AvatarLookup = (playerId?: string, name?: string) => string | undefined;
 const AvatarContext = createContext<AvatarLookup>(() => undefined);
+
+/**
+ * A name that may wrap, with the badge kept on the line of its last word so
+ * it never sits alone on a line.
+ */
+function BadgedName({
+  name,
+  badge,
+  isMe,
+  hint,
+}: {
+  name: string;
+  badge: boolean;
+  isMe?: boolean;
+  hint?: string;
+}) {
+  if (!badge) return <>{name}</>;
+  const cut = name.trimEnd().lastIndexOf(" ") + 1;
+  return (
+    <>
+      {name.slice(0, cut)}
+      <span className="badge-keep">
+        {name.slice(cut)}
+        <PokerizeBadge name={name} isMe={isMe} hint={hint} />
+      </span>
+    </>
+  );
+}
 
 function buildAvatarLookup(
   players: PlayerProfile[],
@@ -3624,7 +3653,7 @@ function HomeView({
             </span>
             <span className="home-notice-copy">
               <b className="literal-text">
-                {friendRequests[0].displayName ?? "Someone"}
+                <BadgedName name={friendRequests[0].displayName ?? "Someone"} badge />
               </b>
               {friendRequests.length > 1
                 ? ` and ${friendRequests.length - 1} other${friendRequests.length === 2 ? "" : "s"} want to be friends`
@@ -6061,7 +6090,12 @@ function ProfileView({
                     <AvatarArt id={row.avatar} seed={row.name} />
                   </span>
                   <span className="profile-row-copy">
-                    <b>{row.name}</b>
+                    <b className="name-with-badge">
+                      <span>{row.name}</span>
+                      {hasAccount(row) && row.kind !== "removed" ? (
+                        <PokerizeBadge name={row.name} isMe={row.kind === "self"} />
+                      ) : null}
+                    </b>
                     <small className={`row-kind-${row.kind}`}>{subtitle(row)}</small>
                   </span>
                   {actions.length ? (
@@ -6800,7 +6834,10 @@ function FriendRequestCard({
         <div>
           <span className="eyebrow">Friend request</span>
           <p>
-            <b>{name}</b> wants to be friends
+            <b>
+              <BadgedName name={name} badge />
+            </b>{" "}
+            wants to be friends
           </p>
         </div>
       </div>
@@ -7093,7 +7130,10 @@ function AddPlayerSheet({
                 <AvatarArt id={found.avatar} seed={found.displayName ?? ""} />
               </span>
               <span className="profile-row-copy">
-                <b>{found.displayName ?? "Someone without a name yet"}</b>
+                <b className="name-with-badge">
+                  <span>{found.displayName ?? "Someone without a name yet"}</span>
+                  <PokerizeBadge name={found.displayName ?? undefined} />
+                </b>
                 <small>
                   {found.relation === "none" ? `On ${APP_NAME}` : relationNote[found.relation]}
                 </small>
@@ -11784,6 +11824,8 @@ function StandingCard({
   onToggle,
   excluded,
   tag,
+  onPokerize,
+  badgeHint,
   action,
   markNew,
 }: {
@@ -11798,6 +11840,10 @@ function StandingCard({
    * 2026-10-26).
    */
   tag?: string | null;
+  /** Has a Pokerize account: the badge after the name. */
+  onPokerize?: boolean;
+  /** Under the badge's "is on Pokerize" when it is tapped. */
+  badgeHint?: string;
   /** Under the details: Add Friend, or Invite to Pokerize for your guests. */
   action?: React.ReactNode;
   /** Label new players; off while everyone is shown for lack of regulars. */
@@ -11862,7 +11908,12 @@ function StandingCard({
       />
       <span className="standing-name">
         <b>
-          {entry.name}
+          <BadgedName
+            name={entry.name}
+            badge={Boolean(onPokerize)}
+            isMe={entry.isMe}
+            hint={badgeHint}
+          />
           {entry.isMe ? <span className="you-tag">You</span> : null}
         </b>
         {tag || status ? (
@@ -12167,6 +12218,12 @@ function GroupStandingsView({
             onToggle={() => toggle(index)}
             markNew={shown.applies}
             tag={row.account?.relation === "friends" ? "Friend" : null}
+            onPokerize={row.isMe || Boolean(row.account)}
+            badgeHint={
+              row.account?.relation === "none"
+                ? "Open their card to add them as a friend."
+                : undefined
+            }
             action={
               row.account && row.account.relation !== "friends" ? (
                 <StandingFriendRequest
@@ -12330,6 +12387,7 @@ function StandingsView({
         onToggle={() => toggle(entry.key)}
         markNew={shown.applies}
         tag={entry.isMe ? null : entry.linked ? "Friend" : "Guest"}
+        onPokerize={entry.isMe || entry.linked}
         action={
           entry.playerId && invitable.has(entry.playerId) ? (
             <div className="standing-action">
@@ -12665,7 +12723,7 @@ function GroupGamesView({
     () => (group.sharedGames ?? []).map((game) => groupGameSession(group, game)),
     [group],
   );
-  const settling = games.find((item) => item.session.id === settlingId)?.session;
+  const settling = games.find((item) => item.session.id === settlingId);
 
   return (
     <CurrencyContext.Provider value={group.currency}>
@@ -12691,8 +12749,8 @@ function GroupGamesView({
       {settling
         ? createPortal(
             <SettleUpSheet
-              key={settling.id}
-              session={settling}
+              key={settling.session.id}
+              session={settling.session}
               onCopied={onCopied}
               onClose={() => setSettlingId(null)}
             />,

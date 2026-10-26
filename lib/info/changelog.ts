@@ -32,6 +32,10 @@ export const CHANGELOG: ChangelogEntry[] = [
     items: [
       {
         tag: "new",
+        text: "A Pokerize badge now sits after the name of everyone with a Pokerize account, on Profile and Ranks; tap it to see who it is. In a friend's standings you can tell at a glance who you can add as a friend: a badge without \"Friend\" means they're on Pokerize and one tap away.",
+      },
+      {
+        tag: "new",
         text: "Add friends straight from a friend's standings: open the card of anyone you've played with and tap Add Friend. No code or QR needed. Requests you've sent now wait in the Profile bell. Standings now also mark each player as Friend or Guest, as on Profile.",
       },
       {

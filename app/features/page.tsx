@@ -199,7 +199,7 @@ const GROUPS: FeatureGroup[] = [
     features: [
       {
         name: "Adding friends",
-        text: "Every account has a code like 7KQ4-M2XP. Share it, show it as a QR code, or scan a friend's to send a request. Or tap Add Friend on anyone you've played with in a friend's standings.",
+        text: "Every account has a code like 7KQ4-M2XP. Share it, show it as a QR code, or scan a friend's to send a request. Or tap Add Friend on anyone you've played with in a friend's standings: a Pokerize badge after a name shows who has an account.",
       },
       {
         name: "Invite your guests",
