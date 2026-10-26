@@ -54,6 +54,10 @@ export const CHANGELOG: ChangelogEntry[] = [
         tag: "improved",
         text: "Each player's standings details now show Total: what they put in plus what they won or lost.",
       },
+      {
+        tag: "improved",
+        text: "In a friend's standings, every player's card now shows Invested, Total and Net across the games you played together, not just yours.",
+      },
     ],
   },
   {

@@ -49,8 +49,8 @@ export type GroupSessions = {
 
 /**
  * A standings row as a friend sees it: no player, game or session IDs.
- * `invested` and `net` are sent only on the friend's own row; other players'
- * money stays on the server (user decision, 2026-10-05).
+ * Every row carries its player's `invested` and `net` (user decision
+ * 2026-10-26, which replaces the 2026-10-05 "own row only" rule).
  */
 export type GroupStandingRow = {
   rank: number | null;
@@ -59,8 +59,8 @@ export type GroupStandingRow = {
   averageReturn: number | null;
   eligibleSessions: number;
   totalSessions: number;
-  invested?: number;
-  net?: number;
+  invested: number;
+  net: number;
   hands: number;
   profitableSessions: number;
   isMe: boolean;
@@ -149,8 +149,8 @@ const twoDecimals = (value: number) => Math.round(value * 100) / 100;
  * 2026-10-05): the players they sat with, ranked among themselves 1…N with
  * the same rules as the host's own standings, the graph over those games,
  * and the games themselves for the Games screen. Nothing reveals how many
- * games or players the host has in total, and only the friend's own row
- * carries money in the standings. `friend_group_sessions()` already returns
+ * games or players the host has in total; every row carries its player's
+ * invested and net (2026-10-26). `friend_group_sessions()` already returns
  * only those games (migration 0022); they are filtered here too. Game,
  * session and player IDs never leave the server.
  */
@@ -208,7 +208,8 @@ export function buildGroupStandings(group: GroupSessions): GroupStandings {
         averageReturn: entry.averageReturn,
         eligibleSessions: entry.eligibleSessions,
         totalSessions: entry.totalSessions,
-        ...(isMe ? { invested: entry.invested, net: entry.net } : {}),
+        invested: entry.invested,
+        net: entry.net,
         hands: entry.hands,
         profitableSessions: entry.profitableSessions,
         isMe,

@@ -70,15 +70,15 @@ describe("group standings for a linked friend", () => {
     assert.equal(result.lastPlayed, Date.UTC(2026, 8, 8));
   });
 
-  it("sends money only on the friend's own row", () => {
+  it("sends every player's invested and net", () => {
     const rows = buildGroupStandings(group).rows;
     const me = rows.find((row) => row.isMe);
     const other = rows.find((row) => !row.isMe);
     assert.equal(me?.net, 500);
     assert.equal(me?.invested, 2000);
     assert.ok(other);
-    assert.equal("net" in other, false);
-    assert.equal("invested" in other, false);
+    assert.equal(other.net, -500);
+    assert.equal(other.invested, 3000);
   });
 
   it("marks the friend's own row", () => {

@@ -153,8 +153,10 @@ export default function PrivacyPage() {
           <li>
             <b>Your friends</b> see your name and avatar, and standings and
             saved games built only from the games of theirs you played in. In
-            those games they see everyone&apos;s result, as at the table. They
-            never see your email or games they weren&apos;t in.
+            those games they see everyone&apos;s result, as at the table, and
+            the standings show each player&apos;s invested and net totals
+            across them. They never see your email or games they weren&apos;t
+            in.
           </li>
           <li>
             <b>Anyone with a live standings link</b> sees the names, avatars and

@@ -11620,7 +11620,6 @@ type StandingCardEntry = {
   averageReturn: number | null;
   eligibleSessions: number;
   totalSessions: number;
-  /** Absent on other players' rows in a friend's group: no money is sent. */
   invested?: number;
   net?: number;
   hands: number;
@@ -12175,7 +12174,6 @@ function StandingsView({
 const GROUP_HIDDEN_INFO = [
   "Games you didn't play in",
   "Players you've never sat with",
-  "Other players' total chips put in and net won or lost (only yours show; each game you played in is on Games)",
   "How many games and players the host has in total",
 ] as const;
 
