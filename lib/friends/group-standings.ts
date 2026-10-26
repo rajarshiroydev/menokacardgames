@@ -69,10 +69,11 @@ export type GroupStandingRow = {
 /**
  * One player's graph line, in the same order as `rows`: only the games that
  * changed their score, as [game number in date order, running average after
- * it, that game's return], both in percent to two decimals. Games they missed
- * repeat the previous average, so the phone fills those in.
+ * it, that game's return, money won or lost so far]: the two returns in
+ * percent to two decimals, the money in the host's currency (2026-10-26).
+ * Games they missed repeat the previous point, so the phone fills those in.
  */
-export type GroupChartLine = Array<[number, number, number]>;
+export type GroupChartLine = Array<[number, number, number, number]>;
 
 /**
  * One game a friend played in, as they saw it at the table: every player's
@@ -215,19 +216,21 @@ export function buildGroupStandings(group: GroupSessions): GroupStandings {
         isMe,
       };
     }),
-    chart: standings.entries.map((entry) =>
-      (standings.series.get(entry.key)?.returns ?? []).flatMap((point) =>
+    chart: standings.entries.map((entry) => {
+      const line = standings.series.get(entry.key);
+      return (line?.returns ?? []).flatMap((point) =>
         point && point.sessionReturn !== null
           ? [
               [
                 point.sessionIndex,
                 twoDecimals(point.runningAverage),
                 twoDecimals(point.sessionReturn),
-              ] as [number, number, number],
+                line?.cumulativeNet[point.sessionIndex] ?? 0,
+              ] as [number, number, number, number],
             ]
           : [],
-      ),
-    ),
+      );
+    }),
     sharedGames: shared
       .map((session): GroupGame => {
         const chipValue = normalizeChipValue(session.chipValue);

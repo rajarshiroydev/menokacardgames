@@ -3990,9 +3990,27 @@ textarea::placeholder {
   stroke-linejoin: round;
 }
 
+/* The graph's Return % / Net switch, beside its heading. */
+.chart-heading {
+  align-items: center;
+}
+
+.segmented.chart-metric {
+  flex: none;
+  padding: 3px;
+}
+
+.segmented.chart-metric button {
+  flex: none;
+  height: 28px;
+  padding: 0 10px;
+  font-size: 12px;
+}
+
 .chart-legend {
   display: grid;
   grid-template-columns: 1fr 1fr;
+  grid-auto-flow: column;
   gap: 4px 14px;
   padding-top: 10px;
   border-top: 1px solid var(--line);

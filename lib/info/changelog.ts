@@ -58,6 +58,18 @@ export const CHANGELOG: ChangelogEntry[] = [
         tag: "improved",
         text: "In a friend's standings, every player's card now shows Invested, Total and Net across the games you played together, not just yours.",
       },
+      {
+        tag: "improved",
+        text: "The names under the standings graph now read in rank order down the left column, then down the right.",
+      },
+      {
+        tag: "new",
+        text: "Switch the standings graph between Return % and Net to see how much money each player has won or lost over time.",
+      },
+      {
+        tag: "improved",
+        text: "The standings graph now fits its height to the players' results, so the lines spread out and are easier to tell apart.",
+      },
     ],
   },
   {

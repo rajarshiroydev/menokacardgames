@@ -184,7 +184,7 @@ const GROUPS: FeatureGroup[] = [
       },
       {
         name: "A graph over time",
-        text: "Watch each player's average change game by game. Tap a name to highlight their line.",
+        text: "Watch each player's average, or the money they've won or lost, change game by game. Tap a name to highlight their line.",
       },
       {
         name: "The details",

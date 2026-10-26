@@ -162,16 +162,17 @@ describe("group standings for a linked friend", () => {
     assert.equal(result.chart.length, result.rows.length);
     const line = (name: string) => result.chart[result.rows.findIndex((row) => row.name === name)];
     assert.deepEqual(line("Debraj"), [
-      [1, -50, -50],
-      [2, 25, 100],
-      [3, 25, 25],
+      [1, -50, -50, -500],
+      [2, 25, 100, 500],
+      [3, 25, 25, 750],
     ]);
     // Rajarshi missed game 3, so the phone carries his average; it isn't sent.
+    // The last number is the money won or lost so far.
     assert.deepEqual(line("Rajarshi"), [
-      [1, 50, 50],
-      [2, 0, -50],
+      [1, 50, 50, 500],
+      [2, 0, -50, -500],
     ]);
-    assert.deepEqual(line("Newcomer"), [[3, -25, -25]]);
+    assert.deepEqual(line("Newcomer"), [[3, -25, -25, -250]]);
   });
 
   it("handles a host with no saved games", () => {
