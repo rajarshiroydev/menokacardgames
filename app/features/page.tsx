@@ -207,7 +207,7 @@ const GROUPS: FeatureGroup[] = [
       },
       {
         name: "Group standings",
-        text: "When a friend hosts games you play in, you can see standings built only from those games, ranked among the people you sat with.",
+        text: "When a friend hosts games you play in, you can see standings built only from those games, ranked among the people you sat with, and every one of those games with everyone's results on Games.",
       },
       {
         name: "Notifications",

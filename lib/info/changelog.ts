@@ -28,8 +28,12 @@ export const CHANGE_TAG_LABELS: Record<ChangeTag, string> = {
 export const CHANGELOG: ChangelogEntry[] = [
   {
     date: "2026-10-26",
-    title: "Fairer standings for new players",
+    title: "Fairer standings and friends' games",
     items: [
+      {
+        tag: "new",
+        text: "See the games you played at a friend's table. On Games, pick a friend's hosted games from the list at the top, just like on Ranks, to see each game you played there with everyone's results, its details, Settle up and its results card to share. Only the host can continue a game or change its chip value.",
+      },
       {
         tag: "improved",
         text: "New players no longer jump to the top of the standings after one or two lucky games. Once 3 players have played 5 games, players with 4 games or fewer are hidden until you turn on Newcomers under Player Standings. New groups still see everyone, and you always see your own card.",

@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 
 import {
   buildGroupStandings,
+  findSharedGame,
   playedInGroup,
   type GroupSessions,
 } from "../lib/friends/group-standings.ts";
@@ -50,6 +51,10 @@ describe("group standings for a linked friend", () => {
       group.sessions.map((session) => ({
         ...session,
         chipValue: session.chipValue ?? undefined,
+        blindHistory: session.blindHistory ?? undefined,
+        rebuyRules: session.rebuyRules ?? undefined,
+        rakeRules: session.rakeRules ?? undefined,
+        kind: session.kind === "ledger" ? session.kind : undefined,
         ended: session.date,
         ante: 0,
         results: session.results.map(({ buyIns, ...rest }) =>
@@ -173,6 +178,122 @@ describe("group standings for a linked friend", () => {
     const result = buildGroupStandings({ ...group, sessions: [] });
     assert.deepEqual(result.rows, []);
     assert.deepEqual(result.chart, []);
+    assert.deepEqual(result.sharedGames, []);
     assert.equal(result.lastPlayed, null);
+  });
+
+  it("lists the shared games newest first with everyone's results", () => {
+    const result = buildGroupStandings(group);
+    assert.deepEqual(
+      result.sharedGames.map((game) => [game.date, game.hands]),
+      [
+        [Date.UTC(2026, 8, 8), 20],
+        [Date.UTC(2026, 8, 1), 10],
+      ],
+    );
+    assert.deepEqual(
+      result.sharedGames[0].results.map((row) => [row.name, row.net, row.isMe]),
+      [
+        ["Rajarshi", -1000, false],
+        ["Debraj", 1000, true],
+      ],
+    );
+    assert.deepEqual(result.sharedGames[0].results[0].buyIns, [1000, 1000]);
+    // An empty buy-in list (the starting stack) isn't sent.
+    assert.equal("buyIns" in result.sharedGames[0].results[1], false);
+  });
+
+  it("sends how each game was played for its Details (migration 0027)", () => {
+    const blindHistory = {
+      smallBlindRatio: 0.5,
+      plans: [{ effectiveHand: 1, baseBigBlind: 100, schedule: null }],
+      levels: [{ handNo: 1, bigBlind: 100 }],
+    };
+    const detailed: GroupSessions = {
+      ...group,
+      sessions: [
+        {
+          ...group.sessions[0],
+          kind: "hands",
+          ante: 100,
+          blindHistory: blindHistory as never,
+          rebuyRules: { maxRebuys: 1, closeAtBigBlind: null },
+          bigBlindAnte: false,
+          rakeRules: null,
+        },
+        { ...group.sessions[1], kind: "ledger", ante: 0, blindHistory: null },
+      ],
+    };
+    const [ledger, hands] = buildGroupStandings(detailed).sharedGames;
+    assert.equal(hands.kind, undefined);
+    assert.equal(hands.ante, 100);
+    assert.deepEqual(hands.blindHistory, blindHistory);
+    assert.deepEqual(hands.rebuyRules, { maxRebuys: 1, closeAtBigBlind: null });
+    assert.equal("bigBlindAnte" in hands, false);
+    assert.equal("rakeRules" in hands, false);
+    assert.equal(ledger.kind, "ledger");
+    assert.equal("ante" in ledger, false);
+    // Games from before 0027 simply have none of these.
+    assert.equal("ante" in buildGroupStandings(group).sharedGames[0], false);
+  });
+
+  it("finds a shared game by start time for its results card", () => {
+    const withEnd: GroupSessions = {
+      ...group,
+      sessions: [{ ...group.sessions[1], ended: Date.UTC(2026, 8, 8, 3), ante: 100 }],
+    };
+    const game = findSharedGame(withEnd, Date.UTC(2026, 8, 8))!;
+    assert.equal(game.name, "Rajarshi's game");
+    assert.equal(game.ended, Date.UTC(2026, 8, 8, 3));
+    assert.equal(game.ante, 100);
+    assert.deepEqual(
+      game.results.map((result) => [result.name, result.net]),
+      [
+        ["Rajarshi", -1000],
+        ["Debraj", 1000],
+      ],
+    );
+    assert.equal(buildGroupStandings(withEnd).sharedGames[0].ended, Date.UTC(2026, 8, 8, 3));
+    assert.equal(findSharedGame(withEnd, Date.UTC(2026, 8, 1)), null);
+  });
+
+  it("finds no card for a game the friend didn't play in", () => {
+    const missed: GroupSessions = {
+      ...group,
+      sessions: [
+        {
+          id: "secret-session-z",
+          date: Date.UTC(2026, 8, 22),
+          startStack: 1000,
+          hands: 4,
+          results: [
+            { playerId: "p-raj", name: "Rajarshi", net: 0, end: 1000, buyIns: [1000] },
+          ],
+        },
+      ],
+    };
+    assert.equal(findSharedGame(missed, Date.UTC(2026, 8, 22)), null);
+  });
+
+  it("leaves games the friend missed out of the games list", () => {
+    const missed: GroupSessions = {
+      ...group,
+      sessions: [
+        ...group.sessions,
+        {
+          id: "secret-session-y",
+          date: Date.UTC(2026, 8, 20),
+          startStack: 1000,
+          hands: 8,
+          results: [
+            { playerId: "p-raj", name: "Rajarshi", net: 300, end: 1300, buyIns: [1000] },
+            { playerId: "p-other", name: "Elsewhere", net: -300, end: 700, buyIns: [1000] },
+          ],
+        },
+      ],
+    };
+    const result = buildGroupStandings(missed);
+    assert.equal(result.sharedGames.length, 2);
+    assert.equal(JSON.stringify(result).includes("Elsewhere"), false);
   });
 });

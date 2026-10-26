@@ -5,7 +5,7 @@ import {
 } from "../poker/standings.ts";
 import { type ChipUnit, DEFAULT_CURRENCY } from "../poker/money.ts";
 import { normalizeChipValue } from "../poker/settle-up.ts";
-import type { ChipValue, PokerSession, SessionResult } from "../poker/types";
+import type { ChipValue, GameKind, PokerSession, SessionResult } from "../poker/types";
 import { fallbackAvatarId } from "../avatars.ts";
 
 /** One linked host's saved games, as `public.friend_group_sessions()` returns them. */
@@ -27,6 +27,14 @@ export type GroupSessions = {
     rake?: number;
     /** What the chips cost (migration 0026); absent or null is none. */
     chipValue?: ChipValue | null;
+    /** How the game was played (migration 0027); absent before it. */
+    ended?: number;
+    kind?: GameKind | "hands";
+    ante?: number;
+    blindHistory?: PokerSession["blindHistory"] | null;
+    rebuyRules?: PokerSession["rebuyRules"] | null;
+    bigBlindAnte?: boolean;
+    rakeRules?: PokerSession["rakeRules"] | null;
     /**
      * `avatar` is what the player shows as in the host's list (migration
      * 0015). `accountId` is the account that player is, if any (migration
@@ -66,6 +74,39 @@ export type GroupStandingRow = {
  */
 export type GroupChartLine = Array<[number, number, number]>;
 
+/**
+ * One game a friend played in, as they saw it at the table: every player's
+ * result and how it was played, for its Details and Settle up (user
+ * decisions 2026-10-26, which relax the 2026-10-05 "no money for others"
+ * rule for single games only; standings keep it). No game, session or player
+ * IDs, and no game name or number, which would reveal how many games the
+ * host has. The fields from migration 0027 are absent before it.
+ */
+export type GroupGame = {
+  date: number;
+  ended?: number;
+  chipUnit?: ChipUnit;
+  kind?: GameKind;
+  ante?: number;
+  blindHistory?: PokerSession["blindHistory"];
+  startStack: number;
+  hands: number;
+  rebuyRules?: PokerSession["rebuyRules"];
+  bigBlindAnte?: boolean;
+  rakeRules?: PokerSession["rakeRules"];
+  rake?: number;
+  chipValue?: ChipValue;
+  /** In the host's seating order, as the host's own card gets them. */
+  results: Array<{
+    name: string;
+    avatar: string;
+    net: number;
+    end: number;
+    buyIns?: number[];
+    isMe: boolean;
+  }>;
+};
+
 export type GroupStandings = {
   hostAccountId: string;
   hostName: string | null;
@@ -77,6 +118,8 @@ export type GroupStandings = {
   lastPlayed: number | null;
   rows: GroupStandingRow[];
   chart: GroupChartLine[];
+  /** The games the friend played in, newest first, for the Games screen. */
+  sharedGames: GroupGame[];
 };
 
 /**
@@ -96,12 +139,12 @@ const twoDecimals = (value: number) => Math.round(value * 100) / 100;
  * A friend's view of a host's group, built only from the games the friend
  * played in ("what you could have seen at the table", user decision
  * 2026-10-05): the players they sat with, ranked among themselves 1…N with
- * the same rules as the host's own standings, and the graph over those
- * games. Nothing reveals how many games or players the host has in total,
- * and only the friend's own row carries money. `friend_group_sessions()`
- * already returns only those games (migration 0022); they are filtered here
- * too. Games themselves, and any game, session or player IDs, never leave
- * the server.
+ * the same rules as the host's own standings, the graph over those games,
+ * and the games themselves for the Games screen. Nothing reveals how many
+ * games or players the host has in total, and only the friend's own row
+ * carries money in the standings. `friend_group_sessions()` already returns
+ * only those games (migration 0022); they are filtered here too. Game,
+ * session and player IDs never leave the server.
  */
 export function buildGroupStandings(group: GroupSessions): GroupStandings {
   const shared = group.sessions.filter((session) =>
@@ -176,5 +219,77 @@ export function buildGroupStandings(group: GroupSessions): GroupStandings {
           : [],
       ),
     ),
+    sharedGames: shared
+      .map((session): GroupGame => {
+        const chipValue = normalizeChipValue(session.chipValue);
+        return {
+          date: session.date,
+          ...(session.ended ? { ended: Number(session.ended) } : {}),
+          ...(session.chipUnit === "cents" ? { chipUnit: session.chipUnit } : {}),
+          ...(session.kind === "ledger" ? { kind: session.kind } : {}),
+          ...(session.ante ? { ante: Number(session.ante) } : {}),
+          ...(session.blindHistory ? { blindHistory: session.blindHistory } : {}),
+          startStack: session.startStack,
+          hands: session.hands,
+          ...(session.rebuyRules ? { rebuyRules: session.rebuyRules } : {}),
+          ...(session.bigBlindAnte ? { bigBlindAnte: true } : {}),
+          ...(session.rakeRules ? { rakeRules: session.rakeRules } : {}),
+          ...(session.rake ? { rake: Number(session.rake) } : {}),
+          ...(chipValue ? { chipValue } : {}),
+          results: session.results.map((result) => ({
+            name: result.name,
+            avatar: result.avatar || fallbackAvatarId(result.name),
+            net: result.net,
+            end: result.end,
+            ...(result.buyIns?.length ? { buyIns: result.buyIns } : {}),
+            isMe: result.playerId === group.myPlayerId,
+          })),
+        };
+      })
+      .sort((a, b) => b.date - a.date),
+  };
+}
+
+/** "Asha's game": a game at a friend's table has no name or number. */
+export function hostedGameName(hostName: string | null) {
+  return `${hostName ?? "Friend"}'s game`;
+}
+
+/**
+ * One of the friend's shared games, found by its start time (the phone has
+ * no game IDs), as a saved game for the results card. Null when the friend
+ * didn't play in it or there is no such game.
+ */
+export function findSharedGame(
+  group: GroupSessions,
+  date: number,
+): PokerSession | null {
+  const session = group.sessions.find(
+    (item) =>
+      Number(item.date) === date &&
+      item.results.some((result) => result.playerId === group.myPlayerId),
+  );
+  if (!session) return null;
+  const chipValue = normalizeChipValue(session.chipValue);
+  return {
+    id: session.id,
+    name: hostedGameName(group.hostName),
+    date: session.date,
+    ended: session.ended ? Number(session.ended) : session.date,
+    ...(session.kind === "ledger" ? { kind: session.kind } : {}),
+    ...(session.chipUnit === "cents" ? { chipUnit: session.chipUnit } : {}),
+    ante: Number(session.ante ?? 0),
+    ...(session.blindHistory ? { blindHistory: session.blindHistory } : {}),
+    startStack: session.startStack,
+    hands: session.hands,
+    ...(session.rake ? { rake: Number(session.rake) } : {}),
+    ...(chipValue ? { chipValue } : {}),
+    results: session.results.map((result) => ({
+      playerId: result.playerId,
+      name: result.name,
+      net: result.net,
+      end: result.end,
+      ...(result.buyIns?.length ? { buyIns: result.buyIns } : {}),
+    })),
   };
 }

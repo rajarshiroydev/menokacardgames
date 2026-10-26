@@ -165,7 +165,11 @@ import {
   MAX_DISPLAY_NAME_LENGTH,
 } from "@/lib/accounts/identity-code";
 import { DELETION_GRACE_PERIOD_DAYS } from "@/lib/accounts/lifecycle";
-import type { GroupStandings } from "@/lib/friends/group-standings";
+import {
+  hostedGameName,
+  type GroupGame,
+  type GroupStandings,
+} from "@/lib/friends/group-standings";
 import { linkableFriends } from "@/lib/friends/link-guest";
 import {
   parseCodeInput,
@@ -999,7 +1003,7 @@ export function PokerLedger({
       if (showsPlayerList(nextView)) void refreshPlayers({ quiet: true });
       if (nextView === "home" || nextView === "profile") void refreshFriends();
       if (nextView === "profile") void refreshProfileStats();
-      if (nextView === "history") void refreshGroups();
+      if (nextView === "history" || nextView === "sessions") void refreshGroups();
     },
     [
       refreshFriends,
@@ -2716,7 +2720,8 @@ export function PokerLedger({
           : view === "history"
             ? { title: "Standings" }
             : view === "sessions"
-              ? { title: "My Hosted Games" }
+              ? // With friends' games the picker names whose games these are.
+                { title: groups.length ? "Games" : "My Hosted Games" }
               : view === "profile"
                 ? { title: "Profile" }
                 : view === "settings"
@@ -2831,6 +2836,9 @@ export function PokerLedger({
           />
         ) : view === "sessions" ? (
           <SessionsView
+            groups={groups}
+            groupsError={groupsError}
+            onCopied={() => showToast("Copied")}
             discardedSessions={discardedSessions}
             history={history}
             loading={historyLoading}
@@ -10684,6 +10692,7 @@ function SessionCardBody({
   session,
   moneyCurrency,
   discarded = false,
+  youIndex,
   onContinue,
   onSettle,
   onRestore,
@@ -10693,6 +10702,8 @@ function SessionCardBody({
   /** The host's currency; chip amounts may be plain counts (GameAmounts). */
   moneyCurrency: string;
   discarded?: boolean;
+  /** Which result is the viewer's, marked You (friends' games). */
+  youIndex?: number;
   onContinue?: (id: string) => void;
   onSettle?: (id: string) => void;
   /** Not shown for now: the Discard button is hidden (user decision 2026-10-01). */
@@ -10716,15 +10727,17 @@ function SessionCardBody({
       return null;
     }
   }, [session]);
+  const you = youIndex === undefined ? undefined : session.results[youIndex];
   const ledger = session.kind === "ledger";
-  const blinds = ledger ? null : sessionBlindHistory(session);
+  // A friend's game sent before migration 0027 has no big blind: its blinds
+  // are unknown rather than zero. Every saved hand-by-hand game has one.
+  const blindsKnown = !ledger && session.ante > 0;
+  const blinds = blindsKnown ? sessionBlindHistory(session) : null;
   const lastBigBlind = blinds?.levels.at(-1)!.bigBlind ?? 0;
   // Everything but the date, kind and player count sits under Details.
   const details: [string, string][] = [];
-  if (!ledger) {
-    details.push(["Hands", String(session.hands)]);
-    details.push(["Big blind", money(session.ante)]);
-  }
+  if (!ledger) details.push(["Hands", String(session.hands)]);
+  if (blindsKnown) details.push(["Big blind", money(session.ante)]);
   if (blinds) {
     details.push([
       "Finished at",
@@ -10783,6 +10796,7 @@ function SessionCardBody({
             ) : null}
             <span className="result-name">
               {result.name}
+              {result === you ? <span className="you-tag">You</span> : null}
               {result.buyIns && result.buyIns.length > 1 ? (
                 <small>
                   Buy-ins{" "}
@@ -10831,15 +10845,9 @@ function SessionCardBody({
             </>
           ) : (
             <>
-              {onSettle ? (
-                <button
-                  className="pill-button"
-                  type="button"
-                  onClick={() => onSettle(session.id)}
-                >
-                  Settle up
-                </button>
-              ) : null}
+              {/* Continue game (host only) comes first, so Settle up sits
+                  in the same place on friends' games (user request
+                  2026-10-26). */}
               {onContinue && !ledger ? (
                 <button
                   className="pill-button"
@@ -10847,6 +10855,15 @@ function SessionCardBody({
                   onClick={() => onContinue(session.id)}
                 >
                   Continue game
+                </button>
+              ) : null}
+              {onSettle ? (
+                <button
+                  className="pill-button"
+                  type="button"
+                  onClick={() => onSettle(session.id)}
+                >
+                  Settle up
                 </button>
               ) : null}
             </>
@@ -10931,12 +10948,14 @@ function SettleUpSheet({
   onClose,
 }: {
   session: PokerSession;
-  onSaveChipValue: (value: ChipValue | null) => Promise<boolean>;
+  /** Absent for a game at a friend's table: only the host sets the price. */
+  onSaveChipValue?: (value: ChipValue | null) => Promise<boolean>;
   onCopied: () => void;
   onClose: () => void;
 }) {
   const currency = useContext(CurrencyContext);
   const value = session.chipValue;
+  const isHost = onSaveChipValue !== undefined;
   // Prices are asked for the starting stack, the buy-in people know.
   const stackPrice = value
     ? Math.round((value.cents * session.startStack) / value.chips)
@@ -10969,6 +10988,7 @@ function SettleUpSheet({
   const canShare = typeof navigator !== "undefined" && "share" in navigator;
 
   async function save(next: ChipValue | null) {
+    if (!onSaveChipValue) return;
     setSaving(true);
     const saved = await onSaveChipValue(next);
     setSaving(false);
@@ -11070,17 +11090,19 @@ function SettleUpSheet({
             <>
               <div className="settle-value-head">
                 <span className="label">Chip value</span>
-                <button
-                  className="pill-button settle-change"
-                  type="button"
-                  onClick={() => {
-                    setPrice(stackPrice);
-                    setEditing(true);
-                  }}
-                >
-                  <PencilIcon />
-                  {value ? "Change" : "Set price"}
-                </button>
+                {isHost ? (
+                  <button
+                    className="pill-button settle-change"
+                    type="button"
+                    onClick={() => {
+                      setPrice(stackPrice);
+                      setEditing(true);
+                    }}
+                  >
+                    <PencilIcon />
+                    {value ? "Change" : "Set price"}
+                  </button>
+                ) : null}
               </div>
               {value && stackPrice !== null ? (
                 <>
@@ -11105,7 +11127,9 @@ function SettleUpSheet({
                     <span className="settle-price">{cash(100)}</span>
                   </p>
                   <span className="settle-value-note">
-                    No price set. Change it if chips cost something else.
+                    {isHost
+                      ? "No price set. Change it if chips cost something else."
+                      : "The host set no price."}
                   </span>
                 </>
               )}
@@ -11205,6 +11229,21 @@ function resultsCardKey(session: PokerSession) {
   ].join("|");
 }
 
+/** Starts the made-up id of a game at a friend's table (groupGameSession). */
+const FRIEND_GAME_PREFIX = "friend:";
+
+/**
+ * Where a game's card is drawn, up to its time zone: the host's own games by
+ * id, a friend's game by host and start time (the phone has no game IDs).
+ */
+function resultsCardPath(session: PokerSession) {
+  if (session.id.startsWith(FRIEND_GAME_PREFIX)) {
+    const [host, date] = session.id.slice(FRIEND_GAME_PREFIX.length).split(":");
+    return `/api/groups/card?host=${encodeURIComponent(host)}&date=${encodeURIComponent(date)}&tz=`;
+  }
+  return `/api/sessions/${encodeURIComponent(session.id)}/card?tz=`;
+}
+
 /** A card the server refused (missing game, chips that don't add up). */
 class CardRefused extends Error {}
 
@@ -11219,7 +11258,7 @@ async function fetchResultsCard(session: PokerSession): Promise<File> {
   const timer = setTimeout(() => controller.abort(), CARD_TIMEOUT_MS);
   try {
     const response = await fetch(
-      `/api/sessions/${encodeURIComponent(session.id)}/card?tz=${encodeURIComponent(timeZone)}`,
+      `${resultsCardPath(session)}${encodeURIComponent(timeZone)}`,
       { cache: "no-store", signal: controller.signal },
     );
     if (response.status >= 400 && response.status < 500) {
@@ -11596,8 +11635,39 @@ function RanksView({
   groupsError: string;
 }) {
   const [selected, setSelected] = useState("mine");
-
   const group = groups.find((item) => item.hostAccountId === selected);
+
+  return (
+    <div className="stack-list">
+      <HostPicker
+        label="Whose standings"
+        groups={groups}
+        selected={selected}
+        onSelect={setSelected}
+      />
+      {groupsError ? <p className="muted small-note">{groupsError}</p> : null}
+      {group ? <GroupStandingsView group={group} /> : <StandingsView {...props} />}
+    </div>
+  );
+}
+
+/**
+ * My Hosted Games or a friend's hosted games, at the top of Ranks and Games.
+ * Shown only when a friend's group has a game you played in.
+ */
+function HostPicker({
+  label,
+  groups,
+  selected,
+  onSelect,
+}: {
+  label: string;
+  groups: GroupStandings[];
+  /** "mine", or a host's account id. */
+  selected: string;
+  onSelect: (id: string) => void;
+}) {
+  if (!groups.length) return null;
   // No game counts: a friend's group shows only games they played in, and a
   // count next to the host's name would read as the host's total.
   const options = [
@@ -11607,29 +11677,22 @@ function RanksView({
       label: hostedGamesTitle(item.hostName),
     })),
   ];
-
+  // One picker for any number of hosts: the phone's own list scales where
+  // side-by-side buttons run out of room.
   return (
-    <div className="stack-list">
-      {groups.length ? (
-        // One picker for any number of hosts: the phone's own list scales
-        // where side-by-side buttons run out of room.
-        <div className="standings-picker">
-          <select
-            className="select-control"
-            aria-label="Whose standings"
-            value={selected}
-            onChange={(event) => setSelected(event.target.value)}
-          >
-            {options.map((option) => (
-              <option key={option.id} value={option.id}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </div>
-      ) : null}
-      {groupsError ? <p className="muted small-note">{groupsError}</p> : null}
-      {group ? <GroupStandingsView group={group} /> : <StandingsView {...props} />}
+    <div className="standings-picker">
+      <select
+        className="select-control"
+        aria-label={label}
+        value={selected}
+        onChange={(event) => onSelect(event.target.value)}
+      >
+        {options.map((option) => (
+          <option key={option.id} value={option.id}>
+            {option.label}
+          </option>
+        ))}
+      </select>
     </div>
   );
 }
@@ -11990,14 +12053,15 @@ function StandingsView({
 
 /**
  * What a friend's group leaves out, matching what the server sends
- * (lib/friends/group-standings.ts; user decisions 2026-10-05).
+ * (lib/friends/group-standings.ts; user decisions 2026-10-05). Since
+ * 2026-10-26 the games you played in are on Games with everyone's results,
+ * so only other players' totals stay out of the standings.
  */
 const GROUP_HIDDEN_INFO = [
   "Games you didn't play in",
   "Players you've never sat with",
-  "Other players' chips put in and net won or lost (only yours show)",
+  "Other players' total chips put in and net won or lost (only yours show; each game you played in is on Games)",
   "How many games and players the host has in total",
-  "The host's game-by-game history",
 ] as const;
 
 function RankingHelp({
@@ -12114,7 +12178,133 @@ function InfoSheet({
   );
 }
 
+/**
+ * The Games screen: your own saved games, or the games you played in at a
+ * friend's table (picked like Ranks).
+ */
 function SessionsView({
+  groups,
+  groupsError,
+  onCopied,
+  ...props
+}: Parameters<typeof OwnSessionsView>[0] & {
+  /** Settle up's Copy list on a friend's game. */
+  onCopied: () => void;
+  /** Friends' groups, kept by the app so the picker shows at once. */
+  groups: GroupStandings[];
+  groupsError: string;
+}) {
+  const [selected, setSelected] = useState("mine");
+  const group = groups.find((item) => item.hostAccountId === selected);
+
+  return (
+    <div className="stack-list">
+      <HostPicker
+        label="Whose games"
+        groups={groups}
+        selected={selected}
+        onSelect={setSelected}
+      />
+      {groupsError ? <p className="muted small-note">{groupsError}</p> : null}
+      {group ? (
+        <GroupGamesView group={group} onCopied={onCopied} />
+      ) : (
+        <OwnSessionsView {...props} />
+      )}
+    </div>
+  );
+}
+
+/**
+ * The games you played in at one friend's table, newest first, on the same
+ * cards as your own games: Share, Details and Settle up, but no Continue game
+ * or price changes, which stay with the host (user decisions 2026-10-26).
+ */
+function GroupGamesView({
+  group,
+  onCopied,
+}: {
+  group: GroupStandings;
+  onCopied: () => void;
+}) {
+  const [settlingId, setSettlingId] = useState<string | null>(null);
+  // Older answers from the server may not have the games yet.
+  const games = useMemo(
+    () => (group.sharedGames ?? []).map((game) => groupGameSession(group, game)),
+    [group],
+  );
+  const settling = games.find((item) => item.session.id === settlingId)?.session;
+
+  return (
+    <CurrencyContext.Provider value={group.currency}>
+      {games.length ? (
+        <ExpandingList
+          items={games}
+          render={({ session, youIndex }) => (
+            <SessionCard
+              key={session.id}
+              session={session}
+              youIndex={youIndex}
+              onSettle={setSettlingId}
+            />
+          )}
+          more={(count) => `Show ${count} more game${count === 1 ? "" : "s"}`}
+          all="Show all games"
+        />
+      ) : (
+        <section className="glass card">
+          <p className="muted">No games with this host yet.</p>
+        </section>
+      )}
+      {settling
+        ? createPortal(
+            <SettleUpSheet
+              key={settling.id}
+              session={settling}
+              onCopied={onCopied}
+              onClose={() => setSettlingId(null)}
+            />,
+            document.body,
+          )
+        : null}
+    </CurrencyContext.Provider>
+  );
+}
+
+/**
+ * A friend's game as a saved game, for the shared card and Settle up. Its id
+ * is made up here (the server sends none; see resultsCardPath) and its name
+ * is "Asha's game": a number would reveal how many games the host has.
+ */
+function groupGameSession(group: GroupStandings, game: GroupGame) {
+  const session: PokerSession = {
+    id: `${FRIEND_GAME_PREFIX}${group.hostAccountId}:${game.date}`,
+    name: hostedGameName(group.hostName),
+    date: game.date,
+    ended: game.ended ?? game.date,
+    ...(game.kind ? { kind: game.kind } : {}),
+    ...(game.chipUnit ? { chipUnit: game.chipUnit } : {}),
+    ante: game.ante ?? 0,
+    ...(game.blindHistory ? { blindHistory: game.blindHistory } : {}),
+    startStack: game.startStack,
+    hands: game.hands,
+    ...(game.rebuyRules ? { rebuyRules: game.rebuyRules } : {}),
+    ...(game.bigBlindAnte ? { bigBlindAnte: true } : {}),
+    ...(game.rakeRules ? { rakeRules: game.rakeRules } : {}),
+    ...(game.rake ? { rake: game.rake } : {}),
+    ...(game.chipValue ? { chipValue: game.chipValue } : {}),
+    results: game.results.map((result) => ({
+      name: result.name,
+      net: result.net,
+      end: result.end,
+      ...(result.buyIns ? { buyIns: result.buyIns } : {}),
+    })),
+  };
+  const you = game.results.findIndex((result) => result.isMe);
+  return { session, youIndex: you >= 0 ? you : undefined };
+}
+
+function OwnSessionsView({
   history,
   discardedSessions,
   loading,
