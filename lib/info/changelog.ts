@@ -31,6 +31,10 @@ export const CHANGELOG: ChangelogEntry[] = [
     title: "Fairer standings and friends' games",
     items: [
       {
+        tag: "improved",
+        text: "Link to friend… is now in every guest's options, so you can link any guest to a friend who isn't linked yet, however long you've been friends. If no friend is free, it tells you why.",
+      },
+      {
         tag: "new",
         text: "A Pokerize badge now sits after the name of everyone with a Pokerize account, on Profile and Ranks; tap it to see who it is. In a friend's standings you can tell at a glance who you can add as a friend: a badge without \"Friend\" means they're on Pokerize and one tap away.",
       },

@@ -13,8 +13,7 @@ describe("link a guest to a friend", () => {
     assert.equal(madeAtAccept({ createdAt: 1000 }, 5000), false);
   });
 
-  it("lists only unlinked friends who became friends after the guest", () => {
-    const guest = { createdAt: 3000 };
+  it("lists every friend not yet linked to a guest, whenever they were added", () => {
     const players = new Map([
       ["p-new", { createdAt: 5000 }], // made at accept, after the guest
       ["p-linked", { createdAt: 1000 }], // already linked to an older guest
@@ -27,13 +26,8 @@ describe("link a guest to a friend", () => {
       { id: "gone", since: 7000, myPlayer: null },
     ];
     assert.deepEqual(
-      linkableFriends(guest, friends, players).map((item) => item.id),
-      ["new"],
+      linkableFriends(friends, players).map((item) => item.id),
+      ["new", "early"],
     );
-  });
-
-  it("offers nothing to a guest added after every friendship", () => {
-    const players = new Map([["p-new", { createdAt: 5000 }]]);
-    assert.deepEqual(linkableFriends({ createdAt: 9000 }, [friend("new", 5000)], players), []);
   });
 });

@@ -13,21 +13,18 @@ export function madeAtAccept(player: { createdAt: number }, since: number) {
 }
 
 /**
- * The friends a guest may really be: not yet linked to a guest, and friends
- * only since after the guest was added (a guest added later isn't a stand-in
- * for someone who was already a friend).
+ * The friends a guest may be linked to: those not yet linked to a guest. Any
+ * guest may be any of them, whenever either was added (user request,
+ * 2026-10-26: hiding the option by date was confusing).
  */
 export function linkableFriends<
   Friend extends { since: number; myPlayer: { id: string } | null },
 >(
-  guest: { createdAt: number },
   friends: readonly Friend[],
   playersById: ReadonlyMap<string, { createdAt: number }>,
 ): Friend[] {
   return friends.filter((friend) => {
     const player = friend.myPlayer ? playersById.get(friend.myPlayer.id) : undefined;
-    return (
-      !!player && madeAtAccept(player, friend.since) && guest.createdAt < friend.since
-    );
+    return !!player && madeAtAccept(player, friend.since);
   });
 }

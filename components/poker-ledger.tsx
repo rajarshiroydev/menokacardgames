@@ -466,6 +466,9 @@ function showsPlayerList(view: View) {
   );
 }
 
+/** Extras for a confirmation asked through `ask`. */
+type AskOptions = { points?: string[]; danger?: boolean };
+
 type ModalState =
   | {
       kind: "confirm";
@@ -1446,8 +1449,13 @@ export function PokerLedger({
   }
 
   const ask = useCallback(
-    (message: string, confirmLabel: string, onConfirm: () => void) => {
-      setModal({ kind: "confirm", message, confirmLabel, onConfirm });
+    (
+      message: string,
+      confirmLabel: string,
+      onConfirm: () => void,
+      options: AskOptions = {},
+    ) => {
+      setModal({ kind: "confirm", message, confirmLabel, onConfirm, ...options });
     },
     [],
   );
@@ -5755,7 +5763,12 @@ function ProfileView({
   onPlayersChanged: () => void;
   onViewStandings: (player: PlayerProfile) => void;
   onToast: (message: string) => void;
-  onAsk: (message: string, confirmLabel: string, onConfirm: () => void) => void;
+  onAsk: (
+    message: string,
+    confirmLabel: string,
+    onConfirm: () => void,
+    options?: AskOptions,
+  ) => void;
   /** Players in the game in progress on this device. */
   seatedPlayerIds: string[];
   /** Saved games now belong to another player, so reload them. */
@@ -5809,7 +5822,7 @@ function ProfileView({
   function unfriend(friend: FriendOverview["friends"][number]) {
     const name = friend.displayName ?? "this friend";
     onAsk(
-      `Unfriend ${name}? Your players and games stay in both lists, but they're no longer linked, and ${name} stops being your friend. Linking again needs a new friend request.`,
+      `Unfriend ${name}?`,
       "Unfriend",
       () =>
         void run(friend.accountId, async () => {
@@ -5824,6 +5837,14 @@ function ProfileView({
             );
           }
         }),
+      {
+        danger: true,
+        points: [
+          "You both keep every game.",
+          `${name} goes back to being a guest in your list.`,
+          "To link again, send a new friend request.",
+        ],
+      },
     );
   }
 
@@ -5954,9 +5975,8 @@ function ProfileView({
     }
     return [
       ...standingsAction,
-      ...(friendsFor(player).length
-        ? [{ label: "Link to friend…", run: () => setLinking(player) }]
-        : []),
+      // Always offered on a guest; the sheet says when no friend is free.
+      { label: "Link to friend…", run: () => setLinking(player) },
       { label: "Invite to Pokerize", run: () => setInviting(player) },
       { label: "Rename", run: () => setRenaming(player) },
       { label: "Change avatar", run: () => setChoosingAvatar(player) },
@@ -5989,8 +6009,7 @@ function ProfileView({
     (player) => !player.linked && player.id !== profile.selfPlayerId,
   );
   const playersById = new Map(players.map((player) => [player.id, player]));
-  const friendsFor = (guest: PlayerProfile) =>
-    linkableFriends(guest, overview?.friends ?? [], playersById);
+  const linkable = linkableFriends(overview?.friends ?? [], playersById);
   const gamesOf = (playerId: string | undefined) => {
     const player = playerId ? playersById.get(playerId) : undefined;
     return player ? record(player).games : 0;
@@ -6216,7 +6235,7 @@ function ProfileView({
       {linking ? (
         <LinkFriendSheet
           guest={linking}
-          friends={friendsFor(linking).map((friend) => ({
+          friends={linkable.map((friend) => ({
             friend,
             games: gamesOf(friend.myPlayer?.id),
             seated: !!friend.myPlayer && seatedPlayerIds.includes(friend.myPlayer.id),
@@ -7227,10 +7246,11 @@ function LinkFriendSheet({
       >
         <span className="sheet-grabber" aria-hidden="true" />
         <h2 id="link-friend-title">Link to friend</h2>
-        <p className="muted small-note">
-          Pick the friend {guest.name} really is; their games will count as
-          that friend&apos;s.
-        </p>
+        {friends.length ? (
+          <p className="muted small-note">
+            Which friend is {guest.name}? Their games will move to that friend.
+          </p>
+        ) : null}
         {friends.length ? (
           <div className="add-player-row">
             <select
@@ -7257,7 +7277,10 @@ function LinkFriendSheet({
             </button>
           </div>
         ) : (
-          <p className="muted small-note">You have no friends to link.</p>
+          <p className="muted small-note">
+            No friends to link yet. When {guest.name} joins Pokerize and
+            accepts your friend request, you can link them here.
+          </p>
         )}
         {chosen?.seated ? (
           <p className="field-error" role="alert">
