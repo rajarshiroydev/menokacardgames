@@ -46,6 +46,10 @@ export const CHANGELOG: ChangelogEntry[] = [
         tag: "improved",
         text: "Friend requests no longer show the Pokerize badge beside the sender's name: everyone who sends one is on Pokerize.",
       },
+      {
+        tag: "fixed",
+        text: "The sign-in page no longer fails to load when your earlier sign-in has ended elsewhere, for example after signing out on every device.",
+      },
     ],
   },
   {

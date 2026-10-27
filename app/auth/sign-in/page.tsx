@@ -23,7 +23,11 @@ export default async function SignInPage({
   const params = await searchParams;
   // From an invite page: back there after signing in (migration 0030).
   const invite = isInviteToken(params.invite) ? params.invite : null;
-  if (await getHostSession()) redirect(invite ? invitePath(invite) : "/");
+  // A sign-in cookie whose session is gone (revoked, or the account deleted)
+  // makes the auth library try to clear the cookie, which a page can't do;
+  // that visitor is simply signed out here, as on the invite page.
+  const session = await getHostSession().catch(() => null);
+  if (session) redirect(invite ? invitePath(invite) : "/");
   const deletionRequested = params.deletion === "requested";
   const testbedError =
     typeof params.testbed === "string" ? params.testbed.slice(0, 60) : null;
