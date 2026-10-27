@@ -9939,11 +9939,13 @@ function WinnerPicker({
 }
 
 /** A showdown card's heading: the title with the pot beside it, centred. */
-function PickerHead({ title, amount }: { title: string; amount: string }) {
+function PickerHead({ title, amount }: { title: string; amount?: string }) {
   return (
     <div className="picker-head">
       <h2 className="card-title">{title}</h2>
-      <span className="card-title accent-amount">{amount}</span>
+      {amount ? (
+        <span className="card-title accent-amount">{amount}</span>
+      ) : null}
     </div>
   );
 }
@@ -10742,9 +10744,14 @@ function SidePotPicker({
 
   return (
     <section className="glass card winner-picker">
+      {/* With several pots each names its own amount, so the title doesn't. */}
       <PickerHead
         title={several ? "Pick the winners" : "Pick the winner"}
-        amount={money(pots.reduce((sum, pot) => sum + pot.amount, 0))}
+        amount={
+          several
+            ? undefined
+            : money(pots.reduce((sum, pot) => sum + pot.amount, 0))
+        }
       />
       <p className="muted small-note">
         {several
@@ -10778,10 +10785,10 @@ function SidePotPicker({
         return (
           <div className={several ? "side-pot" : "stack-list"} key={potIndex}>
             {several ? (
-              <div className="card-row">
-                <span className="label">{potLabel(potIndex, pots.length)}</span>
-                <span className="accent-amount">{money(pot.amount)}</span>
-              </div>
+              <PickerHead
+                title={potLabel(potIndex, pots.length)}
+                amount={money(pot.amount)}
+              />
             ) : null}
             {pot.eligible.length === 1 ? (
               <p className="muted small-note">
@@ -10793,8 +10800,12 @@ function SidePotPicker({
                   const isChosen = winners.includes(playerIndex);
                   const share = shares.get(playerIndex) ?? 0;
                   return (
+                    // Like the single-pot card: the amount shows only on the
+                    // player picked, green for one winner, blue in a split.
                     <button
-                      className={`contender ${isChosen ? "selected" : ""}`}
+                      className={`contender ${
+                        isChosen ? (splitShown ? "selected" : "won") : ""
+                      }`}
                       type="button"
                       aria-pressed={isChosen}
                       disabled={follows !== null}
@@ -10806,15 +10817,9 @@ function SidePotPicker({
                         playerId={game.players[playerIndex].id}
                         size="small"
                       />
-                      <span className="contender-name">
-                        {splitShown || (follows !== null && !isChosen)
-                          ? name(playerIndex)
-                          : `${name(playerIndex)} wins`}
-                      </span>
+                      <span className="contender-name">{name(playerIndex)}</span>
                       <span
-                        className={`contender-amount ${
-                          isChosen || !splitShown ? "" : "muted"
-                        }`}
+                        className={`contender-amount ${isChosen ? "" : "muted"}`}
                       >
                         {isChosen
                           ? money(share)
@@ -10822,7 +10827,7 @@ function SidePotPicker({
                             ? ""
                             : split
                               ? "Tap to include"
-                              : money(pot.amount)}
+                              : "Tap to pick"}
                       </span>
                     </button>
                   );
@@ -10848,8 +10853,10 @@ function SidePotPicker({
           </div>
         );
       })}
+      {/* Grey until every pot has a winner, then green, like the
+          single-pot card's award button. */}
       <button
-        className="blue-button full tall"
+        className={`${ready ? "accent-button" : "glass-button"} full tall`}
         type="button"
         disabled={!ready}
         onClick={() => onAward(picks)}

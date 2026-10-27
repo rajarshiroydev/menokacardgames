@@ -90,6 +90,10 @@ export const CHANGELOG: ChangelogEntry[] = [
         tag: "improved",
         text: "Picking the winner is clearer: tap a player to pick them, then press the green \"Name wins\" button under the list. No more popup, and the pot shows only beside the player you picked.",
       },
+      {
+        tag: "improved",
+        text: "Showdowns with side pots work the same way: each pot has a clear heading with its amount, you tap a player to pick them, and Award pots turns green once every pot has a winner.",
+      },
     ],
   },
   {

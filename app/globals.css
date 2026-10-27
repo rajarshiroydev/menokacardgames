@@ -3170,6 +3170,13 @@ textarea::placeholder {
   gap: 10px;
 }
 
+/* Notes under a showdown card's centred heading (what the pots are, the
+   rake, waiting for the river) are centred with it. */
+.winner-picker > .small-note,
+.winner-picker > .pot-refund {
+  text-align: center;
+}
+
 .accent-amount {
   color: var(--g);
   font-weight: 700;
@@ -3222,7 +3229,8 @@ textarea::placeholder {
   cursor: default;
 }
 
-.contender.selected:disabled {
+.contender.selected:disabled,
+.contender.won:disabled {
   opacity: 1;
 }
 
