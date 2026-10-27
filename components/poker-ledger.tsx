@@ -23,7 +23,6 @@ import {
   awardPots,
   cancelCurrentHand,
   bigBlindAtLevel,
-  betStops,
   blindStatus,
   formatClock,
   hasBlindClock,
@@ -58,6 +57,7 @@ import {
   undoableStreet,
   undoStreet,
   dealNextStreet,
+  handContributions,
   nextBuyIn,
   nextPlayerToAct,
   pendingIndexes,
@@ -1972,13 +1972,17 @@ export function PokerLedger({
         showToast("Enter an amount");
         return;
       }
+      // Amounts are typed as the total for the street, so the messages
+      // name totals too.
       if (chips > player.stack) {
-        showToast(`Only ${money(player.stack)} left`);
+        showToast(
+          `The most is ${money(hand.committed[playerIndex] + player.stack)} (all in)`,
+        );
         return;
       }
       const minimum = minimumRaise(next, playerIndex);
       if (chips < minimum && chips < player.stack) {
-        showToast(`Minimum is ${money(minimum)}`);
+        showToast(`Minimum is ${money(hand.committed[playerIndex] + minimum)}`);
         return;
       }
 
@@ -3382,6 +3386,24 @@ function PencilIcon() {
     >
       <path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16z" />
       <path d="m13.5 6.5 4 4" />
+    </svg>
+  );
+}
+
+/** A cross: clear what was typed. */
+function ClearIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width="14"
+      height="14"
+      aria-hidden="true"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.6"
+      strokeLinecap="round"
+    >
+      <path d="M6 6l12 12M18 6 6 18" />
     </svg>
   );
 }
@@ -10309,10 +10331,11 @@ function PlayerRow({
   dock?: boolean;
 }) {
   const { money, symbol, unit } = useMoney();
-  // What is typed, in the game's unit ("0.75" in a cents game).
+  // What is typed, in the game's unit ("0.75" in a cents game): the total
+  // this player's bet reaches this street, like "raise to 300".
   const [amount, setAmount] = useState("");
   // The quick size last tapped and the amount it set; it stays highlighted
-  // only while the amount is unchanged, so typing or sliding clears it.
+  // only while the amount is unchanged, so typing clears it.
   const [picked, setPicked] = useState<{ label: string; amount: string } | null>(
     null,
   );
@@ -10329,24 +10352,41 @@ function PlayerRow({
   const raiseClosed = !mayRaise(game, playerIndex) && player.stack > owed;
   const committed = hand.committed[playerIndex];
   // Once a bet stands (the big blind counts), putting in more is a raise.
-  // Raises are shown as the total they reach, like "raise to 1,300",
-  // while the box and slider stay as chips to put in now.
+  // The box, the quick sizes and the button all speak in the total the bet
+  // reaches this street ("raise to 1,300"); chips to put in now are worked
+  // out from it.
   const raising = hand.roundHigh > 0;
   const hasAmount = amount.trim() !== "";
-  const stops = betStops(minimum, player.stack);
   // Text that isn't an amount (like "1.234" in cents) bets nothing, which
-  // disables the bet button.
+  // disables the bet button. With nothing typed the button offers the minimum.
   const betAmount = hasAmount
-    ? (parseChips(amount, unit) ?? 0)
-    : (stops[0] ?? 0);
+    ? (parseChips(amount, unit) ?? 0) - committed
+    : Math.min(minimum, player.stack);
   const allIn = betAmount >= player.stack;
-  // The slider sits on the highest stop not above the entered amount.
-  const stopIndex = Math.max(
-    0,
-    stops.findLastIndex((stop) => stop <= betAmount),
-  );
   const role = seatRole(game, playerIndex);
-  const stackLine = `${money(player.stack)} · in ${money(committed)}`;
+  // Everything this player has put in this hand, blinds and ante included,
+  // since players ask for the hand's total more than this street's.
+  const inHand = handContributions(game)[playerIndex];
+  // The stack on its own line, larger, with the hand's total under it.
+  const stackLine = (
+    <>
+      <b className="seat-stack-inline">{money(player.stack)}</b>
+      {money(inHand)} in hand
+    </>
+  );
+  // The stack and the hand's total as two tiles, above the amount box.
+  const moneyStats = (
+    <div className="bet-stats">
+      <div className="bet-stat">
+        <span>Stack</span>
+        <b>{money(player.stack)}</b>
+      </div>
+      <div className="bet-stat">
+        <span>In this hand</span>
+        <b>{money(inHand)}</b>
+      </div>
+    </div>
+  );
 
   if (roundClosed) {
     return (
@@ -10355,32 +10395,24 @@ function PlayerRow({
           <Avatar name={player.name} playerId={player.id} role={role} />
           <div className="seat-copy">
             <b>{player.name}</b>
-            <small>{stackLine}</small>
+            <span
+              className={`status-pill ${flash ? "just-acted" : ""}`}
+              key={flash ?? "status"}
+            >
+              {seatStatus(game, playerIndex, money)}
+            </span>
           </div>
-          <span
-            className={`status-pill ${flash ? "just-acted" : ""}`}
-            key={flash ?? "status"}
-          >
-            {seatStatus(game, playerIndex, money)}
-          </span>
         </div>
         <div className="bet-panel" aria-hidden="true" inert>
-          <div className="bet-summary">
-            <p>
-              Betting round complete
-              <br />
-              Deal <b>{STAGES[hand.stage + 1]}</b> next
-            </p>
-            <label className="bet-input">
-              <span className="bet-input-caption">Enter amount</span>
-              <span className="bet-input-box">
-                <span className="bet-input-symbol">{symbol.trim()}</span>
-                <input type="number" disabled placeholder="—" />
-                <PencilIcon />
-              </span>
-            </label>
+          {moneyStats}
+          <div className="bet-input">
+            <span className="bet-input-caption">Round complete</span>
+            <span className="bet-input-box">
+              <span className="bet-input-symbol">{symbol.trim()}</span>
+              <input type="text" disabled />
+              <PencilIcon />
+            </span>
           </div>
-          <input className="bet-range" type="range" disabled defaultValue={0} />
           <div className="quick-sizes">
             {["⅓ Pot", "½ Pot", "Pot", "All in"].map((label) => (
               <button key={label} type="button" disabled>
@@ -10399,7 +10431,6 @@ function PlayerRow({
               Bet
             </button>
           </div>
-          <span className="clear-amount-slot" />
         </div>
       </div>
     );
@@ -10463,34 +10494,19 @@ function PlayerRow({
       <div className="seat-main">
         <Avatar name={player.name} playerId={player.id} role={role} />
         <div className="seat-copy">
-          <b>{dock ? `${player.name} to act` : player.name}</b>
-          <small>
-            {dock ? `${money(player.stack)} behind · in ${money(committed)}` : stackLine}
-          </small>
+          <b>{player.name}</b>
         </div>
-        {dock ? null : <span className="turn-pill">Your turn</span>}
       </div>
       <div className="bet-panel">
-        <div className="bet-summary">
-          <p>
-            To call <b>{money(Math.min(owed, player.stack))}</b>
-            <br />
-            {raiseClosed ? (
-              "Call or fold only"
-            ) : minimum >= player.stack ? (
-              <>
-                All in <b>{money(player.stack)}</b>
-              </>
-            ) : raising ? (
-              <>
-                Min raise <b>{money(committed + minimum)}</b>
-              </>
-            ) : (
-              <>
-                Min bet <b>{money(minimum)}</b>
-              </>
-            )}
-            {raiseClosed ? null : (
+        {moneyStats}
+        {/* To call and the minimum live on the Call and Raise buttons, so
+            they aren't repeated here. */}
+        {raiseClosed ? null : (
+          // Not a <label>: it holds the i button, which a label would
+          // take as its control.
+          <div className="bet-input">
+            <span className="bet-input-caption">
+              {raising ? "Raise to" : "Bet"}
               <button
                 className="info-button inline"
                 type="button"
@@ -10499,68 +10515,49 @@ function PlayerRow({
               >
                 i
               </button>
-            )}
-          </p>
-          {showRaiseHelp ? (
-            <RaiseHelp
-              game={game}
-              onClose={() => setShowRaiseHelp(false)}
-            />
-          ) : null}
-          {raiseClosed ? null : (
-            // A boxed field with a caption and pencil, so it reads as
-            // something to type in rather than a figure on display.
-            <label className="bet-input">
-              <span className="bet-input-caption">Enter amount</span>
-              <span className="bet-input-box">
-                <span className="bet-input-symbol">{symbol.trim()}</span>
-                <input
-                  type="text"
-                  inputMode={unit === "cents" ? "decimal" : "numeric"}
-                  autoComplete="off"
-                  placeholder={stops[0] === undefined ? "" : chipsToInput(stops[0], unit)}
-                  aria-label={
-                    raising ? "Chips to put in for the raise" : "Bet amount"
-                  }
-                  value={amount}
-                  onChange={(event) => setAmount(event.target.value)}
-                />
+            </span>
+            {/* Empty until something is typed or a quick size is tapped,
+                so it never shows a figure nobody chose. */}
+            <span className="bet-input-box">
+              <span className="bet-input-symbol">{symbol.trim()}</span>
+              <input
+                type="text"
+                inputMode={unit === "cents" ? "decimal" : "numeric"}
+                autoComplete="off"
+                aria-label={raising ? "Raise to" : "Bet amount"}
+                value={amount}
+                onChange={(event) => setAmount(event.target.value)}
+              />
+              {/* With an amount in, the pencil becomes a clear button,
+                  which also turns Fold and Check or Call back on. */}
+              {hasAmount ? (
+                <button
+                  className="bet-input-clear"
+                  type="button"
+                  aria-label="Clear amount"
+                  onClick={() => setAmount("")}
+                >
+                  <ClearIcon />
+                </button>
+              ) : (
                 <PencilIcon />
-              </span>
-            </label>
-          )}
-        </div>
+              )}
+            </span>
+          </div>
+        )}
+        {showRaiseHelp ? (
+          <RaiseHelp game={game} onClose={() => setShowRaiseHelp(false)} />
+        ) : null}
         {raiseClosed ? (
           <p className="raise-closed">
             Short all-in: call or fold. It was less than a full raise, so
             betting isn&apos;t reopened for you.
           </p>
-        ) : stops.length > 1 ? (
+        ) : (
           <>
-            <input
-              className="bet-range"
-              type="range"
-              min={0}
-              max={stops.length - 1}
-              step={1}
-              value={stopIndex}
-              aria-label={raising ? "Raise size" : "Bet size"}
-              aria-valuetext={
-                allIn
-                  ? `All in ${money(betAmount)}`
-                  : raising
-                    ? `Raise to ${money(committed + betAmount)}`
-                    : money(betAmount)
-              }
-              onChange={(event) => {
-                const index = Number(event.target.value);
-                // The first stop is the default, so it leaves Call and Fold on.
-                setAmount(index === 0 ? "" : chipsToInput(stops[index], unit));
-              }}
-            />
             <div className="quick-sizes">
               {quickSizes.map((size) => {
-                const sizeAmount = chipsToInput(size.value, unit);
+                const sizeAmount = chipsToInput(committed + size.value, unit);
                 const selected =
                   picked?.label === size.label && picked.amount === amount;
                 return (
@@ -10580,7 +10577,7 @@ function PlayerRow({
               })}
             </div>
           </>
-        ) : null}
+        )}
         <div className={`action-row ${raiseClosed ? "two" : ""}`}>
           <button
             className="glass-button"
@@ -10615,16 +10612,6 @@ function PlayerRow({
             </button>
           )}
         </div>
-        {/* Always takes its space, so the card keeps one height. */}
-        <button
-          className="text-button clear-amount"
-          type="button"
-          hidden={!hasAmount}
-          onClick={() => setAmount("")}
-        >
-          Clear amount to call or fold
-        </button>
-        {hasAmount ? null : <span className="clear-amount-slot" />}
       </div>
     </div>
   );

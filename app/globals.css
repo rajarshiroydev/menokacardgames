@@ -2942,60 +2942,85 @@ textarea::placeholder {
   text-align: center;
 }
 
-.turn-pill {
-  flex: none;
-  padding: 5px 10px;
-  border-radius: 999px;
-  background: var(--g);
-  color: var(--onacc);
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-}
-
 .bet-panel {
   display: flex;
   flex-direction: column;
   gap: 12px;
 }
 
-.bet-summary {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 12px;
+.seat-copy .status-pill {
+  display: inline-block;
+  margin-top: 4px;
 }
 
-.bet-summary p {
-  color: var(--ink2);
-  font-size: 12px;
-  line-height: 1.5;
+/* The stack and what's in this hand, as two equal tiles. */
+.bet-stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
 }
 
-.bet-summary b {
-  color: var(--ink);
-}
-
-.bet-input {
+.bet-stat {
   display: flex;
   flex-direction: column;
-  align-items: flex-end;
-  gap: 4px;
+  gap: 2px;
   min-width: 0;
+  padding: 8px 12px;
+  border-radius: var(--rs);
+  background: var(--field);
+}
+
+.bet-stat span {
+  color: var(--ink2);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.bet-stat b {
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 22px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.seat-copy .seat-stack-inline {
+  color: var(--ink);
+  font-size: 18px;
+  font-weight: 800;
+}
+
+/* "Raise to" and its i with the amount box, inside one tile like the
+   Stack and In this hand tiles above, so they read as one control. */
+.bet-input {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 6px 6px 6px 12px;
+  border-radius: var(--rs);
+  background: var(--field);
 }
 
 .bet-input-caption {
+  display: flex;
+  flex: none;
+  align-items: center;
   color: var(--ink2);
-  font-size: 11px;
-  line-height: 1;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
 }
 
 .bet-input-box {
   display: flex;
+  flex: 1;
   align-items: center;
   gap: 4px;
-  padding: 6px 10px;
+  min-width: 0;
+  padding: 6px 8px 6px 12px;
   border: 1.5px solid var(--ink3);
   border-radius: var(--rs);
   background: var(--glass2);
@@ -3013,21 +3038,21 @@ textarea::placeholder {
 }
 
 .bet-input-symbol {
-  font-size: 22px;
+  font-size: 18px;
   line-height: 1;
 }
 
 .bet-input input {
-  width: 5.2ch;
+  flex: 1;
+  width: 0;
   min-width: 0;
   padding: 0;
   border: 0;
   background: none;
   color: var(--g);
   font: inherit;
-  font-size: 28px;
+  font-size: 24px;
   line-height: 1;
-  text-align: right;
   outline: none;
   -moz-appearance: textfield;
   appearance: textfield;
@@ -3039,20 +3064,10 @@ textarea::placeholder {
   -webkit-appearance: none;
 }
 
-.bet-input input::placeholder {
-  color: var(--g);
-  opacity: 0.55;
-}
-
 .bet-input .pencil-icon {
   flex: none;
   margin-left: 2px;
   color: var(--ink2);
-}
-
-.bet-range {
-  width: 100%;
-  accent-color: var(--g);
 }
 
 .quick-sizes {
@@ -3116,14 +3131,18 @@ textarea::placeholder {
   opacity: 1;
 }
 
-.clear-amount,
-.clear-amount-slot {
-  display: block;
+/* Clears the amount box; a round button so it reads as one. */
+.bet-input-clear {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 26px;
   height: 26px;
-}
-
-.clear-amount[hidden] {
-  display: none;
+  padding: 0;
+  border: 1px solid var(--gb);
+  border-radius: 50%;
+  background: var(--field);
+  color: var(--ink);
 }
 
 .raise-closed {

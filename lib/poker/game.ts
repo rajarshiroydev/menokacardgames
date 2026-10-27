@@ -353,24 +353,6 @@ export function nextPlayerToAct(game: GameState, from: number) {
   return null;
 }
 
-/** Bet slider stops between the minimum and all in, as multiples of the minimum. */
-export const BET_PRESET_MULTIPLES = [1.5, 2, 5, 10] as const;
-
-/**
- * Exact chip amounts the bet slider snaps to: the minimum, each multiple of
- * it rounded to a whole chip, then the whole stack (all in). Stops at or
- * above the stack collapse into all in; a stack no larger than the minimum
- * leaves only all in.
- */
-export function betStops(minimum: number, stack: number) {
-  if (stack <= 0) return [];
-  if (minimum >= stack) return [stack];
-  const multiples = BET_PRESET_MULTIPLES.map((multiple) =>
-    Math.round(minimum * multiple),
-  ).filter((amount) => amount > minimum && amount < stack);
-  return [...new Set([minimum, ...multiples, stack])];
-}
-
 /** How much a raise must add this street: the last full bet or raise, or the big blind. */
 export function raiseSize(game: GameState) {
   return game.hand?.raiseSize ?? game.ante;

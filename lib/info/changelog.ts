@@ -62,6 +62,14 @@ export const CHANGELOG: ChangelogEntry[] = [
         tag: "improved",
         text: "Undo now works across streets. Right after the flop, turn or river is dealt, Undo takes that street back, then keeps stepping back through the actions before it, all the way to the start of the hand.",
       },
+      {
+        tag: "improved",
+        text: "The betting card is easier to read: two tiles show the stack in large type and what the player has put in this whole hand.",
+      },
+      {
+        tag: "improved",
+        text: "The amount box starts empty and takes the total you're raising to, matching the Raise button. The bet slider is gone; the pot-size buttons and All in remain.",
+      },
     ],
   },
   {
