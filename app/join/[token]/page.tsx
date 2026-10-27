@@ -53,10 +53,10 @@ export default async function JoinPage(props: PageProps<"/join/[token]">) {
   if (!invite) {
     return (
       <InviteShell>
-        <p className="eyebrow">Invite</p>
         <h1>This invite has expired or was already used</h1>
         <p className="auth-intro">
-          Ask whoever sent it for a new link. Invites work once, for 30 days.
+          Each invite link can be used once and expires 30 days after
+          it&apos;s made. Ask the person who invited you to send a new one.
         </p>
         <Link className="auth-primary invite-link" href="/">
           Open {APP_NAME}
@@ -104,11 +104,13 @@ export default async function JoinPage(props: PageProps<"/join/[token]">) {
   if (account.id === invite.hostAccountId) {
     return (
       <InviteShell>
-        <p className="eyebrow">Your invite</p>
-        <h1>
-          This is your invite for{" "}
-          <span className="literal-text">{invite.guestName}</span>
-        </h1>
+        <div className="invite-title">
+          <p className="eyebrow">Your invite</p>
+          <h1>
+            This is your invite for{" "}
+            <span className="literal-text">{invite.guestName}</span>
+          </h1>
+        </div>
         <p className="auth-intro">
           Share it with <span className="literal-text">{invite.guestName}</span>{" "}
           so they can join. When they open it and confirm it&apos;s them, you

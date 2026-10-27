@@ -5227,8 +5227,10 @@ textarea::placeholder {
   position: relative;
 }
 
-/* The logo sits in the top-right corner so the host leads the card. It
-   matches the host's 56px avatar and lines up with its centre. */
+/* The logo sits in the top-right corner so the card's opening (the host,
+   or the eyebrow and heading) leads. It matches the host's 56px avatar.
+   The first block after it keeps clear of it, so headings wrap short of
+   the logo instead of running under it. */
 .invite-card .auth-mark {
   position: absolute;
   top: 26px;
@@ -5240,6 +5242,11 @@ textarea::placeholder {
 
 .invite-card .auth-mark + * {
   padding-right: 68px;
+}
+
+.invite-title {
+  display: grid;
+  gap: 8px;
 }
 
 .invite-card h1 {
