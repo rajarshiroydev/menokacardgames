@@ -73,8 +73,8 @@ export default async function JoinPage(props: PageProps<"/join/[token]">) {
       <InviteShell>
         <InviteHeading invite={invite} />
         <p className="auth-intro">
-          Sign in to see your games, results and standings, and to keep
-          playing with {invite.hostName}.
+          Join to see every game you&apos;ve played, with your results and
+          standings.
         </p>
         <Link
           className="auth-primary invite-link"
@@ -147,18 +147,18 @@ function InviteShell({ children }: { children: React.ReactNode }) {
 function InviteHeading({ invite }: { invite: InvitePreview }) {
   return (
     <>
-      <p className="eyebrow">You&apos;re invited</p>
       <div className="invite-host">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={avatarSrc(invite.hostAvatar, invite.hostName)} alt="" width={56} height={56} />
+        {/* The name sets in capitals like on Home and Profile, on its own line. */}
         <h1>
-          <span className="literal-text">{invite.hostName}</span> invited you
-          to {APP_NAME}
+          <span className="invite-host-name">{invite.hostName}</span>{" "}
+          <span className="invite-host-line">invited you to {APP_NAME}</span>
         </h1>
       </div>
       <p className="auth-intro">
-        You play as <b className="literal-text">{invite.guestName}</b> in{" "}
-        <span className="literal-text">{invite.hostName}</span>&apos;s games.
+        In <span className="literal-text">{invite.hostName}</span>&apos;s
+        games, you play as <b className="literal-text">{invite.guestName}</b>.
       </p>
     </>
   );

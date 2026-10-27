@@ -5223,8 +5223,51 @@ textarea::placeholder {
   background: var(--glass2);
 }
 
+.invite-card {
+  position: relative;
+}
+
+/* The logo sits in the top-right corner so the host leads the card. It
+   matches the host's 56px avatar and lines up with its centre. */
+.invite-card .auth-mark {
+  position: absolute;
+  top: 26px;
+  right: 20px;
+  width: 56px;
+  height: 56px;
+  border-radius: 15px;
+}
+
+.invite-card .auth-mark + * {
+  padding-right: 68px;
+}
+
 .invite-card h1 {
   font-size: 34px;
+}
+
+/* Descriptions read as sentences (user decision 2026-10-27: Title Case is
+   leaving normal descriptions app-wide, starting with the invite page). */
+.invite-card .auth-intro,
+.invite-card .auth-notice {
+  text-transform: none;
+}
+
+.invite-host h1 {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.invite-host-name {
+  overflow-wrap: anywhere;
+}
+
+.invite-host-line {
+  color: var(--ink2);
+  font-size: 15px;
+  line-height: 1.1;
+  letter-spacing: 0.03em;
 }
 
 .invite-question {

@@ -27,6 +27,16 @@ export const CHANGE_TAG_LABELS: Record<ChangeTag, string> = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    date: "2026-10-27",
+    title: "A clearer invite page",
+    items: [
+      {
+        tag: "improved",
+        text: "The page your guests open from a Pokerize invite now leads with who invited them, and its text is shorter and easier to read.",
+      },
+    ],
+  },
+  {
     date: "2026-10-26",
     title: "Fairer standings and friends' games",
     items: [
