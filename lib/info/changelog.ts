@@ -54,6 +54,10 @@ export const CHANGELOG: ChangelogEntry[] = [
         tag: "fixed",
         text: "The sign-in page no longer fails to load when your earlier sign-in has ended elsewhere, for example after signing out on every device.",
       },
+      {
+        tag: "improved",
+        text: "Home's Last session now includes games you played at a friend's table, not only games you hosted. Tap it to open that friend's games.",
+      },
     ],
   },
   {

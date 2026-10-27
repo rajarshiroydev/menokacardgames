@@ -877,6 +877,7 @@ export function PokerLedger({
   const [profileStatsError, setProfileStatsError] = useState("");
   const [groups, setGroups] = useState<GroupStandings[]>([]);
   const [groupsError, setGroupsError] = useState("");
+  const [sessionsHost, setSessionsHost] = useState("mine");
   const playersRef = useRef(players);
   useEffect(() => {
     playersRef.current = players;
@@ -1041,7 +1042,10 @@ export function PokerLedger({
       if (showsPlayerList(nextView)) void refreshPlayers({ quiet: true });
       if (nextView === "home" || nextView === "profile") void refreshFriends();
       if (nextView === "profile") void refreshProfileStats();
-      if (nextView === "history" || nextView === "sessions") void refreshGroups();
+      // Home's last game can be one played at a friend's table.
+      if (nextView === "home" || nextView === "history" || nextView === "sessions") {
+        void refreshGroups();
+      }
     },
     [
       refreshFriends,
@@ -1055,10 +1059,16 @@ export function PokerLedger({
   const navigate = useCallback(
     (
       nextView: View,
-      options: { replace?: boolean; setupKind?: "hands" | "ledger" } = {},
+      options: {
+        replace?: boolean;
+        setupKind?: "hands" | "ledger";
+        /** Whose games Games opens on; your own unless a friend's is named. */
+        sessionsHost?: string;
+      } = {},
     ) => {
       setView(nextView);
       if (nextView !== "history") setRankFocus(null);
+      if (nextView === "sessions") setSessionsHost(options.sessionsHost ?? "mine");
       if (options.setupKind) setSetupKind(options.setupKind);
       refreshForView(nextView);
       // The setup kind rides in the history entry, so back and forward
@@ -2782,6 +2792,7 @@ export function PokerLedger({
       displayName={profile.displayName}
       selfPlayerId={profile.selfPlayerId}
       history={history}
+      groups={groups}
       friendRequests={friendRequests}
       legacyGame={legacyGame}
       legacySessionCount={legacySessions.length}
@@ -2792,7 +2803,7 @@ export function PokerLedger({
       onAdoptLegacyGame={offerLegacyGameAdoption}
       onGame={() => navigate(game ? "game" : "newGame")}
       onNewGame={() => navigate("newGame")}
-      onSessions={() => navigate("sessions")}
+      onSessions={(host) => navigate("sessions", { sessionsHost: host })}
       onReviewRequests={openPlayers}
       onOpenHands={openHands}
       onOpenWhoWins={openWhoWins}
@@ -2886,6 +2897,8 @@ export function PokerLedger({
           />
         ) : view === "sessions" ? (
           <SessionsView
+            key={sessionsHost}
+            initialHost={sessionsHost}
             groups={groups}
             groupsError={groupsError}
             onCopied={() => showToast("Copied")}
@@ -3520,6 +3533,7 @@ function HomeView({
   displayName,
   selfPlayerId,
   history,
+  groups,
   friendRequests,
   legacyGame,
   legacySessionCount,
@@ -3540,6 +3554,7 @@ function HomeView({
   displayName: string | null;
   selfPlayerId: string | null;
   history: PokerSession[];
+  groups: GroupStandings[];
   friendRequests: FriendOverview["received"];
   legacyGame: GameState | null;
   legacySessionCount: number;
@@ -3550,7 +3565,8 @@ function HomeView({
   onAdoptLegacyGame: () => void;
   onGame: () => void;
   onNewGame: () => void;
-  onSessions: () => void;
+  /** Opens Games, at a friend's table when `host` is their account id. */
+  onSessions: (host?: string) => void;
   onReviewRequests: () => void;
   onOpenHands: () => void;
   onOpenWhoWins: () => void;
@@ -3672,6 +3688,7 @@ function HomeView({
 
         <HomeLastSession
           history={history}
+          groups={groups}
           selfPlayerId={selfPlayerId}
           onOpen={onSessions}
         />
@@ -3941,18 +3958,24 @@ function HomeLedgerCard({
   );
 }
 
-/** Your most recent saved game: your result, the top winner, everyone's net. */
+/**
+ * Your most recent game on Home: the newest of your own saved games and the
+ * games you played at a friend's table, so a game someone else hosted shows
+ * too. A friend's game is in their currency and opens on their Games list.
+ */
 function HomeLastSession({
   history,
+  groups,
   selfPlayerId,
   onOpen,
 }: {
   history: PokerSession[];
+  groups: GroupStandings[];
   selfPlayerId: string | null;
-  onOpen: () => void;
+  onOpen: (host?: string) => void;
 }) {
-  const { currency } = useMoney();
-  const session = history
+  const currency = useContext(CurrencyContext);
+  const own = history
     .filter((item) => !item.discardedAt)
     .reduce<PokerSession | null>(
       (latest, item) =>
@@ -3964,7 +3987,55 @@ function HomeLastSession({
           : latest,
       null,
     );
-  if (!session || !session.results.length) return null;
+  let last: {
+    session: PokerSession;
+    youIndex?: number;
+    currency: string;
+    host?: string;
+  } | null = own
+    ? {
+        session: own,
+        youIndex: selfPlayerId
+          ? own.results.findIndex((result) => result.playerId === selfPlayerId)
+          : undefined,
+        currency,
+      }
+    : null;
+  for (const group of groups) {
+    // Shared games come newest first.
+    const game = group.sharedGames?.[0];
+    if (!game || (last && game.date <= last.session.date)) continue;
+    last = {
+      ...groupGameSession(group, game),
+      currency: group.currency,
+      host: group.hostAccountId,
+    };
+  }
+  if (!last || !last.session.results.length) return null;
+  const { host } = last;
+  return (
+    <CurrencyContext.Provider value={last.currency}>
+      <HomeLastSessionCard
+        session={last.session}
+        youIndex={last.youIndex}
+        onOpen={() => onOpen(host)}
+      />
+    </CurrencyContext.Provider>
+  );
+}
+
+/** Home's last game: your result, the top winner, everyone's net. */
+function HomeLastSessionCard({
+  session,
+  youIndex,
+  onOpen,
+}: {
+  session: PokerSession;
+  /** Your row in `session.results`, if you played. */
+  youIndex?: number;
+  onOpen: () => void;
+}) {
+  const { currency } = useMoney();
   // Results in money at the game's chip value; chips if they don't balance.
   let moneyNets: Map<PokerSession["results"][number], number> | null = null;
   try {
@@ -3995,9 +4066,8 @@ function HomeLastSession({
     // An unbalanced old session still shows its nets, just without a return.
   }
   const results = [...session.results].sort((a, b) => b.net - a.net);
-  const mine = selfPlayerId
-    ? results.find((result) => result.playerId === selfPlayerId)
-    : undefined;
+  const mine =
+    youIndex === undefined || youIndex < 0 ? undefined : session.results[youIndex];
   const winner = results[0];
   const featured = mine ?? winner;
   const featuredInvested = invested.get(standingsKey(featured));
@@ -12652,18 +12722,21 @@ function InfoSheet({
  * friend's table (picked like Ranks).
  */
 function SessionsView({
+  initialHost,
   groups,
   groupsError,
   onCopied,
   ...props
 }: Parameters<typeof OwnSessionsView>[0] & {
+  /** "mine", or the friend's account id whose games open first. */
+  initialHost: string;
   /** Settle up's Copy list on a friend's game. */
   onCopied: () => void;
   /** Friends' groups, kept by the app so the picker shows at once. */
   groups: GroupStandings[];
   groupsError: string;
 }) {
-  const [selected, setSelected] = useState("mine");
+  const [selected, setSelected] = useState(initialHost);
   const group = groups.find((item) => item.hostAccountId === selected);
 
   return (
