@@ -65,13 +65,23 @@ export function mapSession(row: SessionRow): SavedSession {
 
 export type TransactionSql = NeonQueryFunctionInTransaction<false, false>;
 
-/** Saved sessions with their verified results; `ids` narrows to those IDs. */
+/**
+ * Saved sessions with their verified results; `ids` narrows to those IDs.
+ * Each result is named as the owner's player list names that player now
+ * (player_display_names: the chosen name for anyone with an account, the
+ * guest's current name otherwise), not as it was when the game was saved;
+ * the saved name is kept only for a player that no longer exists. Saving
+ * matches players by ID, so the name is a label only. Runs as the owner.
+ */
 export function selectSessions(
   sql: TransactionSql,
   ownerId: string,
   ids: string[] | null,
 ) {
   return sql`
+        WITH names AS MATERIALIZED (
+          SELECT player_id, display_name FROM public.player_display_names()
+        )
         SELECT
           id,
           game_name,
@@ -97,7 +107,13 @@ export function selectSessions(
           SELECT jsonb_agg(
             jsonb_build_object(
               'playerId', result.player_id,
-              'name', result.player_name,
+              'name', COALESCE(
+                (
+                  SELECT names.display_name FROM names
+                  WHERE names.player_id = result.player_id
+                ),
+                result.player_name
+              ),
               'net', result.net,
               'end', result.ending_stack
             ) || CASE

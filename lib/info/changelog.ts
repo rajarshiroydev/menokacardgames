@@ -28,7 +28,7 @@ export const CHANGE_TAG_LABELS: Record<ChangeTag, string> = {
 export const CHANGELOG: ChangelogEntry[] = [
   {
     date: "2026-10-27",
-    title: "A clearer invite page",
+    title: "Easier invites and the right names",
     items: [
       {
         tag: "improved",
@@ -37,6 +37,10 @@ export const CHANGELOG: ChangelogEntry[] = [
       {
         tag: "improved",
         text: "Joining from an invite takes fewer steps: saving your name accepts it, with no second \"Are you…?\" question. If you already have an account, one Accept invite button does it.",
+      },
+      {
+        tag: "fixed",
+        text: "Saved games now show everyone by the name they chose, and guests by their latest name, instead of the name a game was saved with: in your Games, Details, Settle up and Home, and in a friend's standings and games.",
       },
     ],
   },
