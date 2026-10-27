@@ -3390,6 +3390,25 @@ function PencilIcon() {
   );
 }
 
+/** One line forking into two: split a pot. */
+function SplitIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width="18"
+      height="18"
+      aria-hidden="true"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M12 21v-8M12 13 6 7M12 13l6-6M6 11V7h4M18 11V7h-4" />
+    </svg>
+  );
+}
+
 /** A cross: clear what was typed. */
 function ClearIcon() {
   return (
@@ -7868,7 +7887,6 @@ function GameScreen(props: GameViewProps) {
                   roundClosed={playerIndex === closer}
                   flash={flashFor(game, props.lastTurn, playerIndex)}
                   onAct={props.onAct}
-                  onBuyIn={props.onBuyIn}
                 />
               ))}
               {hand.stage < lastStage ? (
@@ -7896,6 +7914,7 @@ function GameScreen(props: GameViewProps) {
               )}
             </>
           )}
+          <BuyInOptions game={game} onBuyIn={props.onBuyIn} />
           <UndoTurnButton
             game={game}
             onUndo={props.onUndoAction}
@@ -9715,26 +9734,37 @@ function BuyInOptions({
   onBuyIn: (playerIndex: number) => void;
 }) {
   const { money } = useMoney();
+  const hand = game.hand;
+  // Hidden while a pot is being split, so the screen stays on the split.
+  if (hand?.splitSel) return null;
   const offers = game.players.flatMap((player, index) => {
     const amount = nextBuyIn(game, index);
     return amount === null ? [] : [{ player, index, amount }];
   });
-  // Busted players the host's rebuy limits stop, with the reason.
+  // Busted players the host's rebuy limits stop, with the reason. During a
+  // hand only those who were bust when it was dealt; a player who went all
+  // in this hand is still in it.
   const blocked = game.players.flatMap((player, index) => {
+    if (hand && (hand.in[index] || (hand.stacksBeforeHand[index] ?? 0) > 0)) {
+      return [];
+    }
     const reason = player.stack === 0 ? rebuyBlockReason(game, index) : null;
     return reason ? [{ player, index, reason }] : [];
   });
   if (!offers.length && !blocked.length) return null;
   const rules = describeRebuyRules(game.rebuyRules, chipCurrency(game.currency, game.chipValue), game.chipUnit);
 
+  // During a hand it is its own card, in the same place in List and Table
+  // view (above Undo), so a buy-in is always found in one spot.
   return (
-    <div className="buy-in-options">
+    <div className={`buy-in-options ${hand ? "glass card" : ""}`}>
       <span className="label">Buy in</span>
       <p className="muted small-note">
         {game.customBuyIns
           ? `A busted player can buy back in for any amount, usually ${money(game.startStack)}.`
           : "A busted player can buy back in for the starting stack."}
         {rules ? ` ${rules}.` : ""}
+        {hand ? " They sit out this hand and play from the next one." : ""}
       </p>
       {offers.map(({ player, index, amount }) => (
         <button
@@ -9820,14 +9850,11 @@ function WinnerCard({
 function WinnerPicker({
   game,
   pending,
-  hint,
   onPickWinner,
   onBeginSplit,
 }: {
   game: GameState;
   pending: boolean;
-  /** A line under the heading, like where else the winner can be picked. */
-  hint?: string;
   onPickWinner: (playerIndex: number) => void;
   onBeginSplit: () => void;
 }) {
@@ -9852,8 +9879,6 @@ function WinnerPicker({
         <p className="muted small-note">
           Finish the river betting before picking a winner.
         </p>
-      ) : hint ? (
-        <p className="muted small-note">{hint}</p>
       ) : null}
       {activeIndexes(game).map((playerIndex) => (
         <button
@@ -9876,11 +9901,12 @@ function WinnerPicker({
       ))}
       {activeIndexes(game).length > 1 ? (
         <button
-          className="dashed-button"
+          className="split-button"
           type="button"
           disabled={pending}
           onClick={onBeginSplit}
         >
+          <SplitIcon />
           Split between two or more
         </button>
       ) : null}
@@ -9951,18 +9977,6 @@ function TableHand({
   const crowded = count > 6;
   const current = hand.currentPlayer;
   // A player bust at the deal can buy in by tapping their seat.
-  const canBuyIn = (index: number) =>
-    !splitting && nextBuyIn(game, index) !== null;
-
-  function tapSeat(index: number) {
-    if (canBuyIn(index)) {
-      onBuyIn(index);
-      return;
-    }
-    if (!showdown || !hand?.in[index] || multiPot) return;
-    if (splitting) onToggleSplit(index);
-    else onPickWinner(index);
-  }
 
   return (
     <>
@@ -10058,27 +10072,19 @@ function TableHand({
           const flash = showdown ? undefined : flashFor(game, lastTurn, index);
           const contender = showdown && !folded;
           const inSplit = hand.splitSel?.includes(index) ?? false;
-          const buyable = canBuyIn(index);
-          const tappable = buyable || (showdown && contender && !multiPot);
-          const status = buyable
-            ? "Tap to buy in"
-            : folded
+          const status = folded
             ? seatStatus(game, index, money)
             : isTurn
               ? "To act"
               : showdown
-                ? multiPot
-                  ? "In the hand"
-                  : splitting
-                    ? inSplit
-                      ? "In split"
-                      : "Tap to add"
-                    : "Tap to award"
+                ? inSplit
+                  ? "In split"
+                  : "In the hand"
                 : seatStatus(game, index, money)
                     .replace("Small blind", "SB")
                     .replace("Big blind", "BB");
           const state = [
-            folded && !buyable ? "folded" : "",
+            folded ? "folded" : "",
             isTurn ? "turn" : "",
             contender ? (inSplit ? "in-split" : "contender") : "",
             flash ? "just-acted" : "",
@@ -10086,15 +10092,14 @@ function TableHand({
             .filter(Boolean)
             .join(" ");
           return (
-            <button
+            // Seats only show the table (user decision 2026-10-27): the
+            // winner is picked and buy-ins made on the cards under it.
+            <div
               className={`table-seat ${state}`}
-              type="button"
               key={player.id || index}
-              disabled={!tappable}
-              aria-pressed={splitting && contender ? inSplit : undefined}
+              role="group"
               aria-label={`${player.name}, ${money(player.stack)}, ${status}`}
               style={{ left: `${spot.x}%`, top: `${spot.y}%` }}
-              onClick={() => tapSeat(index)}
             >
               <span className="table-seat-ring">
                 <Avatar
@@ -10105,11 +10110,12 @@ function TableHand({
                 />
               </span>
               <span className="table-seat-pill" key={flash ?? "pill"}>
-                <b>{player.name.split(" ")[0]}</b>
+                {/* The whole chosen name, never cut: long names wrap and step down a size. */}
+                <b data-length={nameLength(player.name)}>{player.name}</b>
                 <span className="table-seat-stack">{money(player.stack)}</span>
                 <small>{status}</small>
               </span>
-            </button>
+            </div>
           );
         })}
       </section>
@@ -10129,7 +10135,6 @@ function TableHand({
         <WinnerPicker
           game={game}
           pending={false}
-          hint="Tap a seat on the table or a name below."
           onPickWinner={onPickWinner}
           onBeginSplit={onBeginSplit}
         />
@@ -10152,6 +10157,7 @@ function TableHand({
           Deal {STAGES[hand.stage + 1]}
         </button>
       ) : null}
+      <BuyInOptions game={game} onBuyIn={onBuyIn} />
       <UndoTurnButton
         game={game}
         tall
@@ -10298,6 +10304,12 @@ function seatStatus(
   return "Waiting";
 }
 
+function nameLength(name: string): "long" | "longer" | undefined {
+  if (name.length > 28) return "longer";
+  if (name.length > 14) return "long";
+  return undefined;
+}
+
 function seatRole(game: GameState, playerIndex: number) {
   const hand = game.hand!;
   return [
@@ -10313,7 +10325,6 @@ function PlayerRow({
   game,
   playerIndex,
   onAct,
-  onBuyIn,
   roundClosed = false,
   dock = false,
   flash,
@@ -10321,8 +10332,6 @@ function PlayerRow({
   game: GameState;
   playerIndex: number;
   onAct: GameViewProps["onAct"];
-  /** Offered on the card of a player who was bust when the hand was dealt. */
-  onBuyIn?: (playerIndex: number) => void;
   /** This player's action closed the round; keep the card open but locked. */
   roundClosed?: boolean;
   /** Set while this player's action is the latest; its status flashes. */
@@ -10437,13 +10446,9 @@ function PlayerRow({
   }
 
   if (folded || done || !isTurn) {
-    const buyIn =
-      onBuyIn && !hand.splitSel ? nextBuyIn(game, playerIndex) : null;
-    // Not faded while they can buy in, so the button doesn't look disabled.
+    // Buy-ins are on the Buy in card, not here.
     return (
-      <div
-        className={`glass seat-card ${folded && buyIn === null ? "folded" : ""}`}
-      >
+      <div className={`glass seat-card ${folded ? "folded" : ""}`}>
         <div className="seat-main">
           <Avatar name={player.name} playerId={player.id} role={role} />
           <div className="seat-copy">
@@ -10456,15 +10461,6 @@ function PlayerRow({
           >
             {seatStatus(game, playerIndex, money)}
           </span>
-          {buyIn !== null ? (
-            <button
-              className="pill-button"
-              type="button"
-              onClick={() => onBuyIn?.(playerIndex)}
-            >
-              {game.customBuyIns ? "Buy in" : `Buy in · ${money(buyIn)}`}
-            </button>
-          ) : null}
         </div>
       </div>
     );
@@ -10807,10 +10803,11 @@ function SidePotPicker({
                   </p>
                 ) : (
                   <button
-                    className="dashed-button"
+                    className={split ? "glass-button" : "split-button"}
                     type="button"
                     onClick={() => toggleSplit(potIndex)}
                   >
+                    {split ? null : <SplitIcon />}
                     {split ? "Back to one winner" : "Split this pot"}
                   </button>
                 )}
@@ -10891,7 +10888,8 @@ function SplitView({
       ) : (
         <p className="muted small-note">Select at least 2 players.</p>
       )}
-      <button className="dashed-button" type="button" onClick={onBack}>
+      {/* A solid button like Undo, so the way back isn't missed. */}
+      <button className="glass-button full" type="button" onClick={onBack}>
         Back to one winner
       </button>
     </section>

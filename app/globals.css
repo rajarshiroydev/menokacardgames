@@ -482,7 +482,6 @@ textarea::placeholder {
 .accent-button,
 .blue-button,
 .glass-button,
-.dashed-button,
 .ghost,
 .danger {
   display: inline-flex;
@@ -532,12 +531,26 @@ textarea::placeholder {
   color: var(--neg);
 }
 
-.dashed-button {
+/* Starts splitting a pot: solid blue, the colour of the split itself, so
+   it isn't missed beside the winner rows. */
+.split-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
   min-height: 48px;
-  border: 1px dashed var(--gb);
-  background: transparent;
-  color: var(--ink2);
-  font-weight: 600;
+  padding: 0 14px;
+  border: 1.5px solid var(--b);
+  border-radius: var(--rs);
+  background: color-mix(in oklch, var(--b) 12%, transparent);
+  color: var(--b);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.split-button:hover:not(:disabled) {
+  background: color-mix(in oklch, var(--b) 20%, transparent);
 }
 
 .full {
@@ -3077,13 +3090,13 @@ textarea::placeholder {
 }
 
 .quick-sizes button {
-  height: 32px;
+  height: 40px;
   padding: 0;
   border: 1px solid var(--gb);
   border-radius: var(--rs);
   background: var(--field);
   color: var(--ink);
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 700;
 }
 
@@ -3491,15 +3504,6 @@ textarea::placeholder {
     top 0.3s ease-out;
 }
 
-.table-seat:active:not(:disabled) {
-  transform: translate(-50%, -50%) scale(0.96);
-}
-
-.table-seat:disabled {
-  cursor: default;
-  opacity: 1;
-}
-
 .table-seat.folded {
   opacity: 0.45;
 }
@@ -3574,11 +3578,25 @@ textarea::placeholder {
 
 .table-seat-pill b {
   max-width: 100%;
-  overflow: hidden;
   font-size: 11px;
   font-weight: 700;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+  text-align: center;
+}
+
+/* Long names get a wider label and a smaller size, so most fit in two lines. */
+.table-seat-pill:has(b[data-length]) {
+  max-width: 104px;
+  padding-inline: 6px;
+}
+
+.table-seat-pill b[data-length="long"] {
+  font-size: 10px;
+}
+
+.table-seat-pill b[data-length="longer"] {
+  font-size: 9px;
 }
 
 .table-seat-stack {
@@ -3628,6 +3646,10 @@ textarea::placeholder {
   min-width: 54px;
   max-width: 76px;
   padding: 2px 6px;
+}
+
+.poker-table.crowded .table-seat-pill:has(b[data-length]) {
+  max-width: 92px;
 }
 
 .table-schedule {

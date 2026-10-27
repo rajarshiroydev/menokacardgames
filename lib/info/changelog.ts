@@ -55,6 +55,10 @@ export const CHANGELOG: ChangelogEntry[] = [
         text: "The sign-in page no longer fails to load when your earlier sign-in has ended elsewhere, for example after signing out on every device.",
       },
       {
+        tag: "fixed",
+        text: "Seats on the table now show each player's full name, the same as the standings and Pick the winner, instead of only the first name. Two players called Arjun no longer look alike.",
+      },
+      {
         tag: "improved",
         text: "Home's Last session now includes games you played at a friend's table, not only games you hosted. Tap it to open that friend's games.",
       },
@@ -69,6 +73,18 @@ export const CHANGELOG: ChangelogEntry[] = [
       {
         tag: "improved",
         text: "The amount box starts empty and takes the total you're raising to, matching the Raise button. The bet slider is gone; the pot-size buttons and All in remain.",
+      },
+      {
+        tag: "improved",
+        text: "The button to split a pot is now easy to spot at the showdown, in blue with a split icon, and Back to one winner is a solid button too, instead of faint outlines.",
+      },
+      {
+        tag: "improved",
+        text: "On the table, tapping a player's seat no longer awards the pot. Pick the winner on the card under the table, so a stray tap can't hand out chips.",
+      },
+      {
+        tag: "improved",
+        text: "Buying in a busted player during a hand now has one place in both views: a Buy in card above Undo. Table seats and player cards no longer have their own buy-in buttons.",
       },
     ],
   },
