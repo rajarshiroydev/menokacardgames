@@ -34,6 +34,10 @@ export const CHANGELOG: ChangelogEntry[] = [
         tag: "improved",
         text: "The page your guests open from a Pokerize invite now leads with who invited them, and its text is shorter and easier to read.",
       },
+      {
+        tag: "improved",
+        text: "Joining from an invite takes fewer steps: saving your name accepts it, with no second \"Are you…?\" question. If you already have an account, one Accept invite button does it.",
+      },
     ],
   },
   {

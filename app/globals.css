@@ -5256,7 +5256,8 @@ textarea::placeholder {
 /* Descriptions read as sentences (user decision 2026-10-27: Title Case is
    leaving normal descriptions app-wide, starting with the invite page). */
 .invite-card .auth-intro,
-.invite-card .auth-notice {
+.invite-card .auth-notice,
+.invite-card .auth-error {
   text-transform: none;
 }
 
@@ -5277,27 +5278,24 @@ textarea::placeholder {
   letter-spacing: 0.03em;
 }
 
-.invite-question {
-  font-family: var(--fd);
-  font-size: 26px;
-  font-weight: 900;
-  font-variation-settings: "opsz" 72;
-  text-transform: uppercase;
-}
-
 .invite-actions {
   display: grid;
-  gap: 10px;
+  gap: 6px;
 }
 
-.invite-no {
-  min-height: 46px;
-  border: 1px solid var(--gb);
-  border-radius: var(--rs);
-  background: var(--glass);
-  color: var(--ink);
+/* A quiet text link under Accept invite, for a link that reached the wrong
+   person. */
+.invite-not-me {
+  justify-self: center;
+  min-height: 40px;
+  padding: 0 12px;
+  border: 0;
+  background: none;
+  color: var(--ink3);
   font-size: 14px;
   font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
 /* Testbed mode only (npm run testbed:dev): one button per fake persona. */

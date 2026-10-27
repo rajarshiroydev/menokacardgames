@@ -1,13 +1,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
-import { BrandMark } from "@/components/brand-mark";
+import { InviteHeading, InviteShell } from "@/components/invite-card";
 import { JoinInvite } from "@/components/join-invite";
-import { NameSetup } from "@/components/name-setup";
-import { ThemeToggle } from "@/components/theme-toggle";
 import { provisionHostAccount } from "@/lib/accounts/server";
 import { getHostSession } from "@/lib/auth/server";
-import { avatarSrc } from "@/lib/avatars";
 import { APP_NAME } from "@/lib/brand";
 import { inviteTokenHashHex } from "@/lib/friends/invite-token";
 import { isInviteToken } from "@/lib/friends/invites";
@@ -43,8 +40,9 @@ async function readInvite(token: string): Promise<InvitePreview | null> {
 /**
  * An invite to Pokerize from a host to one of their guests (migration 0030).
  * Anyone with the link sees who invited them and the name they play under;
- * after signing in and saving a name they confirm it's them, which makes
- * them the host's friend and links the guest, games and all.
+ * after signing in, saving their name (or tapping Accept invite when they
+ * already have one) makes them the host's friend and links the guest, games
+ * and all.
  */
 export default async function JoinPage(props: PageProps<"/join/[token]">) {
   const { token } = await props.params;
@@ -122,46 +120,16 @@ export default async function JoinPage(props: PageProps<"/join/[token]">) {
       </InviteShell>
     );
   }
-  if (!profile.displayName) {
-    return <NameSetup initialAvatar={profile.avatar} initialName={invite.guestName} />;
-  }
-
   return (
-    <InviteShell>
-      <InviteHeading invite={invite} />
-      <JoinInvite token={token} hostName={invite.hostName} guestName={invite.guestName} />
-    </InviteShell>
-  );
-}
-
-function InviteShell({ children }: { children: React.ReactNode }) {
-  return (
-    <main className="auth-page">
-      <ThemeToggle className="page-theme-toggle" />
-      <section className="auth-card invite-card">
-        <BrandMark className="auth-mark" />
-        {children}
-      </section>
-    </main>
-  );
-}
-
-function InviteHeading({ invite }: { invite: InvitePreview }) {
-  return (
-    <>
-      <div className="invite-host">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={avatarSrc(invite.hostAvatar, invite.hostName)} alt="" width={56} height={56} />
-        {/* The name sets in capitals like on Home and Profile, on its own line. */}
-        <h1>
-          <span className="invite-host-name">{invite.hostName}</span>{" "}
-          <span className="invite-host-line">invited you to {APP_NAME}</span>
-        </h1>
-      </div>
-      <p className="auth-intro">
-        In <span className="literal-text">{invite.hostName}</span>&apos;s
-        games, you play as <b className="literal-text">{invite.guestName}</b>.
-      </p>
-    </>
+    <JoinInvite
+      token={token}
+      invite={{
+        hostName: invite.hostName,
+        hostAvatar: invite.hostAvatar,
+        guestName: invite.guestName,
+      }}
+      needsName={!profile.displayName}
+      initialAvatar={profile.avatar}
+    />
   );
 }

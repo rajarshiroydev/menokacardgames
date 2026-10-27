@@ -21,10 +21,13 @@ import { ThemeToggle } from "@/components/theme-toggle";
 export function NameSetup({
   initialAvatar,
   initialName = "",
+  onSaved,
 }: {
   initialAvatar: string;
   /** From an invite: the name the host knows them by, to keep or change. */
   initialName?: string;
+  /** From an invite: runs once the name is saved, instead of a page refresh. */
+  onSaved?: () => Promise<void>;
 }) {
   const [name, setName] = useState(initialName);
   const [avatar, setAvatar] = useState(initialAvatar);
@@ -61,8 +64,9 @@ export function NameSetup({
         setSaving(false);
         return;
       }
-      // Keep the button disabled: the refreshed page replaces this screen.
-      router.refresh();
+      // Keep the button disabled: the next screen replaces this one.
+      if (onSaved) await onSaved();
+      else router.refresh();
     } catch {
       setError("Could not save your name. Check your connection and try again.");
       setSaving(false);
