@@ -2879,7 +2879,6 @@ export function PokerLedger({
             history={history}
             players={[...players, ...discardedPlayers]}
             selfPlayerId={profile.selfPlayerId}
-            hostName={profile.displayName ?? "Your host"}
             focusKey={rankFocus}
             loading={historyLoading}
             error={historyError}
@@ -11864,7 +11863,7 @@ function StandingCard({
   onPokerize?: boolean;
   /** Under the badge's "is on Pokerize" when it is tapped. */
   badgeHint?: string;
-  /** Under the details: Add Friend, or Invite to Pokerize for your guests. */
+  /** Under the details: Add Friend, in a friend's standings. */
   action?: React.ReactNode;
   /** Label new players; off while everyone is shown for lack of regulars. */
   markNew: boolean;
@@ -12017,7 +12016,7 @@ function RanksView({
           onRequestSent={onRequestSent}
         />
       ) : (
-        <StandingsView {...props} onToast={onToast} />
+        <StandingsView {...props} />
       )}
     </div>
   );
@@ -12288,40 +12287,21 @@ function StandingsView({
   history,
   players,
   selfPlayerId,
-  hostName,
   focusKey,
   loading,
   error,
   onRetry,
-  onToast,
 }: {
   history: PokerSession[];
   /** Current names: a renamed guest or a friend's chosen name wins over saved ones. */
   players: PlayerProfile[];
   selfPlayerId: string | null;
-  /** Your name, for Invite to Pokerize's message. */
-  hostName: string;
   /** A player's card to open and scroll to, from "View standings". */
   focusKey: string | null;
   loading: boolean;
   error: string;
   onRetry: () => void;
-  onToast: (message: string) => void;
 }) {
-  // Your current guests, who can be invited to Pokerize (migration 0030).
-  const invitable = useMemo(
-    () =>
-      new Map(
-        players
-          .filter(
-            (player) =>
-              !player.discardedAt && !player.linked && player.id !== selfPlayerId,
-          )
-          .map((player) => [player.id, player]),
-      ),
-    [players, selfPlayerId],
-  );
-  const [inviting, setInviting] = useState<PlayerProfile | null>(null);
   const standings = useMemo(() => {
     const built = buildStandings(history);
     const byId = new Map(players.map((player) => [player.id, player]));
@@ -12408,19 +12388,6 @@ function StandingsView({
         markNew={shown.applies}
         tag={entry.isMe ? null : entry.linked ? "Friend" : "Guest"}
         onPokerize={entry.isMe || entry.linked}
-        action={
-          entry.playerId && invitable.has(entry.playerId) ? (
-            <div className="standing-action">
-              <button
-                className="glass-button full"
-                type="button"
-                onClick={() => setInviting(invitable.get(entry.playerId!) ?? null)}
-              >
-                Invite to Pokerize
-              </button>
-            </div>
-          ) : null
-        }
         excluded={
           entry.ineligible.length ? (
             <ul className="leaderboard-excluded">
@@ -12484,14 +12451,6 @@ function StandingsView({
         </button>
       ) : null}
       {shown.pinnedSelf ? standingCard(shown.pinnedSelf) : null}
-      {inviting ? (
-        <InviteSheet
-          guest={inviting}
-          hostName={hostName}
-          onToast={onToast}
-          onClose={() => setInviting(null)}
-        />
-      ) : null}
     </div>
   );
 }

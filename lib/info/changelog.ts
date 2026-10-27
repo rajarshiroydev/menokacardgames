@@ -47,6 +47,10 @@ export const CHANGELOG: ChangelogEntry[] = [
         text: "Friend requests no longer show the Pokerize badge beside the sender's name: everyone who sends one is on Pokerize.",
       },
       {
+        tag: "improved",
+        text: "Invite to Pokerize is now only in a guest's options on Profile, no longer on their card in Ranks.",
+      },
+      {
         tag: "fixed",
         text: "The sign-in page no longer fails to load when your earlier sign-in has ended elsewhere, for example after signing out on every device.",
       },
