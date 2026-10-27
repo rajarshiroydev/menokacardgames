@@ -465,6 +465,69 @@ export function undoRaiseRules(
   hand.raiseOpen = open;
 }
 
+/**
+ * Deals the next street: betting starts afresh, and the street just played is
+ * kept so Undo can go back to it. Returns false on the river.
+ */
+export function dealNextStreet(game: GameState) {
+  const hand = game.hand;
+  if (!hand || hand.stage >= STAGES.length - 1) return false;
+  hand.streets = [
+    ...(hand.streets ?? []),
+    structuredClone({
+      committed: hand.committed,
+      acted: hand.acted,
+      last: hand.last,
+      roundHigh: hand.roundHigh,
+      ...(hand.raiseSize !== undefined ? { raiseSize: hand.raiseSize } : {}),
+      ...(hand.raiseOpen ? { raiseOpen: hand.raiseOpen } : {}),
+      currentPlayer: hand.currentPlayer,
+    }),
+  ];
+  hand.stage += 1;
+  hand.committed = game.players.map(() => 0);
+  hand.roundHigh = 0;
+  hand.acted = game.players.map(() => false);
+  hand.last = game.players.map(() => null);
+  resetRaiseRules(game);
+  hand.currentPlayer = nextPlayerToAct(game, hand.dealerIndex);
+  return true;
+}
+
+/**
+ * The street Undo can take back: the one being played, once it has been
+ * dealt and before anyone acts on it. Null otherwise.
+ */
+export function undoableStreet(game: GameState) {
+  const hand = game.hand;
+  if (!hand?.streets?.length || hand.stage === 0) return null;
+  if (hand.last.some(Boolean) || hand.acted.some(Boolean)) return null;
+  return STAGES[hand.stage];
+}
+
+/**
+ * Takes back the street just dealt, before anyone acts on it, restoring the
+ * betting of the street before so its actions can be undone in turn.
+ * Chips don't move when a street is dealt, so stacks and pot stay as they are.
+ */
+export function undoStreet(game: GameState) {
+  const hand = game.hand;
+  if (!hand || !undoableStreet(game)) return false;
+  const before = hand.streets!.at(-1)!;
+  hand.streets = hand.streets!.slice(0, -1);
+  hand.stage -= 1;
+  hand.committed = [...before.committed];
+  hand.acted = [...before.acted];
+  hand.last = [...before.last];
+  hand.roundHigh = before.roundHigh;
+  if (before.raiseSize !== undefined) hand.raiseSize = before.raiseSize;
+  else delete hand.raiseSize;
+  if (before.raiseOpen) hand.raiseOpen = [...before.raiseOpen];
+  else delete hand.raiseOpen;
+  hand.currentPlayer = before.currentPlayer;
+  return true;
+}
+
 /** Each street starts with raises of one big blind, open to everyone. */
 export function resetRaiseRules(game: GameState) {
   const hand = game.hand!;

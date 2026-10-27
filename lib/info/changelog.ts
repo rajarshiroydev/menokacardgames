@@ -58,6 +58,10 @@ export const CHANGELOG: ChangelogEntry[] = [
         tag: "improved",
         text: "Home's Last session now includes games you played at a friend's table, not only games you hosted. Tap it to open that friend's games.",
       },
+      {
+        tag: "improved",
+        text: "Undo now works across streets. Right after the flop, turn or river is dealt, Undo takes that street back, then keeps stepping back through the actions before it, all the way to the start of the hand.",
+      },
     ],
   },
   {

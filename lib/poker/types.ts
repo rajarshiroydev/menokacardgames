@@ -99,6 +99,17 @@ export type RaiseRecord = {
   acted?: boolean[];
 };
 
+/** A street's betting as it stood when the next street was dealt. */
+export type StreetRecord = {
+  committed: number[];
+  acted: boolean[];
+  last: Array<PlayerAction | null>;
+  roundHigh: number;
+  raiseSize?: number;
+  raiseOpen?: boolean[];
+  currentPlayer: number | null;
+};
+
 export type Hand = {
   no: number;
   pot: number;
@@ -130,6 +141,11 @@ export type Hand = {
   smallBlindIndex: number;
   bigBlindIndex: number;
   currentPlayer: number | null;
+  /**
+   * The betting of each street already dealt past, oldest first, so Undo
+   * can take back a street and then that street's actions. Older hands lack it.
+   */
+  streets?: StreetRecord[];
   splitSel?: number[] | null;
   /** When the hand was dealt. Older hands lack it. */
   dealtAt?: number;

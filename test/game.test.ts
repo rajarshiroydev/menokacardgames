@@ -21,6 +21,7 @@ import {
   cancelCurrentHand,
   completedHandRecord,
   dealNewHand,
+  dealNextStreet,
   editBlindSchedule,
   hasBlindClock,
   pauseBlindClock,
@@ -37,6 +38,8 @@ import {
   totalBuyIns,
   undoLastHand,
   undoRaiseRules,
+  undoStreet,
+  undoableStreet,
 } from "../lib/poker/game.ts";
 import type {
   BlindSchedule,
@@ -519,6 +522,67 @@ describe("positional betting", () => {
 
     game.players[1].stack = 80;
     assert.equal(minimumRaise(game, 1), 80);
+  });
+});
+
+describe("undoing a street", () => {
+  test("takes back each street dealt, back to the preflop betting", () => {
+    const game = gameState();
+    dealNewHand(game);
+    const hand = dealtHand(game);
+    betTo(game, 0, 400);
+    hand.last[0] = { type: "bet", chips: 400, line: "A raises to 400" };
+    betTo(game, 1, 400);
+    betTo(game, 2, 400);
+    const preflop = structuredClone(hand);
+
+    assert.equal(undoableStreet(game), null);
+    assert.equal(dealNextStreet(game), true);
+    assert.equal(hand.stage, 1);
+    assert.deepEqual(hand.committed, [0, 0, 0]);
+    assert.equal(minimumRaise(game, 1), 100);
+    assert.equal(undoableStreet(game), "FLOP");
+
+    betTo(game, 1, 300);
+    hand.last[1] = { type: "bet", chips: 300, line: "B bets 300" };
+    // Once someone acts, their action is undone first, not the street.
+    assert.equal(undoableStreet(game), null);
+    assert.equal(undoStreet(game), false);
+    betTo(game, 2, 300);
+    betTo(game, 0, 300);
+    const flop = structuredClone(hand);
+    assert.equal(dealNextStreet(game), true);
+    assert.equal(undoableStreet(game), "TURN");
+
+    assert.equal(undoStreet(game), true);
+    assert.deepEqual({ ...hand, streets: undefined }, { ...flop, streets: undefined });
+    assert.equal(hand.streets?.length, 1);
+
+    // The flop's actions undone, the flop itself can go.
+    hand.committed = [0, 0, 0];
+    hand.acted = [false, false, false];
+    hand.last = [null, null, null];
+    assert.equal(undoStreet(game), true);
+    assert.equal(hand.stage, 0);
+    assert.deepEqual(hand.committed, preflop.committed);
+    assert.deepEqual(hand.acted, preflop.acted);
+    assert.deepEqual(hand.last, preflop.last);
+    assert.equal(hand.roundHigh, preflop.roundHigh);
+    assert.equal(raiseSize(game), raiseSize({ ...game, hand: preflop }));
+    assert.deepEqual(hand.raiseOpen, preflop.raiseOpen);
+    assert.equal(hand.currentPlayer, preflop.currentPlayer);
+    assert.deepEqual(hand.streets, []);
+    assert.equal(undoableStreet(game), null);
+  });
+
+  test("doesn't deal past the river", () => {
+    const game = gameState();
+    dealNewHand(game);
+    for (let street = 1; street <= 3; street += 1) {
+      assert.equal(dealNextStreet(game), true);
+    }
+    assert.equal(dealNextStreet(game), false);
+    assert.equal(dealtHand(game).stage, 3);
   });
 });
 

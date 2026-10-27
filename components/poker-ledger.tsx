@@ -55,11 +55,13 @@ import {
   minimumRaise,
   raiseSize,
   undoRaiseRules,
+  undoableStreet,
+  undoStreet,
+  dealNextStreet,
   nextBuyIn,
   nextPlayerToAct,
   pendingIndexes,
   pendingBlindPlan,
-  resetRaiseRules,
   isValidSmallBlind,
   smallBlindFor,
   STAGES,
@@ -2068,16 +2070,18 @@ export function PokerLedger({
       return;
     }
     const next = structuredClone(game);
-    const hand = next.hand;
-    if (!hand) return;
-    hand.stage += 1;
-    hand.committed = next.players.map(() => 0);
-    hand.roundHigh = 0;
-    hand.acted = next.players.map(() => false);
-    hand.last = next.players.map(() => null);
-    resetRaiseRules(next);
-    hand.currentPlayer = nextPlayerToAct(next, hand.dealerIndex);
+    if (!dealNextStreet(next)) return;
     setGame(next);
+  }
+
+  function undoNextStreet() {
+    if (!game?.hand) return;
+    const next = structuredClone(game);
+    const street = undoableStreet(next);
+    if (!street || !undoStreet(next)) return;
+    setLastTurn(null);
+    setGame(next);
+    showToast(`${titleCase(street.toLowerCase())} taken back`);
   }
 
   function pickWinner(playerIndex: number) {
@@ -2999,6 +3003,7 @@ export function PokerLedger({
             lastTurn={lastTurn}
             onAct={act}
             onUndoAction={undoAction}
+            onUndoStreet={undoNextStreet}
             onNextStage={nextStage}
             onPickWinner={pickWinner}
             onBeginSplit={beginSplit}
@@ -7575,6 +7580,7 @@ type GameViewProps = {
     amount?: number,
   ) => void;
   onUndoAction: (playerIndex: number) => void;
+  onUndoStreet: () => void;
   onNextStage: () => void;
   onPickWinner: (playerIndex: number) => void;
   onBeginSplit: () => void;
@@ -7868,7 +7874,11 @@ function GameScreen(props: GameViewProps) {
               )}
             </>
           )}
-          <UndoTurnButton game={game} onUndo={props.onUndoAction} />
+          <UndoTurnButton
+            game={game}
+            onUndo={props.onUndoAction}
+            onUndoStreet={props.onUndoStreet}
+          />
           <button
             className="glass-button full danger-text"
             type="button"
@@ -9875,6 +9885,7 @@ function TableHand({
   blindSchedule,
   onAct,
   onUndoAction,
+  onUndoStreet,
   onBuyIn,
   onNextStage,
   onPickWinner,
@@ -10119,7 +10130,12 @@ function TableHand({
           Deal {STAGES[hand.stage + 1]}
         </button>
       ) : null}
-      <UndoTurnButton game={game} tall onUndo={onUndoAction} />
+      <UndoTurnButton
+        game={game}
+        tall
+        onUndo={onUndoAction}
+        onUndoStreet={onUndoStreet}
+      />
       <button
         className="glass-button full tall danger-text"
         type="button"
@@ -10133,18 +10149,31 @@ function TableHand({
 
 /**
  * One Undo for the live hand, in both views: it takes back the latest action
- * this street and names it, like "Undo Asha's call". Hidden before anyone
- * acts and while a pot is being split.
+ * this street and names it, like "Undo Asha's call". Before anyone acts on a
+ * new street it takes back the street ("Undo Flop"), so a whole hand can be
+ * stepped back to the first preflop action. Hidden while a pot is being split.
  */
 function UndoTurnButton({
   game,
   tall = false,
   onUndo,
+  onUndoStreet,
 }: {
   game: GameState;
   tall?: boolean;
   onUndo: (playerIndex: number) => void;
+  onUndoStreet: () => void;
 }) {
+  const className = `glass-button full ${tall ? "tall " : ""}undo-turn`;
+  const street = game.hand?.splitSel ? null : undoableStreet(game);
+  if (street) {
+    return (
+      <button className={className} type="button" onClick={onUndoStreet}>
+        <UndoIcon />
+        Undo {titleCase(street.toLowerCase())}
+      </button>
+    );
+  }
   const seat = game.hand?.splitSel ? null : latestActor(game);
   const action = seat === null ? null : game.hand?.last[seat];
   if (seat === null || !action) return null;
@@ -10156,7 +10185,7 @@ function UndoTurnButton({
   );
   return (
     <button
-      className={`glass-button full ${tall ? "tall " : ""}undo-turn`}
+      className={className}
       type="button"
       onClick={() => onUndo(seat)}
     >
