@@ -2088,20 +2088,13 @@ export function PokerLedger({
     showToast(`${titleCase(street.toLowerCase())} taken back`);
   }
 
+  // No confirmation: the winner is tapped first, then awarded with a
+  // separate button that names them and the amount.
   function pickWinner(playerIndex: number) {
     if (!game?.hand) return;
-    const rake = handRake(game);
-    ask(
-      `Give the ${money(game.hand.pot - rake)} pot to ${
-        game.players[playerIndex].name
-      }?${rake ? ` The house takes ${money(rake)} rake.` : ""}`,
-      `${game.players[playerIndex].name} wins`,
-      () => {
-        const next = structuredClone(game);
-        awardPot(next, playerIndex);
-        setGame(next);
-      },
-    );
+    const next = structuredClone(game);
+    awardPot(next, playerIndex);
+    setGame(next);
   }
 
   function beginSplit() {
@@ -9859,17 +9852,24 @@ function WinnerPicker({
   onBeginSplit: () => void;
 }) {
   const { money } = useMoney();
+  // The player tapped, for this hand only. Awarding takes a second tap on
+  // the button under the list, which names them.
+  const [picked, setPicked] = useState<{ hand: number; index: number } | null>(
+    null,
+  );
   const hand = game.hand;
   if (!hand) return null;
   const rake = handRake(game);
   const payout = hand.pot - rake;
+  const active = activeIndexes(game);
+  const winner =
+    !pending && picked?.hand === hand.no && active.includes(picked.index)
+      ? picked.index
+      : null;
 
   return (
     <section className="glass card winner-picker">
-      <div className="card-row">
-        <span className="label">Pick the winner</span>
-        <span className="accent-amount">{money(payout)}</span>
-      </div>
+      <PickerHead title="Pick the winner" amount={money(payout)} />
       {rake ? (
         <p className="muted small-note">
           After the house&apos;s {money(rake)} rake.
@@ -9880,26 +9880,50 @@ function WinnerPicker({
           Finish the river betting before picking a winner.
         </p>
       ) : null}
-      {activeIndexes(game).map((playerIndex) => (
-        <button
-          className="contender"
-          type="button"
-          disabled={pending}
-          key={playerIndex}
-          onClick={() => onPickWinner(playerIndex)}
-        >
-          <Avatar
-            name={game.players[playerIndex].name}
-            playerId={game.players[playerIndex].id}
-            size="small"
-          />
-          <span className="contender-name">
-            {game.players[playerIndex].name} wins
-          </span>
-          <span className="contender-amount">{money(payout)}</span>
-        </button>
-      ))}
-      {activeIndexes(game).length > 1 ? (
+      {active.map((playerIndex) => {
+        const isWinner = winner === playerIndex;
+        return (
+          <button
+            className={`contender ${isWinner ? "won" : ""}`}
+            type="button"
+            disabled={pending}
+            aria-pressed={isWinner}
+            key={playerIndex}
+            onClick={() =>
+              setPicked(
+                isWinner ? null : { hand: hand.no, index: playerIndex },
+              )
+            }
+          >
+            <Avatar
+              name={game.players[playerIndex].name}
+              playerId={game.players[playerIndex].id}
+              size="small"
+            />
+            <span className="contender-name">
+              {game.players[playerIndex].name}
+            </span>
+            {/* The amount shows only on the player picked, as in a split. */}
+            <span className={`contender-amount ${isWinner ? "" : "muted"}`}>
+              {isWinner ? money(payout) : "Tap to pick"}
+            </span>
+          </button>
+        );
+      })}
+      {/* Grey until a player is picked, then green and naming them. */}
+      <button
+        className={`${winner === null ? "glass-button" : "accent-button"} full tall`}
+        type="button"
+        disabled={winner === null}
+        onClick={() => {
+          if (winner !== null) onPickWinner(winner);
+        }}
+      >
+        {winner === null
+          ? "Pick a winner"
+          : `${game.players[winner].name} wins ${money(payout)}`}
+      </button>
+      {active.length > 1 ? (
         <button
           className="split-button"
           type="button"
@@ -9911,6 +9935,16 @@ function WinnerPicker({
         </button>
       ) : null}
     </section>
+  );
+}
+
+/** A showdown card's heading: the title with the pot beside it, centred. */
+function PickerHead({ title, amount }: { title: string; amount: string }) {
+  return (
+    <div className="picker-head">
+      <h2 className="card-title">{title}</h2>
+      <span className="card-title accent-amount">{amount}</span>
+    </div>
   );
 }
 
@@ -10708,12 +10742,10 @@ function SidePotPicker({
 
   return (
     <section className="glass card winner-picker">
-      <div className="card-row">
-        <span className="label">{several ? "Pick the winners" : "Pick the winner"}</span>
-        <span className="accent-amount">
-          {money(pots.reduce((sum, pot) => sum + pot.amount, 0))}
-        </span>
-      </div>
+      <PickerHead
+        title={several ? "Pick the winners" : "Pick the winner"}
+        amount={money(pots.reduce((sum, pot) => sum + pot.amount, 0))}
+      />
       <p className="muted small-note">
         {several
           ? "Each pot goes to the best hand among the players listed under it."
@@ -10852,10 +10884,7 @@ function SplitView({
 
   return (
     <section className="glass card winner-picker">
-      <div className="card-row">
-        <span className="label">Split the pot</span>
-        <span className="accent-amount">{money(payout)}</span>
-      </div>
+      <PickerHead title="Split the pot" amount={money(payout)} />
       {activeIndexes(game).map((playerIndex) => {
         const isSelected = hand.splitSel?.includes(playerIndex) ?? false;
         const share = shares.get(playerIndex) ?? 0;

@@ -86,6 +86,10 @@ export const CHANGELOG: ChangelogEntry[] = [
         tag: "improved",
         text: "Buying in a busted player during a hand now has one place in both views: a Buy in card above Undo. Table seats and player cards no longer have their own buy-in buttons.",
       },
+      {
+        tag: "improved",
+        text: "Picking the winner is clearer: tap a player to pick them, then press the green \"Name wins\" button under the list. No more popup, and the pot shows only beside the player you picked.",
+      },
     ],
   },
   {
