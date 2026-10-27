@@ -42,6 +42,10 @@ export const CHANGELOG: ChangelogEntry[] = [
         tag: "fixed",
         text: "Saved games now show everyone by the name they chose, and guests by their latest name, instead of the name a game was saved with: in your Games, Details, Settle up and Home, and in a friend's standings and games.",
       },
+      {
+        tag: "improved",
+        text: "Friend requests no longer show the Pokerize badge beside the sender's name: everyone who sends one is on Pokerize.",
+      },
     ],
   },
   {

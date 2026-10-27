@@ -3661,7 +3661,7 @@ function HomeView({
             </span>
             <span className="home-notice-copy">
               <b className="literal-text">
-                <BadgedName name={friendRequests[0].displayName ?? "Someone"} badge />
+                {friendRequests[0].displayName ?? "Someone"}
               </b>
               {friendRequests.length > 1
                 ? ` and ${friendRequests.length - 1} other${friendRequests.length === 2 ? "" : "s"} want to be friends`
@@ -6853,10 +6853,7 @@ function FriendRequestCard({
         <div>
           <span className="eyebrow">Friend request</span>
           <p>
-            <b>
-              <BadgedName name={name} badge />
-            </b>{" "}
-            wants to be friends
+            <b>{name}</b> wants to be friends
           </p>
         </div>
       </div>
