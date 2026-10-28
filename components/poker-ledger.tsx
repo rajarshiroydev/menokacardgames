@@ -8811,7 +8811,7 @@ function JoinGameSheet({
                 >
                   {seats.map(({ player, index }) => (
                     <option key={player.id || index} value={index + 1}>
-                      Left of {player.name}
+                      After {player.name}
                       {index === game.dealerIndex ? " (dealer last hand)" : ""}
                     </option>
                   ))}

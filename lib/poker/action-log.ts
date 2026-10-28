@@ -276,5 +276,47 @@ export function groupLog(
     }
     section.entries.push(entry);
   });
-  return groups;
+  // Lifted buy-ins join the "Before hand N" lines next to them (cash-outs,
+  // joins), so a break between hands is one group.
+  return groups.flatMap(liftBuyIns).reduce<LogGroup[]>((merged, group) => {
+    const last = merged.at(-1);
+    if (
+      last &&
+      last.hand === null &&
+      group.hand === null &&
+      last.title === group.title
+    ) {
+      last.streets[0].entries.push(...group.streets[0].entries);
+    } else {
+      merged.push(group);
+    }
+    return merged;
+  }, []);
+}
+
+/**
+ * A buy-in logged against a hand ("Hand N: …" after it ended, "During hand
+ * N: …" while it ran) plays no part in it: the player plays from the next
+ * hand. So it moves out into a "Before hand N+1" group just above (newer
+ * than) the hand. The stored lines keep their prefixes, since undo and
+ * saving match them.
+ */
+function liftBuyIns(group: LogGroup): LogGroup[] {
+  if (group.hand === null) return [group];
+  const buyIns = group.streets.flatMap((street) =>
+    street.entries.filter((entry) => entry.kind === "buy-in"),
+  );
+  if (!buyIns.length) return [group];
+  const streets = group.streets
+    .map((street) => ({
+      ...street,
+      entries: street.entries.filter((entry) => entry.kind !== "buy-in"),
+    }))
+    .filter((street) => street.entries.length);
+  const lifted: LogGroup = {
+    hand: null,
+    title: `Before hand ${group.hand + 1}`,
+    streets: [{ street: null, entries: buyIns }],
+  };
+  return streets.length ? [lifted, { ...group, streets }] : [lifted];
 }

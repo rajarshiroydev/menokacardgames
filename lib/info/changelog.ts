@@ -40,7 +40,7 @@ export const CHANGELOG: ChangelogEntry[] = [
       },
       {
         tag: "improved",
-        text: "A clearer action log: each hand in its own box, split by street, with every player's avatar, a coloured tag for what they did and the amount on the right. Actions are numbered from 1 in each hand, so you can follow the order, and wins stand out in green.",
+        text: "A clearer action log: each hand in its own box, split by street, with every player's avatar, a coloured tag for what they did and the amount on the right. Actions are numbered from 1 in each hand, so you can follow the order, wins stand out in green, and rebuys sit with cash-outs and new players under \"Before hand\", outside the hands.",
       },
       {
         tag: "improved",

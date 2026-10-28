@@ -143,6 +143,36 @@ describe("groupLog", () => {
     );
   });
 
+  test("lifts a hand's buy-ins out to before the next hand", () => {
+    const groups = groupLog(
+      [
+        "Before hand 3: Dev cashes out with ₹800",
+        "Hand 2: Asha Rao buys in for ₹1,000",
+        "Hand 2: Dev wins pot ₹300",
+        "During hand 2: Asha Rao buys in again for ₹500",
+        "Hand 2 PREFLOP: Asha calls ₹50",
+        "Hand 1: Dev buys in for ₹1,000",
+      ],
+      names,
+    );
+    assert.deepEqual(
+      groups.map((group) => [
+        group.title,
+        group.hand,
+        group.streets.map((street) => [
+          street.street,
+          street.entries.map((entry) => entry.verb),
+        ]),
+      ]),
+      [
+        // They join the cash-out made in the same break.
+        ["Before hand 3", null, [[null, ["Cashes out", "Buys in", "Buys in again"]]]],
+        ["Hand 2", 2, [[null, ["Wins"]], ["Preflop", ["Calls"]]]],
+        ["Before hand 2", null, [[null, ["Buys in"]]]],
+      ],
+    );
+  });
+
   test("numbers betting actions from 1 within each hand", () => {
     const lines = [
       "Hand 2: Dev wins pot ₹300",
@@ -160,12 +190,12 @@ describe("groupLog", () => {
         ),
       );
     assert.deepEqual(numbers(groupLog(lines, names)), [
-      null, 3, 2, 1, null, null, 1,
+      null, null, 3, 2, 1, null, 1,
     ]);
     // A log that may have lost old lines leaves its oldest hand unnumbered.
     assert.deepEqual(
       numbers(groupLog(lines, names, { complete: false })),
-      [null, 3, 2, 1, null, null, null],
+      [null, null, 3, 2, 1, null, null],
     );
   });
 });
