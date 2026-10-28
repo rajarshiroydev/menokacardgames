@@ -82,6 +82,24 @@ describe("parseLogLine", () => {
     assert.equal(before.entry.verb, "Joins");
   });
 
+  test("reads a buy-in taken back when saving", () => {
+    const { entry } = parseLogLine(
+      "Asha takes back a buy-in of ₹10,000 when saving (no hand finished with it)",
+      names,
+    );
+    assert.deepEqual(
+      [entry.kind, entry.player, entry.verb, entry.amount, entry.note],
+      ["take-back", 0, "Buy-in taken back", "₹10,000", "No hand finished with it"],
+    );
+    assert.equal(
+      parseLogLine(
+        "Dev takes back 2 buy-ins of ₹20,000 when saving (no hand finished with them)",
+        names,
+      ).entry.verb,
+      "2 buy-ins taken back",
+    );
+  });
+
   test("reads blinds and rake, and keeps anything else whole", () => {
     const blinds = parseLogLine(
       "Hand 9: blinds up to ₹100/₹200 (level 3)",

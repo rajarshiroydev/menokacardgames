@@ -292,6 +292,8 @@ export function buyInPlayer(
   }
   noteBuyInAmount(game, amount);
   const player = game.players[playerIndex];
+  // Buy-ins before the first one counted here were played with.
+  player.buyInsPlayed ??= playerBuyIns(game, playerIndex).length;
   player.buyIns = [...playerBuyIns(game, playerIndex), amount];
   player.stack = amount;
   const hand = game.hand;
@@ -302,6 +304,54 @@ export function buyInPlayer(
     hand.boughtIn = [...(hand.boughtIn ?? []), playerIndex];
   }
   return amount;
+}
+
+/**
+ * Rebuys not yet played with: made after the last finished hand each player
+ * was dealt into (a hand cut off by saving doesn't count). Saving offers to
+ * take them back. A player's first buy-in is never listed.
+ */
+export function unplayedRebuys(game: GameState) {
+  return game.players.flatMap((player, playerIndex) => {
+    const buyIns = playerBuyIns(game, playerIndex);
+    const from = Math.max(1, player.buyInsPlayed ?? buyIns.length);
+    return from < buyIns.length
+      ? [{ playerIndex, amounts: buyIns.slice(from) }]
+      : [];
+  });
+}
+
+/**
+ * Takes back the unplayed rebuys of `playerIndexes` (see `unplayedRebuys`):
+ * the buy-ins and their chips, as if they never happened. Only for saving,
+ * since it leaves the player out of chips. Logs a line for each.
+ */
+export function takeBackRebuys(
+  game: GameState,
+  playerIndexes: readonly number[],
+  money: (chips: number) => string,
+) {
+  for (const { playerIndex, amounts } of unplayedRebuys(game)) {
+    if (!playerIndexes.includes(playerIndex)) continue;
+    const player = game.players[playerIndex];
+    const total = amounts.reduce((sum, amount) => sum + amount, 0);
+    player.buyIns = playerBuyIns(game, playerIndex).slice(
+      0,
+      -amounts.length,
+    );
+    player.stack = Math.max(0, player.stack - total);
+    const hand = game.hand;
+    if (hand) {
+      hand.stacksBeforeHand[playerIndex] = Math.max(
+        0,
+        hand.stacksBeforeHand[playerIndex] - total,
+      );
+    }
+    player.buyInsPlayed = player.buyIns.length;
+    game.log.unshift(
+      `${player.name} takes back ${amounts.length === 1 ? "a buy-in" : `${amounts.length} buy-ins`} of ${money(total)} when saving (no hand finished with ${amounts.length === 1 ? "it" : "them"})`,
+    );
+  }
 }
 
 function bettingIsClosed(game: GameState) {
@@ -940,6 +990,7 @@ function dealHand(game: GameState, now: number) {
     pot,
     stage: 0,
     in: inHand,
+    dealtIn: [...inHand],
     committed,
     acted: game.players.map(() => false),
     last: game.players.map(() => null),
@@ -1011,6 +1062,7 @@ export function completedHandRecord(game: GameState): CompletedHand {
           ),
         }
       : {}),
+    buyInsPlayedBefore: game.players.map((player) => player.buyInsPlayed ?? null),
   };
 }
 
@@ -1052,6 +1104,10 @@ export function undoLastHand(game: GameState, now = Date.now()) {
     // Dealing the hand again counts it again.
     const handsBefore = last.handsPlayedBefore?.[index];
     if (handsBefore !== undefined) player.handsPlayed = handsBefore;
+    // The undone hand no longer counts as played with their buy-ins.
+    const playedBefore = last.buyInsPlayedBefore?.[index];
+    if (playedBefore === null) delete player.buyInsPlayed;
+    else if (playedBefore !== undefined) player.buyInsPlayed = playedBefore;
   });
   game.log = game.log.filter(
     (line) =>
@@ -1644,6 +1700,12 @@ export function handsUntilBigBlind(game: GameState): (number | null)[] {
 export function recordHandResult(game: GameState) {
   const won = game.winnerAnnouncement;
   if (!won) return;
+  // Everyone dealt into the finished hand has now played with their buy-ins.
+  game.hand?.dealtIn?.forEach((dealt, index) => {
+    if (dealt) {
+      game.players[index].buyInsPlayed = playerBuyIns(game, index).length;
+    }
+  });
   const results = (game.handResults ?? []).filter(
     (result) => result.no < won.handNo,
   );

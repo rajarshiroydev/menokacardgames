@@ -28,6 +28,13 @@ export type Player = {
    */
   leftHand?: number;
   leftAt?: number;
+  /**
+   * Hand-by-hand games: how many of `buyIns` this player had in the last
+   * hand they were dealt into that finished. Rebuys after that haven't been
+   * played with, so saving offers to take them back. Absent until their
+   * first rebuy or finished hand.
+   */
+  buyInsPlayed?: number;
 };
 
 /**
@@ -151,6 +158,8 @@ export type Hand = {
   stacksBeforeHand: number[];
   /** Players who bought in during this hand; they play from the next one. */
   boughtIn?: number[];
+  /** Who was dealt in, kept as dealt (folds change `in`). Older hands lack it. */
+  dealtIn?: boolean[];
   dealerIndex: number;
   smallBlindIndex: number;
   bigBlindIndex: number;
@@ -241,6 +250,8 @@ export type CompletedHand = {
   rakeBefore?: number;
   /** Each player's hands played before this hand (games that track players). */
   handsPlayedBefore?: number[];
+  /** Each player's `buyInsPlayed` before this hand; null where it was unset. */
+  buyInsPlayedBefore?: Array<number | null>;
 };
 
 /**

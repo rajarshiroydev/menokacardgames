@@ -5379,6 +5379,68 @@ button.log-hand-head {
   color: var(--ink3);
 }
 
+/* Saving with rebuys nobody played with: Keep or Take back for each. */
+.unplayed-rebuys {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border-radius: var(--rs);
+  background: var(--field);
+}
+
+.unplayed-rebuys-head {
+  display: grid;
+  gap: 4px;
+}
+
+.unplayed-rebuys-head b {
+  font-size: 15px;
+}
+
+.unplayed-rebuys-head p {
+  margin: 0;
+  color: var(--ink2);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.unplayed-rebuy {
+  display: grid;
+  gap: 8px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+
+.unplayed-rebuy-who {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.unplayed-rebuy-name {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+}
+
+.unplayed-rebuy-name b {
+  font-size: 15px;
+  overflow-wrap: anywhere;
+}
+
+.unplayed-rebuy-name small {
+  color: var(--ink2);
+  font-size: 12px;
+}
+
+.unplayed-rebuy-amount {
+  flex: none;
+  color: var(--ink);
+  font-size: 20px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
 .sheet > button,
 .sheet .legacy-review-actions button {
   width: 100%;

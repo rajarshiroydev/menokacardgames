@@ -24,6 +24,7 @@ export type LogKind =
   | "split"
   | "buy-in"
   | "cash-out"
+  | "take-back"
   | "blinds"
   | "rake"
   | "note";
@@ -150,6 +151,15 @@ function playerAction(rest: string): Parts | null {
     [
       /^cashes out with (\S+)$/,
       (m) => ({ kind: "cash-out", verb: "Cashes out", amount: m[1], note: null }),
+    ],
+    [
+      /^takes back (a buy-in|\d+ buy-ins) of (\S+) when saving \((.+)\)$/,
+      (m) => ({
+        kind: "take-back",
+        verb: m[1] === "a buy-in" ? "Buy-in taken back" : `${capitalise(m[1])} taken back`,
+        amount: m[2],
+        note: capitalise(m[3]),
+      }),
     ],
     [
       /^returns to the table with (\S+)$/,

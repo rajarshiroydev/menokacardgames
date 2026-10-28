@@ -32,6 +32,10 @@ export const CHANGELOG: ChangelogEntry[] = [
     items: [
       {
         tag: "new",
+        text: "If someone buys back in and you stop before they play a hand with it, saving asks whether to keep that buy-in or take it back, so their results only count money they played with.",
+      },
+      {
+        tag: "new",
         text: "The action log now keeps the whole session instead of the last 80 lines, and it's saved with the game: tap Action log on a saved game to read it, and Continue game picks it up where it left off. Older hands fold to their result until you tap them.",
       },
       {

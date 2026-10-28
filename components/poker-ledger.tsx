@@ -97,6 +97,8 @@ import {
   mostRebuysUsed,
   rebuyBlockReason,
   savedPlayerRecord,
+  takeBackRebuys,
+  unplayedRebuys,
   upcomingBigBlinds,
 } from "@/lib/poker/game";
 import {
@@ -513,6 +515,20 @@ type ModalState =
       onConfirm: () => void;
       /** A link under the message for another way to go on, such as a different amount. */
       alternative?: { label: string; onChoose: () => void };
+      /**
+       * Saving with rebuys nobody played with: Keep or Take back for each,
+       * then `onSave` with the players whose rebuys are taken back.
+       */
+      rebuys?: {
+        items: Array<{
+          playerIndex: number;
+          playerId?: string;
+          name: string;
+          amount: string;
+          count: number;
+        }>;
+        onSave: (takeBack: number[]) => void;
+      };
     }
   | {
       kind: "recent-sign-in";
@@ -2450,11 +2466,20 @@ export function PokerLedger({
       showToast(error instanceof Error ? error.message : "Check the count");
       return;
     }
-    ask(
-      "Save this game? It goes to your games and counts towards the standings.",
-      "Save game",
-      () => void saveLedgerSession(session),
+    // A short question as the title, with the facts as points under it, like
+    // the hand-by-hand save.
+    const bought = session.results.reduce(
+      (sum, result) =>
+        sum +
+        (result.buyIns ?? [session.startStack]).reduce((all, chips) => all + chips, 0),
+      0,
     );
+    ask("Save this game?", "Save game", () => void saveLedgerSession(session), {
+      points: [
+        `${session.results.length} players, ${money(bought)} bought in`,
+        "Goes to Games and counts towards the standings",
+      ],
+    });
   }
 
   async function saveLedgerSession(session: PokerSession) {
@@ -2524,7 +2549,16 @@ export function PokerLedger({
     );
   }
 
-  async function finishSession(completedHands: number) {
+  /**
+   * Saves the game, or `saving`: a copy of it with unplayed rebuys taken
+   * back at the host's choice (endSession).
+   */
+  async function finishSession(
+    completedHands: number,
+    saving: GameState | null = game,
+  ) {
+    // The game as it is saved; the one on screen is left alone until then.
+    const game = saving;
     if (!game) return;
     const endStacks = game.hand
       ? [...game.hand.stacksBeforeHand]
@@ -2634,19 +2668,53 @@ export function PokerLedger({
       showToast("No completed hands to save");
       return;
     }
-    ask(
-      game.continues
-        ? `Save this game? ${newHands} more hand${
-            newHands === 1 ? "" : "s"
-          } played (${completedHands} in all) — it updates ${
-            game.sessionLabel || "the saved game"
-          } and the leaderboard.`
-        : `Save this session? ${completedHands} hand${
-            completedHands === 1 ? "" : "s"
-          } played — it goes to History and counts towards the leaderboard.`,
-      "Save session",
-      () => void finishSession(completedHands),
-    );
+    // A short question as the title, with the facts as points under it.
+    const hands = (count: number) => `${count} hand${count === 1 ? "" : "s"}`;
+    const label = game.sessionLabel || "the saved game";
+    const message = game.continues ? `Save ${label}?` : "Save this game?";
+    const points = game.continues
+      ? [
+          `${newHands} more ${newHands === 1 ? "hand" : "hands"} played, ${completedHands} in all`,
+          `Updates ${label} and the standings`,
+        ]
+      : [
+          `${hands(completedHands)} played`,
+          "Goes to Games and counts towards the standings",
+        ];
+    // Rebuys nobody played with (rare): the host chooses, for each, whether
+    // the saved game keeps them.
+    const unplayed = unplayedRebuys(game);
+    if (unplayed.length) {
+      setModal({
+        kind: "confirm",
+        message,
+        points,
+        confirmLabel: "Save session",
+        onConfirm: () => {},
+        rebuys: {
+          items: unplayed.map(({ playerIndex, amounts }) => ({
+            playerIndex,
+            playerId: game.players[playerIndex].id,
+            name: game.players[playerIndex].name,
+            amount: money(amounts.reduce((sum, amount) => sum + amount, 0)),
+            count: amounts.length,
+          })),
+          onSave: (takeBack) => {
+            if (!takeBack.length) {
+              void finishSession(completedHands);
+              return;
+            }
+            const saving = structuredClone(game);
+            takeBackRebuys(saving, takeBack, money);
+            void finishSession(completedHands, saving);
+          },
+        },
+      });
+      return;
+    }
+    ask(message, "Save session", () => void finishSession(completedHands), {
+      points,
+    });
   }
 
   function discardSession(id: string) {
@@ -13900,8 +13968,13 @@ function Modal({
   onClose: () => void;
   onConfirm: () => void;
 }) {
+  // Rebuys the host chose to take back (`rebuys`); every one is kept at first.
+  const [takeBack, setTakeBack] = useState<number[]>([]);
+  const rebuys = state.kind === "confirm" ? state.rebuys : undefined;
+
   function confirm() {
-    state.onConfirm();
+    if (rebuys) rebuys.onSave(takeBack);
+    else state.onConfirm();
     onConfirm();
   }
 
@@ -13941,6 +14014,52 @@ function Modal({
             state.message
           )}
         </div>
+        {rebuys ? (
+          <div className="unplayed-rebuys">
+            <div className="unplayed-rebuys-head">
+              <b>{rebuys.items.length === 1 ? "Unused buy-in" : "Unused buy-ins"}</b>
+              <p>
+                {rebuys.items.length === 1
+                  ? `${rebuys.items[0].name} hasn't finished a hand since buying back in. Taking the buy-in back removes it as if it never happened.`
+                  : `${rebuys.items
+                      .slice(0, -1)
+                      .map((item) => item.name)
+                      .join(", ")} and ${rebuys.items.at(-1)!.name} haven't finished a hand since buying back in. Taking a buy-in back removes it as if it never happened.`}
+              </p>
+            </div>
+            {rebuys.items.map((item) => (
+              <div className="unplayed-rebuy" key={item.playerIndex}>
+                {/* Who and how much on one line, like a standings row; the
+                    amount is what the choice is about, so it is the largest. */}
+                <div className="unplayed-rebuy-who">
+                  <Avatar name={item.name} playerId={item.playerId} size="small" />
+                  <span className="unplayed-rebuy-name">
+                    <b>{item.name}</b>
+                    <small>
+                      {item.count === 1 ? "Bought back in" : `Bought back in ${item.count} times`}
+                    </small>
+                  </span>
+                  <strong className="unplayed-rebuy-amount">{item.amount}</strong>
+                </div>
+                <Segmented
+                  label={`${item.name}'s buy-in`}
+                  options={[
+                    { value: "keep", label: "Keep" },
+                    { value: "back", label: "Take back" },
+                  ]}
+                  value={takeBack.includes(item.playerIndex) ? "back" : "keep"}
+                  onChange={(choice) =>
+                    setTakeBack((current) =>
+                      choice === "back"
+                        ? [...current, item.playerIndex]
+                        : current.filter((index) => index !== item.playerIndex),
+                    )
+                  }
+                />
+              </div>
+            ))}
+          </div>
+        ) : null}
         {state.kind === "confirm" && state.alternative ? (
           <button
             className="text-button"
