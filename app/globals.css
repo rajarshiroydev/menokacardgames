@@ -3917,6 +3917,16 @@ textarea::placeholder {
   margin-top: 10px;
 }
 
+/* Under a card title the card's gap is spacing enough, so the space below
+   the title matches the padding above it. */
+.card-title + .action-log {
+  margin-top: 0;
+}
+
+.session-standings .rows > :first-child {
+  padding-top: 0;
+}
+
 .log-hand {
   border: 1px solid var(--line);
   border-radius: 14px;

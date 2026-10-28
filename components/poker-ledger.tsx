@@ -8076,7 +8076,7 @@ function GameScreen(props: GameViewProps) {
         </>
       )}
 
-      <section className="glass card">
+      <section className="glass card session-standings">
         <h2 className="card-title">Session Standings</h2>
         {game.rakeRules ? (
           <p className="muted small-note">
@@ -8136,7 +8136,7 @@ function GameScreen(props: GameViewProps) {
 
       {game.log.length ? (
         <section className="glass card">
-          <span className="label">Action log</span>
+          <h2 className="card-title">Action Log</h2>
           <ActionLog
             lines={game.log}
             players={game.players}
@@ -8840,7 +8840,7 @@ function JoinGameSheet({
                 >
                   {seats.map(({ player, index }) => (
                     <option key={player.id || index} value={index + 1}>
-                      Left of {player.name}
+                      After {player.name}
                       {index === game.dealerIndex ? " (dealer last hand)" : ""}
                     </option>
                   ))}
