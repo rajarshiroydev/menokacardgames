@@ -7,6 +7,7 @@ import {
   isGameBackupId,
   summarizeGameBackup,
   validateGameBackupState,
+  withoutForgottenBackups,
 } from "../lib/poker/game-backup.ts";
 import { LOG_LIMIT } from "../lib/poker/action-log.ts";
 import type { GameState } from "../lib/poker/types.ts";
@@ -111,5 +112,24 @@ describe("summarizeGameBackup", () => {
         updatedAt: 1_760_000_100_000,
       },
     );
+  });
+});
+
+describe("withoutForgottenBackups", () => {
+  const discarded = summarizeGameBackup("s1760000000000", game(), 1, true);
+  const other = summarizeGameBackup("s1760000000001", game(), 2, false);
+
+  it("leaves out a game whose backup is being deleted", () => {
+    assert.deepEqual(
+      withoutForgottenBackups([discarded, other], new Set(["s1760000000000"])),
+      [other],
+    );
+  });
+
+  it("keeps every game when nothing is being deleted", () => {
+    assert.deepEqual(withoutForgottenBackups([discarded, other], new Set()), [
+      discarded,
+      other,
+    ]);
   });
 });

@@ -137,6 +137,7 @@ import {
   GAME_BACKUP_QUIET_MS,
   gameBackupId,
   type GameBackupSummary,
+  withoutForgottenBackups,
 } from "@/lib/poker/game-backup";
 import {
   bigBlindChoices,
@@ -965,6 +966,11 @@ export function PokerLedger({
     lastSent: 0,
     pending: Promise.resolve(),
   });
+  // Games whose backup is being deleted (discarded or closed), so neither a
+  // late update nor a list Home fetched meanwhile brings them back.
+  const forgettingBackups = useRef(new Set<string>());
+  // Only the newest list request may set Home's list.
+  const backupListRequest = useRef(0);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const showToast = useCallback((message: string) => {
@@ -1071,12 +1077,19 @@ export function PokerLedger({
   /** Quietly refreshes what the screen being opened shows. */
   /** Unfinished games backed up from any device, for Home. */
   const refreshGameBackups = useCallback(async () => {
+    const request = ++backupListRequest.current;
     try {
       const data = await gameBackupApi<{ backups?: GameBackupSummary[] }>(
         "GET",
         { query: { deviceId: readDeviceId() } },
       );
-      setGameBackups(Array.isArray(data.backups) ? data.backups : []);
+      if (request !== backupListRequest.current) return;
+      setGameBackups(
+        withoutForgottenBackups(
+          Array.isArray(data.backups) ? data.backups : [],
+          forgettingBackups.current,
+        ),
+      );
     } catch {
       // Home simply doesn't offer a restore until the next check.
     }
@@ -1348,6 +1361,9 @@ export function PokerLedger({
 
   const sendGameBackup = useCallback(
     (current: GameState) => {
+      if (forgettingBackups.current.has(gameBackupId(current))) {
+        return backupSync.current.pending;
+      }
       backupSync.current.lastSent = Date.now();
       const sending = gameBackupApi("PUT", {
         body: {
@@ -1397,16 +1413,29 @@ export function PokerLedger({
     };
   }, [game, ready, sendGameBackup]);
 
-  /** A discarded or closed game's backup goes, after any update in flight. */
+  /**
+   * A discarded or closed game's backup goes, after any update in flight.
+   * Home leaves it out meanwhile, then checks again once the delete is done.
+   */
   function forgetGameBackup(current: GameState) {
     const gameId = gameBackupId(current);
-    void backupSync.current.pending.then(() =>
-      gameBackupApi("DELETE", {
-        query: { gameId, deviceId: readDeviceId() },
-      }).catch(() => {
-        // It expires after 7 days; Home offers it until then.
-      }),
+    forgettingBackups.current.add(gameId);
+    setGameBackups((backups) =>
+      withoutForgottenBackups(backups, forgettingBackups.current),
     );
+    void backupSync.current.pending
+      .then(() =>
+        gameBackupApi("DELETE", {
+          query: { gameId, deviceId: readDeviceId() },
+        }),
+      )
+      .catch(() => {
+        // It expires after 7 days; Home offers it until then.
+      })
+      .finally(() => {
+        forgettingBackups.current.delete(gameId);
+        void refreshGameBackups();
+      });
   }
 
   async function restoreGameBackup(backup: GameBackupSummary) {

@@ -53,6 +53,17 @@ export type GameBackupSummary = {
   updatedAt: number;
 };
 
+/**
+ * Home's list without the games whose backup this device is deleting: a list
+ * fetched while the delete waits for a last update to land still has them.
+ */
+export function withoutForgottenBackups(
+  backups: GameBackupSummary[],
+  forgotten: ReadonlySet<string>,
+) {
+  return backups.filter((backup) => !forgotten.has(backup.gameId));
+}
+
 function isObject(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
