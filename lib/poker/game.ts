@@ -1018,11 +1018,26 @@ export function completedHandRecord(game: GameState): CompletedHand {
  * then deals the undone hand again from the same seat, blinds and time, so
  * it matches the moment it was first dealt. Only one hand can be undone.
  */
+/**
+ * The number of the hand Undo hand takes back, or null when there is none:
+ * the last completed hand (games saved without its number count back from
+ * the hand being played, or from the hands dealt).
+ */
+export function lastHandNumber(game: GameState) {
+  const last = game.lastHand;
+  if (!last) return null;
+  return last.handNo ?? (game.hand ? game.hand.no - 1 : game.handNo);
+}
+
 export function undoLastHand(game: GameState, now = Date.now()) {
   const last = game.lastHand;
   if (!last) return false;
-  const undoneNumber =
-    last.handNo ?? (game.hand ? game.hand.no - 1 : game.handNo);
+  const undoneNumber = lastHandNumber(game)!;
+  if (game.handResults) {
+    game.handResults = game.handResults.filter(
+      (result) => result.no < undoneNumber,
+    );
+  }
   const currentHandNumber = game.hand?.no;
   // The dealer of the undone hand, for games saved without the record.
   const undoneDealer =
@@ -1446,6 +1461,7 @@ export function awardPots(game: GameState, winners: number[][]) {
     split: names.length > 1,
     pots: results,
   };
+  recordHandResult(game);
   game.hand = null;
   return true;
 }
@@ -1495,4 +1511,150 @@ export function savedPlayerRecord(
         }
       : {}),
   };
+}
+
+/** The river is out and its betting is over: the winner is picked now. */
+export function isShowdown(game: GameState) {
+  const hand = game.hand;
+  return (
+    !!hand &&
+    hand.stage === STAGES.length - 1 &&
+    pendingIndexes(game).length === 0
+  );
+}
+
+/** A seat's position this hand: "D", "SB", "BB", or "D SB" heads-up. */
+export function seatRole(game: GameState, playerIndex: number) {
+  const hand = game.hand;
+  if (!hand) return "";
+  return [
+    playerIndex === hand.dealerIndex ? "D" : "",
+    playerIndex === hand.smallBlindIndex ? "SB" : "",
+    playerIndex === hand.bigBlindIndex ? "BB" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+}
+
+/** What a seat's status says, without an amount or before it. */
+export const SEAT_STATUS_LABELS = [
+  "Cashed out",
+  "Next hand",
+  "Busted",
+  "Folded",
+  "In split",
+  "In the hand",
+  "All in",
+  "Checked",
+  "Called",
+  "Raised to",
+  "Bet",
+  "Big blind",
+  "Small blind",
+  "Waiting",
+] as const;
+
+export type SeatStatusLabel = (typeof SEAT_STATUS_LABELS)[number];
+
+/**
+ * A seat's status during a hand as its words and, when it has one, the
+ * amount: "Raised to" and 1,200, or just "Checked".
+ */
+export function seatStatusParts(
+  game: GameState,
+  playerIndex: number,
+): { label: SeatStatusLabel; amount?: number } {
+  const hand = game.hand!;
+  const player = game.players[playerIndex];
+  const committed = hand.committed[playerIndex];
+  if (!hand.in[playerIndex]) {
+    if (player.left) return { label: "Cashed out" };
+    if (hand.boughtIn?.includes(playerIndex)) return { label: "Next hand" };
+    // Bust when the hand was dealt, so never in it.
+    if (!(hand.stacksBeforeHand[playerIndex] > 0)) return { label: "Busted" };
+    return { label: "Folded" };
+  }
+  // At the showdown nobody acts any more: everyone still in is a contender.
+  if (isShowdown(game)) {
+    return {
+      label: hand.splitSel?.includes(playerIndex) ? "In split" : "In the hand",
+    };
+  }
+  if (player.stack === 0) return { label: "All in", amount: committed };
+  const last = hand.last[playerIndex];
+  if (last) {
+    if (last.type === "check") return { label: "Checked" };
+    if (last.type === "call") return { label: "Called", amount: committed };
+    if (last.type === "bet") {
+      // The log line already says whether the chips opened, raised or called.
+      return {
+        label: last.line.includes(" raises to ")
+          ? "Raised to"
+          : last.line.includes(" bets ")
+            ? "Bet"
+            : "Called",
+        amount: committed,
+      };
+    }
+    if (last.type === "all-in") return { label: "All in", amount: committed };
+  }
+  if (hand.stage === 0 && committed > 0) {
+    if (playerIndex === hand.bigBlindIndex) {
+      return { label: "Big blind", amount: committed };
+    }
+    if (playerIndex === hand.smallBlindIndex) {
+      return { label: "Small blind", amount: committed };
+    }
+  }
+  return { label: "Waiting" };
+}
+
+/**
+ * How many deals until each seat is the big blind, if everyone with chips
+ * now stays in: 0 for the big blind of the hand being played, 1 for the
+ * next hand, and so on. Null for anyone not dealt in (busted or left).
+ */
+export function handsUntilBigBlind(game: GameState): (number | null)[] {
+  const hand = game.hand;
+  // During a hand, who was dealt in; between hands, who will be.
+  const seated = game.players.map((player, index) =>
+    hand
+      ? !player.left && (hand.stacksBeforeHand[index] ?? 0) > 0
+      : isDealtIn(player),
+  );
+  const result: (number | null)[] = game.players.map(() => null);
+  const alive = seated.filter(Boolean).length;
+  if (alive < 2) return result;
+  if (hand) result[hand.bigBlindIndex] = 0;
+  let dealer = Number.isInteger(game.dealerIndex) ? game.dealerIndex : -1;
+  for (let deal = 1; deal <= alive; deal += 1) {
+    dealer = nextEligibleIndex(seated, dealer);
+    const small = alive === 2 ? dealer : nextEligibleIndex(seated, dealer);
+    const big = nextEligibleIndex(seated, small);
+    if (result[big] === null) result[big] = deal;
+  }
+  return result;
+}
+
+/**
+ * Notes the hand just paid out, from its winner card, with everyone's net
+ * after it. Call right after a hand's chips are awarded.
+ */
+export function recordHandResult(game: GameState) {
+  const won = game.winnerAnnouncement;
+  if (!won) return;
+  const results = (game.handResults ?? []).filter(
+    (result) => result.no < won.handNo,
+  );
+  results.push({
+    no: won.handNo,
+    pot: won.pot,
+    names: [...won.names],
+    split: won.split,
+    ...(won.pots ? { pots: structuredClone(won.pots) } : {}),
+    nets: game.players.map(
+      (player, index) => player.stack - totalBuyIns(game, index),
+    ),
+  });
+  game.handResults = results;
 }

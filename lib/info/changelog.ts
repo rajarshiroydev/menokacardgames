@@ -52,6 +52,22 @@ export const CHANGELOG: ChangelogEntry[] = [
       },
       {
         tag: "improved",
+        text: "During a hand, Undo hand now sits beside Cancel hand, and both name their hand, like Undo hand 25 and Cancel hand 26, so you know exactly which hand each one changes.",
+      },
+      {
+        tag: "improved",
+        text: "Session standings show what each player started with and their buy-ins on their own row, like Start ₹10,000 · Buy-ins ₹20,000, and Share live standings now sits under the list. The live standings link shows the same.",
+      },
+      {
+        tag: "new",
+        text: "The live standings link now follows the hand: the pot, the street, who's to act and what everyone did, with dealer and blind badges. It also shows when the blinds go up next, who won the last hand, how players moved in the ranking, and the game so far: time and hands played, average stack, chips in play and the biggest pot.",
+      },
+      {
+        tag: "new",
+        text: "On the live link, tap your name to see when you're next in the big blind, how many rebuys you have left and a chart of how your game has gone.",
+      },
+      {
+        tag: "improved",
         text: "In Table view the Deal Flop, Turn and River button no longer jumps up when a round ends. It stays in one place under the betting panel, as in List view. In both views the Deal and Undo buttons now stay on screen for the whole hand, greyed out when they can't be used.",
       },
       {

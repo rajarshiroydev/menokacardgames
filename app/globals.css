@@ -580,6 +580,10 @@ textarea::placeholder {
   min-height: 50px;
 }
 
+.button-pair > button.tall {
+  min-height: 52px;
+}
+
 .pill-button {
   flex: none;
   height: 30px;
@@ -2900,9 +2904,12 @@ textarea::placeholder {
   gap: 4px;
 }
 
+/* Less rounded than the action card's tiles, so the small text keeps clear
+   of the corners. */
 .seat-strip-stats .bet-stat {
   gap: 0;
   padding: 2px 8px;
+  border-radius: 6px;
 }
 
 .seat-strip-stats .bet-stat span {
@@ -5543,11 +5550,15 @@ textarea::placeholder {
   text-align: center;
 }
 
+/* Under the game's name: "● Live standings · Updated 8s ago". */
 .live-updated {
   display: flex;
   align-items: center;
   gap: 8px;
+  margin: 6px 0 0;
   color: var(--ink2);
+  font-size: 12px;
+  font-weight: 600;
 }
 
 .live-dot {
@@ -5572,110 +5583,347 @@ textarea::placeholder {
   color: oklch(0.55 0.14 70);
 }
 
-.live-blinds {
+/* The live page reuses the game screen's pieces (components/game-parts).
+   These are the few things only it needs. */
+.live-between {
   align-items: center;
-  gap: 2px;
-  padding: 14px 16px 16px;
-  text-align: center;
 }
 
-.live-blinds .blinds-label {
-  font-size: 11px;
+/* The last hand, as the winner card shows it, in the page's flow. */
+.winner-card.inline {
+  width: 100%;
+  padding: 18px 16px 16px;
+  animation: none;
 }
 
-.live-blinds-value {
-  font-family: var(--fd);
-  font-size: 44px;
-  font-weight: 900;
-  font-variation-settings: "opsz" 72;
-  line-height: 1;
-  white-space: nowrap;
+.winner-card.inline .winner-pot {
+  margin-bottom: 0;
 }
 
-.live-list {
-  gap: 0;
-  padding: 6px 16px;
+/* The last hand on one line while the next is played. */
+.live-last {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  padding: 10px 14px;
+  font-size: 14px;
+  font-weight: 700;
 }
 
-.live-row {
+/* A player on the live page, the same in every state: the rank, then the
+   avatar, name and status chip, the action card's boxes for stack, net and
+   chips in the hand (or bought in, between hands), and what they put in. */
+.live-player {
   display: flex;
-  align-items: center;
-  gap: 12px;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  transition: opacity 0.18s ease-out;
+}
+
+.live-player.me {
   width: calc(100% + 16px);
   margin: 0 -8px;
-  padding: 12px 8px;
-  border: 0;
+  padding-inline: 8px;
   border-radius: var(--rs);
-  background: transparent;
-  text-align: left;
-}
-
-.live-row + .live-row {
-  border-top: 1px solid var(--line);
-}
-
-.live-row.me {
   background: var(--glass2);
   box-shadow: inset 3px 0 0 var(--g);
 }
 
-.live-player {
+/* Folded, busted or cashed out: faded, as on the game screen. */
+.live-player.out {
+  opacity: 0.5;
+}
+
+.live-player-rank {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  align-items: center;
+  width: 20px;
+  padding-top: 6px;
+  color: var(--ink3);
+  font-family: var(--fd);
+  font-size: 18px;
+  font-weight: 900;
+  font-variation-settings: "opsz" 72;
+  line-height: 1;
+}
+
+.live-player-rank small {
+  margin-top: 4px;
+  font-family: var(--fb);
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.live-player-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.live-player-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.live-player-head b {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 15px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.live-player-head .status-pill {
+  max-width: 50%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.status-pill.turn {
+  background: var(--g);
+  color: var(--onacc);
+}
+
+.status-pill.next {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--g);
+  color: var(--g);
+}
+
+/* Both rows of boxes wrap: as wide as they can share equally, but never
+   narrower than what they hold, so on a narrow screen or with long amounts
+   a box moves to the next line instead of being cut off. */
+.live-player-stats,
+.live-player-thin {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.live-player-stats > .bet-stat,
+.live-player-thin > span {
+  flex: 1 1 0;
+  min-width: fit-content;
+}
+
+.live-player-stats .bet-stat b {
+  overflow: visible;
+}
+
+.live-player-stats .bet-stat {
+  padding: 4px 10px;
+  border-radius: 8px;
+}
+
+.live-player-stats .bet-stat span {
+  font-size: 11px;
+}
+
+.live-player-stats .bet-stat b {
+  font-size: 15px;
+}
+
+/* The stack stands out: the theme's text colour as the box, so white in
+   the dark theme and near-black in the light one. */
+.live-player-stats .bet-stat.stack {
+  background: var(--ink);
+}
+
+.live-player-stats .bet-stat.stack span {
+  color: color-mix(in oklch, var(--bg) 70%, var(--ink));
+}
+
+.live-player-stats .bet-stat.stack b {
+  color: var(--bg);
+}
+
+/* Net in green for a profit and red for a loss, as everywhere else. */
+.live-player-stats .bet-stat b.pos {
+  color: var(--g);
+}
+
+.live-player-stats .bet-stat b.neg {
+  color: var(--neg);
+}
+
+/* Start and buy-ins: the same dark boxes, thin, label and amount on one
+   line. */
+/* The big-blind count only takes the room it needs. */
+.live-player-thin > .bb {
+  flex: 0 0 auto;
+}
+
+.live-player-thin > span {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 8px;
+  background: var(--field);
+  color: var(--ink2);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.live-player-thin b {
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+/* Your game: who you are, what's next for you, and your net over hands. */
+.live-you {
+  gap: 10px;
+}
+
+.live-you-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.live-you-name {
   flex: 1;
   min-width: 0;
 }
 
-.live-player b {
+.live-you-name b {
   display: block;
   font-size: 15px;
   font-weight: 600;
   overflow-wrap: anywhere;
 }
 
-.live-stack {
+.live-you-name small {
   display: block;
-  margin-top: 2px;
-  font-family: var(--fd);
-  font-size: min(28px, 7.5vw);
-  font-weight: 900;
-  font-variation-settings: "opsz" 72;
-  line-height: 1.05;
+  color: var(--ink2);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.live-you-head > b {
+  font-size: 16px;
+  font-weight: 800;
   white-space: nowrap;
 }
 
-/* Same style as the Buy-In line, so both labels read as one family. */
-.live-stack small {
+.live-chart {
+  position: relative;
+  margin: 0;
+  --tone: var(--g);
+}
+
+.live-chart.neg {
+  --tone: var(--neg);
+}
+
+.live-chart svg {
   display: block;
-  color: var(--ink2);
-  font-family: var(--fb);
-  font-size: 12px;
+  width: 100%;
+  height: 72px;
+  overflow: visible;
+}
+
+.live-chart-line {
+  fill: none;
+  stroke: var(--tone);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2.5;
+  vector-effect: non-scaling-stroke;
+}
+
+.live-chart-area {
+  fill: color-mix(in oklch, var(--tone) 16%, transparent);
+}
+
+.live-chart-zero {
+  stroke: var(--line);
+  stroke-dasharray: 4 4;
+  vector-effect: non-scaling-stroke;
+}
+
+.live-chart-dot {
+  position: absolute;
+  right: -4px;
+  width: 9px;
+  height: 9px;
+  margin-top: -4.5px;
+  border: 2px solid var(--sheet);
+  border-radius: 50%;
+  background: var(--tone);
+}
+
+.live-chart figcaption {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 6px;
+  color: var(--ink3);
+  font-size: 11px;
   font-weight: 600;
+}
+
+/* How the page works, above the pot card. */
+.live-help {
+  gap: 8px;
+  padding: 12px 14px;
+}
+
+.live-help dl {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+}
+
+/* Each point: a dot, the subject in bold, then what it means. */
+.live-help dl > div {
+  display: grid;
+  grid-template-columns: 8px 96px minmax(0, 1fr);
+  align-items: baseline;
+  gap: 8px;
+  font-size: 12px;
   line-height: 1.4;
 }
 
-.live-values {
-  flex: none;
-  text-align: right;
+.live-help dl > div::before {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--g);
+  content: "";
+  transform: translateY(-1px);
 }
 
-.live-values b {
-  display: block;
-  font-size: 16px;
+.live-help dt {
+  color: var(--ink);
   font-weight: 700;
 }
 
-.live-values small {
-  display: block;
+.live-help dd {
+  margin: 0;
   color: var(--ink2);
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.live-summary {
-  gap: 6px;
-}
-
-.live-footnote {
-  padding: 0 4px;
 }
 
 .live-share-button {

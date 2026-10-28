@@ -97,8 +97,8 @@ export default function TermsPage() {
             someone else.
           </li>
           <li>
-            Anyone with a live standings link can see that game&apos;s names and
-            chips until it ends. Share links with care.
+            Anyone with a live standings link can see that game&apos;s names,
+            chips and how its hands went until it ends. Share links with care.
           </li>
         </ul>
       </InfoSection>

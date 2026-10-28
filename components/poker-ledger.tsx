@@ -19,12 +19,25 @@ import {
 import { createPortal } from "react-dom";
 
 import {
+  BlindsPill,
+  BlindTimer,
+  blindsLine,
+  nextBlindsText,
+  PotCard,
+  SeatAvatar,
+  SeatStrip,
+  shortBlinds,
+  StandingRow,
+  StreetPips,
+  WinnerSummary,
+} from "@/components/game-parts";
+
+import {
   activeIndexes,
   awardPots,
   cancelCurrentHand,
   bigBlindAtLevel,
   blindStatus,
-  formatClock,
   hasBlindClock,
   pauseBlindClock,
   resumeBlindClock,
@@ -69,6 +82,11 @@ import {
   playerBuyIns,
   totalBuyIns,
   undoLastHand,
+  lastHandNumber,
+  recordHandResult,
+  isShowdown,
+  seatRole,
+  seatStatusParts,
   editRebuyRules,
   cashOutPlayer,
   canJoinGame,
@@ -828,6 +846,7 @@ function awardPot(game: GameState, playerIndex: number, automatic = false) {
     handNo: hand.no,
     split: false,
   };
+  recordHandResult(game);
   game.hand = null;
 }
 
@@ -2154,6 +2173,7 @@ export function PokerLedger({
       handNo: hand.no,
       split: true,
     };
+    recordHandResult(next);
     next.hand = null;
     setGame(next);
   }
@@ -2450,7 +2470,7 @@ export function PokerLedger({
       showToast("Nothing to undo");
       return;
     }
-    ask("Undo the last completed hand?", "Undo hand", () => {
+    ask(`Undo hand ${lastHandNumber(game)}?`, "Undo hand", () => {
       const next = structuredClone(game);
       if (!undoLastHand(next)) return;
       setGame(next);
@@ -3268,19 +3288,12 @@ function Avatar({
   size?: "large" | "small";
 }) {
   const lookup = useContext(AvatarContext);
-  // Heads-up, the dealer also posts the small blind: the white D badge
-  // moves to the left so the blind badge keeps the right.
-  const roles = role ? role.split(" ") : [];
-  const dealer = roles.includes("D");
-  const blind = roles.find((part) => part !== "D");
   return (
-    <span className={`avatar avatar-${size}`} aria-hidden="true">
-      <AvatarArt id={avatar ?? lookup(playerId, name)} seed={name} />
-      {dealer ? (
-        <span className={`role-badge dealer${blind ? " paired" : ""}`}>D</span>
-      ) : null}
-      {blind ? <span className="role-badge">{blind}</span> : null}
-    </span>
+    <SeatAvatar
+      art={<AvatarArt id={avatar ?? lookup(playerId, name)} seed={name} />}
+      role={role}
+      size={size}
+    />
   );
 }
 
@@ -7661,18 +7674,19 @@ function GameScreen(props: GameViewProps) {
   );
   const blinds = blindStatus(game, now);
   const pendingPlan = pendingBlindPlan(game);
-  const nextBlinds = `${money(blinds.nextSmallBlind)}/${money(
-    blinds.nextBigBlind,
-  )}`;
   const blindNote = !blinds.schedule
     ? ""
-    : blinds.dueNow
-      ? `Blinds go up to ${nextBlinds} on the next hand`
-      : blinds.schedule.unit === "hands"
-        ? `${nextBlinds} in ${blinds.handsLeft} hand${
-            blinds.handsLeft === 1 ? "" : "s"
-          }`
-        : `${nextBlinds} in ${formatClock(blinds.msLeft)}`;
+    : nextBlindsText(
+        {
+          smallBlind: blinds.nextSmallBlind,
+          bigBlind: blinds.nextBigBlind,
+          dueNow: blinds.dueNow,
+          ...(blinds.schedule.unit === "hands"
+            ? { handsLeft: blinds.handsLeft }
+            : { msLeft: blinds.msLeft }),
+        },
+        money,
+      );
   const clock = hasBlindClock(game);
   const pausedNote = blinds.paused ? "Clock paused · " : "";
   const clockButton = clock ? (
@@ -7688,18 +7702,11 @@ function GameScreen(props: GameViewProps) {
     </button>
   ) : null;
   const blindSchedule = (
-    <div className="blind-clock">
-      {blinds.schedule && !pendingPlan ? (
-        <div
-          className={`blind-timer ${blinds.dueNow ? "due" : ""} ${
-            blinds.paused ? "paused" : ""
-          }`}
-          aria-live="polite"
-        >
-          {pausedNote}
-          {blindNote}
-        </div>
-      ) : null}
+    <BlindTimer
+      text={blinds.schedule && !pendingPlan ? blindNote : ""}
+      due={blinds.dueNow}
+      paused={blinds.paused}
+    >
       {pendingPlan ? (
         <div className={`blind-timer due ${blinds.paused ? "paused" : ""}`}>
           {pausedNote}From hand {pendingPlan.effectiveHand}:{" "}
@@ -7707,35 +7714,34 @@ function GameScreen(props: GameViewProps) {
         </div>
       ) : null}
       {clockButton}
-    </div>
+    </BlindTimer>
   );
   const blindsDisplay = (
-    <div className="blinds-display" aria-label="Current blinds">
-      <div className="blinds-pill">
-        <span className="blinds-label">Blinds</span>
-        <span className="blinds-value">
-          {money(blinds.smallBlind)}
-          <span className="blinds-separator"> / </span>
-          {money(blinds.bigBlind)}
-        </span>
-        {blinds.schedule ? (
-          <span className="blinds-level">L{blinds.level + 1}</span>
-        ) : null}
-      </div>
+    <BlindsPill
+      smallBlind={money(blinds.smallBlind)}
+      bigBlind={money(blinds.bigBlind)}
+      level={blinds.schedule ? blinds.level : undefined}
+    >
       {game.bigBlindAnte ? (
         <span className="muted small-note">
           Big blind ante {money(blinds.bigBlind)}
         </span>
       ) : null}
       {blindSchedule}
-    </div>
+    </BlindsPill>
   );
 
   // The blinds on one line, for the middle of the table and the List view's
   // pot card alike.
-  const blindsText = `${money(blinds.smallBlind)} / ${money(blinds.bigBlind)}${
-    game.bigBlindAnte ? ` · Ante ${money(blinds.bigBlind)}` : ""
-  }${blinds.schedule ? ` · L${blinds.level + 1}` : ""}`;
+  const blindsText = blindsLine(
+    {
+      smallBlind: blinds.smallBlind,
+      bigBlind: blinds.bigBlind,
+      ante: Boolean(game.bigBlindAnte),
+      level: blinds.schedule ? blinds.level : undefined,
+    },
+    money,
+  );
 
   const [showFullLog, setShowFullLog] = useState(false);
   const lastStage = STAGES.length - 1;
@@ -7827,21 +7833,15 @@ function GameScreen(props: GameViewProps) {
         <>
           {/* The same as the middle of the table: the streets as small
               bars, "Pot · Turn", the pot and the blinds. */}
-          <section className="glass card pot-card">
-            <StreetPips game={game} />
-            <span className="table-label">{potCardLabel(game)}</span>
-            <span
-              className="table-pot"
-              style={
-                { "--chars": money(hand.pot).length } as React.CSSProperties
-              }
-            >
-              {money(hand.pot)}
-            </span>
-            <PotBreakdown game={game} className="table-sidepots" />
-            <span className="table-blinds">{blindsText}</span>
-            {blinds.schedule || pendingPlan ? blindSchedule : null}
-          </section>
+          <PotCard
+            stage={hand.stage}
+            showdown={isShowdown(game)}
+            label={potCardLabel(game)}
+            pot={money(hand.pot)}
+            breakdown={<PotBreakdown game={game} className="table-sidepots" />}
+            blinds={blindsText}
+            timer={blinds.schedule || pendingPlan ? blindSchedule : null}
+          />
 
           {/* Everyone not acting, in the order they act next, as strips
               above the action card, so the buttons sit right under it as in
@@ -7908,27 +7908,35 @@ function GameScreen(props: GameViewProps) {
             onUndo={props.onUndoAction}
             onUndoStreet={props.onUndoStreet}
           />
-          <button
-            className="glass-button full tall danger-text"
-            type="button"
-            onClick={props.onCancelHand}
-          >
-            Cancel hand
-          </button>
+          <HandButtons
+            game={game}
+            onUndoHand={props.onUndoHand}
+            onCancelHand={props.onCancelHand}
+          />
         </>
       )}
 
       <section className="glass card">
-        <div className="card-row">
-          <h2 className="card-title">Session Standings</h2>
-          <span className="card-note">Start {money(game.startStack)}</span>
-        </div>
+        <h2 className="card-title">Session Standings</h2>
         {game.rakeRules ? (
           <p className="muted small-note">
             {describeRakeRules(game.rakeRules, money)} · house has taken{" "}
             {money(game.rake ?? 0)}
           </p>
         ) : null}
+        <div className="rows">
+          {standings.map(({ player, index }, rank) => (
+            <StandingRow
+              key={index}
+              rank={rank + 1}
+              name={player.name}
+              note={`${player.left ? "Cashed out · " : ""}${standingBuyIns(game, index, money)}`}
+              stack={money(player.stack)}
+              net={signedMoney(net(index))}
+              netTone={toneClass(net(index))}
+            />
+          ))}
+        </div>
         <button
           className={`glass-button full live-share-button${
             props.liveSharing ? " sharing" : ""
@@ -7947,37 +7955,18 @@ function GameScreen(props: GameViewProps) {
             "Share live standings"
           )}
         </button>
-        <div className="rows">
-          {standings.map(({ player, index }, rank) => (
-            <div className="standing-row" key={index}>
-              <span className="standing-rank">{rank + 1}</span>
-              <div className="standing-name">
-                <b>{player.name}</b>
-                <small>
-                  {player.left ? "Cashed out · " : ""}Invested{" "}
-                  {money(totalBuyIns(game, index))}
-                </small>
-              </div>
-              <div className="standing-values">
-                <b>{money(player.stack)}</b>
-                <small className={toneClass(net(index))}>
-                  {signedMoney(net(index))}
-                </small>
-              </div>
-            </div>
-          ))}
-        </div>
       </section>
 
       <button className="cta" type="button" onClick={props.onEndSession}>
         Finish And Save Session
       </button>
-      <div className="button-pair">
-        <button className="glass-button" type="button" onClick={props.onUndoHand}>
-          Undo last hand
-        </button>
+      {/* During a hand Undo hand sits beside Cancel hand instead. */}
+      <div className={hand ? "" : "button-pair"}>
+        {hand ? null : (
+          <UndoHandButton game={game} onUndoHand={props.onUndoHand} />
+        )}
         <button
-          className="glass-button danger-text"
+          className={`glass-button danger-text ${hand ? "full" : ""}`}
           type="button"
           onClick={props.onDiscard}
         >
@@ -9789,11 +9778,6 @@ function WinnerCard({
   onNext: () => void;
 }) {
   const { money } = useMoney();
-  const winnerText = announcement.split
-    ? `${announcement.names.join(" And ")} Win`
-    : `${announcement.names[0]} Wins`;
-  const pots =
-    announcement.pots && announcement.pots.length > 1 ? announcement.pots : null;
 
   return (
     <div className="winner-overlay" role="presentation">
@@ -9808,25 +9792,17 @@ function WinnerCard({
             <span key={index} />
           ))}
         </div>
-        <span className="eyebrow">
-          {pots ? "Pots won" : "Pot won"} · Hand {announcement.handNo}
-        </span>
-        <h2 id="winner-title">{winnerText}</h2>
-        {pots ? (
-          <ul className="winner-pots">
-            {pots.map((pot) => (
-              <li key={pot.label}>
-                <span className="winner-pot-label">{pot.label}</span>
-                <b>{pot.names.join(", ")}</b>
-                <span className="winner-pot-amount">{money(pot.amount)}</span>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="gradient-text winner-pot">
-            {money(announcement.pot)}
-          </p>
-        )}
+        <WinnerSummary
+          handNo={announcement.handNo}
+          names={announcement.names}
+          split={announcement.split}
+          pot={money(announcement.pot)}
+          pots={announcement.pots?.map((pot) => ({
+            label: pot.label,
+            names: pot.names,
+            amount: money(pot.amount),
+          }))}
+        />
         <button className="cta" type="button" onClick={onNext}>
           Next
         </button>
@@ -9965,6 +9941,7 @@ function TableHand({
   onSplitPot,
   onAwardPots,
   onCancelHand,
+  onUndoHand,
   lastTurn,
 }: GameViewProps & {
   blindsText: string;
@@ -10028,7 +10005,7 @@ function TableHand({
           </div>
         </div>
         <div className="table-center">
-          <StreetPips game={game} />
+          <StreetPips stage={hand.stage} showdown={showdown} />
           <span className="table-label">{potCardLabel(game)}</span>
           <span
             className="table-pot"
@@ -10164,24 +10141,12 @@ function TableHand({
         onUndo={onUndoAction}
         onUndoStreet={onUndoStreet}
       />
-      <button
-        className="glass-button full tall danger-text"
-        type="button"
-        onClick={onCancelHand}
-      >
-        Cancel hand
-      </button>
+      <HandButtons
+        game={game}
+        onUndoHand={onUndoHand}
+        onCancelHand={onCancelHand}
+      />
     </>
-  );
-}
-
-/** The river is out and its betting is over: the winner is picked now. */
-function isShowdown(game: GameState) {
-  const hand = game.hand;
-  return (
-    !!hand &&
-    hand.stage === STAGES.length - 1 &&
-    pendingIndexes(game).length === 0
   );
 }
 
@@ -10199,33 +10164,72 @@ function potCardLabel(game: GameState) {
   return hand.splitSel ? "Split the pot" : "Pick the winner";
 }
 
-/** "Small blind" and "Big blind" as the seats write them: "SB", "BB". */
-function shortBlinds(text: string) {
-  return text.replace("Small blind", "SB").replace("Big blind", "BB");
+
+/**
+ * What a player put in, for the standings: their own starting buy-in, then
+ * any rebuys together ("Start ₹10,000 · Buy-ins ₹20,000").
+ */
+function standingBuyIns(
+  game: GameState,
+  playerIndex: number,
+  money: (value: number) => string,
+) {
+  const [start = 0, ...rebuys] = playerBuyIns(game, playerIndex);
+  const more = rebuys.reduce((total, amount) => total + amount, 0);
+  return more > 0
+    ? `Start ${money(start)} · Buy-ins ${money(more)}`
+    : `Start ${money(start)}`;
 }
 
 /**
- * The four streets as small bars, in both views: those dealt are lit, the
- * current one green, and all of them once the showdown comes.
+ * Takes back the last completed hand, named by its number ("Undo hand 23"),
+ * greyed when there is none to undo.
  */
-function StreetPips({ game }: { game: GameState }) {
-  const hand = game.hand;
-  if (!hand) return null;
-  const showdown = isShowdown(game);
+function UndoHandButton({
+  game,
+  onUndoHand,
+  tall = false,
+}: {
+  game: GameState;
+  onUndoHand: () => void;
+  tall?: boolean;
+}) {
+  const undoable = lastHandNumber(game);
   return (
-    <div className="table-pips" aria-label={`Street: ${STAGES[hand.stage]}`}>
-      {STAGES.map((stage, index) => (
-        <span
-          key={stage}
-          className={
-            showdown || index < hand.stage
-              ? "past"
-              : index === hand.stage
-                ? "current"
-                : ""
-          }
-        />
-      ))}
+    <button
+      className={`glass-button ${tall ? "tall" : ""}`}
+      type="button"
+      disabled={undoable === null}
+      onClick={onUndoHand}
+    >
+      {undoable === null ? "Undo hand" : `Undo hand ${undoable}`}
+    </button>
+  );
+}
+
+/**
+ * During a hand, in both views: undo the last hand beside cancelling this
+ * one, each named by its number.
+ */
+function HandButtons({
+  game,
+  onUndoHand,
+  onCancelHand,
+}: {
+  game: GameState;
+  onUndoHand: () => void;
+  onCancelHand: () => void;
+}) {
+  return (
+    <div className="button-pair">
+      <UndoHandButton game={game} onUndoHand={onUndoHand} tall />
+      <button
+        className="glass-button tall danger-text"
+        type="button"
+        onClick={onCancelHand}
+      >
+        Cancel hand {game.hand?.no}
+      </button>
     </div>
   );
 }
@@ -10361,74 +10365,10 @@ function seatStatus(
   return amount === undefined ? label : `${label} ${money(amount)}`;
 }
 
-/**
- * A seat's status as its words and, when it has one, the amount: "Raised
- * to" and 1,200, or just "Checked".
- */
-function seatStatusParts(
-  game: GameState,
-  playerIndex: number,
-): { label: string; amount?: number } {
-  const hand = game.hand!;
-  const player = game.players[playerIndex];
-  const committed = hand.committed[playerIndex];
-  if (!hand.in[playerIndex]) {
-    if (player.left) return { label: "Cashed out" };
-    if (hand.boughtIn?.includes(playerIndex)) return { label: "Next hand" };
-    // Bust when the hand was dealt, so never in it.
-    if (!(hand.stacksBeforeHand[playerIndex] > 0)) return { label: "Busted" };
-    return { label: "Folded" };
-  }
-  // At the showdown nobody acts any more: everyone still in is a contender.
-  if (isShowdown(game)) {
-    return {
-      label: hand.splitSel?.includes(playerIndex) ? "In split" : "In the hand",
-    };
-  }
-  if (player.stack === 0) return { label: "All in", amount: committed };
-  const last = hand.last[playerIndex];
-  if (last) {
-    if (last.type === "check") return { label: "Checked" };
-    if (last.type === "call") return { label: "Called", amount: committed };
-    if (last.type === "bet") {
-      // The log line already says whether the chips opened, raised or called.
-      return {
-        label: last.line.includes(" raises to ")
-          ? "Raised to"
-          : last.line.includes(" bets ")
-            ? "Bet"
-            : "Called",
-        amount: committed,
-      };
-    }
-    if (last.type === "all-in") return { label: "All in", amount: committed };
-  }
-  if (hand.stage === 0 && committed > 0) {
-    if (playerIndex === hand.bigBlindIndex) {
-      return { label: "Big blind", amount: committed };
-    }
-    if (playerIndex === hand.smallBlindIndex) {
-      return { label: "Small blind", amount: committed };
-    }
-  }
-  return { label: "Waiting" };
-}
-
 function nameLength(name: string): "long" | "longer" | undefined {
   if (name.length > 28) return "longer";
   if (name.length > 14) return "long";
   return undefined;
-}
-
-function seatRole(game: GameState, playerIndex: number) {
-  const hand = game.hand!;
-  return [
-    playerIndex === hand.dealerIndex ? "D" : "",
-    playerIndex === hand.smallBlindIndex ? "SB" : "",
-    playerIndex === hand.bigBlindIndex ? "BB" : "",
-  ]
-    .filter(Boolean)
-    .join(" ");
 }
 
 /**
@@ -10542,36 +10482,29 @@ function WaitingStrip({
   const player = game.players[playerIndex];
   const status = seatStatusParts(game, playerIndex);
   return (
-    <div className={`seat-strip ${hand.in[playerIndex] ? "" : "folded"}`}>
-      <Avatar
-        name={player.name}
-        playerId={player.id}
-        role={seatRole(game, playerIndex)}
-        size="small"
-      />
-      <b className="seat-strip-name">{player.name}</b>
-      <div className="seat-strip-stats">
-        <div className="bet-stat">
-          <span>Stack</span>
-          <b>{money(player.stack)}</b>
-        </div>
-        <div className="bet-stat">
-          <span>In hand</span>
-          <b>{money(handContributions(game)[playerIndex])}</b>
-        </div>
-        <div
-          className={`bet-stat seat-strip-status ${flash ? "just-acted" : ""}`}
-          key={flash ?? "status"}
-        >
-          <span>
-            {status.amount === undefined ? "Status" : shortBlinds(status.label)}
-          </span>
-          <b>
-            {status.amount === undefined ? status.label : money(status.amount)}
-          </b>
-        </div>
-      </div>
-    </div>
+    <SeatStrip
+      avatar={
+        <Avatar
+          name={player.name}
+          playerId={player.id}
+          role={seatRole(game, playerIndex)}
+          size="small"
+        />
+      }
+      name={player.name}
+      folded={!hand.in[playerIndex]}
+      stack={{ label: "Stack", value: money(player.stack) }}
+      inHand={{
+        label: "In hand",
+        value: money(handContributions(game)[playerIndex]),
+      }}
+      status={
+        status.amount === undefined
+          ? { label: "Status", value: status.label }
+          : { label: shortBlinds(status.label), value: money(status.amount) }
+      }
+      flash={flash}
+    />
   );
 }
 

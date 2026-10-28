@@ -36,6 +36,7 @@ import {
   sessionBlindHistory,
   totalBuyIns,
   undoLastHand,
+  lastHandNumber,
   undoRaiseRules,
   undoStreet,
   undoableStreet,
@@ -838,6 +839,19 @@ describe("buy-ins", () => {
     assert.equal(game.players[0].stack, 0);
     assert.equal(game.players[0].buyIns?.length ?? 1, 1);
     assert.equal(game.log.some((line) => line.startsWith("During hand")), false);
+  });
+
+  test("the hand Undo hand takes back is named by its number", () => {
+    const game = gameState();
+    assert.equal(lastHandNumber(game), null, "nothing to undo yet");
+    dealNewHand(game);
+    game.lastHand = completedHandRecord(game);
+    game.hand = null;
+    assert.equal(lastHandNumber(game), 1, "between hands: the hand just played");
+    dealNewHand(game);
+    assert.equal(lastHandNumber(game), 1, "during the next hand: the one before");
+    delete game.lastHand!.handNo;
+    assert.equal(lastHandNumber(game), 1, "an older save counts back from this hand");
   });
 });
 

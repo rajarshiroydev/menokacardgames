@@ -69,6 +69,20 @@ export type WinnerAnnouncement = {
   pots?: PotResult[];
 };
 
+/** How a finished hand went, kept for the live link. */
+export type HandResult = {
+  no: number;
+  /** Everything paid out, after any rake. */
+  pot: number;
+  /** Who won, as the winner card names them. */
+  names: string[];
+  split: boolean;
+  /** Each pot's winners, when the hand had side pots. */
+  pots?: PotResult[];
+  /** Every player's net (stack less buy-ins) once it was paid out, by seat. */
+  nets: number[];
+};
+
 /** A main or side pot and the players still in who can win it. */
 export type Pot = {
   amount: number;
@@ -334,6 +348,11 @@ export type GameState = {
   log: string[];
   winnerAnnouncement?: WinnerAnnouncement | null;
   lastHand?: CompletedHand | null;
+  /**
+   * One entry per finished hand, oldest first, for the live link's chart,
+   * last result and biggest pot. Absent in games started before it existed.
+   */
+  handResults?: HandResult[];
   /** A saved game reopened to play on; saving updates that game. */
   continues?: ContinuedSession;
   /**

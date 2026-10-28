@@ -226,7 +226,7 @@ const GROUPS: FeatureGroup[] = [
     features: [
       {
         name: "Share a link",
-        text: "Create a live link or QR code during a game. Players open it without signing in and see blinds, stacks and buy-ins.",
+        text: "Create a live link or QR code during a game. Players open it without signing in and see the hand being played, the blinds and when they go up, stacks, buy-ins, the last hand's winner and how the game has gone.",
       },
       {
         name: "Always up to date",

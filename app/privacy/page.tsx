@@ -181,8 +181,10 @@ export default function PrivacyPage() {
           <li>
             <b>Anyone with a live standings link</b> sees the names, avatars and
             chip counts of that one game until the link ends (at the latest{" "}
-            {LIVE_VIEW_EXPIRY_HOURS} hours after the host&apos;s last update).
-            Share it only with the table.
+            {LIVE_VIEW_EXPIRY_HOURS} hours after the host&apos;s last update):
+            each player&apos;s actions and position in the hand being played,
+            who won the last hand and the biggest pot, and every player&apos;s
+            result over recent hands. Share it only with the table.
           </li>
           <li>
             <b>Us.</b> We can see account information to run the service, answer
