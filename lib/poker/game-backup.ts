@@ -1,3 +1,4 @@
+import { LOG_LIMIT } from "./action-log.ts";
 import type { GameState } from "./types";
 
 /**
@@ -15,13 +16,15 @@ export const GAME_BACKUP_QUIET_MS = 2_000;
  * link's 20 the host stays under the firewall's 30 writes a minute per IP.
  */
 export const GAME_BACKUP_MIN_INTERVAL_MS = 10_000;
-/** Largest request a backup may be; a long game is well under 100 KB. */
-export const GAME_BACKUP_BODY_LIMIT = 256 * 1024;
+/**
+ * Largest request a backup may be. A long night's game with its whole log is
+ * about 150 KB; a full log of LOG_LIMIT lines fits too.
+ */
+export const GAME_BACKUP_BODY_LIMIT = 1024 * 1024;
 
 const GAME_ID_PATTERN = /^[A-Za-z0-9._:-]{1,100}$/;
 const DEVICE_ID_PATTERN = /^[A-Za-z0-9_-]{16,64}$/;
 const MAX_PLAYERS = 10;
-const MAX_LOG_LINES = 200;
 
 /** The ID a game is saved under: the saved game's when continued. */
 export function gameBackupId(game: Pick<GameState, "continues" | "startedAt">) {
@@ -94,7 +97,7 @@ export function validateGameBackupState(
   if (
     log !== undefined &&
     (!Array.isArray(log) ||
-      log.length > MAX_LOG_LINES ||
+      log.length > LOG_LIMIT ||
       !log.every((line) => typeof line === "string"))
   ) {
     throw new Error("Invalid action log in game backup");

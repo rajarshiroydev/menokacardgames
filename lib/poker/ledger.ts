@@ -1,3 +1,4 @@
+import { LOG_LIMIT } from "./action-log.ts";
 import { isValidBuyIn, MAX_BUY_INS } from "./buy-ins.ts";
 import {
   canJoinGame,
@@ -17,7 +18,6 @@ import type { ChipValue, GameState, LedgerStep, PokerSession } from "./types";
 
 /** How many changes Undo can take back. */
 export const LEDGER_UNDO_LIMIT = 30;
-const LOG_LIMIT = 80;
 
 export function isLedgerGame(game: Pick<GameState, "kind"> | null | undefined) {
   return game?.kind === "ledger";
@@ -328,5 +328,12 @@ export function ledgerSession(
         ...savedPlayerRecord(game, index, 0),
       };
     }),
+    actionLog: {
+      players: game.players.map((player) => ({
+        ...(player.id ? { id: player.id } : {}),
+        name: player.name,
+      })),
+      lines: game.log.slice(0, LOG_LIMIT),
+    },
   };
 }

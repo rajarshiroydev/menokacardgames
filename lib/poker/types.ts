@@ -419,4 +419,17 @@ export type PokerSession = {
   rake?: number;
   hands: number;
   results: SessionResult[];
+  /**
+   * The game's action log when it was saved (since 2026-10-28). Sent when
+   * saving; reading the game list leaves it out, and it is fetched for one
+   * game at a time. Absent for older and imported games.
+   */
+  actionLog?: SavedActionLog;
+};
+
+/** A saved game's log: its lines, newest first, and who they name. */
+export type SavedActionLog = {
+  /** The players in seat order, as the lines name them. */
+  players: Array<{ id?: string; name: string }>;
+  lines: string[];
 };

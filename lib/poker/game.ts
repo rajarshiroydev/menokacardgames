@@ -1,3 +1,4 @@
+import { LOG_LIMIT } from "./action-log.ts";
 import {
   describeRebuyRules,
   isValidBuyIn,
@@ -116,7 +117,7 @@ export function editRebuyRules(game: GameState, rules: RebuyRules | null) {
       describeRebuyRules(stored, chipCurrency(game.currency, game.chipValue), game.chipUnit) ?? "Unlimited rebuys"
     ).replace(/^./, (first) => first.toLowerCase())}`,
   );
-  game.log = game.log.slice(0, 80);
+  game.log = game.log.slice(0, LOG_LIMIT);
   return true;
 }
 
@@ -181,7 +182,7 @@ export function canJoinGame(
 function tableLog(game: GameState, line: string) {
   // Not "Hand N:", so undoing a hand keeps the line, like the change.
   game.log.unshift(`Before hand ${game.handNo + 1}: ${line}`);
-  game.log = game.log.slice(0, 80);
+  game.log = game.log.slice(0, LOG_LIMIT);
 }
 
 /**
@@ -764,7 +765,7 @@ export function hasBlindClock(game: GameState) {
 function logBlindClock(game: GameState, line: string) {
   // No hand prefix, so Cancel hand and Undo last hand keep these lines.
   game.log.unshift(line);
-  game.log = game.log.slice(0, 80);
+  game.log = game.log.slice(0, LOG_LIMIT);
 }
 
 /** Moves the current timed level's start later, so it loses no time. */
@@ -848,7 +849,7 @@ function applyBlindLevel(game: GameState, handNo: number, now: number) {
         chipCurrency(game.currency, game.chipValue),
       )}/${formatChips(bigBlind, game.chipUnit, chipCurrency(game.currency, game.chipValue))} (level ${level + 1})`,
     );
-    game.log = game.log.slice(0, 80);
+    game.log = game.log.slice(0, LOG_LIMIT);
   }
 }
 
@@ -1270,7 +1271,7 @@ export function takeRake(game: GameState) {
   game.log.unshift(
     `Hand ${hand.no}: house rake ${formatChips(rake, game.chipUnit, chipCurrency(game.currency, game.chipValue))}`,
   );
-  game.log = game.log.slice(0, 80);
+  game.log = game.log.slice(0, LOG_LIMIT);
   return rake;
 }
 
@@ -1450,7 +1451,7 @@ export function awardPots(game: GameState, winners: number[][]) {
     return { label, amount: pot.amount, names: players.map(name) };
   });
   lines.forEach((line) => game.log.unshift(line));
-  game.log = game.log.slice(0, 80);
+  game.log = game.log.slice(0, LOG_LIMIT);
 
   const names = [...new Set(chosen.flat())].sort((a, b) => a - b).map(name);
   game.lastHand = record;

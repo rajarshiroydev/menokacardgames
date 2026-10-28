@@ -4659,3 +4659,17 @@ $$;
 
 REVOKE ALL ON FUNCTION public.friend_group_sessions() FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.friend_group_sessions() TO menoka_app;
+
+-- 0032: the game's action log, saved with it.
+-- { "players": [{ "id"?, "name" }], "lines": [text, ...] }, newest line
+-- first; NULL for older and imported games. The API validates the contents.
+ALTER TABLE poker_sessions
+  ADD COLUMN IF NOT EXISTS action_log jsonb
+  CONSTRAINT poker_sessions_action_log_shape CHECK (
+    action_log IS NULL OR (
+      jsonb_typeof(action_log) = 'object'
+      AND jsonb_typeof(action_log -> 'players') = 'array'
+      AND jsonb_typeof(action_log -> 'lines') = 'array'
+      AND jsonb_array_length(action_log -> 'lines') <= 5000
+    )
+  );

@@ -31,6 +31,18 @@ export const CHANGELOG: ChangelogEntry[] = [
     title: "A tidier List view and showdowns",
     items: [
       {
+        tag: "new",
+        text: "The action log now keeps the whole session instead of the last 80 lines, and it's saved with the game: open a saved game's Details to read it, and Continue game picks it up where it left off. Older hands fold to their result until you tap them.",
+      },
+      {
+        tag: "improved",
+        text: "A clearer action log: each hand in its own box, split by street, with every player's avatar, a coloured tag for what they did and the amount on the right. Actions are numbered from 1 in each hand, so you can follow the order, and wins stand out in green.",
+      },
+      {
+        tag: "improved",
+        text: "Tap a highlighted bet size (⅓ Pot, ½ Pot, Pot or All in) again to clear it and empty the amount.",
+      },
+      {
         tag: "improved",
         text: "Showdowns with side pots are tidier: each pot's heading shows who still needs picking, then a green tick with the winner, and the award button counts the pots picked before showing the total to award. The split button reads Split this pot on every showdown.",
       },

@@ -1,4 +1,5 @@
 import { deriveSessionAccounting } from "./accounting.ts";
+import { LOG_LIMIT } from "./action-log.ts";
 import {
   isValidBuyIn,
   MAX_BUY_INS,
@@ -13,6 +14,7 @@ import type {
   GameKind,
   PokerSession,
   RakeRules,
+  SavedActionLog,
   SessionResult,
 } from "./types";
 
@@ -20,6 +22,8 @@ export const MAX_SESSIONS_PER_REQUEST = 250;
 const MAX_RESULTS_PER_SESSION = 10;
 const MAX_GAME_NAME_LENGTH = 80;
 const MAX_BLIND_EVENTS = 1000;
+const MAX_LOG_LINE_LENGTH = 300;
+const MAX_LOG_NAME_LENGTH = 80;
 
 function asSafeInteger(
   value: unknown,
@@ -31,6 +35,49 @@ function asSafeInteger(
     throw new Error(`${field} must be a valid whole number`);
   }
   return number;
+}
+
+/**
+ * A saved game's action log: up to LOG_LIMIT lines of text and the players
+ * they name. It is a record to read, not accounting, so only its shape and
+ * sizes are checked. Absent or null is none.
+ */
+export function parseActionLog(value: unknown): SavedActionLog | undefined {
+  if (value === undefined || value === null) return undefined;
+  const log = asObject(value, "action log");
+  if (
+    !Array.isArray(log.lines) ||
+    log.lines.length > LOG_LIMIT ||
+    !log.lines.every(
+      (line) =>
+        typeof line === "string" &&
+        line.length > 0 &&
+        line.length <= MAX_LOG_LINE_LENGTH,
+    )
+  ) {
+    throw new Error("Invalid action log");
+  }
+  if (
+    !Array.isArray(log.players) ||
+    log.players.length > MAX_RESULTS_PER_SESSION
+  ) {
+    throw new Error("Invalid action log players");
+  }
+  const players = log.players.map((entry) => {
+    const player = asObject(entry, "action log player");
+    const name = String(player.name ?? "").trim();
+    if (!name || name.length > MAX_LOG_NAME_LENGTH) {
+      throw new Error("Invalid action log player name");
+    }
+    if (
+      player.id !== undefined &&
+      (typeof player.id !== "string" || !/^[A-Za-z0-9._:-]{1,100}$/.test(player.id))
+    ) {
+      throw new Error("Invalid action log player");
+    }
+    return { ...(player.id ? { id: player.id as string } : {}), name };
+  });
+  return { players, lines: log.lines as string[] };
 }
 
 function asObject(value: unknown, field: string): Record<string, unknown> {
@@ -286,6 +333,7 @@ export function validateSession(input: unknown): PokerSession {
   }
   const chipUnit = parseChipUnit(candidate.chipUnit);
   const chipValue = parseChipValue(candidate.chipValue);
+  const actionLog = parseActionLog(candidate.actionLog);
   const name = String(candidate.name || "").trim();
   if (name.length > MAX_GAME_NAME_LENGTH) {
     throw new Error(
@@ -380,6 +428,7 @@ export function validateSession(input: unknown): PokerSession {
     ...(rake > 0 ? { rake } : {}),
     hands,
     results,
+    ...(actionLog ? { actionLog } : {}),
   };
   deriveSessionAccounting(session);
   return session;

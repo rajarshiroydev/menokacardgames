@@ -90,6 +90,20 @@ describe("gameFromSession", () => {
     assert.equal(game.lastHand, null);
     assert.equal(game.sessionLabel, "Friday");
     assert.match(game.log[0], /Continued from Friday after 12 hands/);
+    assert.equal(game.log.length, 1);
+  });
+
+  it("carries the saved action log on under the continued line", () => {
+    const lines = ["Hand 12: Raj wins ₹400", "Hand 12 RIVER: Sam folds"];
+    const continued = gameFromSession(
+      { ...saved, actionLog: { players: [{ id: "p1", name: "Raj" }], lines } },
+      [],
+      "INR",
+      NOW,
+      () => 0.5,
+    );
+    assert.match(continued.log[0], /Continued from Friday/);
+    assert.deepEqual(continued.log.slice(1), lines);
   });
 
   it("resumes at the last blind level with the odd small blind", () => {

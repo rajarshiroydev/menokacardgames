@@ -100,6 +100,13 @@ import {
   upcomingBigBlinds,
 } from "@/lib/poker/game";
 import {
+  groupLog,
+  LOG_LIMIT,
+  type LogEntry,
+  type LogGroup,
+  type LogKind,
+} from "@/lib/poker/action-log";
+import {
   describeMaxRebuys,
   describeRebuyRules,
   isUnusualBuyIn,
@@ -250,6 +257,7 @@ import type {
   PokerSession,
   RakeRules,
   RebuyRules,
+  SavedActionLog,
   WinnerAnnouncement,
 } from "@/lib/poker/types";
 
@@ -817,12 +825,12 @@ function recordAction(
   const line = `Hand ${hand.no} ${STAGES[hand.stage]}: ${text}`;
   hand.last[playerIndex] = { ...action, line };
   game.log.unshift(line);
-  game.log = game.log.slice(0, 80);
+  game.log = game.log.slice(0, LOG_LIMIT);
 }
 
 function recordWin(game: GameState, line: string) {
   game.log.unshift(line);
-  game.log = game.log.slice(0, 80);
+  game.log = game.log.slice(0, LOG_LIMIT);
 }
 
 function awardPot(game: GameState, playerIndex: number, automatic = false) {
@@ -1711,10 +1719,30 @@ export function PokerLedger({
     ask(
       `Continue ${label}? Everyone starts with the chips they finished with, and saving updates this game. Until then it stays as saved.`,
       "Continue Game",
-      () => {
+      async () => {
+        // The saved log carries on in the continued game. Without it,
+        // saving would replace the saved log with only the new lines, so a
+        // failed load stops here.
+        let saved: SavedActionLog | null;
+        try {
+          saved = (
+            await sessionsApi<{ log: SavedActionLog | null }>(
+              `/${encodeURIComponent(id)}/log`,
+            )
+          ).log;
+        } catch (error) {
+          showToast(
+            error instanceof Error ? error.message : "Couldn't load the game",
+          );
+          return;
+        }
         setGame(
           gameFromSession(
-            { ...session, sessionNumber: session.sessionNumber! },
+            {
+              ...session,
+              sessionNumber: session.sessionNumber!,
+              ...(saved ? { actionLog: saved } : {}),
+            },
             [...players, ...discardedPlayers],
             currency,
           ),
@@ -2543,6 +2571,7 @@ export function PokerLedger({
           : {}),
         ...savedPlayerRecord(game, index, completedHands),
       })),
+      actionLog: savedActionLog(game),
     };
 
     showToast("Saving to shared ledger…");
@@ -2566,6 +2595,7 @@ export function PokerLedger({
               body: JSON.stringify({ sessions: [session] }),
             },
       );
+      savedLogs.delete(session.id);
       endLiveSharing();
       setGame(null);
       navigate("history", { replace: true });
@@ -3372,6 +3402,26 @@ function TurnSeatsIcon() {
       <path d="M20 12a8 8 0 1 1-2.34-5.66" />
       <path d="M20 4v4.5h-4.5" />
       <circle cx="12" cy="12" r="2" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
+/** A small chevron, pointing down when closed and up when open. */
+function ChevronIcon({ open }: { open: boolean }) {
+  return (
+    <svg
+      className={`chevron-icon ${open ? "open" : ""}`}
+      viewBox="0 0 12 12"
+      width="12"
+      height="12"
+      aria-hidden="true"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M2.5 4.5 6 8l3.5-3.5" />
     </svg>
   );
 }
@@ -7743,13 +7793,11 @@ function GameScreen(props: GameViewProps) {
     money,
   );
 
-  const [showFullLog, setShowFullLog] = useState(false);
   const lastStage = STAGES.length - 1;
   const pending = hand ? pendingIndexes(game).length > 0 : false;
   const standings = game.players
     .map((player, index) => ({ player, index }))
     .sort((a, b) => b.player.stack - a.player.stack);
-  const logLines = showFullLog ? game.log : game.log.slice(0, 6);
   // When a round has just closed, the player whose action closed it keeps an
   // open (locked) card until the next street is dealt, so nothing above the
   // Deal button changes height and the button stays under the same finger.
@@ -7977,23 +8025,199 @@ function GameScreen(props: GameViewProps) {
       {game.log.length ? (
         <section className="glass card">
           <span className="label">Action log</span>
-          <div className="rows log">
-            {logLines.map((line, index) => (
-              <div key={`${line}-${index}`}>{line}</div>
-            ))}
-          </div>
-          {game.log.length > 6 ? (
-            <button
-              className="text-button"
-              type="button"
-              onClick={() => setShowFullLog((shown) => !shown)}
-            >
-              {showFullLog ? "Show fewer" : `Show all ${game.log.length} lines`}
-            </button>
-          ) : null}
+          <ActionLog
+            lines={game.log}
+            players={game.players}
+            liveHand={hand?.no ?? null}
+          />
         </section>
       ) : null}
     </div>
+  );
+}
+
+// The mark beside lines that aren't about one player.
+const LOG_ICONS: Partial<Record<LogKind, string>> = {
+  blinds: "↑",
+  rake: "%",
+  note: "•",
+};
+
+/** The game's log as it is saved, with the players its lines name. */
+function savedActionLog(game: GameState): SavedActionLog {
+  return {
+    players: game.players.map((player) => ({
+      ...(player.id ? { id: player.id } : {}),
+      name: player.name,
+    })),
+    lines: game.log.slice(0, LOG_LIMIT),
+  };
+}
+
+/** How many groups the closed log shows: up to and including the second hand. */
+function recentGroups(groups: LogGroup[]) {
+  let hands = 0;
+  const index = groups.findIndex(
+    (group) => group.hand !== null && ++hands === 2,
+  );
+  return index < 0 ? groups.length : index + 1;
+}
+
+/**
+ * The action log, newest first: each hand in its own box headed by its
+ * number, split by street, one row per action with who, what and how much.
+ * Closed, it shows the latest two hands; Show all lists every hand, older
+ * ones folded to their heading and result until tapped.
+ */
+function ActionLog({
+  lines,
+  players,
+  liveHand = null,
+}: {
+  lines: string[];
+  /** The game's players in order, as the log's names refer to them. */
+  players: ReadonlyArray<{ id?: string; name: string }>;
+  /** The hand being played, marked In play. */
+  liveHand?: number | null;
+}) {
+  const [showAll, setShowAll] = useState(false);
+  const [opened, setOpened] = useState<ReadonlySet<string>>(new Set());
+  // At the limit old lines may have been dropped, so the oldest hand isn't
+  // numbered.
+  const groups = groupLog(
+    lines,
+    players.map((player) => player.name),
+    { complete: lines.length < LOG_LIMIT },
+  );
+  const recent = recentGroups(groups);
+  const shown = showAll ? groups : groups.slice(0, recent);
+  const handCount = groups.filter((group) => group.hand !== null).length;
+  // Inside a hand every row but the result keeps the number's place, so
+  // the avatars line up.
+  const row = (entry: LogEntry, index: number, inHand: boolean) => {
+    const player = entry.player === null ? null : players[entry.player];
+    // A split shows its winners' faces, overlapping.
+    const sharers =
+      entry.kind === "split" && entry.note
+        ? entry.note
+            .split(", ")
+            .flatMap((name) => players.filter((each) => each.name === name))
+            .slice(0, 3)
+        : [];
+    return (
+      <li key={`${entry.line}-${index}`} className={`log-row log-${entry.kind}`}>
+        {entry.number !== null ? (
+          <span className="log-number" aria-label={`Action ${entry.number}`}>
+            {entry.number}
+          </span>
+        ) : inHand && entry.kind !== "win" && entry.kind !== "split" ? (
+          <span className="log-number" aria-hidden="true" />
+        ) : null}
+        {player ? (
+          <Avatar name={player.name} playerId={player.id} size="small" />
+        ) : sharers.length ? (
+          <span className="log-avatars">
+            {sharers.map((sharer, sharerIndex) => (
+              <Avatar
+                key={sharer.id ?? `${sharer.name}-${sharerIndex}`}
+                name={sharer.name}
+                playerId={sharer.id}
+                size="small"
+              />
+            ))}
+          </span>
+        ) : (
+          <span className="log-icon" aria-hidden="true">
+            {LOG_ICONS[entry.kind] ?? "•"}
+          </span>
+        )}
+        <span className="log-copy">
+          <span className="log-what">
+            {player ? <b>{player.name}</b> : null}
+            <span className="log-verb">{entry.verb}</span>
+          </span>
+          {entry.note ? <small>{entry.note}</small> : null}
+        </span>
+        {entry.amount ? <span className="log-amount">{entry.amount}</span> : null}
+      </li>
+    );
+  };
+  return (
+    <>
+      <div className="action-log">
+        {shown.map((group, groupIndex) => {
+          const key = `${group.title}-${groupIndex}`;
+          // Older hands fold to their result; the latest two stay open.
+          const foldable = group.hand !== null && groupIndex >= recent;
+          const folded = foldable && !opened.has(key);
+          // A hand's actions are the rows under its streets.
+          const actions = group.streets.reduce(
+            (count, street) => count + (street.street ? street.entries.length : 0),
+            0,
+          );
+          const streets = folded
+            ? group.streets.filter((street) => street.street === null)
+            : group.streets;
+          const toggle = () =>
+            setOpened((current) => {
+              const next = new Set(current);
+              if (!next.delete(key)) next.add(key);
+              return next;
+            });
+          return (
+            <section
+              key={key}
+              className={`log-hand ${group.title ? "" : "plain"} ${folded ? "folded" : ""}`}
+            >
+              {group.title ? (
+                foldable ? (
+                  <button
+                    className="log-hand-head"
+                    type="button"
+                    aria-expanded={!folded}
+                    onClick={toggle}
+                  >
+                    <b>{group.title}</b>
+                    <span className="log-hand-count">
+                      {actions} action{actions === 1 ? "" : "s"}
+                      <ChevronIcon open={!folded} />
+                    </span>
+                  </button>
+                ) : (
+                  <header className="log-hand-head">
+                    <b>{group.title}</b>
+                    {group.hand !== null && group.hand === liveHand ? (
+                      <span className="log-live">In play</span>
+                    ) : null}
+                  </header>
+                )
+              ) : null}
+              {streets.map((street, streetIndex) => (
+                <div key={`${street.street}-${streetIndex}`} className="log-street">
+                  {street.street ? (
+                    <span className="log-street-name">{street.street}</span>
+                  ) : null}
+                  <ul>
+                    {street.entries.map((entry, index) =>
+                      row(entry, index, group.hand !== null),
+                    )}
+                  </ul>
+                </div>
+              ))}
+            </section>
+          );
+        })}
+      </div>
+      {groups.length > recent ? (
+        <button
+          className="text-button"
+          type="button"
+          onClick={() => setShowAll((all) => !all)}
+        >
+          {showAll ? "Show fewer" : `Show all ${handCount} hands`}
+        </button>
+      ) : null}
+    </>
   );
 }
 
@@ -10754,7 +10978,14 @@ function PlayerRow({
                     type="button"
                     className={selected ? "selected" : undefined}
                     aria-pressed={selected}
+                    // Tapping the highlighted size again clears it and the
+                    // amount, like the clear button.
                     onClick={() => {
+                      if (selected) {
+                        setAmount("");
+                        setPicked(null);
+                        return;
+                      }
                       setAmount(sizeAmount);
                       setPicked({ label: size.label, amount: sizeAmount });
                     }}
@@ -11219,6 +11450,7 @@ function SessionCardBody({
   onSettle,
   onRestore,
   onDeletePermanently,
+  showLog = false,
 }: {
   session: PokerSession;
   /** The host's currency; chip amounts may be plain counts (GameAmounts). */
@@ -11232,6 +11464,8 @@ function SessionCardBody({
   onDiscard?: (id: string) => void;
   onRestore?: (id: string) => void;
   onDeletePermanently?: (id: string) => void;
+  /** The host's own games: Details also loads the saved action log. */
+  showLog?: boolean;
 }) {
   const { currency, unit, money, signedMoney } = useMoney();
   const sortedResults = [...session.results].sort((a, b) => b.net - a.net);
@@ -11313,7 +11547,8 @@ function SessionCardBody({
     ]);
   }
 
-  const hasDetails = details.length > 0 || !sameStart || blinds !== null;
+  const hasDetails =
+    details.length > 0 || !sameStart || blinds !== null || showLog;
   const [showDetails, setShowDetails] = useState(false);
 
   return (
@@ -11538,9 +11773,82 @@ function SessionCardBody({
               ))}
             </>
           ) : null}
+          {showLog ? <SavedLog sessionId={session.id} /> : null}
         </div>
       ) : null}
     </article>
+  );
+}
+
+// Saved logs already loaded this visit, by game ID. Saving a continued game
+// changes its log, so finishSession drops its entry.
+const savedLogs = new Map<string, SavedActionLog | null>();
+
+/** A saved game's action log under its Details, loaded when first opened. */
+function SavedLog({ sessionId }: { sessionId: string }) {
+  const [state, setState] = useState<
+    | { status: "loading" }
+    | { status: "loaded"; log: SavedActionLog | null }
+    | { status: "failed"; message: string }
+  >(() =>
+    savedLogs.has(sessionId)
+      ? { status: "loaded", log: savedLogs.get(sessionId)! }
+      : { status: "loading" },
+  );
+  const [attempt, setAttempt] = useState(0);
+  useEffect(() => {
+    if (savedLogs.has(sessionId)) return;
+    let current = true;
+    sessionsApi<{ log: SavedActionLog | null }>(
+      `/${encodeURIComponent(sessionId)}/log`,
+    ).then(
+      ({ log }) => {
+        savedLogs.set(sessionId, log);
+        if (current) setState({ status: "loaded", log });
+      },
+      (error: unknown) => {
+        if (current) {
+          setState({
+            status: "failed",
+            message:
+              error instanceof Error ? error.message : "Couldn't load the log",
+          });
+        }
+      },
+    );
+    return () => {
+      current = false;
+    };
+  }, [sessionId, attempt]);
+
+  return (
+    <div className="saved-log">
+      <b>Action log</b>
+      {state.status === "loading" ? (
+        <p className="muted">Loading…</p>
+      ) : state.status === "failed" ? (
+        <p className="muted">
+          {state.message}.{" "}
+          <button
+            className="text-button"
+            type="button"
+            onClick={() => {
+              setState({ status: "loading" });
+              setAttempt((count) => count + 1);
+            }}
+          >
+            Try again
+          </button>
+        </p>
+      ) : state.log?.lines.length ? (
+        <ActionLog lines={state.log.lines} players={state.log.players} />
+      ) : (
+        <p className="muted">
+          No action log was saved with this game. Games keep their log from
+          28 October 2026.
+        </p>
+      )}
+    </div>
   );
 }
 
@@ -13147,6 +13455,7 @@ function OwnSessionsView({
               onDiscard={onDiscard}
               onContinue={onContinue}
               onSettle={onSettle}
+              showLog
             />
           )}
           more={(count) => `Show ${count} more game${count === 1 ? "" : "s"}`}
@@ -13175,6 +13484,7 @@ function OwnSessionsView({
               session={session}
               onRestore={onRestore}
               onDeletePermanently={onDeletePermanently}
+              showLog
             />
           ))}
         </>

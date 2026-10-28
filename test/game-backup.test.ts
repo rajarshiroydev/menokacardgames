@@ -8,6 +8,7 @@ import {
   summarizeGameBackup,
   validateGameBackupState,
 } from "../lib/poker/game-backup.ts";
+import { LOG_LIMIT } from "../lib/poker/action-log.ts";
 import type { GameState } from "../lib/poker/types.ts";
 
 function game(overrides: Partial<GameState> = {}): GameState {
@@ -86,7 +87,7 @@ describe("validateGameBackupState", () => {
     ["no starting stack", game({ startStack: 0 })],
     ["a made-up hand number", game({ handNo: -3 })],
     ["a log that isn't text", game({ log: [1, 2] as unknown as string[] })],
-    ["a huge log", game({ log: Array(201).fill("line") })],
+    ["a log over the limit", game({ log: Array(LOG_LIMIT + 1).fill("line") })],
   ];
   for (const [label, state] of refusals) {
     it(`refuses ${label}`, () => {

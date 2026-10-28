@@ -207,6 +207,15 @@ describe("quick ledger count and save", () => {
         { playerId: "p-arjun", name: "Arjun", net: -600, end: 1400, buyIns: [1000, 1000] },
         { playerId: "p-bikram", name: "Bikram", net: 0, end: 1000 },
       ],
+      // The log is saved with the game, naming players in seat order.
+      actionLog: {
+        players: [
+          { id: "p-asha", name: "Asha" },
+          { id: "p-arjun", name: "Arjun" },
+          { id: "p-bikram", name: "Bikram" },
+        ],
+        lines: game.log,
+      },
     });
     assert.deepEqual(validateSession(session), session);
   });

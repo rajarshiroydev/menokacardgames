@@ -1,3 +1,4 @@
+import { LOG_LIMIT } from "./action-log.ts";
 import { bigBlindAtLevel, sessionBlindHistory } from "./game.ts";
 import type { SavedSession } from "./session-conflict.ts";
 import type {
@@ -123,11 +124,13 @@ export function gameFromSession(
     handNo: session.hands,
     // The next hand deals from the seat after this one.
     dealerIndex: firstDealer - 1,
+    // The saved log carries on under a line marking where play resumed.
     log: [
       `Continued from ${label} after ${session.hands} hand${
         session.hands === 1 ? "" : "s"
       }`,
-    ],
+      ...(session.actionLog?.lines ?? []),
+    ].slice(0, LOG_LIMIT),
     winnerAnnouncement: null,
     lastHand: null,
     ...(tracked ? { tracksPlayers: true as const } : {}),

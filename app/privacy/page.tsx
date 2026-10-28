@@ -76,7 +76,10 @@ export default function PrivacyPage() {
             <b>Your games:</b> game names, dates and times, seats, blinds,
             antes, rake, buy-ins, rebuys, chip counts and results, and, for
             each player, how many hands they played and when they joined late
-            or cashed out.
+            or cashed out. Games saved from 28 October 2026 also keep their
+            action log: each bet, call, fold, buy-in and win, naming players as
+            they were called at the table. Only you see a game&apos;s log, not
+            your friends.
           </li>
           <li>
             <b>The game in progress:</b> while you play, your phone sends us a

@@ -322,7 +322,8 @@ async function handlePost(request: Request) {
               rake,
               chip_value_chips,
               chip_value_cents,
-              results
+              results,
+              action_log
               ) SELECT
                 ${ownerId}::uuid,
                 allocated.session_number,
@@ -342,7 +343,8 @@ async function handlePost(request: Request) {
                 ${session.rake ?? 0},
                 ${session.chipValue?.chips ?? null}::bigint,
                 ${session.chipValue?.cents ?? null}::bigint,
-                ${JSON.stringify(session.results)}::jsonb
+                ${JSON.stringify(session.results)}::jsonb,
+                ${session.actionLog ? JSON.stringify(session.actionLog) : null}::jsonb
               FROM allocated
               ON CONFLICT (owner_id, id) WHERE owner_id IS NOT NULL DO NOTHING
               RETURNING record_id, id
@@ -601,7 +603,13 @@ async function handlePut(request: Request) {
             blind_history = ${resolved.blindHistory ? JSON.stringify(resolved.blindHistory) : null}::jsonb,
             rebuy_rules = ${resolved.rebuyRules ? JSON.stringify(resolved.rebuyRules) : null}::jsonb,
             rake = ${resolved.rake ?? 0},
-            results = ${JSON.stringify(resolved.results)}::jsonb
+            results = ${JSON.stringify(resolved.results)}::jsonb,
+            -- The continued game's log holds the saved lines too; one sent
+            -- without a log leaves the saved one.
+            action_log = COALESCE(
+              ${resolved.actionLog ? JSON.stringify(resolved.actionLog) : null}::jsonb,
+              action_log
+            )
           WHERE owner_id = ${ownerId}::uuid
             AND id = ${resolved.id}
             AND discarded_at IS NULL
