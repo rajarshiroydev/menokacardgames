@@ -111,7 +111,7 @@ const GROUPS: FeatureGroup[] = [
       },
       {
         name: "List or Table view",
-        text: "See the hand as a list of seat cards or as an oval poker table. Your phone remembers which you like, and a button turns the table so the seats match where everyone sits.",
+        text: "See the hand as a list, with the player to act under everyone waiting, or as an oval poker table. Your phone remembers which you like, and a button turns the table so the seats match where everyone sits.",
       },
       {
         name: "Showdown",

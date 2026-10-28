@@ -7731,6 +7731,12 @@ function GameScreen(props: GameViewProps) {
     </div>
   );
 
+  // The blinds on one line, for the middle of the table and the List view's
+  // pot card alike.
+  const blindsText = `${money(blinds.smallBlind)} / ${money(blinds.bigBlind)}${
+    game.bigBlindAnte ? ` · Ante ${money(blinds.bigBlind)}` : ""
+  }${blinds.schedule ? ` · L${blinds.level + 1}` : ""}`;
+
   const [showFullLog, setShowFullLog] = useState(false);
   const lastStage = STAGES.length - 1;
   const pending = hand ? pendingIndexes(game).length > 0 : false;
@@ -7745,6 +7751,12 @@ function GameScreen(props: GameViewProps) {
     hand && !hand.splitSel && hand.stage < lastStage && !pending
       ? hand.last.findIndex((action) => action?.line === game.log[0])
       : -1;
+  const rowOrder = hand ? listOrder(game, closer) : [];
+  const rowRef = useTurnShift(rowOrder);
+  // The player with the action card: the one to act, or the one whose
+  // action just closed the round. Everyone else is a tile above it.
+  const lead = closer >= 0 ? closer : (hand?.currentPlayer ?? null);
+  const waiting = rowOrder.filter((playerIndex) => playerIndex !== lead);
 
   return (
     <div className="stack-list game-view">
@@ -7807,49 +7819,65 @@ function GameScreen(props: GameViewProps) {
         </section>
       ) : props.layout === "table" ? (
         <TableHand
-          blindsText={`${money(blinds.smallBlind)} / ${money(blinds.bigBlind)}${
-            game.bigBlindAnte ? ` · Ante ${money(blinds.bigBlind)}` : ""
-          }${blinds.schedule ? ` · L${blinds.level + 1}` : ""}`}
+          blindsText={blindsText}
           blindSchedule={blinds.schedule || pendingPlan ? blindSchedule : null}
           {...props}
         />
       ) : (
         <>
-          <section className="glass card scoreboard">
-            <div className="street-bar">
-              {STAGES.map((stage, index) => (
+          {/* The same as the middle of the table: the streets as small
+              bars, "Pot · Turn", the pot and the blinds. */}
+          <section className="glass card pot-card">
+            <StreetPips game={game} />
+            <span className="table-label">{potCardLabel(game)}</span>
+            <span
+              className="table-pot"
+              style={
+                { "--chars": money(hand.pot).length } as React.CSSProperties
+              }
+            >
+              {money(hand.pot)}
+            </span>
+            <PotBreakdown game={game} className="table-sidepots" />
+            <span className="table-blinds">{blindsText}</span>
+            {blinds.schedule || pendingPlan ? blindSchedule : null}
+          </section>
+
+          {/* Everyone not acting, in the order they act next, as strips
+              above the action card, so the buttons sit right under it as in
+              the Table view. */}
+          {waiting.length ? (
+            <div className="glass waiting-list">
+              {waiting.map((playerIndex) => (
+                // The wrapper keeps its place in the DOM across turns, so
+                // it can move from its old spot.
                 <div
-                  className={
-                    index < hand.stage
-                      ? "past"
-                      : index === hand.stage
-                        ? "current"
-                        : ""
-                  }
-                  key={stage}
+                  className="player-slot"
+                  key={playerIndex}
+                  ref={rowRef(playerIndex)}
                 >
-                  <span className="street-line" />
-                  <span className="street-label">{stage}</span>
+                  <WaitingStrip
+                    game={game}
+                    playerIndex={playerIndex}
+                    flash={flashFor(game, props.lastTurn, playerIndex)}
+                  />
                 </div>
               ))}
             </div>
-            <div className="pot-block">
-              <span className="label">Pot</span>
-              <span
-                className="pot gradient-text"
-                style={
-                  {
-                    "--chars": money(hand.pot).length,
-                  } as React.CSSProperties
-                }
-              >
-                {money(hand.pot)}
-              </span>
-              <PotBreakdown game={game} className="pot-split" />
-            </div>
-            {blindsDisplay}
-          </section>
-
+          ) : null}
+          {lead !== null ? (
+            <PlayerRow
+              key={`${hand.no}-${hand.stage}-${lead}-${hand.acted[lead]}`}
+              game={game}
+              playerIndex={lead}
+              roundClosed={lead === closer}
+              flash={flashFor(game, props.lastTurn, lead)}
+              onAct={props.onAct}
+            />
+          ) : null}
+          {/* A split keeps the player rows above it, like a side pot's. As
+              in the Table view, the winner is picked once the river betting
+              is over, not while it is still going. */}
           {hand.splitSel ? (
             <SplitView
               game={game}
@@ -7857,64 +7885,31 @@ function GameScreen(props: GameViewProps) {
               onSplit={props.onSplitPot}
               onBack={props.onEndSplit}
             />
+          ) : hand.stage < lastStage || pending ? null : hasSidePots(game) ? (
+            <SidePotPicker
+              key={hand.no}
+              game={game}
+              onAward={props.onAwardPots}
+            />
           ) : (
-            <>
-              {[
-                // A closing fold keeps its place until the next street.
-                ...game.players
-                  .map((_, index) => index)
-                  .filter((index) => hand.in[index] || index === closer),
-                ...game.players
-                  .map((_, index) => index)
-                  .filter(
-                    (index) =>
-                      !hand.in[index] &&
-                      index !== closer &&
-                      !game.players[index].left,
-                  ),
-              ].map((playerIndex) => (
-                <PlayerRow
-                  key={`${hand.no}-${hand.stage}-${playerIndex}-${hand.acted[playerIndex]}`}
-                  game={game}
-                  playerIndex={playerIndex}
-                  roundClosed={playerIndex === closer}
-                  flash={flashFor(game, props.lastTurn, playerIndex)}
-                  onAct={props.onAct}
-                />
-              ))}
-              {hand.stage < lastStage ? (
-                <button
-                  className="blue-button full tall"
-                  type="button"
-                  disabled={pending}
-                  onClick={props.onNextStage}
-                >
-                  Deal {STAGES[hand.stage + 1]}
-                </button>
-              ) : !pending && hasSidePots(game) ? (
-                <SidePotPicker
-                  key={hand.no}
-                  game={game}
-                  onAward={props.onAwardPots}
-                />
-              ) : (
-                <WinnerPicker
-                  game={game}
-                  pending={pending}
-                  onPickWinner={props.onPickWinner}
-                  onBeginSplit={props.onBeginSplit}
-                />
-              )}
-            </>
+            <WinnerPicker
+              game={game}
+              onPickWinner={props.onPickWinner}
+              onBeginSplit={props.onBeginSplit}
+            />
           )}
+          {/* Always there from the deal to the showdown, faded when it
+              can't be used, so it never jumps into place or leaves a gap. */}
+          <DealButton game={game} onDeal={props.onNextStage} />
           <BuyInOptions game={game} onBuyIn={props.onBuyIn} />
           <UndoTurnButton
             game={game}
+            tall
             onUndo={props.onUndoAction}
             onUndoStreet={props.onUndoStreet}
           />
           <button
-            className="glass-button full danger-text"
+            className="glass-button full tall danger-text"
             type="button"
             onClick={props.onCancelHand}
           >
@@ -9842,12 +9837,10 @@ function WinnerCard({
 
 function WinnerPicker({
   game,
-  pending,
   onPickWinner,
   onBeginSplit,
 }: {
   game: GameState;
-  pending: boolean;
   onPickWinner: (playerIndex: number) => void;
   onBeginSplit: () => void;
 }) {
@@ -9863,7 +9856,7 @@ function WinnerPicker({
   const payout = hand.pot - rake;
   const active = activeIndexes(game);
   const winner =
-    !pending && picked?.hand === hand.no && active.includes(picked.index)
+    picked?.hand === hand.no && active.includes(picked.index)
       ? picked.index
       : null;
 
@@ -9875,18 +9868,12 @@ function WinnerPicker({
           After the house&apos;s {money(rake)} rake.
         </p>
       ) : null}
-      {pending ? (
-        <p className="muted small-note">
-          Finish the river betting before picking a winner.
-        </p>
-      ) : null}
       {active.map((playerIndex) => {
         const isWinner = winner === playerIndex;
         return (
           <button
             className={`contender ${isWinner ? "won" : ""}`}
             type="button"
-            disabled={pending}
             aria-pressed={isWinner}
             key={playerIndex}
             onClick={() =>
@@ -9927,11 +9914,10 @@ function WinnerPicker({
         <button
           className="split-button"
           type="button"
-          disabled={pending}
           onClick={onBeginSplit}
         >
           <SplitIcon />
-          Split between two or more
+          Split this pot
         </button>
       ) : null}
     </section>
@@ -10005,13 +9991,20 @@ function TableHand({
   }
   const lastStage = STAGES.length - 1;
   const pending = pendingIndexes(game).length > 0;
-  const showdown = hand.stage === lastStage && !pending;
+  const showdown = isShowdown(game);
   const splitting = Boolean(hand.splitSel);
   // With side pots the winners are picked per pot on the card below.
   const multiPot = showdown && hasSidePots(game);
-  const potCount = multiPot ? potsFor(game).pots.length : 1;
   const crowded = count > 6;
   const current = hand.currentPlayer;
+  // Like the List view: when a round has just closed, the player whose
+  // action closed it keeps a locked card in the dock until the next street
+  // is dealt, so the Deal button under it stays where the betting buttons
+  // were.
+  const closer =
+    !splitting && hand.stage < lastStage && !pending
+      ? hand.last.findIndex((action) => action?.line === game.log[0])
+      : -1;
   // A player bust at the deal can buy in by tapping their seat.
 
   return (
@@ -10035,29 +10028,8 @@ function TableHand({
           </div>
         </div>
         <div className="table-center">
-          <div className="table-pips" aria-label={`Street: ${STAGES[hand.stage]}`}>
-            {STAGES.map((stage, index) => (
-              <span
-                key={stage}
-                className={
-                  showdown || index < hand.stage
-                    ? "past"
-                    : index === hand.stage
-                      ? "current"
-                      : ""
-                }
-              />
-            ))}
-          </div>
-          <span className="table-label">
-            {showdown
-              ? potCount > 1
-                ? "Pick the winners"
-                : splitting
-                  ? "Split the pot"
-                  : "Pick the winner"
-              : `Pot · ${STAGES[hand.stage]}`}
-          </span>
+          <StreetPips game={game} />
+          <span className="table-label">{potCardLabel(game)}</span>
           <span
             className="table-pot"
             style={
@@ -10108,17 +10080,7 @@ function TableHand({
           const flash = showdown ? undefined : flashFor(game, lastTurn, index);
           const contender = showdown && !folded;
           const inSplit = hand.splitSel?.includes(index) ?? false;
-          const status = folded
-            ? seatStatus(game, index, money)
-            : isTurn
-              ? "To act"
-              : showdown
-                ? inSplit
-                  ? "In split"
-                  : "In the hand"
-                : seatStatus(game, index, money)
-                    .replace("Small blind", "SB")
-                    .replace("Big blind", "BB");
+          const status = isTurn ? "To act" : shortBlinds(seatStatus(game, index, money));
           const state = [
             folded ? "folded" : "",
             isTurn ? "turn" : "",
@@ -10170,7 +10132,6 @@ function TableHand({
       ) : showdown ? (
         <WinnerPicker
           game={game}
-          pending={false}
           onPickWinner={onPickWinner}
           onBeginSplit={onBeginSplit}
         />
@@ -10182,17 +10143,20 @@ function TableHand({
           dock
           onAct={onAct}
         />
+      ) : closer >= 0 ? (
+        <PlayerRow
+          key={`${hand.no}-${hand.stage}-${closer}-closed`}
+          game={game}
+          playerIndex={closer}
+          dock
+          roundClosed
+          onAct={onAct}
+        />
       ) : null}
 
-      {!splitting && !pending && hand.stage < lastStage ? (
-        <button
-          className="blue-button full tall"
-          type="button"
-          onClick={onNextStage}
-        >
-          Deal {STAGES[hand.stage + 1]}
-        </button>
-      ) : null}
+      {/* Always there from the deal to the showdown, faded when it can't be
+          used, so it never jumps into place or leaves a gap. */}
+      <DealButton game={game} onDeal={onNextStage} />
       <BuyInOptions game={game} onBuyIn={onBuyIn} />
       <UndoTurnButton
         game={game}
@@ -10211,11 +10175,91 @@ function TableHand({
   );
 }
 
+/** The river is out and its betting is over: the winner is picked now. */
+function isShowdown(game: GameState) {
+  const hand = game.hand;
+  return (
+    !!hand &&
+    hand.stage === STAGES.length - 1 &&
+    pendingIndexes(game).length === 0
+  );
+}
+
+/**
+ * What the pot says above its amount, in both views: the street while it's
+ * bet, then what the showdown needs.
+ */
+function potCardLabel(game: GameState) {
+  const hand = game.hand;
+  if (!hand) return "";
+  if (!isShowdown(game)) return `Pot · ${STAGES[hand.stage]}`;
+  if (hasSidePots(game) && potsFor(game).pots.length > 1) {
+    return "Pick the winners";
+  }
+  return hand.splitSel ? "Split the pot" : "Pick the winner";
+}
+
+/** "Small blind" and "Big blind" as the seats write them: "SB", "BB". */
+function shortBlinds(text: string) {
+  return text.replace("Small blind", "SB").replace("Big blind", "BB");
+}
+
+/**
+ * The four streets as small bars, in both views: those dealt are lit, the
+ * current one green, and all of them once the showdown comes.
+ */
+function StreetPips({ game }: { game: GameState }) {
+  const hand = game.hand;
+  if (!hand) return null;
+  const showdown = isShowdown(game);
+  return (
+    <div className="table-pips" aria-label={`Street: ${STAGES[hand.stage]}`}>
+      {STAGES.map((stage, index) => (
+        <span
+          key={stage}
+          className={
+            showdown || index < hand.stage
+              ? "past"
+              : index === hand.stage
+                ? "current"
+                : ""
+          }
+        />
+      ))}
+    </div>
+  );
+}
+
+/**
+ * Deals the next street, in both views. It stays from the deal to the
+ * showdown, greyed while the street is being bet, while a pot is being split
+ * and once the river is out ("River dealt").
+ */
+function DealButton({ game, onDeal }: { game: GameState; onDeal: () => void }) {
+  const hand = game.hand;
+  if (!hand) return null;
+  const lastStage = STAGES.length - 1;
+  const pending = pendingIndexes(game).length > 0;
+  return (
+    <button
+      className="blue-button full tall"
+      type="button"
+      disabled={Boolean(hand.splitSel) || pending || hand.stage >= lastStage}
+      onClick={onDeal}
+    >
+      {hand.stage < lastStage
+        ? `Deal ${STAGES[hand.stage + 1]}`
+        : `${STAGES[lastStage]} dealt`}
+    </button>
+  );
+}
+
 /**
  * One Undo for the live hand, in both views: it takes back the latest action
  * this street and names it, like "Undo Asha's call". Before anyone acts on a
  * new street it takes back the street ("Undo Flop"), so a whole hand can be
- * stepped back to the first preflop action. Hidden while a pot is being split.
+ * stepped back to the first preflop action. Greyed while a pot is being split
+ * or before anyone has acted.
  */
 function UndoTurnButton({
   game,
@@ -10240,7 +10284,16 @@ function UndoTurnButton({
   }
   const seat = game.hand?.splitSel ? null : latestActor(game);
   const action = seat === null ? null : game.hand?.last[seat];
-  if (seat === null || !action) return null;
+  // With nothing to undo it stays, greyed, so the buttons under it don't
+  // move.
+  if (seat === null || !action) {
+    return (
+      <button className={className} type="button" disabled>
+        <UndoIcon />
+        Undo
+      </button>
+    );
+  }
   // First name only, unless another player shares it ("Arjun S.").
   const name = game.players[seat].name;
   const first = name.split(" ")[0];
@@ -10304,40 +10357,61 @@ function seatStatus(
   playerIndex: number,
   money: (value: number) => string,
 ) {
+  const { label, amount } = seatStatusParts(game, playerIndex);
+  return amount === undefined ? label : `${label} ${money(amount)}`;
+}
+
+/**
+ * A seat's status as its words and, when it has one, the amount: "Raised
+ * to" and 1,200, or just "Checked".
+ */
+function seatStatusParts(
+  game: GameState,
+  playerIndex: number,
+): { label: string; amount?: number } {
   const hand = game.hand!;
   const player = game.players[playerIndex];
   const committed = hand.committed[playerIndex];
   if (!hand.in[playerIndex]) {
-    if (player.left) return "Cashed out";
-    if (hand.boughtIn?.includes(playerIndex)) return "Next hand";
+    if (player.left) return { label: "Cashed out" };
+    if (hand.boughtIn?.includes(playerIndex)) return { label: "Next hand" };
     // Bust when the hand was dealt, so never in it.
-    if (!(hand.stacksBeforeHand[playerIndex] > 0)) return "Busted";
-    return "Folded";
+    if (!(hand.stacksBeforeHand[playerIndex] > 0)) return { label: "Busted" };
+    return { label: "Folded" };
   }
-  if (player.stack === 0) return `All in ${money(committed)}`;
+  // At the showdown nobody acts any more: everyone still in is a contender.
+  if (isShowdown(game)) {
+    return {
+      label: hand.splitSel?.includes(playerIndex) ? "In split" : "In the hand",
+    };
+  }
+  if (player.stack === 0) return { label: "All in", amount: committed };
   const last = hand.last[playerIndex];
   if (last) {
-    if (last.type === "check") return "Checked";
-    if (last.type === "call") return `Called ${money(committed)}`;
+    if (last.type === "check") return { label: "Checked" };
+    if (last.type === "call") return { label: "Called", amount: committed };
     if (last.type === "bet") {
       // The log line already says whether the chips opened, raised or called.
-      return last.line.includes(" raises to ")
-        ? `Raised to ${money(committed)}`
-        : last.line.includes(" bets ")
-          ? `Bet ${money(committed)}`
-          : `Called ${money(committed)}`;
+      return {
+        label: last.line.includes(" raises to ")
+          ? "Raised to"
+          : last.line.includes(" bets ")
+            ? "Bet"
+            : "Called",
+        amount: committed,
+      };
     }
-    if (last.type === "all-in") return `All in ${money(committed)}`;
+    if (last.type === "all-in") return { label: "All in", amount: committed };
   }
   if (hand.stage === 0 && committed > 0) {
     if (playerIndex === hand.bigBlindIndex) {
-      return `Big blind ${money(committed)}`;
+      return { label: "Big blind", amount: committed };
     }
     if (playerIndex === hand.smallBlindIndex) {
-      return `Small blind ${money(committed)}`;
+      return { label: "Small blind", amount: committed };
     }
   }
-  return "Waiting";
+  return { label: "Waiting" };
 }
 
 function nameLength(name: string): "long" | "longer" | undefined {
@@ -10355,6 +10429,150 @@ function seatRole(game: GameState, playerIndex: number) {
   ]
     .filter(Boolean)
     .join(" ");
+}
+
+/**
+ * The List view's player order. The player to act, or the one whose action
+ * just closed the round, comes first, so the action card always sits in the
+ * same place under the pot; the others still in follow in turn order from
+ * them, then those who folded, in seat order. With nobody to act (the
+ * showdown) it is seat order.
+ */
+function listOrder(game: GameState, closer: number) {
+  const hand = game.hand;
+  if (!hand) return [];
+  const lead = closer >= 0 ? closer : (hand.currentPlayer ?? -1);
+  const count = game.players.length;
+  const fromLead = Array.from(
+    { length: count },
+    (_, offset) => (Math.max(lead, 0) + offset) % count,
+  );
+  return [
+    // A closing fold keeps its place until the next street.
+    ...fromLead.filter((index) => hand.in[index] || index === lead),
+    ...game.players
+      .map((_, index) => index)
+      .filter(
+        (index) =>
+          !hand.in[index] && index !== lead && !game.players[index].left,
+      ),
+  ];
+}
+
+/**
+ * When the turn order moves on, the waiting players' tiles move from where
+ * they were to their new place, each one step nearer their turn. The new
+ * action card is left to its own slide-in, and the tile of the player who
+ * just left the action card rises into its place from one tile below.
+ * Positions are measured within the grid, so scrolling in between doesn't
+ * count; nothing moves under reduced motion.
+ */
+function useTurnShift(order: number[]) {
+  const nodes = useRef(new Map<number, HTMLElement>());
+  const places = useRef(new Map<number, { left: number; top: number }>());
+  const lastOrder = useRef<number[]>([]);
+  const orderKey = order.join(",");
+
+  useLayoutEffect(() => {
+    const previous = lastOrder.current;
+    const moved = previous.length > 0 && previous.join(",") !== orderKey;
+    lastOrder.current = order;
+    const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const easing = "cubic-bezier(0.2, 0, 0, 1)";
+    const next = new Map<number, { left: number; top: number }>();
+    nodes.current.forEach((node, id) => {
+      const now = { left: node.offsetLeft, top: node.offsetTop };
+      next.set(id, now);
+      if (!moved || still || id === order[0]) return;
+      // The player who just left the action card has no old tile: theirs
+      // rises into its place from one tile below.
+      if (id === previous[0]) {
+        const gap = parseFloat(getComputedStyle(node.parentElement!).rowGap);
+        const below = node.offsetHeight + (Number.isNaN(gap) ? 0 : gap);
+        node.animate(
+          [
+            { transform: `translateY(${below}px)`, opacity: 0 },
+            { transform: "none", opacity: 1 },
+          ],
+          { duration: 240, easing },
+        );
+        return;
+      }
+      const before = places.current.get(id);
+      if (!before || (before.left === now.left && before.top === now.top)) {
+        return;
+      }
+      node.animate(
+        [
+          {
+            transform: `translate(${before.left - now.left}px, ${before.top - now.top}px)`,
+          },
+          { transform: "none" },
+        ],
+        { duration: 240, easing },
+      );
+    });
+    places.current = next;
+  });
+
+  return (id: number) => (node: HTMLDivElement | null) => {
+    if (node) nodes.current.set(id, node);
+    else nodes.current.delete(id);
+  };
+}
+
+/**
+ * A waiting player in the List view: the avatar, and beside it the name
+ * over three boxes like the action card's, for the stack, what's in this hand and the status. An
+ * amount in the status is the box's value, under its words ("Raised to",
+ * "₹1,200"), so long statuses still fit.
+ */
+function WaitingStrip({
+  game,
+  playerIndex,
+  flash,
+}: {
+  game: GameState;
+  playerIndex: number;
+  flash?: number;
+}) {
+  const { money } = useMoney();
+  const hand = game.hand;
+  if (!hand) return null;
+  const player = game.players[playerIndex];
+  const status = seatStatusParts(game, playerIndex);
+  return (
+    <div className={`seat-strip ${hand.in[playerIndex] ? "" : "folded"}`}>
+      <Avatar
+        name={player.name}
+        playerId={player.id}
+        role={seatRole(game, playerIndex)}
+        size="small"
+      />
+      <b className="seat-strip-name">{player.name}</b>
+      <div className="seat-strip-stats">
+        <div className="bet-stat">
+          <span>Stack</span>
+          <b>{money(player.stack)}</b>
+        </div>
+        <div className="bet-stat">
+          <span>In hand</span>
+          <b>{money(handContributions(game)[playerIndex])}</b>
+        </div>
+        <div
+          className={`bet-stat seat-strip-status ${flash ? "just-acted" : ""}`}
+          key={flash ?? "status"}
+        >
+          <span>
+            {status.amount === undefined ? "Status" : shortBlinds(status.label)}
+          </span>
+          <b>
+            {status.amount === undefined ? status.label : money(status.amount)}
+          </b>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function PlayerRow({
@@ -10434,19 +10652,24 @@ function PlayerRow({
   );
 
   if (roundClosed) {
+    // The status sits on the right of the name, as on the other rows, so
+    // the card is as tall as the betting card. In the dock the seat on the
+    // table already shows it.
     return (
-      <div className="glass seat-card round-closed">
+      <div className={`glass seat-card round-closed ${dock ? "dock" : ""}`}>
         <div className="seat-main">
           <Avatar name={player.name} playerId={player.id} role={role} />
           <div className="seat-copy">
             <b>{player.name}</b>
+          </div>
+          {dock ? null : (
             <span
               className={`status-pill ${flash ? "just-acted" : ""}`}
               key={flash ?? "status"}
             >
               {seatStatus(game, playerIndex, money)}
             </span>
-          </div>
+          )}
         </div>
         <div className="bet-panel" aria-hidden="true" inert>
           {moneyStats}
@@ -10690,74 +10913,82 @@ function SidePotPicker({
   const { pots, refund, rake } = payablePots(game);
   const name = (index: number) => game.players[index].name;
   const several = pots.length > 1;
+  const total = pots.reduce((sum, pot) => sum + pot.amount, 0);
   // A pot being split isn't decided until two or more players are in it.
-  const picks = pots.map((_, index) =>
-    splitting[index] && (choice[index]?.length ?? 0) < 2
-      ? []
-      : (choice[index] ?? []),
-  );
+  const picks = picksFor(choice, splitting);
   // Pots an earlier pot's winners are in follow from that pick.
   const resolved = resolvePotWinners(pots, picks);
   // "the main pot", "side pot 1": how a note names the pot it follows.
   const potPhrase = (index: number) =>
     index === 0 ? "the main pot" : potLabel(index, pots.length).toLowerCase();
-  const ready = pots.every((pot, index) =>
+  const decided = pots.map((pot, index) =>
     pot.eligible.length === 1 || resolved[index].from !== null
       ? true
       : splitting[index]
         ? resolved[index].winners.length >= 2
         : resolved[index].winners.length === 1,
   );
+  const ready = decided.every(Boolean);
+  const decidedCount = decided.filter(Boolean).length;
 
-  // A changed pick changes which later pots follow it, so their picks and
-  // splits start again.
-  function clearAfter<T>(list: T[], potIndex: number) {
-    return list.slice(0, potIndex + 1);
+  // What's picked, counting a split as no pick until two or more are in it.
+  function picksFor(nextChoice: number[][], nextSplitting: boolean[]) {
+    return pots.map((_, index) =>
+      nextSplitting[index] && (nextChoice[index]?.length ?? 0) < 2
+        ? []
+        : (nextChoice[index] ?? []),
+    );
+  }
+
+  // A changed pick only matters to later pots its winners are in: those now
+  // follow it, so their own picks and splits are dropped (and don't come back
+  // if they open up again). Pots it doesn't reach keep theirs.
+  function update(nextChoice: number[][], nextSplitting: boolean[]) {
+    const followed = resolvePotWinners(
+      pots,
+      picksFor(nextChoice, nextSplitting),
+    );
+    followed.forEach((result, index) => {
+      if (result.from !== null) {
+        nextChoice[index] = [];
+        nextSplitting[index] = false;
+      }
+    });
+    setChoice(nextChoice);
+    setSplitting(nextSplitting);
   }
 
   function pick(potIndex: number, playerIndex: number) {
-    setSplitting((current) => clearAfter(current, potIndex));
-    setChoice((current) => {
-      const next = clearAfter([...current], potIndex);
-      const chosen = next[potIndex] ?? [];
-      next[potIndex] = splitting[potIndex]
-        ? chosen.includes(playerIndex)
-          ? chosen.filter((index) => index !== playerIndex)
-          : [...chosen, playerIndex]
-        : [playerIndex];
-      return next;
-    });
+    const nextChoice = [...choice];
+    const chosen = nextChoice[potIndex] ?? [];
+    nextChoice[potIndex] = splitting[potIndex]
+      ? chosen.includes(playerIndex)
+        ? chosen.filter((index) => index !== playerIndex)
+        : [...chosen, playerIndex]
+      : [playerIndex];
+    update(nextChoice, [...splitting]);
   }
 
   function toggleSplit(potIndex: number) {
-    setSplitting((current) => {
-      const next = clearAfter([...current], potIndex);
-      next[potIndex] = !next[potIndex];
-      return next;
-    });
-    setChoice((current) => {
-      const next = clearAfter([...current], potIndex);
-      next[potIndex] = [];
-      return next;
-    });
+    const nextChoice = [...choice];
+    const nextSplitting = [...splitting];
+    nextSplitting[potIndex] = !nextSplitting[potIndex];
+    nextChoice[potIndex] = [];
+    update(nextChoice, nextSplitting);
   }
 
   return (
     <section className="glass card winner-picker">
-      {/* With several pots each names its own amount, so the title doesn't. */}
-      <PickerHead
-        title={several ? "Pick the winners" : "Pick the winner"}
-        amount={
-          several
-            ? undefined
-            : money(pots.reduce((sum, pot) => sum + pot.amount, 0))
-        }
-      />
-      <p className="muted small-note">
-        {several
-          ? "Each pot goes to the best hand among the players listed under it."
-          : "An all-in player can only win what each player matched."}
-      </p>
+      {/* With several pots each pot's own heading leads, so the card has
+          no title of its own. */}
+      {several ? null : (
+        <>
+          <PickerHead title="Pick the winner" amount={money(total)} />
+          <p className="muted small-note">
+            An all-in player can only win what each player matched.
+          </p>
+        </>
+      )}
       {refund ? (
         <p className="pot-refund">
           {money(refund.amount)} goes back to {name(refund.playerIndex)} ·
@@ -10785,10 +11016,29 @@ function SidePotPicker({
         return (
           <div className={several ? "side-pot" : "stack-list"} key={potIndex}>
             {several ? (
-              <PickerHead
-                title={potLabel(potIndex, pots.length)}
-                amount={money(pot.amount)}
-              />
+              // The pot's name and amount, with what it still needs (or
+              // who has it) on the right.
+              <div className="side-pot-head">
+                <PickerHead
+                  title={potLabel(potIndex, pots.length)}
+                  amount={money(pot.amount)}
+                />
+                <span
+                  className={`side-pot-status ${decided[potIndex] ? "done" : ""}`}
+                >
+                  {decided[potIndex]
+                    ? `✓ ${
+                        pot.eligible.length === 1
+                          ? name(pot.eligible[0])
+                          : winners.length > 1
+                            ? "Split"
+                            : name(winners[0])
+                      }`
+                    : split
+                      ? "Pick two or more"
+                      : "Pick the winner"}
+                </span>
+              </div>
             ) : null}
             {pot.eligible.length === 1 ? (
               <p className="muted small-note">
@@ -10861,7 +11111,13 @@ function SidePotPicker({
         disabled={!ready}
         onClick={() => onAward(picks)}
       >
-        {several ? "Award pots" : "Award pot"}
+        {!several
+          ? "Award pot"
+          : ready
+            ? `Award ${money(total)}`
+            : decidedCount === 0
+              ? "Pick a winner for each pot"
+              : `${decidedCount} of ${pots.length} pots picked`}
       </button>
     </section>
   );

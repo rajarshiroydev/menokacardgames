@@ -2677,82 +2677,58 @@ textarea::placeholder {
    Live hand
    ------------------------------------------------------------------ */
 
-.scoreboard {
-  position: relative;
+/* List view: the pot card is drawn like the middle of the table (see
+   .table-center), in the app's own colours instead of white on felt. */
+.pot-card {
   align-items: center;
-  gap: 16px;
-  overflow: hidden;
-  padding: 18px;
+  gap: 4px;
+  padding: 8px 16px;
+  text-align: center;
 }
 
-.street-bar {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
+/* The street bars run the card's full width, as the List view's street
+   bar did. */
+.pot-card .table-pips {
+  align-self: stretch;
   gap: 6px;
-  width: 100%;
+  margin-bottom: 4px;
 }
 
-.street-bar > div {
-  display: flex;
-  flex-direction: column;
-  gap: 7px;
-}
-
-.street-line {
-  height: 4px;
-  border-radius: 2px;
+.pot-card .table-pips span {
+  flex: 1;
+  width: auto;
   background: var(--line);
 }
 
-.street-label {
-  color: var(--ink3);
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
+.pot-card .table-pips .past {
+  background: var(--ink);
 }
 
-.street-bar .past .street-line {
+.pot-card .table-pips .current {
   background: var(--g);
 }
 
-.street-bar .current .street-line {
-  background: linear-gradient(90deg, var(--g), var(--b));
+.pot-card .table-label {
+  color: var(--ink2);
+  opacity: 1;
 }
 
-.street-bar .past .street-label,
-.street-bar .current .street-label {
-  color: var(--ink);
-}
-
-.pot-block {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
+.pot-card .table-pot {
   max-width: 100%;
-  padding-top: 4px;
-}
-
-.pot-block .label {
-  letter-spacing: 0.22em;
-}
-
-.pot {
-  display: block;
-  max-width: 100%;
-  padding: 0 6px;
-  font-family: var(--fd);
-  /* Long pots shrink so a million-chip pot still fits on one line. */
   font-size: min(
-    104px,
-    calc((min(100vw, 480px) - 96px) / (var(--chars, 6) * 0.5))
+    48px,
+    calc((min(100vw, 480px) - 64px) / (var(--chars, 6) * 0.5))
   );
-  font-weight: 900;
-  font-variation-settings: "opsz" 72;
-  letter-spacing: 0.01em;
-  line-height: 1;
-  white-space: nowrap;
+}
+
+.pot-card .table-sidepots {
+  color: var(--ink2);
+}
+
+.pot-card .table-blinds {
+  max-width: 100%;
+  background: var(--field);
+  color: var(--ink);
 }
 
 .blinds-display {
@@ -2867,6 +2843,91 @@ textarea::placeholder {
   transition: opacity 0.18s ease-out;
 }
 
+/* List view: the waiting players in one card above the action card, a
+   strip each with no gaps between them. Each strip's wrapper moves when the
+   turn moves on. */
+.waiting-list {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.player-slot {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.waiting-list .player-slot + .player-slot {
+  border-top: 1px solid var(--gb);
+}
+
+/* The avatar, and beside it the name over the stack, what's in this hand
+   and the status in small boxes like the action card's: thin enough that
+   the action card stays on screen. */
+.seat-strip {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  align-items: center;
+  column-gap: 10px;
+  row-gap: 2px;
+  padding: 5px 10px;
+  transition: opacity 0.18s ease-out;
+}
+
+.seat-strip > .avatar {
+  grid-row: 1 / span 2;
+}
+
+.seat-strip.folded {
+  opacity: 0.45;
+}
+
+.seat-strip-name {
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 16px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.seat-strip-stats {
+  display: grid;
+  grid-column: 2;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.seat-strip-stats .bet-stat {
+  gap: 0;
+  padding: 2px 8px;
+}
+
+.seat-strip-stats .bet-stat span {
+  overflow: hidden;
+  font-size: 10px;
+  line-height: 12px;
+  text-overflow: ellipsis;
+}
+
+.seat-strip-stats .bet-stat b {
+  font-size: 14px;
+  line-height: 17px;
+}
+
+/* The status box flashes like the status pill when this player has just
+   acted. */
+.seat-strip-status.just-acted {
+  animation: acted-flash 1s ease-out;
+}
+
+.seat-strip-status.just-acted span,
+.seat-strip-status.just-acted b {
+  color: inherit;
+}
+
 .seat-card.folded {
   opacity: 0.45;
 }
@@ -2876,24 +2937,10 @@ textarea::placeholder {
   box-shadow: 0 18px 40px -18px var(--g);
 }
 
-/* Turn feedback: the next player's card arrives with a glow, so a tap
-   visibly hands the turn on. The dock under the table slides in instead. */
+/* Turn feedback: the next player's action card slides in from the right,
+   in List view and in the dock under the table alike. */
 .seat-card.active {
-  animation: turn-arrive 0.32s ease-out;
-}
-
-.seat-card.active.dock {
-  animation-name: dock-arrive;
-}
-
-@keyframes turn-arrive {
-  from {
-    opacity: 0.5;
-    transform: translateY(6px) scale(0.985);
-    box-shadow:
-      0 0 0 4px color-mix(in oklch, var(--g) 45%, transparent),
-      0 18px 40px -18px var(--g);
-  }
+  animation: dock-arrive 0.32s ease-out;
 }
 
 @keyframes dock-arrive {
@@ -2961,11 +3008,6 @@ textarea::placeholder {
   gap: 12px;
 }
 
-.seat-copy .status-pill {
-  display: inline-block;
-  margin-top: 4px;
-}
-
 /* The stack and what's in this hand, as two equal tiles. */
 .bet-stats {
   display: grid;
@@ -2978,7 +3020,7 @@ textarea::placeholder {
   flex-direction: column;
   gap: 2px;
   min-width: 0;
-  padding: 8px 12px;
+  padding: 6px 12px;
   border-radius: var(--rs);
   background: var(--field);
 }
@@ -2993,7 +3035,7 @@ textarea::placeholder {
 .bet-stat b {
   overflow: hidden;
   color: var(--ink);
-  font-size: 22px;
+  font-size: 20px;
   font-weight: 800;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -3123,7 +3165,7 @@ textarea::placeholder {
 }
 
 .action-row button {
-  min-height: 52px;
+  min-height: 46px;
   padding: 0 8px;
   font-size: 15px;
   font-weight: 700;
@@ -3263,20 +3305,46 @@ textarea::placeholder {
   border-top: 1px solid var(--gb);
 }
 
+/* The card has no title above the first pot, so no rule either. */
+.side-pot:first-child {
+  padding-top: 0;
+  border-top: 0;
+}
+
+/* A side pot's heading: name and amount on the left, its status right. */
+.side-pot-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 10px;
+}
+
+.side-pot-head .picker-head {
+  justify-content: flex-start;
+  text-align: left;
+}
+
+.side-pot-status {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink2);
+  font-size: 13px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.side-pot-status.done {
+  color: var(--g);
+  font-weight: 700;
+}
+
 .pot-refund {
   padding: 10px 12px;
   border: 1px dashed var(--gb);
   border-radius: var(--rs);
   color: var(--ink2);
   font-size: 13px;
-}
-
-.pot-split {
-  color: var(--ink2);
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-align: center;
 }
 
 .table-sidepots {

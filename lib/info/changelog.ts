@@ -27,6 +27,40 @@ export const CHANGE_TAG_LABELS: Record<ChangeTag, string> = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    date: "2026-10-28",
+    title: "A tidier List view and showdowns",
+    items: [
+      {
+        tag: "improved",
+        text: "Showdowns with side pots are tidier: each pot's heading shows who still needs picking, then a green tick with the winner, and the award button counts the pots picked before showing the total to award. The split button reads Split this pot on every showdown.",
+      },
+      {
+        tag: "fixed",
+        text: "Changing the main pot's winner no longer clears a side pot you'd already picked, unless the new winner is in that side pot too.",
+      },
+      {
+        tag: "improved",
+        text: "Splitting a pot in List view keeps everyone's player cards on screen, as it already did with side pots.",
+      },
+      {
+        tag: "improved",
+        text: "The List view is laid out like the table: a smaller pot card on top, the other players as slim strips showing their stack, what they have in the hand and their last action, then the player to act with Deal, Undo and Cancel hand right under them. The strips move up a place each turn, so the betting buttons stay put and you scroll much less.",
+      },
+      {
+        tag: "improved",
+        text: "The Stack and In this hand boxes and the Fold, Check and Bet buttons are a little slimmer, in both views.",
+      },
+      {
+        tag: "improved",
+        text: "In Table view the Deal Flop, Turn and River button no longer jumps up when a round ends. It stays in one place under the betting panel, as in List view. In both views the Deal and Undo buttons now stay on screen for the whole hand, greyed out when they can't be used.",
+      },
+      {
+        tag: "improved",
+        text: "In List view the Pick the winner card now opens once the river betting is over, as on the table, instead of sitting locked under the players while they still bet.",
+      },
+    ],
+  },
+  {
     date: "2026-10-27",
     title: "Easier invites and the right names",
     items: [
