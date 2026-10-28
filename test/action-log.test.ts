@@ -1,7 +1,12 @@
 import { strict as assert } from "node:assert";
 import { describe, test } from "node:test";
 
-import { groupLog, LOG_LIMIT, parseLogLine } from "../lib/poker/action-log.ts";
+import {
+  groupLog,
+  linesToSave,
+  LOG_LIMIT,
+  parseLogLine,
+} from "../lib/poker/action-log.ts";
 import { parseActionLog } from "../lib/poker/session-validation.ts";
 
 const names = ["Asha", "Asha Rao", "Dev"];
@@ -173,5 +178,29 @@ describe("parseActionLog", () => {
     ]) {
       assert.throws(() => parseActionLog(bad));
     }
+  });
+});
+
+describe("linesToSave", () => {
+  const lines = [
+    "Hand 12 PREFLOP: Dev calls ₹100",
+    "During hand 12: Asha buys in for ₹1,000",
+    "Hand 12: blinds up to ₹100/₹200 (level 2)",
+    "Hand 11: Dev wins ₹300",
+    "Hand 1 PREFLOP: Asha folds",
+  ];
+
+  test("leaves out the unfinished hand's lines but keeps its buy-ins", () => {
+    assert.deepEqual(linesToSave(lines, 12), [
+      "During hand 12: Asha buys in for ₹1,000",
+      "Hand 11: Dev wins ₹300",
+      "Hand 1 PREFLOP: Asha folds",
+    ]);
+  });
+
+  test("keeps every line between hands", () => {
+    assert.deepEqual(linesToSave(lines, null), lines);
+    // Hand 1 isn't hand 12's prefix match.
+    assert.equal(linesToSave(lines, 1).length, 4);
   });
 });

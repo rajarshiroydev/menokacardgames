@@ -32,7 +32,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     items: [
       {
         tag: "new",
-        text: "The action log now keeps the whole session instead of the last 80 lines, and it's saved with the game: open a saved game's Details to read it, and Continue game picks it up where it left off. Older hands fold to their result until you tap them.",
+        text: "The action log now keeps the whole session instead of the last 80 lines, and it's saved with the game: tap Action log on a saved game to read it, and Continue game picks it up where it left off. Older hands fold to their result until you tap them.",
       },
       {
         tag: "improved",

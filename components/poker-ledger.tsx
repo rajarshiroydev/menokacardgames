@@ -101,6 +101,7 @@ import {
 } from "@/lib/poker/game";
 import {
   groupLog,
+  linesToSave,
   LOG_LIMIT,
   type LogEntry,
   type LogGroup,
@@ -8050,7 +8051,7 @@ function savedActionLog(game: GameState): SavedActionLog {
       ...(player.id ? { id: player.id } : {}),
       name: player.name,
     })),
-    lines: game.log.slice(0, LOG_LIMIT),
+    lines: linesToSave(game.log, game.hand?.no ?? null),
   };
 }
 
@@ -11464,7 +11465,7 @@ function SessionCardBody({
   onDiscard?: (id: string) => void;
   onRestore?: (id: string) => void;
   onDeletePermanently?: (id: string) => void;
-  /** The host's own games: Details also loads the saved action log. */
+  /** The host's own games: an Action log toggle beside Details. */
   showLog?: boolean;
 }) {
   const { currency, unit, money, signedMoney } = useMoney();
@@ -11547,9 +11548,10 @@ function SessionCardBody({
     ]);
   }
 
-  const hasDetails =
-    details.length > 0 || !sameStart || blinds !== null || showLog;
+  const hasDetails = details.length > 0 || !sameStart || blinds !== null;
   const [showDetails, setShowDetails] = useState(false);
+  // The log has its own toggle, so Details stays short (user request).
+  const [logOpen, setLogOpen] = useState(false);
 
   return (
     <article className={`glass card session-card ${discarded ? "discarded" : ""}`}>
@@ -11603,6 +11605,16 @@ function SessionCardBody({
             onClick={() => setShowDetails((open) => !open)}
           >
             Details
+          </button>
+        ) : null}
+        {showLog ? (
+          <button
+            className="session-details-toggle"
+            type="button"
+            aria-expanded={logOpen}
+            onClick={() => setLogOpen((open) => !open)}
+          >
+            Action log
           </button>
         ) : null}
         <div className="session-actions">
@@ -11773,9 +11785,9 @@ function SessionCardBody({
               ))}
             </>
           ) : null}
-          {showLog ? <SavedLog sessionId={session.id} /> : null}
         </div>
       ) : null}
+      {showLog && logOpen ? <SavedLog sessionId={session.id} /> : null}
     </article>
   );
 }
@@ -11784,7 +11796,7 @@ function SessionCardBody({
 // changes its log, so finishSession drops its entry.
 const savedLogs = new Map<string, SavedActionLog | null>();
 
-/** A saved game's action log under its Details, loaded when first opened. */
+/** A saved game's action log under its toggle, loaded when first opened. */
 function SavedLog({ sessionId }: { sessionId: string }) {
   const [state, setState] = useState<
     | { status: "loading" }
@@ -11823,7 +11835,6 @@ function SavedLog({ sessionId }: { sessionId: string }) {
 
   return (
     <div className="saved-log">
-      <b>Action log</b>
       {state.status === "loading" ? (
         <p className="muted">Loading…</p>
       ) : state.status === "failed" ? (

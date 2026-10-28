@@ -192,6 +192,24 @@ function tableAction(text: string): Parts {
   return { kind: "note", verb: capitalise(text), amount: null, note: null };
 }
 
+/**
+ * The lines to save with a game. Saved mid-hand, the game keeps only the
+ * hands finished before it, so that hand's own lines ("Hand N …", its
+ * actions and any blind change at its deal) are left out; buy-ins during it
+ * ("During hand N: …") count and stay.
+ */
+export function linesToSave(lines: readonly string[], unfinishedHand: number | null) {
+  const kept =
+    unfinishedHand === null
+      ? lines
+      : lines.filter(
+          (line) =>
+            !line.startsWith(`Hand ${unfinishedHand} `) &&
+            !line.startsWith(`Hand ${unfinishedHand}:`),
+        );
+  return kept.slice(0, LOG_LIMIT);
+}
+
 /** One stored line read into its parts, with the hand and street it names. */
 export function parseLogLine(line: string, names: readonly string[]) {
   const [, prefix, number, stage, text] = line.match(PREFIX) ?? [];
