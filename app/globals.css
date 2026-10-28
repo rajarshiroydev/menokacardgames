@@ -3890,10 +3890,14 @@ textarea::placeholder {
   border-top: 1px solid var(--line);
 }
 
-/* A saved game's log under its own toggle, beside Details. */
+/* A saved game's log under its own toggle, beside Details, in the same dark
+   panel as Details. */
 .saved-log {
   display: grid;
   gap: 8px;
+  padding: 10px 12px;
+  border-radius: var(--rs);
+  background: var(--field);
 }
 
 .saved-log > .muted {
