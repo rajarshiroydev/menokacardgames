@@ -29,6 +29,7 @@ export type SessionRow = {
   chip_value_chips: number | string | null;
   chip_value_cents: number | string | null;
   results: PokerSession["results"];
+  has_action_log: boolean;
 };
 
 export function mapSession(row: SessionRow): SavedSession {
@@ -60,6 +61,7 @@ export function mapSession(row: SessionRow): SavedSession {
       : {}),
     hands: Number(row.hands),
     results: row.results,
+    ...(row.has_action_log ? { hasActionLog: true as const } : {}),
   };
 }
 
@@ -101,7 +103,9 @@ export function selectSessions(
           chip_value_chips,
           chip_value_cents,
           normalized.results,
-          discarded_at
+          discarded_at,
+          -- Only whether there is a log; the log itself is fetched per game.
+          action_log IS NOT NULL AS has_action_log
         FROM poker_sessions AS session
         JOIN LATERAL (
           SELECT jsonb_agg(

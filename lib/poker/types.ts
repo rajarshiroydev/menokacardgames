@@ -425,6 +425,11 @@ export type PokerSession = {
    * game at a time. Absent for older and imported games.
    */
   actionLog?: SavedActionLog;
+  /**
+   * Set when reading the game list: the game has a saved action log, so
+   * opening it is worth a request. Never sent when saving.
+   */
+  hasActionLog?: true;
 };
 
 /** A saved game's log: its lines, newest first, and who they name. */

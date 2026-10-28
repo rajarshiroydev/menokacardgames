@@ -2735,7 +2735,21 @@ export function PokerLedger({
 
   function exportData() {
     const blob = new Blob(
-      [JSON.stringify({ exported: Date.now(), sessions: history }, null, 2)],
+      [
+        JSON.stringify(
+          {
+            exported: Date.now(),
+            // Whether a game has a log is read-side only; logs aren't exported.
+            sessions: history.map((session) => {
+              const exported = { ...session };
+              delete exported.hasActionLog;
+              return exported;
+            }),
+          },
+          null,
+          2,
+        ),
+      ],
       { type: "application/json" },
     );
     const anchor = document.createElement("a");
@@ -11787,7 +11801,9 @@ function SessionCardBody({
           ) : null}
         </div>
       ) : null}
-      {showLog && logOpen ? <SavedLog sessionId={session.id} /> : null}
+      {showLog && logOpen ? (
+        <SavedLog sessionId={session.id} saved={session.hasActionLog === true} />
+      ) : null}
     </article>
   );
 }
@@ -11796,20 +11812,25 @@ function SessionCardBody({
 // changes its log, so finishSession drops its entry.
 const savedLogs = new Map<string, SavedActionLog | null>();
 
-/** A saved game's action log under its toggle, loaded when first opened. */
-function SavedLog({ sessionId }: { sessionId: string }) {
+/**
+ * A saved game's action log under its toggle, loaded when first opened.
+ * A game saved without one says so at once, with no request.
+ */
+function SavedLog({ sessionId, saved }: { sessionId: string; saved: boolean }) {
   const [state, setState] = useState<
     | { status: "loading" }
     | { status: "loaded"; log: SavedActionLog | null }
     | { status: "failed"; message: string }
   >(() =>
-    savedLogs.has(sessionId)
-      ? { status: "loaded", log: savedLogs.get(sessionId)! }
-      : { status: "loading" },
+    !saved
+      ? { status: "loaded", log: null }
+      : savedLogs.has(sessionId)
+        ? { status: "loaded", log: savedLogs.get(sessionId)! }
+        : { status: "loading" },
   );
   const [attempt, setAttempt] = useState(0);
   useEffect(() => {
-    if (savedLogs.has(sessionId)) return;
+    if (!saved || savedLogs.has(sessionId)) return;
     let current = true;
     sessionsApi<{ log: SavedActionLog | null }>(
       `/${encodeURIComponent(sessionId)}/log`,
@@ -11831,7 +11852,7 @@ function SavedLog({ sessionId }: { sessionId: string }) {
     return () => {
       current = false;
     };
-  }, [sessionId, attempt]);
+  }, [sessionId, saved, attempt]);
 
   return (
     <div className="saved-log">
