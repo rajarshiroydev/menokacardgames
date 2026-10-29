@@ -28,11 +28,23 @@ export const CHANGE_TAG_LABELS: Record<ChangeTag, string> = {
 export const CHANGELOG: ChangelogEntry[] = [
   {
     date: "2026-10-29",
-    title: "Choosing an avatar",
+    title: "Avatars and safer sign-out",
     items: [
       {
         tag: "improved",
         text: "Changing your avatar or a guest's no longer saves on the first tap: try a few, then press Save Avatar.",
+      },
+      {
+        tag: "new",
+        text: "Settings has Sign Out Of All Devices, which signs you out on every phone and browser at once, for example after losing a phone.",
+      },
+      {
+        tag: "improved",
+        text: "Signing out now removes your game in progress and live link from the phone, so the next person can't see them. The game is backed up first and waits under Unfinished game when you sign back in.",
+      },
+      {
+        tag: "improved",
+        text: "For safety, you now sign in again with an email link every 90 days, even if you use the app every day.",
       },
     ],
   },

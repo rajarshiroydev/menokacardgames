@@ -1,3 +1,5 @@
+import { visibleText } from "../visible-text.ts";
+
 /**
  * User codes (for accounts) and player codes (for a host's player profiles).
  * The database generates both (`public.new_identity_code()` in migration
@@ -25,8 +27,7 @@ export const MAX_DISPLAY_NAME_LENGTH = 40;
 
 /** The name a person shows to others in the friend network. */
 export function cleanDisplayName(value: unknown) {
-  const name =
-    typeof value === "string" ? value.trim().replace(/\s+/g, " ") : "";
+  const name = typeof value === "string" ? visibleText(value) : "";
 
   if (!name || name.length > MAX_DISPLAY_NAME_LENGTH) {
     throw new Error(

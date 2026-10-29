@@ -8,6 +8,7 @@ import { accountAccessError, type HostAccount } from "@/lib/accounts/lifecycle";
 import { provisionHostAccount } from "@/lib/accounts/server";
 import {
   RECENT_SIGN_IN_REQUIRED,
+  sessionTooOld,
   signedInRecently,
 } from "@/lib/auth/recent-sign-in";
 import { withoutSessionCookies } from "@/lib/auth/session-cookies";
@@ -66,6 +67,17 @@ export type HostSession = NonNullable<Awaited<ReturnType<typeof getHostSession>>
 export async function getHostSession() {
   const { data, error } = await timed("auth", () => auth.getSession());
   if (error || !data?.user) return null;
+  // A sign-in lasts 90 days at most, however often it is used. Where cookies
+  // can change (route handlers, server actions) the old session is also
+  // revoked; a page just treats the person as signed out.
+  if (sessionTooOld(data.session?.createdAt)) {
+    try {
+      await auth.signOut();
+    } catch {
+      // Pages can't change cookies; the next sign-in replaces them.
+    }
+    return null;
+  }
   return data;
 }
 

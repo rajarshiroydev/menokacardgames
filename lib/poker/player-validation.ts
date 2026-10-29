@@ -1,9 +1,9 @@
+import { visibleText } from "../visible-text.ts";
+
 export const MAX_PLAYER_NAME_LENGTH = 80;
 
 export function cleanPlayerName(value: unknown) {
-  const name = String(value || "")
-    .trim()
-    .replace(/\s+/g, " ");
+  const name = visibleText(value);
 
   if (!name || name.length > MAX_PLAYER_NAME_LENGTH) {
     throw new Error(

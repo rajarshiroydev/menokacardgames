@@ -115,7 +115,10 @@ export default function PrivacyPage() {
           Your theme, the List or Table choice, the sound setting, when you
           last opened the notification bell and a random ID for your browser
           (so we know which device holds a game in progress) are stored in your
-          browser, not on our servers.
+          browser, not on our servers. A game in progress is kept on the phone
+          too while you play. Signing out removes it and the live link from
+          the phone, after backing the game up so it waits for you when you
+          sign in again.
         </p>
         <h3>The camera</h3>
         <p>

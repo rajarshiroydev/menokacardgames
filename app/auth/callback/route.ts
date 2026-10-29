@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { exchangeMagicLinkVerifier } from "@/lib/auth/server";
-import { invitePath, isInviteToken } from "@/lib/friends/invites";
+import { afterSignInPath } from "@/lib/auth/sign-in-destination";
 
 export async function GET(request: Request) {
   const requestUrl = new URL(request.url);
@@ -16,10 +16,10 @@ export async function GET(request: Request) {
     return NextResponse.redirect(new URL("/auth/sign-in?error=INVALID_TOKEN", requestUrl));
   }
 
-  // Signed in from an invite: back to the invite page (migration 0030).
-  const invite = requestUrl.searchParams.get("invite");
+  // Back to the invite page (migration 0030) or the admin dashboard the
+  // link was asked from, otherwise Home.
   const response = NextResponse.redirect(
-    new URL(isInviteToken(invite) ? invitePath(invite) : "/", requestUrl),
+    new URL(afterSignInPath(requestUrl.searchParams), requestUrl),
   );
   response.headers.set("Cache-Control", "no-store");
 

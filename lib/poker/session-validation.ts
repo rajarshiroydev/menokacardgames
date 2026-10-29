@@ -17,6 +17,7 @@ import type {
   SavedActionLog,
   SessionResult,
 } from "./types";
+import { visibleText } from "../visible-text.ts";
 
 export const MAX_SESSIONS_PER_REQUEST = 250;
 const MAX_RESULTS_PER_SESSION = 10;
@@ -334,7 +335,7 @@ export function validateSession(input: unknown): PokerSession {
   const chipUnit = parseChipUnit(candidate.chipUnit);
   const chipValue = parseChipValue(candidate.chipValue);
   const actionLog = parseActionLog(candidate.actionLog);
-  const name = String(candidate.name || "").trim();
+  const name = visibleText(candidate.name || "");
   if (name.length > MAX_GAME_NAME_LENGTH) {
     throw new Error(
       `Game names must be ${MAX_GAME_NAME_LENGTH} characters or fewer`,

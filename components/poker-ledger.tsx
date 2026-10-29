@@ -182,7 +182,7 @@ import { playTurnSound } from "@/lib/turn-sound";
 import { useRouter } from "next/navigation";
 import qrcode from "qrcode-generator";
 
-import { signOut } from "@/app/auth/sign-in/actions";
+import { signOut, signOutEverywhere } from "@/app/auth/sign-in/actions";
 import { AvatarArt } from "@/components/avatar-art";
 import { AvatarPicker, randomAvatarId } from "@/components/avatar-picker";
 import { BrandMark } from "@/components/brand-mark";
@@ -1925,6 +1925,66 @@ export function PokerLedger({
     }
   }
 
+  /**
+   * Before signing out on this device (user decision 2026-10-29): the game in
+   * progress is backed up, then removed from the device with the live link,
+   * so the next person on a shared phone finds nothing of this account. The
+   * game comes back as an Unfinished game after signing in again. If the
+   * backup can't be sent (offline), the game stays on the device rather than
+   * being lost. Data from before accounts stays: it may exist nowhere else.
+   */
+  async function clearDeviceForSignOut() {
+    let keepGame = false;
+    if (game) {
+      try {
+        await gameBackupApi("PUT", {
+          body: {
+            gameId: gameBackupId(game),
+            deviceId: readDeviceId(),
+            state: game,
+          },
+        });
+      } catch (error) {
+        // Saved already, or carried on elsewhere: the copy here isn't needed.
+        keepGame = !(
+          error instanceof ApiError &&
+          (error.code === "finished" || error.code === "moved")
+        );
+      }
+    }
+    try {
+      if (!keepGame) window.localStorage.removeItem(gameStorageKey);
+      window.localStorage.removeItem(liveTokenStorageKey);
+    } catch {
+      // Storage is blocked, so nothing was kept on the device.
+    }
+  }
+
+  async function signOutHere() {
+    await clearDeviceForSignOut();
+    await signOut();
+  }
+
+  function confirmSignOutEverywhere() {
+    setModal({
+      kind: "confirm",
+      danger: true,
+      message: "Sign out of all devices?",
+      points: [
+        "You're signed out on every phone and browser, this one included.",
+        "Sign in again with an email link on each device you use.",
+      ],
+      confirmLabel: "Sign Out Everywhere",
+      onConfirm: () => {
+        void (async () => {
+          await clearDeviceForSignOut();
+          const result = await signOutEverywhere();
+          if (result?.error) showToast(result.error);
+        })();
+      },
+    });
+  }
+
   function deleteAccount() {
     setModal({
       kind: "confirm",
@@ -3085,6 +3145,7 @@ export function PokerLedger({
             profile={profile}
             accountEmail={accountEmail}
             onOpenSettings={() => navigate("settings")}
+            onSignOut={() => void signOutHere()}
             onProfile={(next) => {
               setProfile(next);
               // Your own player goes by your name, so the list follows it.
@@ -3118,7 +3179,12 @@ export function PokerLedger({
             statsError={profileStatsError}
           />
         ) : view === "settings" ? (
-          <SettingsView email={accountEmail} onDeleteAccount={deleteAccount} />
+          <SettingsView
+            email={accountEmail}
+            onSignOut={() => void signOutHere()}
+            onSignOutEverywhere={confirmSignOutEverywhere}
+            onDeleteAccount={deleteAccount}
+          />
         ) : view === "hands" ? (
           <PokerHandsChart />
         ) : view === "whoWins" ? (
@@ -6004,6 +6070,7 @@ function ProfileView({
   profile,
   accountEmail,
   onOpenSettings,
+  onSignOut,
   onProfile,
   players,
   discardedPlayers,
@@ -6032,6 +6099,7 @@ function ProfileView({
   profile: AccountProfile;
   accountEmail: string;
   onOpenSettings: () => void;
+  onSignOut: () => void;
   onProfile: (profile: AccountProfile) => void;
   players: PlayerProfile[];
   discardedPlayers: PlayerProfile[];
@@ -6319,6 +6387,7 @@ function ProfileView({
         onToast={onToast}
         stats={stats}
         statsError={statsError}
+        onSignOut={onSignOut}
       />
 
       {overview?.received.map((request) => (
@@ -6545,9 +6614,11 @@ function ProfileView({
 function AccountMenu({
   email,
   onEditName,
+  onSignOut,
 }: {
   email: string;
   onEditName: () => void;
+  onSignOut: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const container = useRef<HTMLDivElement>(null);
@@ -6596,11 +6667,16 @@ function AccountMenu({
           >
             Edit name
           </button>
-          <form action={signOut}>
-            <button type="submit" role="menuitem">
-              Sign out
-            </button>
-          </form>
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              setOpen(false);
+              onSignOut();
+            }}
+          >
+            Sign out
+          </button>
         </div>
       ) : null}
     </div>
@@ -6652,6 +6728,7 @@ function ProfileCard({
   profile,
   accountEmail,
   onOpenSettings,
+  onSignOut,
   onProfile,
   onScannedCode,
   onToast,
@@ -6667,6 +6744,7 @@ function ProfileCard({
   onToast: (message: string) => void;
   stats: ProfileSummary | null;
   statsError: string;
+  onSignOut: () => void;
 }) {
   const { signedMoney } = useMoney();
   const [editing, setEditing] = useState(false);
@@ -6878,6 +6956,7 @@ function ProfileCard({
               setDraft(name);
               setEditing(true);
             }}
+            onSignOut={onSignOut}
           />
         )}
       </div>

@@ -91,7 +91,7 @@ Also high: `sharp`, `source-map-js`, `zod` (inside `@neondatabase/auth`) and `de
 
 **M1. `npm run lint` fails.** ESLint scans the untracked local folders (`design_handoff_sporty_glass_redesign/`, `Menoka Card Games Redesign/`, `competition/`). The app's own code is clean, but the gate as written can't pass, so a real lint error would be lost in the noise. **Fix:** add those folders to `globalIgnores` in `eslint.config.mjs`. **Fixed 2026-10-29:** ESLint now skips whatever `.gitignore` lists, plus agent worktrees in `.claude/`, and checks exactly the 173 tracked source files.
 
-**M2. The admin dashboard needs only a normal sign-in.** `/admin` shows every account, including emails, to anyone listed in `app_admins` with a session of any age (sessions renew for weeks). ASVS Level 2 expects stronger authentication for admin access. **Fix:** require a sign-in within the last 10 minutes for `/admin`, reusing `requireRecentHostAccount`; consider passkeys later. ASVS V6, V8.
+**M2. The admin dashboard needs only a normal sign-in.** `/admin` shows every account, including emails, to anyone listed in `app_admins` with a session of any age (sessions renew for weeks). ASVS Level 2 expects stronger authentication for admin access. **Fix:** require a sign-in within the last 10 minutes for `/admin`, reusing `requireRecentHostAccount`; consider passkeys later. ASVS V6, V8. **Status 2026-10-29: fixed and pushed.** `/admin` needs an email sign-in from the last hour, with a button to email a fresh link.
 
 **M3. No error monitoring or alerting.** Errors go only to `console.error`, and Hobby keeps a day of logs. Nobody is told when sign-in, saving or the card routes start failing, and there is no record of security events (rejected cross-site requests, repeated 401s and 423s). **Fix:** error tracking (for example Sentry) or a Vercel log drain, an uptime check on the home page and the API, and alerts on error rate. ASVS V16 (logging and error handling).
 
@@ -99,13 +99,13 @@ Also high: `sharp`, `source-map-js`, `zod` (inside `@neondatabase/auth`) and `de
 
 **M5. No automated tests for routes, pages or the full flow.** The 508 tests cover pure logic well. Nothing automatically checks that each route refuses a signed-out or another host's request, the owner-isolation SQL test is run by hand, and there is no browser test of sign-in → game → save. **Fix:** route tests for the auth and validation paths; one Playwright smoke test against the testbed, run in CI. ASVS V15.
 
-**M6. Local game data stays on the device after sign-out.** The game in progress, the live link token and the device ID stay in `localStorage` after sign-out. On a shared or borrowed phone, the next person can read them. **Fix:** clear the account's keys on sign-out. ASVS V14 (client-side data).
+**M6. Local game data stays on the device after sign-out.** The game in progress, the live link token and the device ID stay in `localStorage` after sign-out. On a shared or borrowed phone, the next person can read them. **Fix:** clear the account's keys on sign-out. ASVS V14 (client-side data). **Status 2026-10-29: fixed and pushed.** Sign-out backs up the game, then removes it and the live link from the phone. Pre-account data stays, because it may exist nowhere else.
 
 ### Low
 
-**L1. Names allow invisible and direction-changing characters.** Display names and player names are trimmed but can contain zero-width and right-to-left override characters. Someone could pose as another person in a friend list. **Fix:** strip Unicode control and format characters (`\p{Cc}`, `\p{Cf}`) in `cleanDisplayName` and the player-name check, and normalise to NFC. ASVS V1, V2.
+**L1. Names allow invisible and direction-changing characters.** Display names and player names are trimmed but can contain zero-width and right-to-left override characters. Someone could pose as another person in a friend list. **Fix:** strip Unicode control and format characters (`\p{Cc}`, `\p{Cf}`) in `cleanDisplayName` and the player-name check, and normalise to NFC. ASVS V1, V2. **Status 2026-10-29: fixed and pushed.** `lib/visible-text.ts`; Bengali, Hindi and emoji joiners are kept.
 
-**L2. Sessions have no absolute lifetime and no "sign out everywhere".** The renewal keeps a session alive for as long as it is used. Sign-out ends only the current device's session. **Fix:** a "Sign out of all devices" action in Settings (the code already calls `auth.revokeSessions()` for deletion); consider an absolute limit such as 90 days. ASVS V7.
+**L2. Sessions have no absolute lifetime and no "sign out everywhere".** The renewal keeps a session alive for as long as it is used. Sign-out ends only the current device's session. **Fix:** a "Sign out of all devices" action in Settings (the code already calls `auth.revokeSessions()` for deletion); consider an absolute limit such as 90 days. ASVS V7. **Status 2026-10-29: fixed and pushed.** A sign-in lasts 90 days at most; Settings has Sign Out Of All Devices. Other devices can keep working for up to 5 minutes (the auth library's session cache).
 
 **L3. The auth SDK is a beta.** `@neondatabase/auth` 0.5.0-beta is pinned; 0.7.0-beta is out, and its dependencies carry the `zod` and `better-auth` advisories. Track it and upgrade with a full rehearsal on the testbed.
 
@@ -131,7 +131,7 @@ Each step is one reviewed change, matching the project's way of working.
 | 2 | H1: security headers and CSP (report-only first) | Built 2026-10-29; enforce the CSP after a few days of clean logs |
 | 3 | H4, M1, L4: CI workflow, lint ignores, Node pin | Built 2026-10-29; branch protection and Dependabot are your call |
 | 4 | H2, H3: firewall to 429, per-account limits and storage caps | Released 2026-10-29; you replace the firewall rule |
-| 5 | M2, M6, L1, L2: admin step-up, clear device data on sign-out, name cleaning, sign out everywhere | Go-ahead; L2 is user-visible |
+| 5 | M2, M6, L1, L2: admin step-up, clear device data on sign-out, name cleaning, sign out everywhere | Released 2026-10-29 |
 | 6 | M3, L5, L7: monitoring, error pages, security.txt | Choice of monitoring service |
 | 7 | H5: Vercel Pro, Neon paid plan and backups, custom SMTP | Billing and DNS decisions (you do these in the dashboards) |
 | Later | M4, M5, L3: split the big component, route and browser tests, auth SDK upgrade | Ongoing |

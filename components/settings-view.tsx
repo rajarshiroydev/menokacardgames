@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
-import { signOut } from "@/app/auth/sign-in/actions";
 import { APP_NAME } from "@/lib/brand";
 import { CHANGELOG } from "@/lib/info/changelog";
 import {
@@ -20,9 +19,13 @@ import { readTurnSound, storeTurnSound } from "@/lib/poker/storage";
  */
 export function SettingsView({
   email,
+  onSignOut,
+  onSignOutEverywhere,
   onDeleteAccount,
 }: {
   email: string;
+  onSignOut: () => void;
+  onSignOutEverywhere: () => void;
   onDeleteAccount: () => void;
 }) {
   const latest = CHANGELOG[0];
@@ -65,13 +68,17 @@ export function SettingsView({
             </span>
           </div>
           <ContactRow />
-          <form action={signOut}>
-            <button className="settings-row" type="submit">
-              <span>
-                <b>Sign Out</b>
-              </span>
-            </button>
-          </form>
+          <button className="settings-row" type="button" onClick={onSignOut}>
+            <span>
+              <b>Sign Out</b>
+            </span>
+          </button>
+          <button className="settings-row" type="button" onClick={onSignOutEverywhere}>
+            <span>
+              <b>Sign Out Of All Devices</b>
+              <small>Every phone and browser, this one included</small>
+            </span>
+          </button>
           <button className="settings-row settings-row-danger" type="button" onClick={onDeleteAccount}>
             <span>
               <b>Delete My Account</b>
