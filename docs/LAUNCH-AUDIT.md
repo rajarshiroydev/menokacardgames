@@ -1,0 +1,129 @@
+# Pre-launch audit (2026-10-29)
+
+A read-only review of `main` at `7ff0743` before the public launch: code quality, security against **OWASP ASVS 5.0 Level 2**, and operational readiness. Nothing was changed. Fixes are proposed at the end, to be taken one reviewed step at a time.
+
+## About the standards
+
+- **TRL 9** (Technology Readiness Level) is a maturity scale from NASA and the EU: "actual system proven in an operational environment". It describes how proven a technology is, not how well code is written. Pokerize has run in production with real hosts since 2026-09-25, so it is already close to TRL 9 in that sense. For a consumer launch, the gaps that matter are operational: monitoring, backups, rate limits, CI and hosting plans. Those are covered below.
+- **OWASP ASVS** (Application Security Verification Standard) is the right yardstick for the code. Level 2 is the recommended level for apps that hold personal data, and is the target used here. Level 3 is meant for banking, medical and similar apps.
+
+## How it was checked
+
+- Gates: `npx tsc --noEmit`, ESLint, `npm test`, `npm run build` (in a scratch copy), `npm audit`, `npm outdated`.
+- Read every API route, the proxy, auth, session, CSRF, body-size, token, purge, admin and database helpers, and the row-level security (RLS) parts of `schema.sql`.
+- Pattern scans of all code for raw SQL, HTML injection, `eval`, error leaks and browser storage.
+- Response headers fetched from production (`https://www.pokerize.app`).
+- Git history scanned for committed secrets.
+
+Not done: penetration testing, checks against the production database, a line-by-line read of the 14,000-line UI component (it was pattern-scanned), and the Vercel and Neon dashboard settings (their state is taken from the project docs).
+
+## Results of the gates
+
+| Check | Result |
+| --- | --- |
+| TypeScript (strict) | Pass |
+| ESLint on tracked code | Pass, no warnings |
+| `npm run lint` as written | **Fails**: 2,259 errors, all in untracked local folders (see M1) |
+| Unit tests | 508 of 508 pass (96 suites, 0.6 s) |
+| Production build | Pass |
+| `npm audit` | **14 issues: 2 critical, 5 high, 7 low** (see C1) |
+| Secrets in git history | None. Only `.env.example` was ever committed |
+
+## What is already strong
+
+These match or exceed ASVS Level 2 and should be kept as they are.
+
+- **Each host's data is kept apart by the database itself.** Every data table has RLS. The app connects as an unprivileged role (`menoka_app`). All 61 `SECURITY DEFINER` functions pin `search_path` and are revoked from `PUBLIC`. The only table without RLS (`app_migrations`) has no grant to the runtime role. A bug in a route can't read another host's ledger.
+- **No SQL injection paths.** All queries use parameterised tagged templates; no `sql.unsafe` or string-built SQL anywhere.
+- **Every API route checks the session**, and locked or deleting accounts get 423.
+- **CSRF protection**: every non-GET `/api/*` request must be same-origin (`Sec-Fetch-Site`, with `Origin` as fallback). Server actions have Next's own origin check.
+- **Input limits**: request bodies are read with a hard byte limit, IDs match strict patterns, and the server derives the accounting instead of trusting the device.
+- **Tokens**: live and invite links use 256-bit random tokens; only their SHA-256 hash is stored; live links expire after 12 hours; token pages send `no-referrer` and `noindex`.
+- **Sign-in**: magic links only, single use, 5-minute expiry, no passwords. Permanent deletion, account deletion and recovery need a sign-in within the last 10 minutes.
+- **Purge job**: cron secret compared in constant time; a separate least-privilege database role; Healthchecks.io alerts.
+- **Audit trail** in `audit_events` for sensitive actions, including every admin look at a person's details.
+- Pure game rules are separate from persistence and identity, and are well tested.
+
+## Findings
+
+Severity: **Critical** = fix before launch, exploitable now. **High** = fix before launch. **Medium** = fix soon after, or before launch if cheap. **Low** = good practice.
+
+### Critical
+
+**C1. Next.js 16.3.5 has known critical vulnerabilities.** `npm audit` lists 11 advisories for `next` 16.0.0–16.4.0, including:
+
+- Remote code execution in `next/og` `ImageResponse` (GHSA-vcvr-r3jv-pc5j). **The app uses it**: both results-card routes (`lib/poker/results-card-image.tsx`) draw names and titles that any signed-in person controls.
+- Remote code execution and SSRF in the Image Optimization API (GHSA-2464-fhr4-w9xw, GHSA-cjq9-62q9-8jv4). The endpoint is live because `components/brand-mark.tsx` uses `next/image`.
+- Denial of service through Server Actions (GHSA-p3m5-59mp-jv5r). The app has server actions (sign-out).
+
+Also high: `sharp`, `source-map-js`, `zod` (inside `@neondatabase/auth`) and `deepmerge`.
+**Fix:** upgrade `next` and `eslint-config-next` to 16.4.3, run `npm audit fix` for the rest, rerun every gate and check the card routes in the browser. ASVS V15 (dependencies).
+
+**Status 2026-10-29: fixed and pushed.** Next.js is 16.4.3 and `sharp` and `source-map-js` are updated. 11 advisories remain, 1 critical, all inside the Neon Auth SDK's dependencies (`better-auth`, `zod`, `deepmerge`). No SDK release fixes them yet, not even 0.7.0-beta. They concern features of Neon's hosted auth service that this app doesn't run. See the plan entry "Next.js 16.4.3 security upgrade".
+
+### High
+
+**H1. No browser security headers.** Production pages send only HSTS (without `includeSubDomains`/`preload`). Missing: `Content-Security-Policy`, `frame-ancestors`/`X-Frame-Options` (the app can be framed for clickjacking, for example over a Delete button), `X-Content-Type-Options: nosniff`, `Referrer-Policy`, `Permissions-Policy`. The `X-Powered-By: Next.js` header gives away the framework.
+**Fix:** add `headers()` and `poweredByHeader: false` in `next.config.ts`; add a CSP with a per-request nonce set in `proxy.ts` (the inline theme script in `app/layout.tsx` needs the nonce or a hash). Start the CSP in report-only mode for a few days. ASVS V3 (web frontend), V13 (configuration).
+
+**H2. Rate limiting is effectively off.** The single Vercel Firewall rule has been in Log mode since 2026-09-25. It is keyed by IP only, covers writes only, and never limits reads, including the CPU-heavy PNG card renders. There are no per-account limits. The plan already lists per-account limits as open before the store launch.
+**Fix:** switch the rule to 429 now; add per-account limits in the server for writes, card renders and friend lookups. This reverses the 2026-09-24 "no app-side counters" decision, so it needs your decision. ASVS V2 (anti-automation), V4.
+
+**H3. No per-account storage quotas.** One signed-in account can create unlimited 1 MB game backups (each kept 7 days), unlimited players and unlimited saved games. A single script could fill the Neon Free plan's storage and take the app down for everyone.
+**Fix:** caps in the database (for example at most 10 backups per account, sensible caps on players and games), checked in the same transaction as the write. ASVS V2 (business logic limits).
+
+**H4. No CI pipeline.** There is no `.github/` folder. Lint, types, tests and build are run by hand, and a push to `main` deploys to production straight away.
+**Fix:** a GitHub Actions workflow running lint, `tsc`, tests, build and `npm audit --audit-level=high` on every push and pull request; branch protection on `main`; Dependabot or Renovate for dependency updates. ASVS V15.
+
+**H5. Hosting plans are not fit for a commercial launch.**
+
+- **Vercel Hobby** is licensed for non-commercial use only. It allows one firewall rule and keeps one day of logs.
+- **Neon Free**: production restore history is 6 hours (the deletion disclosure says so). There are no long-term backups, and a restore has never been rehearsed from a backup.
+- **Neon's shared email sender** for sign-in links. Neon's own checklist says production needs custom SMTP. Delivery and rate limits are outside your control, and sign-in depends on it.
+
+**Fix (your billing decision):** Vercel Pro; a paid Neon plan with at least 7 days of restore history plus a scheduled off-site `pg_dump`, with one rehearsed restore; custom SMTP (Resend, Postmark or SES) with SPF, DKIM and DMARC on `pokerize.app`. ASVS V14 (data protection), V13.
+
+### Medium
+
+**M1. `npm run lint` fails.** ESLint scans the untracked local folders (`design_handoff_sporty_glass_redesign/`, `Menoka Card Games Redesign/`, `competition/`). The app's own code is clean, but the gate as written can't pass, so a real lint error would be lost in the noise. **Fix:** add those folders to `globalIgnores` in `eslint.config.mjs`.
+
+**M2. The admin dashboard needs only a normal sign-in.** `/admin` shows every account, including emails, to anyone listed in `app_admins` with a session of any age (sessions renew for weeks). ASVS Level 2 expects stronger authentication for admin access. **Fix:** require a sign-in within the last 10 minutes for `/admin`, reusing `requireRecentHostAccount`; consider passkeys later. ASVS V6, V8.
+
+**M3. No error monitoring or alerting.** Errors go only to `console.error`, and Hobby keeps a day of logs. Nobody is told when sign-in, saving or the card routes start failing, and there is no record of security events (rejected cross-site requests, repeated 401s and 423s). **Fix:** error tracking (for example Sentry) or a Vercel log drain, an uptime check on the home page and the API, and alerts on error rate. ASVS V16 (logging and error handling).
+
+**M4. One 14,124-line component.** `components/poker-ledger.tsx` holds about 95 components and 219 hooks; `app/globals.css` is 8,058 lines. This makes review, testing and code-splitting hard: every screen ships in one bundle, and a change anywhere risks breaking an unrelated flow. **Fix:** split it gradually, one screen per step (Home, live game, Ranks, Friends, Profile, Settings) into their own files, with no behaviour change. Not a launch blocker.
+
+**M5. No automated tests for routes, pages or the full flow.** The 508 tests cover pure logic well. Nothing automatically checks that each route refuses a signed-out or another host's request, the owner-isolation SQL test is run by hand, and there is no browser test of sign-in → game → save. **Fix:** route tests for the auth and validation paths; one Playwright smoke test against the testbed, run in CI. ASVS V15.
+
+**M6. Local game data stays on the device after sign-out.** The game in progress, the live link token and the device ID stay in `localStorage` after sign-out. On a shared or borrowed phone, the next person can read them. **Fix:** clear the account's keys on sign-out. ASVS V14 (client-side data).
+
+### Low
+
+**L1. Names allow invisible and direction-changing characters.** Display names and player names are trimmed but can contain zero-width and right-to-left override characters. Someone could pose as another person in a friend list. **Fix:** strip Unicode control and format characters (`\p{Cc}`, `\p{Cf}`) in `cleanDisplayName` and the player-name check, and normalise to NFC. ASVS V1, V2.
+
+**L2. Sessions have no absolute lifetime and no "sign out everywhere".** The renewal keeps a session alive for as long as it is used. Sign-out ends only the current device's session. **Fix:** a "Sign out of all devices" action in Settings (the code already calls `auth.revokeSessions()` for deletion); consider an absolute limit such as 90 days. ASVS V7.
+
+**L3. The auth SDK is a beta.** `@neondatabase/auth` 0.5.0-beta is pinned; 0.7.0-beta is out, and its dependencies carry the `zod` and `better-auth` advisories. Track it and upgrade with a full rehearsal on the testbed.
+
+**L4. No Node version pinned.** `package.json` has no `engines` field and there is no `.nvmrc`. This machine runs Node 26, and the tests rely on `--experimental-strip-types`. **Fix:** pin the version Vercel runs.
+
+**L5. No custom error pages.** There is no `app/error.tsx`, `app/global-error.tsx` or `app/not-found.tsx`, so a rendering error shows Next's default page.
+
+**L6. `Server-Timing` is sent in production.** It reveals how long auth and database calls take. That's harmless today; consider sending it only in development or to the admin.
+
+**L7. No vulnerability disclosure contact.** Add `/.well-known/security.txt` with an email for security reports.
+
+## Proposed order of fixes
+
+Each step is one reviewed change, matching the project's way of working.
+
+| Step | Fixes | Needs from you |
+| --- | --- | --- |
+| 1 | C1: upgrade Next.js and audited packages | Done, pushed 2026-10-29 |
+| 2 | H1: security headers and CSP (report-only first) | Go-ahead |
+| 3 | H4, M1, L4: CI workflow, lint ignores, Node pin | Go-ahead; you turn on branch protection in GitHub |
+| 4 | H2, H3: firewall to 429, per-account limits and storage caps | Decision on limits (reverses an earlier decision) |
+| 5 | M2, M6, L1, L2: admin step-up, clear device data on sign-out, name cleaning, sign out everywhere | Go-ahead; L2 is user-visible |
+| 6 | M3, L5, L7: monitoring, error pages, security.txt | Choice of monitoring service |
+| 7 | H5: Vercel Pro, Neon paid plan and backups, custom SMTP | Billing and DNS decisions (you do these in the dashboards) |
+| Later | M4, M5, L3: split the big component, route and browser tests, auth SDK upgrade | Ongoing |
