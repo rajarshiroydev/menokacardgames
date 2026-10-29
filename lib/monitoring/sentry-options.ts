@@ -47,6 +47,11 @@ export function sentryOptions() {
       genAI: { ...DATA_COLLECTION.genAI },
     },
     ignoreErrors: [...IGNORED_ERRORS],
+    // Messages (CSP warnings, a `console.error` with only text) are titled by
+    // their text. With a made-up stack, Sentry names them after the minified
+    // function instead: POKERIZE-6 and -7 were titled "m" (2026-10-30).
+    // Errors keep their own stack.
+    attachStacktrace: false,
     tracesSampleRate: 0,
     beforeSend: scrubEvent,
   };

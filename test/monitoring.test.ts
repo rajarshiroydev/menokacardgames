@@ -116,6 +116,7 @@ describe("Sentry collects nothing about people", () => {
     const options = sentryOptions();
     assert.deepEqual(options.dataCollection, DATA_COLLECTION);
     assert.equal(options.tracesSampleRate, 0);
+    assert.equal(options.attachStacktrace, false);
     assert.equal(options.enabled, Boolean(process.env.NEXT_PUBLIC_SENTRY_DSN));
   });
 
