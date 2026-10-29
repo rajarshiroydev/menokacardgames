@@ -27,6 +27,16 @@ export const CHANGE_TAG_LABELS: Record<ChangeTag, string> = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    date: "2026-10-29",
+    title: "Choosing an avatar",
+    items: [
+      {
+        tag: "improved",
+        text: "Changing your avatar or a guest's no longer saves on the first tap: try a few, then press Save Avatar.",
+      },
+    ],
+  },
+  {
     date: "2026-10-28",
     title: "A tidier List view and showdowns",
     items: [

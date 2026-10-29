@@ -5,7 +5,7 @@ import { AVATARS } from "@/lib/avatars";
 
 /**
  * A grid of avatars where tapping one only selects it; the form around it
- * saves the choice. (AvatarSheet on Profile saves on tap instead.)
+ * saves the choice. (AvatarSheet on Profile has its own Save Avatar button.)
  */
 export function AvatarPicker({
   value,

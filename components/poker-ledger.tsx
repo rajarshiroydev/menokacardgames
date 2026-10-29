@@ -7584,7 +7584,7 @@ function LinkFriendSheet({
 }
 
 /** Renames a guest. People on Pokerize choose their own name. */
-/** Picks an avatar; tapping one saves it. */
+/** Picks an avatar: tapping one selects it, Save Avatar saves it. */
 function AvatarSheet({
   title,
   note,
@@ -7601,6 +7601,7 @@ function AvatarSheet({
   onClose: () => void;
 }) {
   const [saving, setSaving] = useState("");
+  const [chosen, setChosen] = useState(current ?? "");
 
   useEffect(() => {
     function closeOnEscape(event: KeyboardEvent) {
@@ -7610,12 +7611,7 @@ function AvatarSheet({
     return () => window.removeEventListener("keydown", closeOnEscape);
   }, [onClose]);
 
-  async function pick(avatar: string) {
-    if (saving) return;
-    if (avatar === current) {
-      onClose();
-      return;
-    }
+  async function save(avatar: string) {
     setSaving(avatar);
     const saved = await onPick(avatar);
     setSaving("");
@@ -7645,17 +7641,25 @@ function AvatarSheet({
               key={avatar.id}
               type="button"
               className={`avatar-choice${
-                avatar.id === (current ?? "") ? " selected" : ""
+                avatar.id === chosen ? " selected" : ""
               }${saving === avatar.id ? " saving" : ""}`}
               aria-label={`Avatar ${index + 1}`}
-              aria-pressed={avatar.id === current}
+              aria-pressed={avatar.id === chosen}
               disabled={saving !== ""}
-              onClick={() => void pick(avatar.id)}
+              onClick={() => setChosen(avatar.id)}
             >
               <AvatarArt id={avatar.id} seed={seed} />
             </button>
           ))}
         </div>
+        <button
+          className="primary"
+          type="button"
+          disabled={saving !== "" || chosen === "" || chosen === current}
+          onClick={() => void save(chosen)}
+        >
+          {saving ? "Saving…" : "Save Avatar"}
+        </button>
       </div>
     </div>
   );
