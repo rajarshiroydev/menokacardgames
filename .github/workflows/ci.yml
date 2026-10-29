@@ -1,0 +1,58 @@
+# The project's gates on every push to main and every pull request: lint,
+# types, tests, production build and the dependency audit
+# (docs/LAUNCH-AUDIT.md, step 3). It needs no secrets and never reaches the
+# database or Neon Auth.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      # Actions are pinned to a release's commit, so a moved tag can't change
+      # what runs here.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Types
+        run: npx next typegen && npx tsc --noEmit
+
+      - name: Tests
+        run: npm test
+
+      - name: Build
+        run: npm run build
+        env:
+          # lib/auth/server.ts checks these as it loads, and the build loads
+          # every route. Fake values: `.invalid` never resolves, and the
+          # secret is a placeholder used for nothing but this build.
+          NEON_AUTH_BASE_URL: https://neon-auth.invalid/neondb/auth
+          NEON_AUTH_COOKIE_SECRET: ci-build-placeholder-not-a-real-secret
+
+      - name: Dependency audit
+        run: npm run audit:check

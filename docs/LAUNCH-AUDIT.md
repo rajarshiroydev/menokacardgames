@@ -59,7 +59,7 @@ Severity: **Critical** = fix before launch, exploitable now. **High** = fix befo
 Also high: `sharp`, `source-map-js`, `zod` (inside `@neondatabase/auth`) and `deepmerge`.
 **Fix:** upgrade `next` and `eslint-config-next` to 16.4.3, run `npm audit fix` for the rest, rerun every gate and check the card routes in the browser. ASVS V15 (dependencies).
 
-**Status 2026-10-29: fixed and pushed.** Next.js is 16.4.3 and `sharp` and `source-map-js` are updated. 11 advisories remain, 1 critical, all inside the Neon Auth SDK's dependencies (`better-auth`, `zod`, `deepmerge`). No SDK release fixes them yet, not even 0.7.0-beta. They concern features of Neon's hosted auth service that this app doesn't run. See the plan entry "Next.js 16.4.3 security upgrade".
+**Status 2026-10-29: fixed and pushed.** Next.js is 16.4.3 and `sharp` and `source-map-js` are updated. 11 advisories remain, 1 critical, all inside the Neon Auth SDK's dependencies (`better-auth`, `zod`, `deepmerge`). No SDK release fixes them yet, not even 0.7.0-beta. *Corrected in step 3:* the critical one (GHSA-965c-763c-88jm) lets an attacker sign in as anyone whose email they know. It affects a Better Auth server that has magic links **and** a social or Generic OAuth provider. This app runs no Better Auth server: Neon's hosted Neon Auth does, and no Neon branch has any OAuth provider (checked 2026-10-29), so the app is not exposed. **Don't enable Google or any other social sign-in until Neon runs better-auth 1.7.7 or later.** All four high and critical ones are reviewed exceptions in `scripts/audit-exceptions.json`, to be reviewed again by 2026-11-30. See the plan entries "Next.js 16.4.3 security upgrade" and "CI pipeline".
 
 ### High
 
@@ -77,6 +77,8 @@ Also high: `sharp`, `source-map-js`, `zod` (inside `@neondatabase/auth`) and `de
 **H4. No CI pipeline.** There is no `.github/` folder. Lint, types, tests and build are run by hand, and a push to `main` deploys to production straight away.
 **Fix:** a GitHub Actions workflow running lint, `tsc`, tests, build and `npm audit --audit-level=high` on every push and pull request; branch protection on `main`; Dependabot or Renovate for dependency updates. ASVS V15.
 
+**Status 2026-10-29: CI built and pushed** (`.github/workflows/ci.yml`; `npm audit` runs as `npm run audit:check`, which allows only reviewed exceptions). **Open, your decisions:** branch protection would block your direct pushes to `main` unless you switch to pull requests; Dependabot would open update pull requests every week.
+
 **H5. Hosting plans are not fit for a commercial launch.**
 
 - **Vercel Hobby** is licensed for non-commercial use only. It allows one firewall rule and keeps one day of logs.
@@ -87,7 +89,7 @@ Also high: `sharp`, `source-map-js`, `zod` (inside `@neondatabase/auth`) and `de
 
 ### Medium
 
-**M1. `npm run lint` fails.** ESLint scans the untracked local folders (`design_handoff_sporty_glass_redesign/`, `Menoka Card Games Redesign/`, `competition/`). The app's own code is clean, but the gate as written can't pass, so a real lint error would be lost in the noise. **Fix:** add those folders to `globalIgnores` in `eslint.config.mjs`.
+**M1. `npm run lint` fails.** ESLint scans the untracked local folders (`design_handoff_sporty_glass_redesign/`, `Menoka Card Games Redesign/`, `competition/`). The app's own code is clean, but the gate as written can't pass, so a real lint error would be lost in the noise. **Fix:** add those folders to `globalIgnores` in `eslint.config.mjs`. **Fixed 2026-10-29:** ESLint now skips whatever `.gitignore` lists, plus agent worktrees in `.claude/`, and checks exactly the 173 tracked source files.
 
 **M2. The admin dashboard needs only a normal sign-in.** `/admin` shows every account, including emails, to anyone listed in `app_admins` with a session of any age (sessions renew for weeks). ASVS Level 2 expects stronger authentication for admin access. **Fix:** require a sign-in within the last 10 minutes for `/admin`, reusing `requireRecentHostAccount`; consider passkeys later. ASVS V6, V8.
 
@@ -107,7 +109,7 @@ Also high: `sharp`, `source-map-js`, `zod` (inside `@neondatabase/auth`) and `de
 
 **L3. The auth SDK is a beta.** `@neondatabase/auth` 0.5.0-beta is pinned; 0.7.0-beta is out, and its dependencies carry the `zod` and `better-auth` advisories. Track it and upgrade with a full rehearsal on the testbed.
 
-**L4. No Node version pinned.** `package.json` has no `engines` field and there is no `.nvmrc`. This machine runs Node 26, and the tests rely on `--experimental-strip-types`. **Fix:** pin the version Vercel runs.
+**L4. No Node version pinned.** `package.json` has no `engines` field and there is no `.nvmrc`. This machine runs Node 26, and the tests rely on `--experimental-strip-types`. **Fix:** pin the version Vercel runs. **Fixed 2026-10-29:** Node 24 (Vercel's setting) in `engines` and `.nvmrc`, with `@types/node` 24 to match.
 
 **L5. No custom error pages.** There is no `app/error.tsx`, `app/global-error.tsx` or `app/not-found.tsx`, so a rendering error shows Next's default page.
 
@@ -127,7 +129,7 @@ Each step is one reviewed change, matching the project's way of working.
 | --- | --- | --- |
 | 1 | C1: upgrade Next.js and audited packages | Done, pushed 2026-10-29 |
 | 2 | H1: security headers and CSP (report-only first) | Built 2026-10-29; enforce the CSP after a few days of clean logs |
-| 3 | H4, M1, L4: CI workflow, lint ignores, Node pin | Go-ahead; you turn on branch protection in GitHub |
+| 3 | H4, M1, L4: CI workflow, lint ignores, Node pin | Built 2026-10-29; branch protection and Dependabot are your call |
 | 4 | H2, H3: firewall to 429, per-account limits and storage caps | Decision on limits (reverses an earlier decision) |
 | 5 | M2, M6, L1, L2: admin step-up, clear device data on sign-out, name cleaning, sign out everywhere | Go-ahead; L2 is user-visible |
 | 6 | M3, L5, L7: monitoring, error pages, security.txt | Choice of monitoring service |

@@ -1,0 +1,33 @@
+{
+  "about": "High or critical npm audit advisories accepted after review (scripts/check-audit.mjs). Each needs a reason and a reviewBy date; the check fails once that date passes, so every exception is looked at again. Remove an entry once a release fixes it.",
+  "exceptions": [
+    {
+      "advisory": "GHSA-965c-763c-88jm",
+      "package": "better-auth",
+      "severity": "critical",
+      "reason": "OAuth sign-in state accepted as a magic link token (account takeover). Only a Better Auth server with magic links and a social or Generic OAuth provider is affected. This app runs no Better Auth server: Neon's hosted Neon Auth does, and no Neon Auth branch has any OAuth provider (checked 2026-10-29). Never enable Google or another provider until Neon runs better-auth 1.7.7 or later. No fixed release exists yet.",
+      "reviewBy": "2026-11-30"
+    },
+    {
+      "advisory": "GHSA-r4xp-prcw-77qf",
+      "package": "better-auth",
+      "severity": "high",
+      "reason": "OAuth Proxy plugin trusts a forged profile. Needs the OAuth Proxy plugin and cookie-stored OAuth state on the Better Auth server; Neon Auth has no OAuth providers here and the app runs no Better Auth server. No fixed release exists yet.",
+      "reviewBy": "2026-11-30"
+    },
+    {
+      "advisory": "GHSA-q84f-53jg-9ppm",
+      "package": "better-auth",
+      "severity": "high",
+      "reason": "Device authorization approval screen lacks client details. Needs the opt-in deviceAuthorization plugin on the Better Auth server, which Neon Auth doesn't offer to this app. Fixed in better-auth 1.7.0, but @neondatabase/auth pins an older release.",
+      "reviewBy": "2026-11-30"
+    },
+    {
+      "advisory": "GHSA-mrhx-c7xc-m3w5",
+      "package": "zod",
+      "severity": "high",
+      "reason": "Memory use when validating oversized constrained collections. Only the zod copy bundled inside @neondatabase/auth is affected; it validates responses from Neon Auth, and the app never validates its own input with zod. Fixed in zod 4.6.6, but the SDK pins an older release.",
+      "reviewBy": "2026-11-30"
+    }
+  ]
+}

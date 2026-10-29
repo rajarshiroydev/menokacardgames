@@ -3,12 +3,16 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": "24.x"
+  },
   "scripts": {
     "dev": "next dev --port 3005",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
     "test": "node --experimental-strip-types --test test/**/*.test.ts",
+    "audit:check": "node scripts/check-audit.mjs",
     "testbed:setup": "node testbed/setup.mjs",
     "testbed:inspect": "node testbed/inspect.mjs",
     "testbed:dev": "node testbed/dev.mjs",
@@ -29,8 +33,9 @@
   "devDependencies": {
     "@dicebear/core": "9.4.3",
     "@dicebear/lorelei": "9.4.2",
+    "@eslint/compat": "2.1.1",
     "@tailwindcss/postcss": "^4",
-    "@types/node": "^20",
+    "@types/node": "^24.19.2",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
