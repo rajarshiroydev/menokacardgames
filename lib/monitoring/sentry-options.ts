@@ -15,6 +15,7 @@ export const DATA_COLLECTION = {
   urlQueryParams: false,
   graphQL: { document: false, variables: false },
   genAI: { inputs: false, outputs: false },
+  mcp: { inputs: false, outputs: false },
   databaseQueryData: false,
   queues: false,
   stackFrameVariables: false,
@@ -45,6 +46,7 @@ export function sentryOptions() {
       httpBodies: [...DATA_COLLECTION.httpBodies],
       graphQL: { ...DATA_COLLECTION.graphQL },
       genAI: { ...DATA_COLLECTION.genAI },
+      mcp: { ...DATA_COLLECTION.mcp },
     },
     ignoreErrors: [...IGNORED_ERRORS],
     // Messages (CSP warnings, a `console.error` with only text) are titled by
