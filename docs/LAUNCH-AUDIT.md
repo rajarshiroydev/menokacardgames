@@ -153,7 +153,7 @@ Recorded 2026-10-30 (user: "proceed with the things that doesn't require additio
 
 - **Firewall rule** (you, in Vercel → Firewall): replace the logging rule with all `/api/*` except `/api/live/*`, 300 a minute per IP, action 429.
 - **Enforce the CSP** after a week with no new CSP issues in Sentry (from 2026-11-06), deciding first about Zod's `eval` probe (H1).
-- **Dependabot pull requests:** #1 moves the Neon Auth SDK to 0.7.0-beta (a security update for a low advisory); don't merge it without a full testbed rehearsal (L3). #2 is the monthly group (`@neondatabase/serverless` 1.2.0, `@sentry/nextjs` 11.9.0, React 19.3.1 and their types); review it, check CI and the app in the browser, then merge.
+- **Dependabot pull requests:** #1 moves the Neon Auth SDK to 0.7.0-beta (a security update for a low advisory); don't merge it without a full testbed rehearsal (L3). #2 (the monthly group) was merged 2026-10-30 after review: see the plan entry "Dependabot #2 merged".
 - **Preview database:** `cutover-rehearsal` (`br-tiny-forest-ayt6f3fe`) is at 0012, 21 migrations behind, and holds a September copy of production data. Previews aren't used today. When they are, the cleaner fix is a new schema-only branch (no production data) with its own Neon Auth; you then set the preview `DATABASE_URL`, `NEON_AUTH_BASE_URL` and cookie secret in Vercel, and the old branch is deleted.
 - **L3, the Neon Auth SDK:** 0.7.0-beta fixes none of the advisories; review the exceptions by 2026-11-30.
 - **M4** (split `poker-ledger.tsx`) and **M5** (route and browser tests).
