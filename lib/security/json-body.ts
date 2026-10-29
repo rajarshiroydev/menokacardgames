@@ -4,7 +4,7 @@ export const SMALL_JSON_BODY_LIMIT = 16 * 1024;
 export const SESSION_BATCH_BODY_LIMIT = 2 * 1024 * 1024;
 
 export type JsonBodyResult =
-  | { ok: true; body: unknown }
+  | { ok: true; body: unknown; bytes: number }
   | { ok: false; status: 400 | 413 | 415; error: string };
 
 function tooLarge(limitBytes: number): JsonBodyResult {
@@ -62,7 +62,11 @@ export async function readJsonBody(
   }
 
   try {
-    return { ok: true, body: JSON.parse(new TextDecoder().decode(bytes)) };
+    return {
+      ok: true,
+      body: JSON.parse(new TextDecoder().decode(bytes)),
+      bytes: received,
+    };
   } catch {
     return { ok: false, status: 400, error: "The request body is not valid JSON" };
   }

@@ -1,6 +1,7 @@
 import "server-only";
 
-import { runAsAuthenticatedUser } from "@/lib/poker/database";
+import { consumeRateLimit, runAsAuthenticatedUser } from "@/lib/poker/database";
+import type { RateLimitBucket } from "@/lib/security/limits";
 
 import type { AccountProfile } from "./identity-code";
 
@@ -35,8 +36,13 @@ function mapAccount(row: AccountRow): HostAccount {
  * Returns the signed-in person's account and profile, creating the account on
  * first use. Runs on every request, so it is one round trip that only writes
  * when the account is missing; the upsert covers two first requests racing.
+ * With `rateLimit`, the request is counted against that bucket in the same
+ * round trip, and a request past the limit throws (see limitErrorResponse).
  */
-export async function provisionHostAccount(authUserId: unknown) {
+export async function provisionHostAccount(
+  authUserId: unknown,
+  rateLimit?: RateLimitBucket,
+) {
   if (!isAuthUserId(authUserId)) {
     throw new Error("The authenticated user has an invalid identifier");
   }
@@ -80,6 +86,7 @@ export async function provisionHostAccount(authUserId: unknown) {
         UNION ALL
         SELECT * FROM created
       `,
+      ...(rateLimit ? [consumeRateLimit(sql, rateLimit)] : []),
     ],
     "account",
   );

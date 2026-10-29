@@ -61,6 +61,21 @@ export async function deleteExpiredGameBackups() {
   return Number(rows[0]?.deleted ?? 0);
 }
 
+/**
+ * The branch's size in bytes, read through the menoka_purge role: every
+ * database on it, as Neon's size limit counts them all (about 28 MB of the
+ * development branch's 34 MB on 2026-10-29; the rest is Neon's overhead).
+ */
+export async function databaseSizeBytes() {
+  const sql = neon(requiredEnvironmentVariable("PURGE_DATABASE_URL"));
+  const rows = (await sql`
+    SELECT sum(pg_database_size(datname))::bigint AS bytes
+    FROM pg_database
+    WHERE datallowconn
+  `) as Array<{ bytes: number | string }>;
+  return Number(rows[0]?.bytes ?? 0);
+}
+
 /** Deletes a Neon Auth user through Neon's documented branch-level endpoint. */
 export function createNeonIdentityDeleter(): IdentityDeleter {
   const apiKey = requiredEnvironmentVariable("NEON_API_KEY");

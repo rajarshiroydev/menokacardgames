@@ -92,7 +92,8 @@ export default function AccountDeletionPage() {
             every player, game, result, buy-in and record in your ledger,
             including the copy of a game in progress;
           </li>
-          <li>your friend requests, friendships and guest invites.</li>
+          <li>your friend requests, friendships and guest invites;</li>
+          <li>the usage counts kept to stop abuse.</li>
         </ul>
         <p>
           Our database provider keeps short-term recovery copies for up to{" "}

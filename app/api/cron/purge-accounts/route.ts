@@ -1,9 +1,10 @@
 import { timingSafeEqual } from "node:crypto";
 
-import { purgeDueAccounts } from "@/lib/accounts/purge";
+import { databaseSizeWarning, purgeDueAccounts } from "@/lib/accounts/purge";
 import {
   createNeonIdentityDeleter,
   createPurgeStore,
+  databaseSizeBytes,
   deleteExpiredGameBackups,
   pingHealthcheck,
 } from "@/lib/accounts/purge-server";
@@ -29,9 +30,11 @@ function authorized(request: Request) {
 
 /**
  * Daily Vercel Cron job: permanently deletes accounts whose 30-day recovery
- * period has ended, then backups of games in progress left for 7 days. The
- * response and the Healthchecks.io report contain only counts, internal
- * account IDs and error messages, never emails or names.
+ * period has ended, then backups of games in progress left for 7 days, then
+ * checks the database's size: from 70% of the plan's limit the run fails, so
+ * Healthchecks.io emails a warning. The response and the Healthchecks.io
+ * report contain only counts, sizes, internal account IDs and error messages,
+ * never emails or names.
  */
 export async function GET(request: Request) {
   if (!authorized(request)) {
@@ -53,12 +56,23 @@ export async function GET(request: Request) {
     } catch (error) {
       backupError = error instanceof Error ? error.message : String(error);
     }
+    // A failed size check is reported the same way as a full database.
+    let databaseBytes: number | null = null;
+    let sizeError: string | undefined;
+    try {
+      databaseBytes = await databaseSizeBytes();
+      sizeError = databaseSizeWarning(databaseBytes) ?? undefined;
+    } catch (error) {
+      sizeError = `size check failed: ${error instanceof Error ? error.message : String(error)}`;
+    }
     const report = {
       ...accounts,
       expiredGameBackups,
+      databaseBytes,
       ...(backupError ? { backupError } : {}),
+      ...(sizeError ? { sizeError } : {}),
     };
-    const failed = Boolean(accounts.failed || backupError);
+    const failed = Boolean(accounts.failed || backupError || sizeError);
     const summary = JSON.stringify(report);
     console.info("account purge run", summary);
     await pingHealthcheck(failed ? "fail" : "success", summary);

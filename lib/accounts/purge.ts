@@ -44,6 +44,19 @@ export type PurgeReport = {
 /** Keeps a run well inside the 60-second function limit; extra accounts wait a day. */
 export const MAX_ACCOUNTS_PER_RUN = 10;
 
+/** Neon Free's size limit for a branch, which the database must stay under. */
+export const DATABASE_SIZE_LIMIT_BYTES = 1024 ** 3;
+
+/** The daily job's Healthchecks.io ping fails from 70% full, so there is time to act. */
+export const DATABASE_SIZE_ALERT_BYTES = Math.round(DATABASE_SIZE_LIMIT_BYTES * 0.7);
+
+/** A warning for the daily report once the database passes the alert size. */
+export function databaseSizeWarning(bytes: number) {
+  if (bytes < DATABASE_SIZE_ALERT_BYTES) return null;
+  const megabytes = (value: number) => Math.round(value / 1024 ** 2);
+  return `The database is ${megabytes(bytes)} MB of the plan's ${megabytes(DATABASE_SIZE_LIMIT_BYTES)} MB`;
+}
+
 function describe(error: unknown) {
   return (error instanceof Error ? error.message : String(error)).slice(0, 500);
 }

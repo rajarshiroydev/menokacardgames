@@ -22,6 +22,7 @@ import {
   requireAccountSession,
 } from "@/lib/auth/server";
 import { readJsonBody, SMALL_JSON_BODY_LIMIT } from "@/lib/security/json-body";
+import { limitErrorResponse } from "@/lib/security/limits";
 import { withServerTiming } from "@/lib/server-timing";
 
 export const dynamic = "force-dynamic";
@@ -56,7 +57,7 @@ async function handleGet() {
 }
 
 async function handlePost(request: Request) {
-  const result = await requireAccountSession();
+  const result = await requireAccountSession("writes");
   if ("response" in result) return result.response;
   const { account, session } = result;
 
@@ -101,6 +102,8 @@ async function handlePost(request: Request) {
       }
       return json({ profile });
     } catch (error) {
+      const limited = limitErrorResponse(error);
+      if (limited) return limited;
       console.error(`account ${action} error`, error);
       return json(
         {

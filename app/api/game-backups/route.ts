@@ -88,7 +88,7 @@ async function handleGet(request: Request) {
  * game is saved (a late update must not bring back a finished game).
  */
 async function handlePut(request: Request) {
-  const authResult = await requireHostAccount();
+  const authResult = await requireHostAccount("writes");
   if ("response" in authResult) return authResult.response;
   const ownerId = authResult.account.id;
 
@@ -191,7 +191,7 @@ async function handlePut(request: Request) {
 
 /** Restores a backup on this device, which takes the game over. */
 async function handlePost(request: Request) {
-  const authResult = await requireHostAccount();
+  const authResult = await requireHostAccount("writes");
   if ("response" in authResult) return authResult.response;
   const ownerId = authResult.account.id;
 
@@ -251,7 +251,7 @@ async function handlePost(request: Request) {
  * discarded game); without one, whichever device wrote it (Home's Delete).
  */
 async function handleDelete(request: Request) {
-  const authResult = await requireHostAccount();
+  const authResult = await requireHostAccount("writes");
   if ("response" in authResult) return authResult.response;
   const params = new URL(request.url).searchParams;
   const gameId = params.get("gameId");

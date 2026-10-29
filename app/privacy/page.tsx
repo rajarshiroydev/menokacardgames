@@ -103,6 +103,12 @@ export default function PrivacyPage() {
             delete or recover your account and friend changes, so we can explain
             what happened if something goes wrong.
           </li>
+          <li>
+            <b>Usage counts:</b> how many requests your account made in the last
+            minute or few minutes, and how much game data it saved today, so we
+            can stop abuse. Only the count for the current period is kept, and
+            it is deleted with your account.
+          </li>
         </ul>
         <h3>Kept only on your phone</h3>
         <p>

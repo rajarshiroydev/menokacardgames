@@ -4,7 +4,7 @@ import {
 } from "@/lib/auth/server";
 import { deriveSessionAccounting } from "@/lib/poker/accounting";
 import { continuationError } from "@/lib/poker/continue-session";
-import { runAsAuthenticatedUser } from "@/lib/poker/database";
+import { consumeRateLimit, runAsAuthenticatedUser } from "@/lib/poker/database";
 import { playerNameKey } from "@/lib/poker/player-validation";
 import {
   isSameSession,
@@ -32,6 +32,7 @@ import {
   type SessionRow,
   type TransactionSql,
 } from "@/lib/poker/saved-sessions";
+import { limitErrorResponse } from "@/lib/security/limits";
 import { withServerTiming } from "@/lib/server-timing";
 
 export const dynamic = "force-dynamic";
@@ -186,7 +187,7 @@ async function loadSavedSessions(
 }
 
 async function handlePost(request: Request) {
-  const authResult = await requireHostAccount();
+  const authResult = await requireHostAccount("writes");
   if ("response" in authResult) return authResult.response;
   const ownerId = authResult.account.id;
   const authUserId = authResult.session.user.id;
@@ -228,6 +229,7 @@ async function handlePost(request: Request) {
       await runAsAuthenticatedUser(authUserId, (sql) => [
         selectPlayerRecords(sql, ownerId),
         selectSessions(sql, ownerId, sessionIds),
+        consumeRateLimit(sql, "game-data", read.bytes),
       ]);
     const savedBefore = savedSessionMap(
       existingSessionsResult as SessionRow[],
@@ -450,6 +452,8 @@ async function handlePost(request: Request) {
     );
     return json({ saved });
   } catch (error) {
+    const limited = limitErrorResponse(error);
+    if (limited) return limited;
     console.error("sessions POST error", error);
     return json({ error: "Could not reach the ledger database" }, 500);
   }
@@ -499,7 +503,7 @@ function sessionChangedResponse() {
  * through changes nothing.
  */
 async function handlePut(request: Request) {
-  const authResult = await requireHostAccount();
+  const authResult = await requireHostAccount("writes");
   if ("response" in authResult) return authResult.response;
   const ownerId = authResult.account.id;
   const authUserId = authResult.session.user.id;
@@ -537,6 +541,7 @@ async function handlePut(request: Request) {
       (sql) => [
         selectPlayerRecords(sql, ownerId),
         selectSessions(sql, ownerId, [session.id]),
+        consumeRateLimit(sql, "game-data", read.bytes),
       ],
     );
     const existing = savedSessionMap(savedResult as SessionRow[]).get(
@@ -709,13 +714,15 @@ async function handlePut(request: Request) {
     if (!results[2].length) return sessionChangedResponse();
     return json({ saved: 1 });
   } catch (error) {
+    const limited = limitErrorResponse(error);
+    if (limited) return limited;
     console.error("sessions PUT error", error);
     return json({ error: "Could not reach the ledger database" }, 500);
   }
 }
 
 async function handlePatch(request: Request) {
-  const authResult = await requireHostAccount();
+  const authResult = await requireHostAccount("writes");
   if ("response" in authResult) return authResult.response;
   const ownerId = authResult.account.id;
   const authUserId = authResult.session.user.id;
@@ -774,6 +781,8 @@ async function handlePatch(request: Request) {
     }
     return json({ id, state: body.action });
   } catch (error) {
+    const limited = limitErrorResponse(error);
+    if (limited) return limited;
     console.error("sessions PATCH error", error);
     return json({ error: "Could not update the session" }, 500);
   }

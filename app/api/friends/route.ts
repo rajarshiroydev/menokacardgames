@@ -5,8 +5,9 @@ import {
   type FriendOverview,
   parseCodeInput,
 } from "@/lib/friends/requests";
-import { runAsAuthenticatedUser } from "@/lib/poker/database";
+import { consumeRateLimit, runAsAuthenticatedUser } from "@/lib/poker/database";
 import { readJsonBody, SMALL_JSON_BODY_LIMIT } from "@/lib/security/json-body";
+import { limitErrorResponse } from "@/lib/security/limits";
 import { withServerTiming } from "@/lib/server-timing";
 
 export const dynamic = "force-dynamic";
@@ -60,7 +61,7 @@ async function handleGet() {
 }
 
 async function handlePost(request: Request) {
-  const authResult = await requireHostAccount();
+  const authResult = await requireHostAccount("writes");
   if ("response" in authResult) return authResult.response;
   const authUserId = authResult.session.user.id;
 
@@ -70,6 +71,14 @@ async function handlePost(request: Request) {
   const action = body.action;
 
   try {
+    // Looking people up by code, and asking them, are counted on their own
+    // and first, so a failed guess counts too.
+    if (action === "find" || action === "send" || action === "send-coplayer") {
+      await runAsAuthenticatedUser(authUserId, (sql) => [
+        consumeRateLimit(sql, "friend-lookups"),
+      ]);
+    }
+
     if (action === "find" || action === "send") {
       const parsed = parseCodeInput(body.code);
       if (!parsed) {
@@ -196,6 +205,8 @@ async function handlePost(request: Request) {
 
     return json({ error: "Unknown friend action" }, 400);
   } catch (error) {
+    const limited = limitErrorResponse(error);
+    if (limited) return limited;
     const known = friendErrorFromDatabase(error);
     if (known) {
       return json({ error: known.error, code: known.code }, known.status);

@@ -207,6 +207,10 @@ describe("JSON body content type", () => {
       1024,
       /^application\/csp-report\b/i,
     );
-    assert.deepEqual(accepted, { ok: true, body: { "csp-report": {} } });
+    assert.deepEqual(accepted, {
+      ok: true,
+      body: { "csp-report": {} },
+      bytes: JSON.stringify({ "csp-report": {} }).length,
+    });
   });
 });

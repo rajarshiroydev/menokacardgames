@@ -69,10 +69,10 @@ Also high: `sharp`, `source-map-js`, `zod` (inside `@neondatabase/auth`) and `de
 **Status 2026-10-29: built and pushed; the CSP is report-only until enforced.** Every response now sends HSTS with `includeSubDomains`, `nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy`, `Permissions-Policy` (camera for the app's own pages only) and `Cross-Origin-Opener-Policy`, and no longer `X-Powered-By`. Every page gets a Content Security Policy with a fresh nonce, in **report-only** mode: browsers report what it would block to `/csp-report`, which logs a `[csp]` line with tokens and query strings removed. To enforce it after a few days of clean logs, change one constant (`CSP_HEADER`). See the plan entry "security headers and report-only CSP".
 
 **H2. Rate limiting is effectively off.** The single Vercel Firewall rule has been in Log mode since 2026-09-25. It is keyed by IP only, covers writes only, and never limits reads, including the CPU-heavy PNG card renders. There are no per-account limits. The plan already lists per-account limits as open before the store launch.
-**Fix:** switch the rule to 429 now; add per-account limits in the server for writes, card renders and friend lookups. This reverses the 2026-09-24 "no app-side counters" decision, so it needs your decision. ASVS V2 (anti-automation), V4.
+**Fix:** switch the rule to 429 now; add per-account limits in the server for writes, card renders and friend lookups. This reverses the 2026-09-24 "no app-side counters" decision, so it needs your decision. ASVS V2 (anti-automation), V4. **Status 2026-10-29: built and released (with H3).** Per-account limits in the database: 60 writes a minute, 120 card pictures per 10 minutes, 30 friend-code lookups per 10 minutes, 25 MB of game data a day. *Correction:* the rule can't simply be switched to 429, because one host with a live link writes about 26 times a minute against its 30. It is replaced instead, by all `/api/*` except `/api/live/*` at 300 a minute per IP, which you set in Vercel.
 
 **H3. No per-account storage quotas.** One signed-in account can create unlimited 1 MB game backups (each kept 7 days), unlimited players and unlimited saved games. A single script could fill the Neon Free plan's storage and take the app down for everyone.
-**Fix:** caps in the database (for example at most 10 backups per account, sensible caps on players and games), checked in the same transaction as the write. ASVS V2 (business logic limits).
+**Fix:** caps in the database (for example at most 10 backups per account, sensible caps on players and games), checked in the same transaction as the write. ASVS V2 (business logic limits). **Status 2026-10-29: built and released.** 500 players, 5,000 games and 5 backups per account (the oldest backup is dropped), 25 MB of saved games a day, and a daily alert from 70% of the 1 GB plan.
 
 **H4. No CI pipeline.** There is no `.github/` folder. Lint, types, tests and build are run by hand, and a push to `main` deploys to production straight away.
 **Fix:** a GitHub Actions workflow running lint, `tsc`, tests, build and `npm audit --audit-level=high` on every push and pull request; branch protection on `main`; Dependabot or Renovate for dependency updates. ASVS V15.
@@ -130,7 +130,7 @@ Each step is one reviewed change, matching the project's way of working.
 | 1 | C1: upgrade Next.js and audited packages | Done, pushed 2026-10-29 |
 | 2 | H1: security headers and CSP (report-only first) | Built 2026-10-29; enforce the CSP after a few days of clean logs |
 | 3 | H4, M1, L4: CI workflow, lint ignores, Node pin | Built 2026-10-29; branch protection and Dependabot are your call |
-| 4 | H2, H3: firewall to 429, per-account limits and storage caps | Decision on limits (reverses an earlier decision) |
+| 4 | H2, H3: firewall to 429, per-account limits and storage caps | Released 2026-10-29; you replace the firewall rule |
 | 5 | M2, M6, L1, L2: admin step-up, clear device data on sign-out, name cleaning, sign out everywhere | Go-ahead; L2 is user-visible |
 | 6 | M3, L5, L7: monitoring, error pages, security.txt | Choice of monitoring service |
 | 7 | H5: Vercel Pro, Neon paid plan and backups, custom SMTP | Billing and DNS decisions (you do these in the dashboards) |

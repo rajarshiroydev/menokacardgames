@@ -4,6 +4,7 @@ import { inviteErrorFromDatabase, isInviteToken } from "@/lib/friends/invites";
 import { friendErrorFromDatabase } from "@/lib/friends/requests";
 import { runAsAuthenticatedUser } from "@/lib/poker/database";
 import { readJsonBody, SMALL_JSON_BODY_LIMIT } from "@/lib/security/json-body";
+import { limitErrorResponse } from "@/lib/security/limits";
 import { withServerTiming } from "@/lib/server-timing";
 
 export const dynamic = "force-dynamic";
@@ -23,7 +24,7 @@ function json(body: object, status = 200) {
  * invite page. The database checks who may do what.
  */
 async function handlePost(request: Request) {
-  const authResult = await requireHostAccount();
+  const authResult = await requireHostAccount("writes");
   if ("response" in authResult) return authResult.response;
   const authUserId = authResult.session.user.id;
 
@@ -60,6 +61,8 @@ async function handlePost(request: Request) {
 
     return json({ error: "Unknown invite action" }, 400);
   } catch (error) {
+    const limited = limitErrorResponse(error);
+    if (limited) return limited;
     const known = inviteErrorFromDatabase(error) ?? friendErrorFromDatabase(error);
     if (known) {
       return json({ error: known.error, code: known.code }, known.status);

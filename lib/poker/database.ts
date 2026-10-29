@@ -2,6 +2,7 @@ import "server-only";
 
 import { neon } from "@neondatabase/serverless";
 
+import { RATE_LIMITS, type RateLimitBucket } from "@/lib/security/limits";
 import { timed } from "@/lib/server-timing";
 import type {
   NeonQueryFunction,
@@ -49,4 +50,26 @@ export async function runAsAuthenticatedUser(
   );
 
   return results.slice(1) as QueryRows<false>[];
+}
+
+/**
+ * Counts `cost` against the signed-in account's `bucket` (limits in
+ * lib/security/limits.ts). Put it in the transaction that does the work: past
+ * the limit the database refuses the whole transaction, and
+ * `limitErrorResponse` turns that into a 429.
+ */
+export function consumeRateLimit(
+  sql: NeonQueryFunctionInTransaction<false, false>,
+  bucket: RateLimitBucket,
+  cost = 1,
+) {
+  const { limit, windowSeconds } = RATE_LIMITS[bucket];
+  return sql`
+    SELECT public.consume_rate_limit(
+      ${bucket},
+      ${cost}::bigint,
+      ${limit}::bigint,
+      ${windowSeconds}::int
+    )
+  `;
 }

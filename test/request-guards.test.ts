@@ -100,16 +100,18 @@ function streamedRequest(chunks: string[]) {
 
 describe("bounded JSON body", () => {
   it("parses a JSON body within the limit", async () => {
+    // `bytes` is what arrived, which the saved-game data limit counts.
     assert.deepEqual(await readJsonBody(jsonRequest('{"a":1}'), 100), {
       ok: true,
       body: { a: 1 },
+      bytes: 7,
     });
     assert.deepEqual(
       await readJsonBody(
         jsonRequest("[]", { "content-type": "application/json; charset=utf-8" }),
         100,
       ),
-      { ok: true, body: [] },
+      { ok: true, body: [], bytes: 2 },
     );
   });
 
@@ -156,6 +158,11 @@ describe("rate-limited response message", () => {
     assert.equal(
       apiErrorMessage(429, undefined, "Could not reach the ledger"),
       TOO_MANY_REQUESTS_MESSAGE,
+    );
+    // The app's own limits say which limit was reached.
+    assert.equal(
+      apiErrorMessage(429, "Too many results cards", "Could not reach the ledger"),
+      "Too many results cards",
     );
     assert.equal(
       apiErrorMessage(400, "Invalid player id", "Could not reach the ledger"),

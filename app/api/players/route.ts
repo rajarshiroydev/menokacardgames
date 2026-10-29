@@ -10,6 +10,7 @@ import {
 } from "@/lib/poker/player-validation";
 import type { PlayerProfile } from "@/lib/poker/types";
 import { readJsonBody, SMALL_JSON_BODY_LIMIT } from "@/lib/security/json-body";
+import { limitErrorResponse } from "@/lib/security/limits";
 import { withServerTiming } from "@/lib/server-timing";
 
 export const dynamic = "force-dynamic";
@@ -99,7 +100,7 @@ async function handleGet() {
 }
 
 async function handlePost(request: Request) {
-  const authResult = await requireHostAccount();
+  const authResult = await requireHostAccount("writes");
   if ("response" in authResult) return authResult.response;
   const ownerId = authResult.account.id;
   const authUserId = authResult.session.user.id;
@@ -153,13 +154,15 @@ async function handlePost(request: Request) {
 
     return json({ player: mapPlayer(rows[0]) }, 201);
   } catch (error) {
+    const limited = limitErrorResponse(error);
+    if (limited) return limited;
     console.error("players POST error", error);
     return json({ error: "Could not add the player" }, 500);
   }
 }
 
 async function handlePatch(request: Request) {
-  const authResult = await requireHostAccount();
+  const authResult = await requireHostAccount("writes");
   if ("response" in authResult) return authResult.response;
   const ownerId = authResult.account.id;
   const authUserId = authResult.session.user.id;
@@ -224,6 +227,8 @@ async function handlePatch(request: Request) {
     }
     return json({ player: mapPlayer(rows[0]) });
   } catch (error) {
+    const limited = limitErrorResponse(error);
+    if (limited) return limited;
     console.error("players PATCH error", error);
     return json({ error: "Could not update the player" }, 500);
   }

@@ -11,6 +11,10 @@ import {
   signedInRecently,
 } from "@/lib/auth/recent-sign-in";
 import { withoutSessionCookies } from "@/lib/auth/session-cookies";
+import {
+  limitErrorResponse,
+  type RateLimitBucket,
+} from "@/lib/security/limits";
 import { timed } from "@/lib/server-timing";
 
 function requiredEnvironmentVariable(name: string) {
@@ -97,15 +101,24 @@ type AccountAccess =
 /**
  * Verified session and account in any lifecycle state. Only account
  * management may use this; ledger data must go through requireHostAccount.
+ * `rateLimit` counts the request against that bucket (lib/security/limits.ts):
+ * "writes" for every request that changes data, "cards" for card pictures.
  */
-export async function requireAccountSession(): Promise<AccountAccess> {
+export async function requireAccountSession(
+  rateLimit?: RateLimitBucket,
+): Promise<AccountAccess> {
   const session = await getHostSession();
   if (!session) return { response: signInRequiredResponse() } as const;
 
   try {
-    const { account, profile } = await provisionHostAccount(session.user.id);
+    const { account, profile } = await provisionHostAccount(
+      session.user.id,
+      rateLimit,
+    );
     return { session, account, profile } as const;
   } catch (error) {
+    const limited = limitErrorResponse(error);
+    if (limited) return { response: limited } as const;
     console.error("host account provisioning error", error);
     return {
       response: noStoreJson({ error: "Could not access this account" }, 500),
@@ -114,8 +127,10 @@ export async function requireAccountSession(): Promise<AccountAccess> {
 }
 
 /** Ledger access: a verified session for an active, unlocked account. */
-export async function requireHostAccount(): Promise<AccountAccess> {
-  const result = await requireAccountSession();
+export async function requireHostAccount(
+  rateLimit?: RateLimitBucket,
+): Promise<AccountAccess> {
+  const result = await requireAccountSession(rateLimit);
   if ("response" in result) return result;
 
   const accessError = accountAccessError(result.account);
@@ -135,7 +150,7 @@ export function hasRecentSignIn(session: HostSession) {
  * created by a recent sign-in link, in place of a shared deletion password.
  */
 export async function requireRecentHostAccount(): Promise<AccountAccess> {
-  const result = await requireHostAccount();
+  const result = await requireHostAccount("writes");
   if ("response" in result) return result;
 
   if (!hasRecentSignIn(result.session)) {

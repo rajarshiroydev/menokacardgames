@@ -34,7 +34,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
  * games show. Nothing is stored, and the picture is never cached.
  */
 async function handleGet(request: Request) {
-  const authResult = await requireHostAccount();
+  const authResult = await requireHostAccount("cards");
   if ("response" in authResult) return authResult.response;
   const authUserId = authResult.session.user.id;
   const params = new URL(request.url).searchParams;

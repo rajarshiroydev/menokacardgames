@@ -47,7 +47,7 @@ async function readLiveView(
 
 /** Starts sharing, or replaces the current link with a new one. */
 async function handlePost(request: Request) {
-  const authResult = await requireHostAccount();
+  const authResult = await requireHostAccount("writes");
   if ("response" in authResult) return authResult.response;
   const ownerId = authResult.account.id;
   const authUserId = authResult.session.user.id;
@@ -90,7 +90,7 @@ async function handlePost(request: Request) {
 
 /** Updates the standings behind the current link. */
 async function handlePut(request: Request) {
-  const authResult = await requireHostAccount();
+  const authResult = await requireHostAccount("writes");
   if ("response" in authResult) return authResult.response;
   const ownerId = authResult.account.id;
   const authUserId = authResult.session.user.id;
@@ -121,7 +121,7 @@ async function handlePut(request: Request) {
 
 /** Stops sharing; the link shows that the game has ended. */
 async function handleDelete() {
-  const authResult = await requireHostAccount();
+  const authResult = await requireHostAccount("writes");
   if ("response" in authResult) return authResult.response;
   const ownerId = authResult.account.id;
   const authUserId = authResult.session.user.id;

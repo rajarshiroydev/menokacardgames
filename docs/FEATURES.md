@@ -1,6 +1,6 @@
 # Feature list
 
-Updated: 26 October 2026
+Updated: 29 October 2026
 
 This is a plain-language list of everything Pokerize can do today. It is written for anyone, technical or not. It describes how the app behaves right now; plans and future ideas live in the [feature plan](./FEATURE-PLAN.md).
 
@@ -247,7 +247,7 @@ The **Profile** tab replaced the Players tab on 30 September 2026. From the top:
 - **Backed up while you play** (since 12 October 2026). The host's device sends a copy of the game in progress to the server 2 seconds after the last change, at most once every 10 seconds, plus when the app opens or comes back on screen. It works whether or not a live link is shared. If the phone is offline the copy waits for the next change.
 - **Restore on another device.** When a device has no game in progress, Home shows an **Unfinished game** card above **Start a game**: the game's name, "Hand 12 in progress" (or "12 hands played", or "Quick ledger"), how many players are still at the table, and when it was last saved ("saved 5 min ago on another device"). **Restore game** opens it at the same hand, with the same stacks, blinds, buy-ins and log ("Game 79 restored"); **Delete** asks first ("Delete the unfinished Game 79? It can't be restored after this."). If a game is already in progress, the card isn't shown.
 - **The old device hands over.** Restoring moves the game to the new device. When the old device next sends its copy (or opens the app), it closes its game and says "Game 79 moved to another device. It was restored there, so it's closed here." Its live standings link is left to the new device, which can share a new one. The old device's Home then offers the game like any other unfinished game, so it can be taken back the same way.
-- **When the copy goes.** Saving the game deletes its copy, and so does discarding it or closing a continued game. A copy nobody changes for **7 days** is deleted by the daily clean-up. Each device keeps at most one copy: starting a new game there replaces its old one. While an account is locked for deletion its copy can't be restored; it comes back on recovery unless the 7 days have passed.
+- **When the copy goes.** Saving the game deletes its copy, and so does discarding it or closing a continued game. A copy nobody changes for **7 days** is deleted by the daily clean-up. Each device keeps at most one copy: starting a new game there replaces its old one. An account keeps at most **5** copies across its devices (since 29 October 2026): a 6th unfinished game quietly drops the copy changed longest ago, which its own device still has. While an account is locked for deletion its copy can't be restored; it comes back on recovery unless the 7 days have passed.
 - **Back button works.** The phone's back gesture or the browser's back button moves back through the app's screens.
 
 ## 11. Saving a game and game history
@@ -543,6 +543,20 @@ Added 13 October 2026 (user request). For hosts who don't want to play every han
 - **Not in a quick ledger:** the live standings link (there are no stacks to show until the count), continuing a saved game, and turning a quick ledger into a hand-by-hand game or back.
 
 ---
+
+## 24. Limits on use
+
+Since 29 October 2026, each account has limits, so one account (or a script using one) can't slow the app down or fill its storage for everyone. Normal play stays well inside them: a host playing with a live link shared sends about 26 changes a minute.
+
+- **Changes:** at most **60 a minute** (anything that saves or changes something: adding a player, a backup of the game in progress, a live link update, saving a game). Going over shows "Too many requests in a short time. Wait a minute, then try again." Reading (opening screens, standings, games) has no limit.
+- **Results card pictures:** at most **120 every 10 minutes**, your games' and friends' together. Going over shows "Too many results cards in a short time. Try again in a few minutes." in the card preview, and the Games tab stops loading cards ahead until the wait is over.
+- **Looking people up by user code and sending friend requests:** at most **30 every 10 minutes**, counting codes that find nobody. Going over shows "Too many friend code lookups in a short time. Try again in a few minutes."
+- **Saved game data:** at most **25 MB a day** of saved, imported or continued games (a long night's game with its action log is about 0.1 MB). Going over shows "You've saved a lot of game data today. Try again tomorrow."
+- **Players:** at most **500** per account, discarded ones included. Adding a 501st shows "You can have up to 500 players. Delete players you no longer play with to add more."
+- **Games:** at most **5,000** saved games per account, discarded ones included. Saving one more shows "You can keep up to 5,000 games. Permanently delete discarded games to save more."
+- **Unfinished-game copies:** at most **5** per account (section 10).
+- Each limit counts from the first request in its period (a minute, 10 minutes or a day) and starts again after it. The counts are kept in the database for the current period only and deleted with the account.
+- A rule on the hosting service also watches requests from each internet address, as a backstop against floods. For now it only logs them and blocks nothing.
 
 ## Known gaps
 

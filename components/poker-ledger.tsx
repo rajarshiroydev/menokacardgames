@@ -12320,8 +12320,19 @@ function resultsCardPath(session: PokerSession) {
   return `/api/sessions/${encodeURIComponent(session.id)}/card?tz=`;
 }
 
-/** A card the server refused (missing game, chips that don't add up). */
-class CardRefused extends Error {}
+/**
+ * A card the server refused: a missing game, chips that don't add up, or the
+ * account's card limit (429, with the server's message and wait).
+ */
+class CardRefused extends Error {
+  constructor(
+    readonly status: number,
+    readonly serverMessage: string | null,
+    readonly retryAfterSeconds: number,
+  ) {
+    super(`card ${status}`);
+  }
+}
 
 async function fetchResultsCard(session: PokerSession): Promise<File> {
   let timeZone = "";
@@ -12338,7 +12349,14 @@ async function fetchResultsCard(session: PokerSession): Promise<File> {
       { cache: "no-store", signal: controller.signal },
     );
     if (response.status >= 400 && response.status < 500) {
-      throw new CardRefused(`card ${response.status}`);
+      const body = (await response.json().catch(() => null)) as {
+        error?: string;
+      } | null;
+      throw new CardRefused(
+        response.status,
+        body?.error ?? null,
+        Number(response.headers.get("Retry-After")) || 60,
+      );
     }
     if (!response.ok) throw new Error(`card ${response.status}`);
     const blob = await response.blob();
@@ -12374,15 +12392,22 @@ function loadResultsCard(session: PokerSession): Promise<File> {
 }
 
 let prefetchQueue: Promise<unknown> = Promise.resolve();
+/** Once the account's card limit is reached, nothing is preloaded until then. */
+let prefetchPausedUntil = 0;
 
 /**
  * Loads a card in the background, ready for a tap, one card at a time so a
  * list of games doesn't load them all at once. Failures wait for the tap.
  */
 function prefetchResultsCard(session: PokerSession) {
-  prefetchQueue = prefetchQueue.then(() =>
-    loadResultsCard(session).catch(() => undefined),
-  );
+  prefetchQueue = prefetchQueue.then(() => {
+    if (Date.now() < prefetchPausedUntil) return undefined;
+    return loadResultsCard(session).catch((error) => {
+      if (error instanceof CardRefused && error.status === 429) {
+        prefetchPausedUntil = Date.now() + error.retryAfterSeconds * 1000;
+      }
+    });
+  });
 }
 
 function canShareFile(file: File) {
@@ -12469,7 +12494,7 @@ function ResultsCardSheet({
   onClose: () => void;
 }) {
   const [card, setCard] = useState<{ file: File; url: string } | null>(null);
-  const [failed, setFailed] = useState(false);
+  const [failure, setFailure] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
   const title = sessionTitle(session);
 
@@ -12482,8 +12507,14 @@ function ResultsCardSheet({
         url = URL.createObjectURL(file);
         setCard({ file, url });
       })
-      .catch(() => {
-        if (!cancelled) setFailed(true);
+      .catch((error) => {
+        if (cancelled) return;
+        // A reached limit says so; any other failure keeps the plain message.
+        setFailure(
+          error instanceof CardRefused && error.status === 429 && error.serverMessage
+            ? error.serverMessage
+            : "Couldn't make the card.",
+        );
       });
     return () => {
       cancelled = true;
@@ -12529,18 +12560,18 @@ function ResultsCardSheet({
             // A plain <img>: it's a local blob, so next/image adds nothing.
             // eslint-disable-next-line @next/next/no-img-element
             <img src={card.url} alt={`Results card for ${title}`} />
-          ) : failed ? (
-            <p className="field-error">Couldn&apos;t make the card.</p>
+          ) : failure ? (
+            <p className="field-error">{failure}</p>
           ) : (
             <p className="muted">Making the card…</p>
           )}
         </div>
-        {failed ? (
+        {failure ? (
           <button
             className="primary full"
             type="button"
             onClick={() => {
-              setFailed(false);
+              setFailure(null);
               setAttempt((count) => count + 1);
             }}
           >

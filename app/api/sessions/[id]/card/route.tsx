@@ -34,7 +34,7 @@ async function handleGet(
   request: Request,
   context: { params: Promise<{ id: string }> },
 ) {
-  const authResult = await requireHostAccount();
+  const authResult = await requireHostAccount("cards");
   if ("response" in authResult) return authResult.response;
   const ownerId = authResult.account.id;
   const authUserId = authResult.session.user.id;
