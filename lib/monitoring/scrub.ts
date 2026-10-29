@@ -56,10 +56,15 @@ type ReportRequest = {
 
 /**
  * The report as it may leave: the request keeps only its scrubbed address,
- * method and browser; there is no user; every string is scrubbed.
+ * method and browser; there is no user and no time zone or language; every
+ * string is scrubbed.
  */
 export function scrubEvent<
-  Event extends { request?: ReportRequest; user?: unknown },
+  Event extends {
+    request?: ReportRequest;
+    user?: unknown;
+    contexts?: { [key: string]: unknown };
+  },
 >(event: Event): Event {
   const cleaned = scrubValue(event, 0) as Event;
   if (cleaned.request) {
@@ -73,6 +78,9 @@ export function scrubEvent<
     } as Event["request"];
   }
   delete cleaned.user;
+  // The browser adds its time zone and language (found 2026-10-30); the
+  // privacy page doesn't list them, so they don't leave.
+  delete cleaned.contexts?.culture;
   return cleaned;
 }
 

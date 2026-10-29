@@ -9,7 +9,11 @@ import {
   scrubText,
   sentryIngestOrigin,
 } from "../lib/monitoring/scrub.ts";
-import { DATA_COLLECTION, sentryOptions } from "../lib/monitoring/sentry-options.ts";
+import {
+  DATA_COLLECTION,
+  IGNORED_ERRORS,
+  sentryOptions,
+} from "../lib/monitoring/sentry-options.ts";
 import { contentSecurityPolicy } from "../lib/security/content-security-policy.ts";
 import { logSecurityEvent } from "../lib/security/security-log.ts";
 
@@ -124,6 +128,41 @@ describe("Sentry collects nothing about people", () => {
     });
     assert.deepEqual(event.exception.values[0].stacktrace.frames[0], { function: "save" });
     assert.equal(event.user, undefined);
+  });
+
+  it("drops the browser's time zone and language, and keeps the browser", () => {
+    const event = scrubEvent({
+      contexts: {
+        culture: { locale: "en-GB", timezone: "Asia/Calcutta", calendar: "gregory" },
+        browser: { name: "Chrome" },
+      },
+    });
+    assert.deepEqual(event.contexts, { browser: { name: "Chrome" } });
+  });
+});
+
+describe("Sentry ignores what isn't an app failure", () => {
+  const ignored = (message: string) =>
+    IGNORED_ERRORS.some((pattern) => pattern.test(message));
+
+  it("ignores Node's own process warnings (POKERIZE-3)", () => {
+    assert.ok(
+      ignored(
+        "(node:8) ExperimentalWarning: vm.USE_MAIN_CONTEXT_DEFAULT_LOADER is an experimental feature and might change at any time",
+      ),
+    );
+    assert.ok(ignored("null: (node:12) DeprecationWarning: Buffer() is deprecated"));
+    assert.deepEqual(sentryOptions().ignoreErrors, IGNORED_ERRORS);
+  });
+
+  it("still reports the app's own errors", () => {
+    for (const message of [
+      "Failed to save game",
+      "Error: Warning: the game has no players",
+      "[security] rate-limited",
+    ]) {
+      assert.equal(ignored(message), false, message);
+    }
   });
 });
 

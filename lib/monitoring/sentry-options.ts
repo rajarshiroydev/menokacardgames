@@ -21,6 +21,13 @@ export const DATA_COLLECTION = {
 } as const;
 
 /**
+ * Node prints its own process warnings (such as an ExperimentalWarning on a
+ * cold start) through `console.error`, which the server reports. They aren't
+ * app failures. Found 2026-10-30 (POKERIZE-3, the results card route).
+ */
+export const IGNORED_ERRORS = [/\(node:\d+\) \w*Warning: /];
+
+/**
  * Sentry settings shared by the browser, server and edge (audit step 6, user
  * decision 2026-10-29: Sentry, US region). Reporting is on only when
  * NEXT_PUBLIC_SENTRY_DSN is set (Vercel production and preview), so local
@@ -39,6 +46,7 @@ export function sentryOptions() {
       graphQL: { ...DATA_COLLECTION.graphQL },
       genAI: { ...DATA_COLLECTION.genAI },
     },
+    ignoreErrors: [...IGNORED_ERRORS],
     tracesSampleRate: 0,
     beforeSend: scrubEvent,
   };
