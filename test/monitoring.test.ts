@@ -9,6 +9,7 @@ import {
   scrubText,
   sentryIngestOrigin,
 } from "../lib/monitoring/scrub.ts";
+import { DATA_COLLECTION, sentryOptions } from "../lib/monitoring/sentry-options.ts";
 import { contentSecurityPolicy } from "../lib/security/content-security-policy.ts";
 import { logSecurityEvent } from "../lib/security/security-log.ts";
 
@@ -71,6 +72,52 @@ describe("error reports leave without personal data", () => {
       /connect-src 'self' https:\/\/o123\.ingest\.us\.sentry\.io;/,
     );
     assert.match(contentSecurityPolicy("n"), /connect-src 'self';/);
+  });
+});
+
+describe("Sentry collects nothing about people", () => {
+  it("turns off every kind of data the SDK can collect", () => {
+    // The SDK's own list of kinds, so a new one in a later version fails here.
+    const sdkTypes = readFileSync(
+      new URL("../node_modules/@sentry/core/build/types/types/datacollection.d.ts", import.meta.url),
+      "utf8",
+    );
+    const body = /export interface DataCollection \{([\s\S]*?)\n\}/.exec(sdkTypes)?.[1] ?? "";
+    const kinds = [...body.matchAll(/^\s{4}(\w+)\?:/gm)].map((match) => match[1]);
+    assert.ok(kinds.length >= 10, "read the SDK's data collection kinds");
+    for (const kind of kinds.filter((name) => name !== "frameContextLines")) {
+      assert.ok(kind in DATA_COLLECTION, `DATA_COLLECTION covers ${kind}`);
+    }
+    assert.deepEqual(DATA_COLLECTION, {
+      userInfo: false,
+      cookies: false,
+      httpHeaders: false,
+      httpBodies: [],
+      urlQueryParams: false,
+      graphQL: { document: false, variables: false },
+      genAI: { inputs: false, outputs: false },
+      databaseQueryData: false,
+      queues: false,
+      stackFrameVariables: false,
+    });
+  });
+
+  it("passes those settings to Sentry, and reports only with a DSN", () => {
+    const options = sentryOptions();
+    assert.deepEqual(options.dataCollection, DATA_COLLECTION);
+    assert.equal(options.tracesSampleRate, 0);
+    assert.equal(options.enabled, Boolean(process.env.NEXT_PUBLIC_SENTRY_DSN));
+  });
+
+  it("drops stack-frame variables from a report", () => {
+    const event = scrubEvent({
+      user: { id: "someone" },
+      exception: {
+        values: [{ stacktrace: { frames: [{ function: "save", vars: { name: "Rajarshi" } }] } }],
+      },
+    });
+    assert.deepEqual(event.exception.values[0].stacktrace.frames[0], { function: "save" });
+    assert.equal(event.user, undefined);
   });
 });
 

@@ -3,8 +3,9 @@ import { redactTokenPath } from "../security/token-paths.ts";
 /**
  * Cleans error reports before they leave for Sentry (pre-launch audit step
  * 6; privacy page "Sentry"). Reports never carry emails, cookies, request
- * bodies, query strings or the tokens in live and invite links. Sentry is
- * also set up with `sendDefaultPii: false`, so it stores no IP address.
+ * bodies, query strings, stack-frame variables or the tokens in live and
+ * invite links. The SDK is also told to collect none of these
+ * (`DATA_COLLECTION` in sentry-options.ts); this is the second line.
  */
 
 const EMAIL = /[^\s@"'<>()]+@[^\s@"'<>()]+\.[A-Za-z]{2,}/g;
@@ -37,6 +38,8 @@ function scrubValue(value: unknown, depth: number): unknown {
   if (Array.isArray(value)) return value.map((item) => scrubValue(item, depth + 1));
   const copy: Record<string, unknown> = {};
   for (const [key, item] of Object.entries(value)) {
+    // A stack frame's local variables can hold anything: names, games.
+    if (key === "vars") continue;
     copy[key] = scrubValue(item, depth + 1);
   }
   return copy;

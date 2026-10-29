@@ -1,6 +1,26 @@
 import { scrubEvent } from "./scrub.ts";
 
 /**
+ * Sentry collects nothing about people. SDK v11 collects all of this by
+ * default and no longer reads `sendDefaultPii`, so every kind is turned off
+ * here. With `userInfo` off, the browser SDK also tells Sentry not to record
+ * the sender's IP address (`infer_ip: "never"`). Found 2026-10-29: the first
+ * test report was stored with an IP while these were left at their defaults.
+ */
+export const DATA_COLLECTION = {
+  userInfo: false,
+  cookies: false,
+  httpHeaders: false,
+  httpBodies: [],
+  urlQueryParams: false,
+  graphQL: { document: false, variables: false },
+  genAI: { inputs: false, outputs: false },
+  databaseQueryData: false,
+  queues: false,
+  stackFrameVariables: false,
+} as const;
+
+/**
  * Sentry settings shared by the browser, server and edge (audit step 6, user
  * decision 2026-10-29: Sentry, US region). Reporting is on only when
  * NEXT_PUBLIC_SENTRY_DSN is set (Vercel production and preview), so local
@@ -13,7 +33,12 @@ export function sentryOptions() {
     dsn,
     enabled: Boolean(dsn),
     environment: process.env.NEXT_PUBLIC_VERCEL_ENV ?? "development",
-    sendDefaultPii: false,
+    dataCollection: {
+      ...DATA_COLLECTION,
+      httpBodies: [...DATA_COLLECTION.httpBodies],
+      graphQL: { ...DATA_COLLECTION.graphQL },
+      genAI: { ...DATA_COLLECTION.genAI },
+    },
     tracesSampleRate: 0,
     beforeSend: scrubEvent,
   };
