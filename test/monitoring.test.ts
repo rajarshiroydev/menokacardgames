@@ -33,6 +33,12 @@ describe("error reports leave without personal data", () => {
       "Failed for [email] at https://www.pokerize.app/auth/sign-in via /api/live/[token]",
     );
     assert.equal(scrubText("GET /api/live/[token] 404"), "GET /api/live/[token] 404");
+    // Found 2026-10-29: a relative address in a message kept its query string.
+    assert.equal(
+      scrubText(`fetch failed for /api/sessions?tz=Asia/Kolkata, then "/join/${TOKEN}?x=1#y"`),
+      'fetch failed for /api/sessions then "/join/[token]"',
+    );
+    assert.equal(scrubText("What happened? Try again/later."), "What happened? Try again/later.");
   });
 
   it("keeps only the request's address, method and browser, and drops the user", () => {
@@ -58,7 +64,7 @@ describe("error reports leave without personal data", () => {
     });
     assert.equal(event.user, undefined);
     assert.equal(event.message, "save failed for [email]");
-    assert.deepEqual(event.breadcrumbs[0].data, { from: "/live/[token]", to: "/?tab=games" });
+    assert.deepEqual(event.breadcrumbs[0].data, { from: "/live/[token]", to: "/" });
   });
 
   it("allows Sentry's ingest address in the CSP only when reporting is set up", () => {

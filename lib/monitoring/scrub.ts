@@ -10,6 +10,8 @@ import { redactTokenPath } from "../security/token-paths.ts";
 
 const EMAIL = /[^\s@"'<>()]+@[^\s@"'<>()]+\.[A-Za-z]{2,}/g;
 const URL_IN_TEXT = /https?:\/\/[^\s"'<>)]+/g;
+// A relative address in text, like "/api/sessions?tz=…", keeps only its path.
+const PATH_QUERY_IN_TEXT = /(^|[\s"'(=])(\/[^\s"'<>?#()]*)[?#][^\s"'<>)]*/g;
 const TOKEN_PATH_IN_TEXT = /\/(api\/live|live|join)\/[A-Za-z0-9_-]{20,}/g;
 
 /** An address without query, fragment or access tokens. */
@@ -28,6 +30,7 @@ export function scrubAddress(value: string) {
 export function scrubText(value: string) {
   return value
     .replace(URL_IN_TEXT, (url) => scrubAddress(url))
+    .replace(PATH_QUERY_IN_TEXT, "$1$2")
     .replace(TOKEN_PATH_IN_TEXT, "/$1/[token]")
     .replace(EMAIL, "[email]");
 }
