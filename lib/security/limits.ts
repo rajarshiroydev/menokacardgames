@@ -1,4 +1,5 @@
 import { TOO_MANY_REQUESTS_MESSAGE } from "./rate-limit-message.ts";
+import { logSecurityEvent } from "./security-log.ts";
 
 /**
  * Per-account rate limits and storage caps (pre-launch audit step 4; user
@@ -41,6 +42,7 @@ export type LimitError =
       status: 429;
       error: string;
       code: "rate-limited";
+      bucket: RateLimitBucket;
       retryAfterSeconds: number;
     }
   | {
@@ -65,6 +67,7 @@ export function limitErrorFromDatabase(error: unknown): LimitError | null {
       status: 429,
       error: RATE_LIMIT_MESSAGES[rate[1]],
       code: "rate-limited",
+      bucket: rate[1],
       retryAfterSeconds: Math.max(1, Number(rate[2])),
     };
   }
@@ -86,6 +89,11 @@ export function limitErrorFromDatabase(error: unknown): LimitError | null {
 export function limitErrorResponse(error: unknown) {
   const limit = limitErrorFromDatabase(error);
   if (!limit) return null;
+  if (limit.kind === "rate") {
+    logSecurityEvent("rate-limited", { bucket: limit.bucket });
+  } else {
+    logSecurityEvent("storage-cap-reached", { cap: limit.code });
+  }
   const headers: Record<string, string> = { "Cache-Control": "no-store" };
   if (limit.kind === "rate") {
     headers["Retry-After"] = String(limit.retryAfterSeconds);

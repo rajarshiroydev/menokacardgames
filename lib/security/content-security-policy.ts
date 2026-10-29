@@ -32,11 +32,16 @@ export function createNonce() {
  * ('strict-dynamic', for Next's chunks and Vercel Analytics). Styles may be
  * inline, because server-rendered `style` attributes can't carry a nonce.
  * Images also come from `blob:` (the results card preview) and `data:`.
+ * `connectOrigins` adds places the browser may send data to besides the
+ * app: Sentry's ingest address when error reporting is on.
  * Development adds 'unsafe-eval', which React uses for its error overlay.
  */
 export function contentSecurityPolicy(
   nonce: string,
-  { development = false }: { development?: boolean } = {},
+  {
+    development = false,
+    connectOrigins = [],
+  }: { development?: boolean; connectOrigins?: string[] } = {},
 ) {
   return [
     "default-src 'self'",
@@ -46,7 +51,7 @@ export function contentSecurityPolicy(
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' blob: data:",
     "font-src 'self'",
-    "connect-src 'self'",
+    ["connect-src 'self'", ...connectOrigins].join(" "),
     "object-src 'none'",
     "base-uri 'none'",
     "form-action 'self'",

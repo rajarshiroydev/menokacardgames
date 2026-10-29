@@ -1,3 +1,4 @@
+import { withSentryConfig } from "@sentry/nextjs/config";
 import type { NextConfig } from "next";
 
 /**
@@ -51,4 +52,26 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+/**
+ * Error reporting (audit step 6). At build time the source maps go to Sentry,
+ * so reports show readable code, and are then deleted from the deployment,
+ * so they are never public. Without SENTRY_AUTH_TOKEN (local builds, CI) the
+ * upload is skipped. SENTRY_ORG and SENTRY_PROJECT name the Sentry project.
+ */
+export default withSentryConfig(nextConfig, {
+  org: process.env.SENTRY_ORG,
+  project: process.env.SENTRY_PROJECT,
+  authToken: process.env.SENTRY_AUTH_TOKEN,
+  silent: !process.env.CI,
+  telemetry: false,
+  sourcemaps: { deleteSourcemapsAfterUpload: true },
+  // Errors only (lib/monitoring/sentry-options.ts): leave out the code for
+  // tracing, session replay and debug logging.
+  bundleSizeOptimizations: {
+    excludeDebugStatements: true,
+    excludeTracing: true,
+    excludeReplayShadowDom: true,
+    excludeReplayIframe: true,
+    excludeReplayWorker: true,
+  },
+});

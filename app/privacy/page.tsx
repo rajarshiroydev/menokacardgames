@@ -231,6 +231,14 @@ export default function PrivacyPage() {
             <b>Healthchecks.io</b> watches our daily clean-up job. It receives
             only counts, never names or emails.
           </li>
+          <li>
+            <b>Sentry</b> tells us when something goes wrong in the app and
+            checks that it is up. A report says what failed and where in our
+            code, with the page address (private links blanked out) and the
+            type of browser and device. It never includes your email, name, IP
+            address, cookies or what you typed. Sentry keeps reports for 30
+            days.
+          </li>
         </ul>
         <p>
           Our servers are in {DATA_LOCATION}, so your information is stored and

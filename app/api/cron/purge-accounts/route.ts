@@ -9,6 +9,8 @@ import {
   pingHealthcheck,
 } from "@/lib/accounts/purge-server";
 
+import { logSecurityEvent } from "@/lib/security/security-log";
+
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
@@ -38,6 +40,7 @@ function authorized(request: Request) {
  */
 export async function GET(request: Request) {
   if (!authorized(request)) {
+    logSecurityEvent("cron-unauthorized");
     return json({ error: "Unauthorized" }, 401);
   }
 

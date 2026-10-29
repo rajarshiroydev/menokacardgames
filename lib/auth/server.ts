@@ -16,6 +16,7 @@ import {
   limitErrorResponse,
   type RateLimitBucket,
 } from "@/lib/security/limits";
+import { logSecurityEvent } from "@/lib/security/security-log";
 import { timed } from "@/lib/server-timing";
 
 function requiredEnvironmentVariable(name: string) {
@@ -71,6 +72,7 @@ export async function getHostSession() {
   // can change (route handlers, server actions) the old session is also
   // revoked; a page just treats the person as signed out.
   if (sessionTooOld(data.session?.createdAt)) {
+    logSecurityEvent("session-too-old", { authUserId: data.user.id });
     try {
       await auth.signOut();
     } catch {
@@ -93,6 +95,7 @@ function noStoreJson(body: unknown, status: number) {
 }
 
 export function recentSignInRequiredResponse(action: string) {
+  logSecurityEvent("recent-sign-in-required", { action });
   return noStoreJson(
     {
       error: `Sign in again to confirm ${action}`,

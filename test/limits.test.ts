@@ -53,6 +53,7 @@ describe("limit errors from the database", () => {
       status: 429,
       error: "Too many results cards in a short time. Try again in a few minutes.",
       code: "rate-limited",
+      bucket: "cards",
       retryAfterSeconds: 417,
     });
   });

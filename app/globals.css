@@ -8056,3 +8056,30 @@ span.name-with-badge {
 .badge-keep {
   white-space: nowrap;
 }
+
+/* Error and not-found pages (app/error.tsx, app/not-found.tsx). */
+.error-page-actions {
+  display: grid;
+  gap: 10px;
+}
+
+.error-page-actions .auth-primary,
+.error-page-secondary {
+  display: grid;
+  place-items: center;
+  text-decoration: none;
+}
+
+.error-page-secondary {
+  min-height: 50px;
+  border: 1px solid var(--gb);
+  border-radius: var(--rs);
+  background: var(--glass2);
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.error-page-code {
+  color: var(--ink3);
+  font-size: 12px;
+}

@@ -6,6 +6,7 @@ import {
 } from "@/lib/auth/recent-sign-in";
 import { getHostSession } from "@/lib/auth/server";
 import { runAsAuthenticatedUser } from "@/lib/poker/database";
+import { logSecurityEvent } from "@/lib/security/security-log";
 
 import { type AdminData, type AdminGame, inCurrencyUnits } from "./data";
 
@@ -49,9 +50,13 @@ export async function loadAdminData(
         "admin",
       );
     } catch (error) {
-      if (isForbidden(error)) return "forbidden";
+      if (isForbidden(error)) {
+        logSecurityEvent("admin-refused", { authUserId: session.user.id });
+        return "forbidden";
+      }
       throw error;
     }
+    logSecurityEvent("admin-sign-in-again", { authUserId: session.user.id });
     return { status: "sign-in-again", email: session.user.email };
   }
 
@@ -90,7 +95,10 @@ export async function loadAdminData(
     }
     return data;
   } catch (error) {
-    if (isForbidden(error)) return "forbidden";
+    if (isForbidden(error)) {
+      logSecurityEvent("admin-refused", { authUserId: session.user.id });
+      return "forbidden";
+    }
     throw error;
   }
 }

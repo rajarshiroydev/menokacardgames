@@ -6,6 +6,9 @@ import {
   SESSION_RENEWAL_INTERVAL_SECONDS,
   SESSION_RENEWED_COOKIE,
 } from "@/lib/auth/session-cookies";
+import { sentryIngestOrigin } from "@/lib/monitoring/scrub";
+import { logSecurityEvent } from "@/lib/security/security-log";
+import { redactTokenPath } from "@/lib/security/token-paths";
 import {
   contentSecurityPolicy,
   createNonce,
@@ -33,6 +36,10 @@ export default async function proxy(request: NextRequest) {
       isMutatingMethod(request.method) &&
       !isSameOriginRequest(request.headers)
     ) {
+      logSecurityEvent("cross-site-request-refused", {
+        method: request.method,
+        path: redactTokenPath(request.nextUrl.pathname),
+      });
       return NextResponse.json(
         {
           error: "This request did not come from the app",
@@ -52,8 +59,10 @@ export default async function proxy(request: NextRequest) {
   // Pages: a fresh nonce each time. Next.js finds it in the policy on the
   // request and puts it on its scripts; the root layout reads NONCE_HEADER.
   const nonce = createNonce();
+  const sentryOrigin = sentryIngestOrigin(process.env.NEXT_PUBLIC_SENTRY_DSN);
   const policy = contentSecurityPolicy(nonce, {
     development: process.env.NODE_ENV === "development",
+    connectOrigins: sentryOrigin ? [sentryOrigin] : [],
   });
   const headers = new Headers(request.headers);
   // Next.js reads an enforced policy before a report-only one, so one sent

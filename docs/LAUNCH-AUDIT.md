@@ -93,7 +93,7 @@ Also high: `sharp`, `source-map-js`, `zod` (inside `@neondatabase/auth`) and `de
 
 **M2. The admin dashboard needs only a normal sign-in.** `/admin` shows every account, including emails, to anyone listed in `app_admins` with a session of any age (sessions renew for weeks). ASVS Level 2 expects stronger authentication for admin access. **Fix:** require a sign-in within the last 10 minutes for `/admin`, reusing `requireRecentHostAccount`; consider passkeys later. ASVS V6, V8. **Status 2026-10-29: fixed and pushed.** `/admin` needs an email sign-in from the last hour, with a button to email a fresh link.
 
-**M3. No error monitoring or alerting.** Errors go only to `console.error`, and Hobby keeps a day of logs. Nobody is told when sign-in, saving or the card routes start failing, and there is no record of security events (rejected cross-site requests, repeated 401s and 423s). **Fix:** error tracking (for example Sentry) or a Vercel log drain, an uptime check on the home page and the API, and alerts on error rate. ASVS V16 (logging and error handling).
+**M3. No error monitoring or alerting.** Errors go only to `console.error`, and Hobby keeps a day of logs. Nobody is told when sign-in, saving or the card routes start failing, and there is no record of security events (rejected cross-site requests, repeated 401s and 423s). **Fix:** error tracking (for example Sentry) or a Vercel log drain, an uptime check on the home page and the API, and alerts on error rate. ASVS V16 (logging and error handling). **Status 2026-10-29: built and pushed; reporting starts when the Sentry keys are in Vercel.** Sentry (US) with scrubbed reports, `[security]` log lines, and `/api/health` for an uptime monitor.
 
 **M4. One 14,124-line component.** `components/poker-ledger.tsx` holds about 95 components and 219 hooks; `app/globals.css` is 8,058 lines. This makes review, testing and code-splitting hard: every screen ships in one bundle, and a change anywhere risks breaking an unrelated flow. **Fix:** split it gradually, one screen per step (Home, live game, Ranks, Friends, Profile, Settings) into their own files, with no behaviour change. Not a launch blocker.
 
@@ -111,11 +111,11 @@ Also high: `sharp`, `source-map-js`, `zod` (inside `@neondatabase/auth`) and `de
 
 **L4. No Node version pinned.** `package.json` has no `engines` field and there is no `.nvmrc`. This machine runs Node 26, and the tests rely on `--experimental-strip-types`. **Fix:** pin the version Vercel runs. **Fixed 2026-10-29:** Node 24 (Vercel's setting) in `engines` and `.nvmrc`, with `@types/node` 24 to match.
 
-**L5. No custom error pages.** There is no `app/error.tsx`, `app/global-error.tsx` or `app/not-found.tsx`, so a rendering error shows Next's default page.
+**L5. No custom error pages.** There is no `app/error.tsx`, `app/global-error.tsx` or `app/not-found.tsx`, so a rendering error shows Next's default page. **Status 2026-10-29: fixed and pushed.** Branded not-found and error pages, plus a self-contained last-resort page.
 
 **L6. `Server-Timing` is sent in production.** It reveals how long auth and database calls take. That's harmless today; consider sending it only in development or to the admin.
 
-**L7. No vulnerability disclosure contact.** Add `/.well-known/security.txt` with an email for security reports.
+**L7. No vulnerability disclosure contact.** Add `/.well-known/security.txt` with an email for security reports. **Status 2026-10-29: fixed and pushed.** `public/.well-known/security.txt`, renewed before 2027-10-28 (a test reminds).
 
 ### Found later
 
@@ -132,6 +132,6 @@ Each step is one reviewed change, matching the project's way of working.
 | 3 | H4, M1, L4: CI workflow, lint ignores, Node pin | Built 2026-10-29; branch protection and Dependabot are your call |
 | 4 | H2, H3: firewall to 429, per-account limits and storage caps | Released 2026-10-29; you replace the firewall rule |
 | 5 | M2, M6, L1, L2: admin step-up, clear device data on sign-out, name cleaning, sign out everywhere | Released 2026-10-29 |
-| 6 | M3, L5, L7: monitoring, error pages, security.txt | Choice of monitoring service |
+| 6 | M3, L5, L7: monitoring, error pages, security.txt | Released 2026-10-29; you set up Sentry |
 | 7 | H5: Vercel Pro, Neon paid plan and backups, custom SMTP | Billing and DNS decisions (you do these in the dashboards) |
 | Later | M4, M5, L3: split the big component, route and browser tests, auth SDK upgrade | Ongoing |

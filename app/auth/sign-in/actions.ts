@@ -1,6 +1,7 @@
 "use server";
 
 import { auth } from "@/lib/auth/server";
+import { logSecurityEvent } from "@/lib/security/security-log";
 import { redirect } from "next/navigation";
 
 export async function signOut() {
@@ -20,6 +21,7 @@ export async function signOutEverywhere(): Promise<{ error: string } | void> {
     console.error("sign out of all devices failed", error);
     return { error: "Could not sign out of all devices. Please try again." };
   }
+  logSecurityEvent("signed-out-everywhere");
   try {
     await auth.signOut();
   } catch (error) {
