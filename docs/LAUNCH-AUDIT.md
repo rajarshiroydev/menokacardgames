@@ -66,7 +66,7 @@ Also high: `sharp`, `source-map-js`, `zod` (inside `@neondatabase/auth`) and `de
 **H1. No browser security headers.** Production pages send only HSTS (without `includeSubDomains`/`preload`). Missing: `Content-Security-Policy`, `frame-ancestors`/`X-Frame-Options` (the app can be framed for clickjacking, for example over a Delete button), `X-Content-Type-Options: nosniff`, `Referrer-Policy`, `Permissions-Policy`. The `X-Powered-By: Next.js` header gives away the framework.
 **Fix:** add `headers()` and `poweredByHeader: false` in `next.config.ts`; add a CSP with a per-request nonce set in `proxy.ts` (the inline theme script in `app/layout.tsx` needs the nonce or a hash). Start the CSP in report-only mode for a few days. ASVS V3 (web frontend), V13 (configuration).
 
-**Status 2026-10-29: built and pushed; the CSP is report-only until enforced.** Every response now sends HSTS with `includeSubDomains`, `nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy`, `Permissions-Policy` (camera for the app's own pages only) and `Cross-Origin-Opener-Policy`, and no longer `X-Powered-By`. Every page gets a Content Security Policy with a fresh nonce, in **report-only** mode: browsers report what it would block to `/csp-report`, which logs a `[csp]` line with tokens and query strings removed. To enforce it after a few days of clean logs, change one constant (`CSP_HEADER`). See the plan entry "security headers and report-only CSP".
+**Status 2026-10-29: built and pushed; the CSP is report-only until enforced.** Every response now sends HSTS with `includeSubDomains`, `nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy`, `Permissions-Policy` (camera for the app's own pages only) and `Cross-Origin-Opener-Policy`, and no longer `X-Powered-By`. Every page gets a Content Security Policy with a fresh nonce, in **report-only** mode: browsers report what it would block to `/csp-report`, which logs a `[csp]` line with tokens and query strings removed. To enforce it after a few days of clean logs, change one constant (`CSP_HEADER`). See the plan entry "security headers and report-only CSP". *2026-10-30:* Vercel Hobby keeps logs for a day and the connector can't read them, so each violation now also goes to Sentry as a warning (one issue per directive and blocked address, browser extensions left out, at most 20 an hour per server). A pass over the live pages (signed out and signed in) sent no reports. **Enforce after a week with no CSP issues in Sentry** (check from 2026-11-06).
 
 **H2. Rate limiting is effectively off.** The single Vercel Firewall rule has been in Log mode since 2026-09-25. It is keyed by IP only, covers writes only, and never limits reads, including the CPU-heavy PNG card renders. There are no per-account limits. The plan already lists per-account limits as open before the store launch.
 **Fix:** switch the rule to 429 now; add per-account limits in the server for writes, card renders and friend lookups. This reverses the 2026-09-24 "no app-side counters" decision, so it needs your decision. ASVS V2 (anti-automation), V4. **Status 2026-10-29: built and released (with H3).** Per-account limits in the database: 60 writes a minute, 120 card pictures per 10 minutes, 30 friend-code lookups per 10 minutes, 25 MB of game data a day. *Correction:* the rule can't simply be switched to 429, because one host with a live link writes about 26 times a minute against its 30. It is replaced instead, by all `/api/*` except `/api/live/*` at 300 a minute per IP, which you set in Vercel.
@@ -77,7 +77,7 @@ Also high: `sharp`, `source-map-js`, `zod` (inside `@neondatabase/auth`) and `de
 **H4. No CI pipeline.** There is no `.github/` folder. Lint, types, tests and build are run by hand, and a push to `main` deploys to production straight away.
 **Fix:** a GitHub Actions workflow running lint, `tsc`, tests, build and `npm audit --audit-level=high` on every push and pull request; branch protection on `main`; Dependabot or Renovate for dependency updates. ASVS V15.
 
-**Status 2026-10-29: CI built and pushed** (`.github/workflows/ci.yml`; `npm audit` runs as `npm run audit:check`, which allows only reviewed exceptions). **Open, your decisions:** branch protection would block your direct pushes to `main` unless you switch to pull requests; Dependabot would open update pull requests every week.
+**Status 2026-10-29: CI built and pushed** (`.github/workflows/ci.yml`; `npm audit` runs as `npm run audit:check`, which allows only reviewed exceptions). **Decided and done 2026-10-30:** Dependabot alerts and security-fix pull requests are on, plus one grouped update pull request a month for npm and for GitHub Actions (`.github/dependabot.yml`; the Neon Auth beta and major versions stay manual). The repository is public, so a free ruleset, "Protect main", blocks force-pushes and deletion of `main`; direct pushes work as before.
 
 **H5. Hosting plans are not fit for a commercial launch.**
 
@@ -86,6 +86,8 @@ Also high: `sharp`, `source-map-js`, `zod` (inside `@neondatabase/auth`) and `de
 - **Neon's shared email sender** for sign-in links. Neon's own checklist says production needs custom SMTP. Delivery and rate limits are outside your control, and sign-in depends on it.
 
 **Fix (your billing decision):** Vercel Pro; a paid Neon plan with at least 7 days of restore history plus a scheduled off-site `pg_dump`, with one rehearsed restore; custom SMTP (Resend, Postmark or SES) with SPF, DKIM and DMARC on `pokerize.app`. ASVS V14 (data protection), V13.
+
+**Free part done 2026-10-30:** production is kept in the one snapshot Neon Free allows, each with a 14-day expiry, taken again before every migration (`migrations/README.md`, "Backups and restore"). A restore was rehearsed into a temporary branch: identical schema, then deleted. The September snapshot and four stale branches holding August–September copies of production data were deleted. The privacy and account deletion pages now say one backup copy is kept for up to 14 days. The rest waits for paid plans; see "Paid, for later".
 
 ### Medium
 
@@ -113,7 +115,7 @@ Also high: `sharp`, `source-map-js`, `zod` (inside `@neondatabase/auth`) and `de
 
 **L5. No custom error pages.** There is no `app/error.tsx`, `app/global-error.tsx` or `app/not-found.tsx`, so a rendering error shows Next's default page. **Status 2026-10-29: fixed and pushed.** Branded not-found and error pages, plus a self-contained last-resort page.
 
-**L6. `Server-Timing` is sent in production.** It reveals how long auth and database calls take. That's harmless today; consider sending it only in development or to the admin.
+**L6. `Server-Timing` is sent in production.** It reveals how long auth and database calls take. That's harmless today; consider sending it only in development or to the admin. **Fixed 2026-10-30:** only development responses carry it; the `[timing]` log line stays.
 
 **L7. No vulnerability disclosure contact.** Add `/.well-known/security.txt` with an email for security reports. **Status 2026-10-29: fixed and pushed.** `public/.well-known/security.txt`, renewed before 2027-10-28 (a test reminds).
 
@@ -133,5 +135,24 @@ Each step is one reviewed change, matching the project's way of working.
 | 4 | H2, H3: firewall to 429, per-account limits and storage caps | Released 2026-10-29; you replace the firewall rule |
 | 5 | M2, M6, L1, L2: admin step-up, clear device data on sign-out, name cleaning, sign out everywhere | Released 2026-10-29 |
 | 6 | M3, L5, L7: monitoring, error pages, security.txt | Released 2026-10-29; you set up Sentry |
-| 7 | H5: Vercel Pro, Neon paid plan and backups, custom SMTP | Billing and DNS decisions (you do these in the dashboards) |
+| 7 | H5: Vercel Pro, Neon paid plan and backups, custom SMTP | Free part done 2026-10-30 (snapshot, rehearsed restore, stale copies deleted); the rest is in "Paid, for later" |
 | Later | M4, M5, L3: split the big component, route and browser tests, auth SDK upgrade | Ongoing |
+
+## Paid, for later
+
+Recorded 2026-10-30 (user: "proceed with the things that doesn't require additional payment ... keep them noted for future"). None of these is done; each needs your billing decision.
+
+| Item | Why | What it replaces today |
+| --- | --- | --- |
+| **Vercel Pro** | Hobby is licensed for non-commercial use only. Pro also allows more firewall rules, longer log retention and log drains. | Hobby: one firewall rule, a day of logs. |
+| **Neon paid plan** | At least 7 days of restore history, scheduled snapshots (up to 100), and enough compute to point the uptime monitor at `/api/health` (checks the database too). | One manual 14-day snapshot, 6 hours of restore history, the monitor on `/privacy`. |
+| **Custom email sender** (Resend, Postmark or SES) with SPF, DKIM and DMARC on `pokerize.app` | Sign-in links from Pokerize's own address, with delivery you control. Resend's free plan (100 a day, 3,000 a month) was offered and set aside: a launch could hit the daily cap and stop sign-ins. | Neon's shared sender, "Neon Auth" <auth@mail.myneon.app>. |
+| **Off-site database copy** | A copy outside Neon, for a Neon account or region failure. Comes with the paid plans above (scheduled `pg_dump` to storage you pay for). | Only Neon's own snapshot. |
+
+## Free, still open (2026-10-30)
+
+- **Firewall rule** (you, in Vercel → Firewall): replace the logging rule with all `/api/*` except `/api/live/*`, 300 a minute per IP, action 429.
+- **Enforce the CSP** after a week with no CSP issues in Sentry (from 2026-11-06).
+- **Preview database:** `cutover-rehearsal` (`br-tiny-forest-ayt6f3fe`) is at 0012, 21 migrations behind, and holds a September copy of production data. Previews aren't used today. When they are, the cleaner fix is a new schema-only branch (no production data) with its own Neon Auth; you then set the preview `DATABASE_URL`, `NEON_AUTH_BASE_URL` and cookie secret in Vercel, and the old branch is deleted.
+- **L3, the Neon Auth SDK:** 0.7.0-beta fixes none of the advisories; review the exceptions by 2026-11-30.
+- **M4** (split `poker-ledger.tsx`) and **M5** (route and browser tests).

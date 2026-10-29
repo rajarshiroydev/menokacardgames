@@ -12,6 +12,15 @@ Migration workflow:
 4. Run schema assertions, application tests and migration reconciliation.
 5. Record the migration in `app_migrations` only as part of the same transaction.
 6. Obtain separate authorization before applying a rehearsed migration to production.
+7. Just before applying it to production, take a fresh production snapshot (see below).
+
+## Backups and restore
+
+Decided 2026-10-30 (audit H5, until a paid Neon plan): production is kept in **one Neon snapshot**, the most Neon Free allows. Each one is taken with an expiry of `SNAPSHOT_KEEP_DAYS` (14) days, as the privacy and account deletion pages promise. Take a new one (delete the old one first, `delete_snapshot`, then `create_snapshot` on `br-small-sea-ayumyssr` with `expires_at`) before every production migration, and whenever a session starts with none left (`list_snapshots`). Neon also keeps 6 hours of restore history.
+
+**Restore, rehearsed 2026-10-30:** `restore_snapshot` with **`finalize: false`** creates a new branch from the snapshot and leaves production alone. Never let it finalize by default: finalizing moves production's computes and name onto the copy (the 2026-09-24 restore did that). The rehearsal's copy matched production's schema exactly (`compare_database_schema`, empty diff), with migrations to 0033, 17 tables (16 with row security) and Neon Auth's 9 tables; then it was deleted.
+
+**Restoring production for real** (with the user's go-ahead): restore to a new branch as above, check it, then, before finalizing, list the accounts in deletion on the current production. Requests made after the snapshot are missing from the copy, so request those deletions again on it. Accounts purged after the snapshot need nothing: the 30-day grace period is longer than a snapshot's 14 days, so their requests are already in the copy and the daily purge deletes them again. Then finalize, and check the app.
 
 `0001_owner_scope_foundation.sql` is an expand-only migration. It leaves legacy players and sessions unowned and keeps the current global constraints so the pre-cutover application remains usable. A later coordinated migration will remove global uniqueness, make ownership mandatory, install row-level security and revoke broad runtime access only after all routes use the owner-scoped data layer.
 

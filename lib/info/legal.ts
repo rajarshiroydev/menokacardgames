@@ -25,12 +25,17 @@ export const MINIMUM_AGE = 18;
 /** Where the database and the app's servers run. */
 export const DATA_LOCATION = "the United States";
 
-export const PRIVACY_UPDATED = "2026-10-29";
+export const PRIVACY_UPDATED = "2026-10-30";
 export const TERMS_UPDATED = "2026-10-28";
-export const DELETION_UPDATED = "2026-10-29";
+export const DELETION_UPDATED = "2026-10-30";
 
 /** Hours the database provider keeps recovery copies of deleted data. */
 export const PROVIDER_BACKUP_HOURS = 6;
+/**
+ * Days a database backup (a Neon snapshot) lives before Neon deletes it
+ * (user decision 2026-10-30). Take each one with this expiry.
+ */
+export const SNAPSHOT_KEEP_DAYS = 14;
 /** Minutes after signing in during which permanent deletions are allowed. */
 export const RECENT_SIGN_IN_MINUTES = RECENT_SIGN_IN_WINDOW_MS / 60_000;
 

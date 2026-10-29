@@ -367,7 +367,7 @@ The **Profile** tab replaced the Players tab on 30 September 2026. From the top:
   - if anything goes wrong, nothing is half-deleted: the account stays locked and the check tries again the next day
 - **Deletion can be up to a day late** because the check runs daily. An account is never deleted early.
 - **After deletion,** signing in with the same email starts a brand-new, empty account.
-- **Backups:** our database provider (Neon) keeps short-term recovery copies of deleted data for up to **6 hours**, after which it is gone for good.
+- **Backups:** our database provider (Neon) keeps short-term recovery copies of deleted data for up to **6 hours**. We also keep **one backup copy** of the database (a Neon snapshot), and each copy is deleted within **14 days**; if the database is ever restored from it, accounts deleted since are deleted again. After that, deleted data is gone for good.
 - **A record is kept** of each deletion request and each recovery, visible only to that account.
 - **Using another email** signs you in to a different, separate account; it does not recover the locked one.
 

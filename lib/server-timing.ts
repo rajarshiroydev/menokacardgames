@@ -4,14 +4,20 @@ import { AsyncLocalStorage } from "node:async_hooks";
 
 /**
  * Per-request timing: how long the sign-in check, the account lookup and the
- * database queries took. Each API response carries it as a Server-Timing
- * header (browser devtools → Network → Timing) and each request logs one
- * `[timing]` line, so a slow request in the Vercel logs shows where the time
- * went.
+ * database queries took. Each request logs one `[timing]` line, so a slow
+ * request in the Vercel logs shows where the time went. In development, API
+ * responses also carry it as a Server-Timing header (browser devtools →
+ * Network → Timing).
  */
 type Timings = Map<string, { ms: number; count: number }>;
 
 const store = new AsyncLocalStorage<Timings>();
+
+/**
+ * Production responses don't carry the header (audit L6, 2026-10-30): it
+ * showed anyone how long the sign-in and database calls took.
+ */
+const SEND_HEADER = process.env.NODE_ENV !== "production";
 
 /** Times `work` under `name` when a request is being timed; otherwise just runs it. */
 export async function timed<T>(name: string, work: () => Promise<T>) {
@@ -57,6 +63,7 @@ export function withServerTiming<Args extends unknown[]>(
     const response = await store.run(timings, () => handler(...args));
     const { header, log } = describe(timings, performance.now() - start);
     console.log(`[timing] ${label} ${response.status} ${log}`);
+    if (!SEND_HEADER) return response;
 
     const headers = new Headers(response.headers);
     headers.append("Server-Timing", header);

@@ -7,6 +7,9 @@ import {
   CSP_REPORT_PATH,
 } from "../lib/security/content-security-policy.ts";
 import {
+  CSP_SENTRY_REPORTS_PER_HOUR,
+  cspSentryReport,
+  hourlyBudget,
   MAX_REPORTS_PER_REQUEST,
   readCspReports,
   redactAddress,
@@ -144,6 +147,53 @@ describe("CSP violation reports", () => {
       "blob",
     );
     assert.equal(redactAddress("not a url"), "other");
+    assert.equal(
+      redactAddress("chrome-extension://abcdefghijklmnop/inject.js"),
+      "chrome-extension",
+    );
+  });
+
+  it("sends app violations to Sentry, one issue per directive and address", () => {
+    const [violation] = readCspReports({
+      "csp-report": {
+        "document-uri": "https://www.pokerize.app/?tab=games",
+        "effective-directive": "connect-src",
+        "blocked-uri": "https://cdn.example/x.js?y=1",
+        disposition: "report",
+      },
+    });
+    assert.deepEqual(cspSentryReport(violation), {
+      message: "CSP would block connect-src: https://cdn.example/x.js",
+      fingerprint: ["csp", "connect-src", "https://cdn.example/x.js"],
+    });
+    assert.equal(
+      cspSentryReport({ ...violation, disposition: "enforce" })?.message,
+      "CSP blocked connect-src: https://cdn.example/x.js",
+    );
+  });
+
+  it("leaves browser extensions out of Sentry", () => {
+    const [fromExtension] = readCspReports({
+      "csp-report": {
+        "effective-directive": "script-src-elem",
+        "blocked-uri": "inline",
+        "source-file": "moz-extension://1234/content.js",
+      },
+    });
+    assert.equal(fromExtension.source, "moz-extension");
+    assert.equal(cspSentryReport(fromExtension), null);
+  });
+
+  it("sends at most the hourly budget to Sentry", () => {
+    let now = 0;
+    const budget = hourlyBudget(CSP_SENTRY_REPORTS_PER_HOUR, () => now);
+    const taken = () =>
+      Array.from({ length: 50 }, () => budget.take()).filter(Boolean).length;
+    assert.equal(taken(), CSP_SENTRY_REPORTS_PER_HOUR);
+    now = 59 * 60 * 1000;
+    assert.equal(taken(), 0);
+    now = 60 * 60 * 1000;
+    assert.equal(taken(), CSP_SENTRY_REPORTS_PER_HOUR);
   });
 
   it("caps a batch and ignores junk", () => {

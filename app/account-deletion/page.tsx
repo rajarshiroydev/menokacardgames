@@ -10,6 +10,7 @@ import {
   GAME_BACKUP_EXPIRY_DAYS,
   PROVIDER_BACKUP_HOURS,
   RECENT_SIGN_IN_MINUTES,
+  SNAPSHOT_KEEP_DAYS,
 } from "@/lib/info/legal";
 
 export const metadata: Metadata = {
@@ -97,8 +98,11 @@ export default function AccountDeletionPage() {
         </ul>
         <p>
           Our database provider keeps short-term recovery copies for up to{" "}
-          {PROVIDER_BACKUP_HOURS} hours, after which they are gone too. Nothing
-          can be recovered after that. Signing in again with the same email
+          {PROVIDER_BACKUP_HOURS} hours, after which they are gone too. We also
+          keep one backup copy of the database, for recovering from a fault,
+          and each copy is deleted within {SNAPSHOT_KEEP_DAYS} days. If we ever
+          restore from it, we delete your account again. Nothing can be
+          recovered after that. Signing in again with the same email
           starts a brand-new, empty account.
         </p>
       </InfoSection>

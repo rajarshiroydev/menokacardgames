@@ -1,0 +1,28 @@
+# Dependency updates (docs/LAUNCH-AUDIT.md, H4; user decision 2026-10-30):
+# a pull request whenever a security fix exists (turned on in the repository
+# settings), plus one grouped pull request a month for npm and one for
+# GitHub Actions. Merges go through CI like any other change.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      npm:
+        patterns: ["*"]
+    ignore:
+      # The Neon Auth SDK is a beta: upgrade it by hand after a full rehearsal
+      # on the testbed (audit L3).
+      - dependency-name: "@neondatabase/auth"
+      # Major versions change behaviour; take them one at a time, by hand.
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      actions:
+        patterns: ["*"]

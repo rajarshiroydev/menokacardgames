@@ -57,6 +57,8 @@ export function redactAddress(value: unknown) {
     if (url.protocol === "data:" || url.protocol === "blob:") {
       return url.protocol.slice(0, -1);
     }
+    // Browser extensions and other addresses without a web origin.
+    if (url.origin === "null") return url.protocol.slice(0, -1);
     return `${url.origin}${redactTokenPath(url.pathname)}`;
   } catch {
     return "other";
@@ -87,6 +89,46 @@ function record(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : null;
+}
+
+const EXTENSION = /^(?:chrome|moz|safari|safari-web|ms-browser)-extension$/;
+
+/**
+ * A violation as a Sentry warning, so reports are kept for 30 days and can
+ * be reviewed before the policy is enforced (Vercel Hobby keeps logs for a
+ * day). One issue per directive and blocked address. Browser extensions
+ * injecting into the page are left out: they say nothing about the app.
+ */
+export function cspSentryReport(violation: CspViolation) {
+  if (EXTENSION.test(violation.blocked) || EXTENSION.test(violation.source ?? "")) {
+    return null;
+  }
+  const blocked = violation.blocked || "unknown";
+  const verb = violation.disposition === "enforce" ? "blocked" : "would block";
+  return {
+    message: `CSP ${verb} ${violation.directive}: ${blocked}`,
+    fingerprint: ["csp", violation.directive, blocked],
+  };
+}
+
+/** Sentry warnings one server instance sends for CSP reports, per hour. */
+export const CSP_SENTRY_REPORTS_PER_HOUR = 20;
+
+/** Allows `limit` takes per hour, so a flood of reports can't use up Sentry's quota. */
+export function hourlyBudget(limit: number, now: () => number = Date.now) {
+  let windowStart = now();
+  let used = 0;
+  return {
+    take() {
+      if (now() - windowStart >= 60 * 60 * 1000) {
+        windowStart = now();
+        used = 0;
+      }
+      if (used >= limit) return false;
+      used += 1;
+      return true;
+    },
+  };
 }
 
 /** The violations in a report body; anything unrecognised is skipped. */

@@ -15,6 +15,7 @@ import {
   OPERATOR_NAME,
   PRIVACY_UPDATED,
   PROVIDER_BACKUP_HOURS,
+  SNAPSHOT_KEEP_DAYS,
 } from "@/lib/info/legal";
 
 export const metadata: Metadata = {
@@ -254,7 +255,8 @@ export default function PrivacyPage() {
             When you delete your account, it is locked straight away and
             permanently deleted after {DELETION_GRACE_PERIOD_DAYS} days. Our
             database provider&apos;s recovery copies are gone {PROVIDER_BACKUP_HOURS}{" "}
-            hours after that. See{" "}
+            hours after that, and our backup copy within {SNAPSHOT_KEEP_DAYS}{" "}
+            days. See{" "}
             <Link href="/account-deletion">Account Deletion</Link>.
           </li>
           <li>
