@@ -66,6 +66,8 @@ Also high: `sharp`, `source-map-js`, `zod` (inside `@neondatabase/auth`) and `de
 **H1. No browser security headers.** Production pages send only HSTS (without `includeSubDomains`/`preload`). Missing: `Content-Security-Policy`, `frame-ancestors`/`X-Frame-Options` (the app can be framed for clickjacking, for example over a Delete button), `X-Content-Type-Options: nosniff`, `Referrer-Policy`, `Permissions-Policy`. The `X-Powered-By: Next.js` header gives away the framework.
 **Fix:** add `headers()` and `poweredByHeader: false` in `next.config.ts`; add a CSP with a per-request nonce set in `proxy.ts` (the inline theme script in `app/layout.tsx` needs the nonce or a hash). Start the CSP in report-only mode for a few days. ASVS V3 (web frontend), V13 (configuration).
 
+**Status 2026-10-29: built and pushed; the CSP is report-only until enforced.** Every response now sends HSTS with `includeSubDomains`, `nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy`, `Permissions-Policy` (camera for the app's own pages only) and `Cross-Origin-Opener-Policy`, and no longer `X-Powered-By`. Every page gets a Content Security Policy with a fresh nonce, in **report-only** mode: browsers report what it would block to `/csp-report`, which logs a `[csp]` line with tokens and query strings removed. To enforce it after a few days of clean logs, change one constant (`CSP_HEADER`). See the plan entry "security headers and report-only CSP".
+
 **H2. Rate limiting is effectively off.** The single Vercel Firewall rule has been in Log mode since 2026-09-25. It is keyed by IP only, covers writes only, and never limits reads, including the CPU-heavy PNG card renders. There are no per-account limits. The plan already lists per-account limits as open before the store launch.
 **Fix:** switch the rule to 429 now; add per-account limits in the server for writes, card renders and friend lookups. This reverses the 2026-09-24 "no app-side counters" decision, so it needs your decision. ASVS V2 (anti-automation), V4.
 
@@ -113,6 +115,10 @@ Also high: `sharp`, `source-map-js`, `zod` (inside `@neondatabase/auth`) and `de
 
 **L7. No vulnerability disclosure contact.** Add `/.well-known/security.txt` with an email for security reports.
 
+### Found later
+
+**A1. Invite tokens reached Vercel Analytics** (found 2026-10-29 during step 2). `components/web-analytics.tsx` blanked live-link tokens out of page addresses but not invite tokens (`/join/<token>`), although the privacy page says private links are blanked out. Only you can see them, in the Vercel dashboard. Invites work once and expire after 30 days, so any that reached analytics stop working on their own. **Fixed 2026-10-29:** one shared rule (`lib/security/token-paths.ts`) now blanks both kinds, for analytics and for CSP reports. Same-site referrers (such as a sign-in page address with `?invite=`) are never sent by Vercel's analytics script, so there is no second route.
+
 ## Proposed order of fixes
 
 Each step is one reviewed change, matching the project's way of working.
@@ -120,7 +126,7 @@ Each step is one reviewed change, matching the project's way of working.
 | Step | Fixes | Needs from you |
 | --- | --- | --- |
 | 1 | C1: upgrade Next.js and audited packages | Done, pushed 2026-10-29 |
-| 2 | H1: security headers and CSP (report-only first) | Go-ahead |
+| 2 | H1: security headers and CSP (report-only first) | Built 2026-10-29; enforce the CSP after a few days of clean logs |
 | 3 | H4, M1, L4: CI workflow, lint ignores, Node pin | Go-ahead; you turn on branch protection in GitHub |
 | 4 | H2, H3: firewall to 429, per-account limits and storage caps | Decision on limits (reverses an earlier decision) |
 | 5 | M2, M6, L1, L2: admin step-up, clear device data on sign-out, name cleaning, sign out everywhere | Go-ahead; L2 is user-visible |

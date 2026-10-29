@@ -15,16 +15,19 @@ function tooLarge(limitBytes: number): JsonBodyResult {
   };
 }
 
+const JSON_CONTENT_TYPE = /^application\/json\b/i;
+
 /**
  * Reads a JSON request body, stopping as soon as it exceeds the limit, so an
- * oversized or mislabelled request is never buffered in full.
+ * oversized or mislabelled request is never buffered in full. `contentType`
+ * lets a caller accept JSON sent under another type, such as browser reports.
  */
 export async function readJsonBody(
   request: Request,
   limitBytes: number,
+  contentType: RegExp = JSON_CONTENT_TYPE,
 ): Promise<JsonBodyResult> {
-  const contentType = request.headers.get("content-type") || "";
-  if (!/^application\/json\b/i.test(contentType)) {
+  if (!contentType.test(request.headers.get("content-type") || "")) {
     return { ok: false, status: 415, error: "Send the request as JSON" };
   }
 

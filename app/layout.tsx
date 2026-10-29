@@ -1,8 +1,10 @@
 import type { Metadata, Viewport } from "next";
 import { Barlow, Big_Shoulders } from "next/font/google";
+import { headers } from "next/headers";
 
 import { WebAnalytics } from "@/components/web-analytics";
 import { APP_NAME } from "@/lib/brand";
+import { NONCE_HEADER } from "@/lib/security/content-security-policy";
 import { THEME_STORAGE_KEY } from "@/lib/theme";
 
 import "./globals.css";
@@ -47,11 +49,15 @@ export const viewport: Viewport = {
   themeColor: "#05080a",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // The page's Content Security Policy nonce (proxy.ts). Reading the request
+  // headers also renders every page per request, which a nonce needs.
+  const nonce = (await headers()).get(NONCE_HEADER) ?? undefined;
+
   return (
     <html
       lang="en"
@@ -60,7 +66,7 @@ export default function RootLayout({
       className={`${barlow.variable} ${bigShoulders.variable} antialiased`}
     >
       <head>
-        <script dangerouslySetInnerHTML={{ __html: themeScript }} />
+        <script nonce={nonce} dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
       <body>
         <div className="backdrop" aria-hidden="true">

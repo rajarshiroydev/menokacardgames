@@ -3,7 +3,6 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
-import { authClient } from "@/lib/auth/client";
 import {
   RECENT_SIGN_IN_REQUIRED,
   RECENT_SIGN_IN_WINDOW_MS,
@@ -77,6 +76,8 @@ export function AccountLocked({
   async function sendLink() {
     setStatus("working");
     try {
+      // Loaded only when needed, as in poker-ledger.tsx.
+      const { authClient } = await import("@/lib/auth/client");
       const { error: linkError } = await authClient.signIn.magicLink({
         email,
         callbackURL: "/auth/callback",

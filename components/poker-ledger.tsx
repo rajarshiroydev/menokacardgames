@@ -213,7 +213,6 @@ import {
   type FoundAccount,
   type FriendOverview,
 } from "@/lib/friends/requests";
-import { authClient } from "@/lib/auth/client";
 import { apiErrorMessage } from "@/lib/security/rate-limit-message";
 import {
   RECENT_SIGN_IN_REQUIRED,
@@ -1911,6 +1910,9 @@ export function PokerLedger({
 
   async function sendRecentSignInLink() {
     try {
+      // Loaded only when needed: the auth client's validation library probes
+      // for eval, which the Content Security Policy reports on every load.
+      const { authClient } = await import("@/lib/auth/client");
       const { error } = await authClient.signIn.magicLink({
         email: accountEmail,
         callbackURL: "/auth/callback",
