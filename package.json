@@ -22,14 +22,14 @@
   },
   "dependencies": {
     "@neondatabase/auth": "0.5.0-beta",
-    "@neondatabase/serverless": "1.1.0",
-    "@sentry/nextjs": "11.8.0",
+    "@neondatabase/serverless": "1.2.0",
+    "@sentry/nextjs": "11.9.0",
     "@vercel/analytics": "2.0.1",
     "jsqr": "1.4.0",
     "next": "16.4.3",
     "qrcode-generator": "2.0.4",
-    "react": "19.2.4",
-    "react-dom": "19.2.4"
+    "react": "19.3.1",
+    "react-dom": "19.3.1"
   },
   "devDependencies": {
     "@dicebear/core": "9.4.3",
