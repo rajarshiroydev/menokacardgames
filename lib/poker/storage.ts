@@ -198,3 +198,32 @@ export function normalizeGameState(input: unknown): GameState | null {
     return null;
   }
 }
+
+export function readStoredLiveToken(storageKey: string) {
+  try {
+    return window.localStorage.getItem(storageKey);
+  } catch {
+    return null;
+  }
+}
+
+export function readStoredGame(storageKey: string) {
+  try {
+    return normalizeGameState(
+      JSON.parse(window.localStorage.getItem(storageKey) || "null"),
+    );
+  } catch {
+    return null;
+  }
+}
+
+export function readStoredHistory(storageKey: string) {
+  try {
+    const data = JSON.parse(
+      window.localStorage.getItem(storageKey) || "[]",
+    ) as PokerSession[];
+    return Array.isArray(data) ? data : [];
+  } catch {
+    return [];
+  }
+}

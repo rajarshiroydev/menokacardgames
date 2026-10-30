@@ -2,14 +2,12 @@
 
 import {
   ChangeEvent,
-  ReactNode,
   useCallback,
   useEffect,
   useMemo,
   useRef,
   useState,
 } from "react";
-
 
 import {
   awardPots,
@@ -87,6 +85,9 @@ import {
   normalizeGameState,
   prepareLegacySessionsForAdoption,
   readHandLayout,
+  readStoredGame,
+  readStoredHistory,
+  readStoredLiveToken,
   readTurnSound,
   storeHandLayout,
   type HandLayout,
@@ -136,6 +137,8 @@ import { savedLogs } from "@/components/ledger/session-card";
 import { SettleUpSheet } from "@/components/ledger/settle-up-sheet";
 import { SetupView } from "@/components/ledger/setup-view";
 import { LiveShareSheet } from "@/components/ledger/share-sheets";
+import { TabBar } from "@/components/ledger/tab-bar";
+import { showsPlayerList, type View, VIEWS } from "@/components/ledger/views";
 import { SettingsView } from "@/components/settings-view";
 import { ThemeToggle } from "@/components/theme-toggle";
 import {
@@ -176,70 +179,6 @@ import type {
   RebuyRules,
   SavedActionLog,
 } from "@/lib/poker/types";
-
-type View =
-  | "home"
-  | "newGame"
-  | "setup"
-  | "game"
-  | "history"
-  | "sessions"
-  | "profile"
-  | "settings"
-  | "hands"
-  | "whoWins";
-const VIEWS: readonly View[] = [
-  "home",
-  "newGame",
-  "setup",
-  "game",
-  "history",
-  "sessions",
-  "profile",
-  "settings",
-  "hands",
-  "whoWins",
-];
-
-/**
- * Screens that show the player list or its count. It is reloaded when one
- * opens, because a friend accepting a request on their phone adds or links a
- * player here.
- */
-function showsPlayerList(view: View) {
-  return (
-    view === "home" || view === "profile" || view === "setup" || view === "whoWins"
-  );
-}
-
-function readStoredLiveToken(storageKey: string) {
-  try {
-    return window.localStorage.getItem(storageKey);
-  } catch {
-    return null;
-  }
-}
-
-function readStoredGame(storageKey: string) {
-  try {
-    return normalizeGameState(
-      JSON.parse(window.localStorage.getItem(storageKey) || "null"),
-    );
-  } catch {
-    return null;
-  }
-}
-
-function readStoredHistory(storageKey: string) {
-  try {
-    const data = JSON.parse(
-      window.localStorage.getItem(storageKey) || "[]",
-    ) as PokerSession[];
-    return Array.isArray(data) ? data : [];
-  } catch {
-    return [];
-  }
-}
 
 export function PokerLedger({
   accountId,
@@ -2612,68 +2551,6 @@ export function PokerLedger({
     </main>
     </AvatarContext.Provider>
     </CurrencyContext.Provider>
-  );
-}
-
-type TabTarget = "home" | "play" | "history" | "sessions" | "profile";
-
-/** A head and shoulders, drawn at the size of the suit glyphs beside it. */
-function ProfileIcon() {
-  return (
-    <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true">
-      <circle cx="8" cy="5" r="3.2" fill="currentColor" />
-      <path d="M1.8 15a6.2 6.2 0 0 1 12.4 0Z" fill="currentColor" />
-    </svg>
-  );
-}
-
-const TABS: ReadonlyArray<{ target: TabTarget; icon: ReactNode; label: string }> = [
-  { target: "home", icon: "♠", label: "Home" },
-  { target: "play", icon: "♦", label: "Play" },
-  { target: "history", icon: "♣", label: "Ranks" },
-  { target: "sessions", icon: "♥", label: "Games" },
-  { target: "profile", icon: <ProfileIcon />, label: "Profile" },
-];
-
-function tabForView(view: View): TabTarget {
-  if (view === "newGame" || view === "setup" || view === "game") return "play";
-  if (view === "hands" || view === "whoWins") return "home";
-  if (view === "settings") return "profile";
-  return view;
-}
-
-function TabBar({
-  view,
-  dots,
-  onSelect,
-}: {
-  view: View;
-  /** A game is on (Play), or friend requests are waiting (Profile). */
-  dots: Partial<Record<TabTarget, boolean>>;
-  onSelect: (target: TabTarget) => void;
-}) {
-  const active = tabForView(view);
-  return (
-    <nav className="tab-bar" aria-label="Main">
-      {TABS.map((tab) => (
-        <button
-          key={tab.target}
-          type="button"
-          className={tab.target === active ? "active" : ""}
-          aria-current={tab.target === active ? "page" : undefined}
-          onClick={() => onSelect(tab.target)}
-        >
-          <span className="tab-icon" aria-hidden="true">
-            {tab.icon}
-          </span>
-          <span className="tab-label">{tab.label}</span>
-          <span className="tab-indicator" aria-hidden="true" />
-          {dots[tab.target] ? (
-            <span className={`tab-dot tab-dot-${tab.target}`} aria-hidden="true" />
-          ) : null}
-        </button>
-      ))}
-    </nav>
   );
 }
 
