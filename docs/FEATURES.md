@@ -562,7 +562,7 @@ Since 29 October 2026, each account has limits, so one account (or a script usin
 - **Games:** at most **5,000** saved games per account, discarded ones included. Saving one more shows "You can keep up to 5,000 games. Permanently delete discarded games to save more."
 - **Unfinished-game copies:** at most **5** per account (section 10).
 - Each limit counts from the first request in its period (a minute, 10 minutes or a day) and starts again after it. The counts are kept in the database for the current period only and deleted with the account.
-- A rule on the hosting service also watches requests from each internet address, as a backstop against floods. For now it only logs them and blocks nothing.
+- A rule on the hosting service also watches each internet address, as a backstop against floods: more than **300 requests a minute** to the app's server (live standings links not counted) gets logged. Since 30 October 2026 it covers reading as well as changes. For now it only logs and blocks nothing: answering "too many requests" needs the hosting service's paid plan, and many people on one mobile network can share an address.
 
 ## Known gaps
 
