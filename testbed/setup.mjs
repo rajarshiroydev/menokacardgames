@@ -78,10 +78,17 @@ await neon("PATCH", `/branches/${branch.id}/auth/email_and_password`, {
 await neon("PATCH", `/branches/${branch.id}/auth/plugins/magic-link`, {
   enabled: false,
 });
+// No social sign-in, as on production: this project's Neon Auth came with
+// Google on (found 2026-10-30), and the Better Auth advisory excepted in
+// scripts/audit-exceptions.json needs a provider and magic links together.
+const { providers = [] } = await neon("GET", `/branches/${branch.id}/auth/oauth_providers`);
+for (const provider of providers) {
+  await neon("DELETE", `/branches/${branch.id}/auth/oauth_providers/${provider.id}`);
+}
 await neon("PATCH", `/branches/${branch.id}/auth/allow_localhost`, {
   allow_localhost: true,
 });
-console.log("Password sign-in on, magic links off, localhost allowed");
+console.log("Password sign-in on, magic links and social sign-in off, localhost allowed");
 
 // 3. Schema. The numbered migrations assume the tables that predate them, so
 // an empty database starts from schema.sql (the full current schema) and

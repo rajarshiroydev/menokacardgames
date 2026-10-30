@@ -5,7 +5,7 @@
       "advisory": "GHSA-965c-763c-88jm",
       "package": "better-auth",
       "severity": "critical",
-      "reason": "OAuth sign-in state accepted as a magic link token (account takeover). Only a Better Auth server with magic links and a social or Generic OAuth provider is affected. This app runs no Better Auth server: Neon's hosted Neon Auth does, and no Neon Auth branch has any OAuth provider (checked 2026-10-29). Never enable Google or another provider until Neon runs better-auth 1.7.7 or later. No fixed release exists yet.",
+      "reason": "OAuth sign-in state accepted as a magic link token (account takeover). Only a Better Auth server with magic links and a social or Generic OAuth provider is affected. This app runs no Better Auth server: Neon's hosted Neon Auth does, and no Neon Auth branch has any OAuth provider (production, development and preview checked 2026-10-29 and 2026-10-30; the testbed had Google on until it was removed on 2026-10-30, with magic links off there, and testbed/setup.mjs now keeps providers off). Never enable Google or another provider until Neon runs better-auth 1.7.7 or later. No fixed release exists yet.",
       "reviewBy": "2026-11-30"
     },
     {
