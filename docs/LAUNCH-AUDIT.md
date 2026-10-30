@@ -99,7 +99,14 @@ Also high: `sharp`, `source-map-js`, `zod` (inside `@neondatabase/auth`) and `de
 
 **M4. One 14,124-line component.** `components/poker-ledger.tsx` holds about 95 components and 219 hooks; `app/globals.css` is 8,058 lines. This makes review, testing and code-splitting hard: every screen ships in one bundle, and a change anywhere risks breaking an unrelated flow. **Fix:** split it gradually, one screen per step (Home, live game, Ranks, Friends, Profile, Settings) into their own files, with no behaviour change. Not a launch blocker.
 
-**M5. No automated tests for routes, pages or the full flow.** The 508 tests cover pure logic well. Nothing automatically checks that each route refuses a signed-out or another host's request, the owner-isolation SQL test is run by hand, and there is no browser test of sign-in → game → save. **Fix:** route tests for the auth and validation paths; one Playwright smoke test against the testbed, run in CI. ASVS V15.
+**M5. No automated tests for routes, pages or the full flow.** The 508 tests cover pure logic well. Nothing automatically checks that each route refuses a signed-out or another host's request, the owner-isolation SQL test is run by hand, and there is no browser test of sign-in → game → save. **Fix:** route tests for the auth and validation paths; one Playwright smoke test against the testbed, run in CI. ASVS V15. **Status 2026-10-30: built (committed, not pushed); runs in CI once you add the testbed secrets.** 55 route checks run over HTTP against the testbed (`npm run testbed:routes`), with real sign-in and row security:
+- every signed-in route and method answers 401 signed out, and cross-site writes get 403;
+- another host's games and players can't be read, discarded, repriced, renamed or deleted;
+- bad input answers 415, 400 or 413;
+- a locked account gets 423 on the ledger but can still manage itself and recover;
+- the public routes behave.
+
+`test/api-routes.test.ts` fails when a route isn't listed. A Playwright smoke test on a phone screen (`npm run testbed:e2e`) signs in, plays a hand, saves, settles up and cleans up. The CI `testbed` job runs both against a production build once the four `TESTBED_*` secrets exist (`npm run testbed:ci-secrets`).
 
 **M6. Local game data stays on the device after sign-out.** The game in progress, the live link token and the device ID stay in `localStorage` after sign-out. On a shared or borrowed phone, the next person can read them. **Fix:** clear the account's keys on sign-out. ASVS V14 (client-side data). **Status 2026-10-29: fixed and pushed.** Sign-out backs up the game, then removes it and the live link from the phone. Pre-account data stays, because it may exist nowhere else.
 
@@ -155,4 +162,5 @@ Recorded 2026-10-30 (user: "proceed with the things that doesn't require additio
 - **Dependabot pull requests:** #1 moves the Neon Auth SDK to 0.7.0-beta (a security update for a low advisory); don't merge it without a full testbed rehearsal (L3). #2 (the monthly group) was merged 2026-10-30 after review: see the plan entry "Dependabot #2 merged".
 - **Preview database:** `cutover-rehearsal` (`br-tiny-forest-ayt6f3fe`) is at 0012, 21 migrations behind, and holds a September copy of production data. Previews aren't used today. When they are, the cleaner fix is a new schema-only branch (no production data) with its own Neon Auth; you then set the preview `DATABASE_URL`, `NEON_AUTH_BASE_URL` and cookie secret in Vercel, and the old branch is deleted.
 - **L3, the Neon Auth SDK:** 0.7.0-beta fixes none of the advisories; review the exceptions by 2026-11-30.
-- **M4** (split `poker-ledger.tsx`) and **M5** (route and browser tests).
+- **M4** (split `poker-ledger.tsx`).
+- **M5 secrets** (you, once): run `npm run testbed:ci-secrets` so CI runs the route checks and the browser test. Dependabot's pull requests don't get Actions secrets; add the same four as Dependabot secrets if you want them checked too.

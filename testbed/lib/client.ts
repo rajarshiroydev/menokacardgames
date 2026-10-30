@@ -14,6 +14,17 @@ export class ApiError extends Error {
   }
 }
 
+export type SendOptions = {
+  method?: string;
+  body?: unknown;
+  rawBody?: string;
+  contentType?: string;
+  crossSite?: boolean;
+  headers?: Record<string, string>;
+};
+
+export type SentResponse = { status: number; headers: Headers; body: unknown };
+
 export class TestbedClient {
   readonly email: string;
   private cookies = new Map<string, string>();
@@ -33,17 +44,26 @@ export class TestbedClient {
     }
   }
 
-  async request<T>(path: string, method = "GET", body?: unknown): Promise<T> {
+  /**
+   * Any request, answered whatever its status. `body` is sent as JSON;
+   * `rawBody` as it is, with `contentType`. `crossSite` sends the headers a
+   * browser sends from another site.
+   */
+  async send(path: string, options: SendOptions = {}): Promise<SentResponse> {
+    const { method = "GET", body, rawBody, contentType, crossSite, headers = {} } = options;
     const response = await fetch(TESTBED_ORIGIN + path, {
       method,
       redirect: "manual",
       headers: {
         Cookie: [...this.cookies].map(([name, value]) => `${name}=${value}`).join("; "),
-        Origin: TESTBED_ORIGIN,
-        "Sec-Fetch-Site": "same-origin",
-        ...(body === undefined ? {} : { "Content-Type": "application/json" }),
+        Origin: crossSite ? "https://evil.example" : TESTBED_ORIGIN,
+        "Sec-Fetch-Site": crossSite ? "cross-site" : "same-origin",
+        ...(body === undefined && rawBody === undefined
+          ? {}
+          : { "Content-Type": contentType ?? "application/json" }),
+        ...headers,
       },
-      body: body === undefined ? undefined : JSON.stringify(body),
+      body: rawBody ?? (body === undefined ? undefined : JSON.stringify(body)),
     });
     this.remember(response);
     const text = await response.text();
@@ -53,14 +73,20 @@ export class TestbedClient {
     } catch {
       data = text;
     }
-    if (!response.ok) {
+    return { status: response.status, headers: response.headers, body: data };
+  }
+
+  async request<T>(path: string, method = "GET", body?: unknown): Promise<T> {
+    const response = await this.send(path, { method, body });
+    if (response.status >= 400) {
+      const data = response.body;
       const message =
         (data as { error?: string; message?: string } | null)?.error ??
         (data as { message?: string } | null)?.message ??
-        response.statusText;
+        String(response.status);
       throw new ApiError(`${method} ${path} → ${response.status}: ${message}`, response.status, data);
     }
-    return data as T;
+    return response.body as T;
   }
 
   /** Creates the sign-in identity; returns false when it already exists. */

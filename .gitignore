@@ -48,3 +48,8 @@ next-env.d.ts
 /Pokerize Logo Design/
 /Pokerize Logo Design.zip
 /design_handoff_sporty_glass_redesign/
+
+# Playwright results and reports (npm run testbed:e2e)
+/test-results/
+/playwright-report/
+/blob-report/

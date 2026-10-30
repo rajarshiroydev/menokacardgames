@@ -21,6 +21,15 @@
       "autoPort": true
     },
     {
+      "name": "testbed-start",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "testbed:start"
+      ],
+      "port": 3006
+    },
+    {
       "name": "testbed-running",
       "url": "http://localhost:3006",
       "port": 3006

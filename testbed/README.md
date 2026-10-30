@@ -11,6 +11,20 @@ never touched. Plan and decisions: `docs/FEATURE-PLAN.md`, entry "testbed".
 | `npm run testbed:seed` | Creates the personas in `lib/testbed/personas.ts` with their players, games and friend requests, through the app's own API. Needs `testbed:dev` running. |
 | `npm run testbed:reset` | Empties all app data and sign-ins, so the seed can run again. |
 | `npm run testbed:inspect` | Prints the project's IDs, roles and auth settings (no secrets). |
+| `npm run testbed:start` | Builds and serves the app in production mode in testbed mode on http://localhost:3006, as CI does (`--no-build` serves the last build). In the preview pane it's the `testbed-start` launch configuration. |
+| `npm run testbed:routes` | Route checks (audit M5): every API route signed out, from another site, as another host, with bad input and while locked. Needs the testbed app running. About 35 seconds. |
+| `npm run testbed:e2e` | Browser smoke test (Playwright, phone screen): sign in as Bikram, play a hand, save, settle up, then delete the game. Needs the testbed app running and, once, `npx playwright install chromium`. |
+| `npm run testbed:ci-secrets` | Copies the four values CI needs from `.env.testbed.local` into GitHub Actions secrets, without printing them. You run it, signed in to `gh`. |
+
+`testbed/lib/routes.ts` lists every API route; `test/api-routes.test.ts` (part
+of `npm test`) fails when a route file is missing from it, so a new route
+can't skip the checks. In CI the `testbed` job runs both suites against a
+production build once the secrets exist; it uploads no traces or reports,
+because the repository is public and they would hold test sessions' cookies.
+
+If `testbed:dev` reloads the page over and over after packages change, the
+dev cache in `.next/dev` is stale: stop the server, move `.next/dev` aside and
+start again.
 
 The sign-in page shows one **Sign in as** button per persona in testbed mode.
 Two browser windows (one private) let you be two people at once.

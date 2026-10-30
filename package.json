@@ -18,6 +18,10 @@
     "testbed:dev": "node testbed/dev.mjs",
     "testbed:seed": "node --experimental-strip-types testbed/seed.ts",
     "testbed:reset": "node testbed/reset.mjs",
+    "testbed:start": "node testbed/start.mjs",
+    "testbed:routes": "node --experimental-strip-types --test testbed/routes.test.ts",
+    "testbed:e2e": "playwright test",
+    "testbed:ci-secrets": "node testbed/ci-secrets.mjs",
     "avatars:generate": "node --experimental-strip-types scripts/generate-avatars.ts"
   },
   "dependencies": {
@@ -35,6 +39,7 @@
     "@dicebear/core": "9.4.3",
     "@dicebear/lorelei": "9.4.2",
     "@eslint/compat": "2.1.1",
+    "@playwright/test": "1.64.1",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^24.19.2",
     "@types/react": "^19",

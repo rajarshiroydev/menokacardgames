@@ -1,7 +1,8 @@
 # The project's gates on every push to main and every pull request: lint,
 # types, tests, production build and the dependency audit
-# (docs/LAUNCH-AUDIT.md, step 3). It needs no secrets and never reaches the
-# database or Neon Auth.
+# (docs/LAUNCH-AUDIT.md, step 3). The checks job needs no secrets and never
+# reaches the database or Neon Auth; the testbed job (audit M5) reaches only
+# the separate test project, when its secrets are set.
 name: CI
 
 on:
@@ -56,3 +57,79 @@ jobs:
 
       - name: Dependency audit
         run: npm run audit:check
+
+  # Whether the testbed's values are available as repository secrets. They
+  # aren't for forks and Dependabot, or until they're added; the testbed job
+  # is then skipped and this says why.
+  testbed-secrets:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    outputs:
+      ready: ${{ steps.check.outputs.ready }}
+    steps:
+      - id: check
+        env:
+          DATABASE_URL: ${{ secrets.TESTBED_DATABASE_URL }}
+          NEON_AUTH_BASE_URL: ${{ secrets.TESTBED_NEON_AUTH_BASE_URL }}
+          NEON_AUTH_COOKIE_SECRET: ${{ secrets.TESTBED_NEON_AUTH_COOKIE_SECRET }}
+          TESTBED_PERSONA_PASSWORD: ${{ secrets.TESTBED_PERSONA_PASSWORD }}
+        run: |
+          if [ -n "$DATABASE_URL" ] && [ -n "$NEON_AUTH_BASE_URL" ] &&
+             [ -n "$NEON_AUTH_COOKIE_SECRET" ] && [ -n "$TESTBED_PERSONA_PASSWORD" ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::No testbed secrets here, so the route checks and the browser test are skipped (docs/LAUNCH-AUDIT.md, M5)."
+          fi
+
+  # Route checks and the browser smoke test (audit M5) against the separate
+  # menoka-testbed project, which holds only test data. The app runs on this
+  # runner in testbed mode (testbed/lib/env.mjs), with every production
+  # credential blank. No traces or reports are uploaded: this repository is
+  # public, and they would hold test sessions' cookies. Reproduce a failure
+  # locally with npm run testbed:routes or npm run testbed:e2e.
+  testbed:
+    needs: [checks, testbed-secrets]
+    if: needs.testbed-secrets.outputs.ready == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+      TESTBED: "1"
+      DATABASE_URL: ${{ secrets.TESTBED_DATABASE_URL }}
+      NEON_AUTH_BASE_URL: ${{ secrets.TESTBED_NEON_AUTH_BASE_URL }}
+      NEON_AUTH_COOKIE_SECRET: ${{ secrets.TESTBED_NEON_AUTH_COOKIE_SECRET }}
+      TESTBED_PERSONA_PASSWORD: ${{ secrets.TESTBED_PERSONA_PASSWORD }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - run: npm ci
+
+      - name: Browser for the smoke test
+        run: npx playwright install --with-deps chromium
+
+      - name: Start the app in testbed mode
+        run: |
+          npm run testbed:start > testbed-server.log 2>&1 &
+          for attempt in $(seq 1 60); do
+            curl -sf http://localhost:3006/api/health > /dev/null && exit 0
+            sleep 5
+          done
+          tail -100 testbed-server.log
+          exit 1
+
+      - name: Route checks
+        run: npm run testbed:routes
+
+      - name: Browser smoke test
+        run: npm run testbed:e2e
+
+      - name: Server log
+        if: failure()
+        run: tail -200 testbed-server.log
