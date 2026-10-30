@@ -425,7 +425,7 @@ The **Profile** tab replaced the Players tab on 30 September 2026. From the top:
 - **Is the host still connected?** The page says "Updated 12s ago". While the host's phone is on, it also checks in once a minute when nothing has changed. After 2½ minutes without any update, the page warns that the host's phone may be offline or asleep. If instead the player's own phone can't reach the app, the page says "This phone can't reach the app" and keeps trying.
 - **Tap your name** to highlight your own row. The highlight is remembered on that phone.
 - **What the link does not show:** the host's player list, other games, saved history, all-time standings, the action log (only the last hand's winners), money values when chips have a price, or anything else in the host's account.
-- **When the link stops working.** It ends when the host saves or discards the game, taps **Stop sharing**, or deletes their account. It also stops 12 hours after the host's last update. Afterwards it shows "This game has ended". Sharing again makes a new link; old links never come back.
+- **When the link stops working.** It ends when the host saves or discards the game, on any phone (since 30 October 2026, also on a phone the game moved to after the link was shared), taps **Stop sharing**, or deletes their account. It also stops 12 hours after the host's last update. Afterwards it shows "This game has ended". Sharing again makes a new link; old links never come back.
 - **Who can see it.** Anyone who has the link can see those names and chip counts until it ends, so share it only with the table. The button reads "Sharing live · show link" while a link is active, and "Live link not updating" if the host's updates keep failing.
 
 ## 20. Friends

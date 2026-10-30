@@ -27,6 +27,16 @@ export const CHANGE_TAG_LABELS: Record<ChangeTag, string> = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    date: "2026-10-30",
+    title: "Live link fix",
+    items: [
+      {
+        tag: "fixed",
+        text: "A live link now ends when the game is saved or discarded on another phone you moved the game to. Before, it stayed open for up to 12 hours.",
+      },
+    ],
+  },
+  {
     date: "2026-10-29",
     title: "Avatars and safer sign-out",
     items: [

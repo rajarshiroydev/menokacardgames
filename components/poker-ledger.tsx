@@ -1038,11 +1038,17 @@ export function PokerLedger({
     );
   }
 
-  /** Saving or discarding the game ends its live link. */
+  /**
+   * Saving or discarding the game ends its live link, also one shared from
+   * another device before the game moved here: this device then has no
+   * token, but the account has only one link, so the request always goes
+   * (found 2026-10-30; before, such a link stayed up until it expired).
+   */
   function endLiveSharing() {
-    if (!liveToken) return;
-    rememberLiveToken(null);
-    setSharingLive(false);
+    if (liveToken) {
+      rememberLiveToken(null);
+      setSharingLive(false);
+    }
     liveApi("DELETE").catch(() => {
       // The link still expires 12 hours after its last update.
     });
