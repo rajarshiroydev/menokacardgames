@@ -1,4 +1,6 @@
-import type { PokerSession } from "./types";
+import { dealNewHand } from "./game.ts";
+import { normalizeChipValue } from "./settle-up.ts";
+import type { GameState, PokerSession } from "./types";
 
 export const LEGACY_GAME_STORAGE_KEY = "pokerLedger.v1";
 export const LEGACY_HISTORY_STORAGE_KEY = "pokerLedger.history.v1";
@@ -138,5 +140,61 @@ export function storeTableTurn(startedAt: number, turn: number) {
     );
   } catch {
     // Private windows may refuse storage; the turn lasts this hand only.
+  }
+}
+
+/**
+ * A game kept on a device or restored from a backup, brought up to date with
+ * fields older versions didn't have. Null when it isn't a game.
+ */
+export function normalizeGameState(input: unknown): GameState | null {
+  try {
+    const data = input as GameState | null;
+    if (!data?.players) return null;
+    // Games saved before escalating blinds kept one fixed big blind.
+    data.baseAnte ??= data.ante;
+    data.blinds ??= null;
+    data.blindLevel ??= 0;
+    data.blindPlans ??= [{
+      effectiveHand: 1,
+      effectiveAt: data.startedAt,
+      baseBigBlind: data.baseAnte,
+      schedule: data.blinds,
+    }];
+    data.blindLevels ??= [
+      {
+        handNo: 1,
+        dealtAt: data.startedAt,
+        bigBlind: data.baseAnte,
+      },
+      ...(data.handNo > 1 && data.ante !== data.baseAnte
+        ? [{ handNo: data.handNo, dealtAt: Date.now(), bigBlind: data.ante }]
+        : []),
+    ];
+    data.players.forEach((player) => {
+      player.buyIns ??= [data.startStack];
+    });
+    if (data.chipValue !== undefined && !normalizeChipValue(data.chipValue)) {
+      delete data.chipValue;
+    }
+    if (data.lastHand) {
+      data.lastHand.buyInsBefore ??= data.players.map((player) => [
+        ...(player.buyIns ?? [data.startStack]),
+      ]);
+    }
+    // Older saved games did not have positional betting. Start their next hand
+    // with the new model instead of leaving an unusable in-progress hand.
+    if (!Number.isInteger(data.dealerIndex)) {
+      data.players.forEach((player, index) => {
+        player.stack = data.hand?.stacksBeforeHand[index] ?? player.stack;
+      });
+      data.dealerIndex = -1;
+      data.hand = null;
+      data.winnerAnnouncement = null;
+      dealNewHand(data);
+    }
+    return data;
+  } catch {
+    return null;
   }
 }

@@ -12,13 +12,11 @@ import {
 
 
 import {
-  activeIndexes,
   awardPots,
   cancelCurrentHand,
   pauseBlindClock,
   resumeBlindClock,
   buyInPlayer,
-  completedHandRecord,
   dealNewHand,
   editBlindSchedule,
   formatDate,
@@ -26,17 +24,10 @@ import {
   normalizeRakeRules,
   potLabel,
   resolvePotWinners,
-  splitShares,
-  takeRake,
-  applyRaiseRules,
-  mayRaise,
-  minimumRaise,
-  undoRaiseRules,
   undoableStreet,
   undoStreet,
   dealNextStreet,
   nextBuyIn,
-  nextPlayerToAct,
   pendingIndexes,
   isValidSmallBlind,
   smallBlindFor,
@@ -45,7 +36,6 @@ import {
   totalBuyIns,
   undoLastHand,
   lastHandNumber,
-  recordHandResult,
   editRebuyRules,
   cashOutPlayer,
   joinGame,
@@ -55,12 +45,16 @@ import {
   unplayedRebuys,
 } from "@/lib/poker/game";
 import {
-  LOG_LIMIT,
-} from "@/lib/poker/action-log";
-import {
   isValidBuyIn,
   normalizeRebuyRules,
 } from "@/lib/poker/buy-ins";
+import {
+  awardPot,
+  playerAction,
+  recordWin,
+  splitPotBetween,
+  undoPlayerAction,
+} from "@/lib/poker/actions";
 import { gameFromSession } from "@/lib/poker/continue-session";
 import {
   createLedgerGame,
@@ -90,6 +84,7 @@ import {
   accountLiveTokenStorageKey,
   LEGACY_GAME_STORAGE_KEY,
   LEGACY_HISTORY_STORAGE_KEY,
+  normalizeGameState,
   prepareLegacySessionsForAdoption,
   readHandLayout,
   readTurnSound,
@@ -235,62 +230,6 @@ function readStoredGame(storageKey: string) {
   }
 }
 
-/**
- * A game kept on a device or restored from a backup, brought up to date with
- * fields older versions didn't have. Null when it isn't a game.
- */
-function normalizeGameState(input: unknown): GameState | null {
-  try {
-    const data = input as GameState | null;
-    if (!data?.players) return null;
-    // Games saved before escalating blinds kept one fixed big blind.
-    data.baseAnte ??= data.ante;
-    data.blinds ??= null;
-    data.blindLevel ??= 0;
-    data.blindPlans ??= [{
-      effectiveHand: 1,
-      effectiveAt: data.startedAt,
-      baseBigBlind: data.baseAnte,
-      schedule: data.blinds,
-    }];
-    data.blindLevels ??= [
-      {
-        handNo: 1,
-        dealtAt: data.startedAt,
-        bigBlind: data.baseAnte,
-      },
-      ...(data.handNo > 1 && data.ante !== data.baseAnte
-        ? [{ handNo: data.handNo, dealtAt: Date.now(), bigBlind: data.ante }]
-        : []),
-    ];
-    data.players.forEach((player) => {
-      player.buyIns ??= [data.startStack];
-    });
-    if (data.chipValue !== undefined && !normalizeChipValue(data.chipValue)) {
-      delete data.chipValue;
-    }
-    if (data.lastHand) {
-      data.lastHand.buyInsBefore ??= data.players.map((player) => [
-        ...(player.buyIns ?? [data.startStack]),
-      ]);
-    }
-    // Older saved games did not have positional betting. Start their next hand
-    // with the new model instead of leaving an unusable in-progress hand.
-    if (!Number.isInteger(data.dealerIndex)) {
-      data.players.forEach((player, index) => {
-        player.stack = data.hand?.stacksBeforeHand[index] ?? player.stack;
-      });
-      data.dealerIndex = -1;
-      data.hand = null;
-      data.winnerAnnouncement = null;
-      dealNewHand(data);
-    }
-    return data;
-  } catch {
-    return null;
-  }
-}
-
 function readStoredHistory(storageKey: string) {
   try {
     const data = JSON.parse(
@@ -300,50 +239,6 @@ function readStoredHistory(storageKey: string) {
   } catch {
     return [];
   }
-}
-
-function recordAction(
-  game: GameState,
-  playerIndex: number,
-  action: Omit<PlayerAction, "line">,
-  text: string,
-) {
-  const hand = game.hand;
-  if (!hand) return;
-  const line = `Hand ${hand.no} ${STAGES[hand.stage]}: ${text}`;
-  hand.last[playerIndex] = { ...action, line };
-  game.log.unshift(line);
-  game.log = game.log.slice(0, LOG_LIMIT);
-}
-
-function recordWin(game: GameState, line: string) {
-  game.log.unshift(line);
-  game.log = game.log.slice(0, LOG_LIMIT);
-}
-
-function awardPot(game: GameState, playerIndex: number, automatic = false) {
-  const hand = game.hand;
-  if (!hand) return;
-  const record = completedHandRecord(game);
-  const pot = hand.pot - takeRake(game);
-  game.players[playerIndex].stack += pot;
-  recordWin(
-    game,
-    `Hand ${hand.no}: ${game.players[playerIndex].name} wins ${formatChips(
-      pot,
-      game.chipUnit,
-      chipCurrency(game.currency, game.chipValue),
-    )}${automatic ? " (others folded)" : ""}`,
-  );
-  game.lastHand = record;
-  game.winnerAnnouncement = {
-    names: [game.players[playerIndex].name],
-    pot,
-    handNo: hand.no,
-    split: false,
-  };
-  recordHandResult(game);
-  game.hand = null;
 }
 
 export function PokerLedger({
@@ -1541,155 +1436,31 @@ export function PokerLedger({
   ) {
     if (!game?.hand) return;
     const next = structuredClone(game);
-    const hand = next.hand;
-    if (
-      !hand ||
-      !hand.in[playerIndex] ||
-      hand.currentPlayer !== playerIndex
-    )
+    const played = playerAction(next, playerIndex, type, amount, money);
+    if (!played) return;
+    if ("error" in played) {
+      showToast(played.error);
       return;
-    const player = next.players[playerIndex];
-
-    if (type === "fold") {
-      hand.in[playerIndex] = false;
-      const raiseBefore = applyRaiseRules(next, playerIndex);
-      recordAction(
-        next,
-        playerIndex,
-        { type, chips: 0, raiseBefore },
-        `${player.name} folds`,
-      );
-    } else if (type === "check") {
-      if (hand.roundHigh > hand.committed[playerIndex]) {
-        showToast(
-          `Cannot check — must call ${money(
-            hand.roundHigh - hand.committed[playerIndex],
-          )}`,
-        );
-        return;
-      }
-      const raiseBefore = applyRaiseRules(next, playerIndex);
-      recordAction(
-        next,
-        playerIndex,
-        { type, chips: 0, raiseBefore },
-        `${player.name} checks`,
-      );
-    } else if (type === "call") {
-      const needed = Math.min(
-        hand.roundHigh - hand.committed[playerIndex],
-        player.stack,
-      );
-      if (needed <= 0) {
-        act(playerIndex, "check");
-        return;
-      }
-      player.stack -= needed;
-      hand.committed[playerIndex] += needed;
-      hand.pot += needed;
-      const raiseBefore = applyRaiseRules(next, playerIndex);
-      recordAction(
-        next,
-        playerIndex,
-        { type, chips: needed, raiseBefore },
-        `${player.name} calls ${money(needed)}`,
-      );
-    } else {
-      const chips =
-        type === "all-in"
-          ? player.stack
-          : (amount ?? minimumRaise(next, playerIndex));
-      if (!Number.isSafeInteger(chips) || chips <= 0) {
-        showToast("Enter an amount");
-        return;
-      }
-      // Amounts are typed as the total for the street, so the messages
-      // name totals too.
-      if (chips > player.stack) {
-        showToast(
-          `The most is ${money(hand.committed[playerIndex] + player.stack)} (all in)`,
-        );
-        return;
-      }
-      const minimum = minimumRaise(next, playerIndex);
-      if (chips < minimum && chips < player.stack) {
-        showToast(`Minimum is ${money(hand.committed[playerIndex] + minimum)}`);
-        return;
-      }
-
-      const total = hand.committed[playerIndex] + chips;
-      const wasRaise = total > hand.roundHigh;
-      if (wasRaise && !mayRaise(next, playerIndex)) {
-        showToast("Only call or fold: the all-in was less than a full raise");
-        return;
-      }
-      const opening = !hand.committed.some(
-        (committed, index) => index !== playerIndex && committed > 0,
-      );
-      player.stack -= chips;
-      hand.committed[playerIndex] += chips;
-      hand.pot += chips;
-      const raiseBefore = applyRaiseRules(next, playerIndex);
-      const description =
-        type === "all-in"
-          ? `goes all-in for ${money(chips)}${
-              wasRaise ? ` (to ${money(total)})` : ""
-            }${wasRaise && !raiseBefore.full ? ", short of a full raise" : ""}`
-          : wasRaise
-            ? opening
-              ? `bets ${money(chips)}`
-              : `raises to ${money(total)}`
-            : `calls ${money(chips)}`;
-      recordAction(
-        next,
-        playerIndex,
-        { type, chips, raiseBefore },
-        `${player.name} ${description}`,
-      );
     }
 
     // Feedback that the tap registered, as the next player's card takes over.
     if (readTurnSound()) {
-      playTurnSound(type === "check" || type === "fold" ? "tap" : "chips");
+      playTurnSound(played.type === "check" || played.type === "fold" ? "tap" : "chips");
     }
     setLastTurn((previous) => ({
       playerIndex,
-      handNo: hand.no,
-      stage: hand.stage,
+      handNo: played.handNo,
+      stage: played.stage,
       seq: (previous?.seq ?? 0) + 1,
     }));
-
-    const active = activeIndexes(next);
-    if (active.length === 1) {
-      const winner = active[0];
-      // The winner card announces it; no toast as well.
-      awardPot(next, winner, true);
-      setGame(next);
-      return;
-    }
-    hand.currentPlayer = nextPlayerToAct(next, playerIndex);
     setGame(next);
   }
 
   function undoAction(playerIndex: number) {
     if (!game?.hand) return;
     const next = structuredClone(game);
-    const hand = next.hand;
-    const action = hand?.last[playerIndex];
-    if (!hand || !hand.acted[playerIndex] || !action) return;
+    if (!undoPlayerAction(next, playerIndex)) return;
     setLastTurn(null);
-
-    next.players[playerIndex].stack += action.chips;
-    hand.committed[playerIndex] -= action.chips;
-    hand.pot -= action.chips;
-    if (action.type === "fold") hand.in[playerIndex] = true;
-    hand.acted[playerIndex] = false;
-    hand.last[playerIndex] = null;
-    hand.roundHigh = Math.max(0, ...hand.committed);
-    undoRaiseRules(next, playerIndex, action.raiseBefore);
-    hand.currentPlayer = playerIndex;
-    const logIndex = next.log.indexOf(action.line);
-    if (logIndex >= 0) next.log.splice(logIndex, 1);
     setGame(next);
     showToast(`${next.players[playerIndex].name} can act again`);
   }
@@ -1754,39 +1525,13 @@ export function PokerLedger({
   }
 
   function splitPot() {
-    if (!game?.hand?.splitSel || game.hand.splitSel.length < 2) {
-      showToast("Select at least 2 players");
+    if (!game) return;
+    const next = structuredClone(game);
+    const refusal = splitPotBetween(next, money);
+    if (refusal) {
+      showToast(refusal);
       return;
     }
-    const next = structuredClone(game);
-    const hand = next.hand;
-    if (!hand?.splitSel) return;
-    const winners = [...hand.splitSel].sort((a, b) => a - b);
-    const record = completedHandRecord(next);
-    const pot = hand.pot - takeRake(next);
-    splitShares(
-      pot,
-      winners,
-      hand.dealerIndex,
-      next.players.length,
-    ).forEach((share, playerIndex) => {
-      next.players[playerIndex].stack += share;
-    });
-    recordWin(
-      next,
-      `Hand ${hand.no}: split ${money(pot)} between ${winners
-        .map((index) => next.players[index].name)
-        .join(", ")}`,
-    );
-    next.lastHand = record;
-    next.winnerAnnouncement = {
-      names: winners.map((index) => next.players[index].name),
-      pot,
-      handNo: hand.no,
-      split: true,
-    };
-    recordHandResult(next);
-    next.hand = null;
     setGame(next);
   }
 

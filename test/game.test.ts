@@ -41,6 +41,7 @@ import {
   undoStreet,
   undoableStreet,
 } from "../lib/poker/game.ts";
+import { playerAction } from "../lib/poker/actions.ts";
 import type {
   BlindSchedule,
   GameState,
@@ -1644,5 +1645,41 @@ describe("rake", () => {
     assert.equal(takeRake(game), 150);
     assert.equal(game.rake, 190);
     assert.equal(game.log[0], "Hand 1: house rake ₹150");
+  });
+});
+
+// betTo and fold above stand in for the table's buttons in tests that set a
+// hand up by hand; this keeps them playing chips as the app does.
+describe("the bet helpers", () => {
+  test("play chips and raise rules as the app's actions do", () => {
+    const helper = gameState();
+    const app = gameState();
+    dealNewHand(helper);
+    dealNewHand(app);
+    const money = String;
+
+    betTo(helper, 0, 400);
+    playerAction(app, 0, "bet", 400, money);
+    fold(helper, 1);
+    playerAction(app, 1, "fold", undefined, money);
+    betTo(helper, 2, 1_000);
+    playerAction(app, 2, "bet", 900, money);
+    betTo(helper, 0, 1_000);
+    playerAction(app, 0, "call", undefined, money);
+
+    const chips = (game: GameState) => {
+      const hand = dealtHand(game);
+      return {
+        stacks: game.players.map((player) => player.stack),
+        committed: hand.committed,
+        pot: hand.pot,
+        in: hand.in,
+        acted: hand.acted,
+        roundHigh: hand.roundHigh,
+        raiseSize: hand.raiseSize,
+        raiseOpen: hand.raiseOpen,
+      };
+    };
+    assert.deepEqual(chips(helper), chips(app));
   });
 });
