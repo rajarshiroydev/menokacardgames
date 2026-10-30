@@ -55,6 +55,8 @@ const BLANKED = [
   "DELETION_PASSWORD",
   "VERCEL_OIDC_TOKEN",
   "NEXT_PUBLIC_SENTRY_DSN",
+  // A testbed build must not upload its source maps to production's Sentry.
+  "SENTRY_AUTH_TOKEN",
 ];
 
 /**
