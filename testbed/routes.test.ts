@@ -17,12 +17,21 @@ import { isMutating, SIGNED_IN_ROUTES, type HttpMethod } from "./lib/routes.ts";
 const password = testbedEnv().TESTBED_PERSONA_PASSWORD;
 if (!password) throw new Error("TESTBED_PERSONA_PASSWORD missing: rerun npm run testbed:setup");
 
-async function signedIn(key: string) {
+/** A new sign-in, for when the old session is gone (the lock check). */
+async function freshSignIn(key: string) {
   const persona = testbedPersona(key);
   if (!persona) throw new Error(`No testbed persona "${key}"`);
   const client = new TestbedClient(persona.email);
   await client.signIn(password);
   return client;
+}
+
+// One sign-in per persona for the whole run: Neon Auth limits sign-ins
+// from one address, and the smoke test signs in right after these checks.
+const sessions = new Map<string, Promise<TestbedClient>>();
+function signedIn(key: string) {
+  if (!sessions.has(key)) sessions.set(key, freshSignIn(key));
+  return sessions.get(key)!;
 }
 
 const CALLS = Object.entries(SIGNED_IN_ROUTES).flatMap(([folder, route]) =>
@@ -207,7 +216,7 @@ describe("a locked account (deletion requested)", () => {
   after(async () => {
     if (!locked) return;
     // Put the account back however the checks ended.
-    const again = await signedIn("farhan");
+    const again = await freshSignIn("farhan");
     await again.send("/api/account", { method: "POST", body: { action: "recover" } });
   });
 
@@ -220,7 +229,7 @@ describe("a locked account (deletion requested)", () => {
     locked = true;
 
     // Requesting deletion signs out everywhere; sign in again to look.
-    const again = await signedIn("farhan");
+    const again = await freshSignIn("farhan");
     for (const [method, path] of [
       ["GET", "/api/players"],
       ["GET", "/api/sessions"],

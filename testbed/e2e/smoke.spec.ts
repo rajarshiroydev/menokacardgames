@@ -21,13 +21,20 @@ test("a host signs in, plays a hand, saves the game and settles up", async ({
   const api = { Origin: baseURL ?? "" };
 
   await test.step("sign in as a test host", async () => {
-    await page.goto("/auth/sign-in", { waitUntil: "networkidle" });
-    await page.getByRole("button", { name: /^Bikram Big Host/ }).click();
     const home = page.getByRole("heading", { name: "Bikram Big Host", level: 1 });
     const refused = page.getByRole("alert").filter({ hasText: /Sign-in failed/ });
-    await expect(home.or(refused)).toBeVisible();
-    // A refused sign-in comes back with Neon Auth's reason (?testbed=…).
-    expect(await refused.count(), `sign-in refused: ${page.url()}`).toBe(0);
+    for (let attempt = 1; ; attempt += 1) {
+      await page.goto("/auth/sign-in", { waitUntil: "networkidle" });
+      await page.getByRole("button", { name: /^Bikram Big Host/ }).click();
+      await expect(home.or(refused)).toBeVisible();
+      if ((await refused.count()) === 0) break;
+      // A refused sign-in comes back with Neon Auth's reason (?testbed=…).
+      // Its limit on sign-ins from one address (the route checks run just
+      // before in CI) passes after a short wait; anything else fails here.
+      const limited = page.url().includes("over_request_rate_limit");
+      expect(limited && attempt < 5, `sign-in refused: ${page.url()}`).toBe(true);
+      await page.waitForTimeout(5_000 * attempt);
+    }
   });
 
   await test.step("set up a three-player game", async () => {

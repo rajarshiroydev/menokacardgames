@@ -106,10 +106,25 @@ export class TestbedClient {
     }
   }
 
+  /**
+   * Signs in. Neon Auth allows only a few sign-ins a minute from one address
+   * and answers 429 after that (CI found it, 2026-10-30), so this waits a
+   * little longer each time and tries again, up to about a minute.
+   */
   async signIn(password: string) {
-    await this.request("/api/auth/sign-in/email", "POST", {
-      email: this.email,
-      password,
-    });
+    for (let attempt = 1; ; attempt += 1) {
+      try {
+        await this.request("/api/auth/sign-in/email", "POST", {
+          email: this.email,
+          password,
+        });
+        return;
+      } catch (error) {
+        if (!(error instanceof ApiError) || error.status !== 429 || attempt >= 5) {
+          throw error;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 5_000 * attempt));
+      }
+    }
   }
 }
