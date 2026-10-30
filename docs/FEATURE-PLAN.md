@@ -1081,3 +1081,17 @@ Shared code also moved, so no module imports the main file: `icons.tsx` (ten SVG
 - `rebuy-rules.tsx`: `rebuyRulesError` and `RebuyRulesFields`, used by setup and by the live game's rebuy editor, which stays in the main file for now.
 
 Two moved imports were renamed on import (`PointerEvent as ReactPointerEvent`, `smallBlindShare as smallBlindShareOf`), which the import generator skips, so they were added by hand. `poker-ledger.tsx` is 5,864 lines. **Move proof:** the three changed files' code lines match before and after. **Checked:** types, lint, 563 unit tests, 55 route checks and both browser tests (which deal from the moved setup) pass. With Playwright on the testbed, with no console errors: picking players and moving a seat with the arrow key; a 5K stack (the big blind choices follow it); odd blinds (the small blind choice appears and goes); blind levels by hands; 2 rebuys (the closing level appears); chip value (the buy-in price box); ante and rake; the rake help sheet; then Deal First Hand, whose table showed the chosen settings (₹50/₹100, ante ₹100, next level ₹100/₹200 in 9 hands, ₹4,950 behind for the small blind), and the test game reset. **Next:** the live game.
+
+2026-10-30 splitting the big component, step 6: the live game (audit M4; user: "Start step 6"). No behaviour change; same method, now with a script that moves a list of declarations by line range per module. **New modules:**
+- `game-screen.tsx`: `GameView` and the List view (the pot, the waiting players' strips, the standings), with `useBlindClock`, which only it used.
+- `table-hand.tsx`: the Table view.
+- `player-row.tsx`: the acting player's card and the raise help sheet.
+- `hand-buttons.tsx`: Deal, Undo, Undo hand and the street buttons; `titleCase`, which the main file still uses.
+- `pot-winners.tsx`: the winner picker, split view, side-pot picker, pot breakdown and the winner card.
+- `buy-in-sheets.tsx`: the buy-in offers, rebuy, add-player and cash-out sheets.
+- `game-editors.tsx`: the blind plan and rebuy rule editors.
+- `ledger-screen.tsx`: the quick ledger's screen and its cash-out sheet.
+- `hand-rankings.tsx`: the Hand rankings page.
+- `game-shared.ts`: the props and helpers the game screen, table and rows share (`GameViewProps`, `LastTurn`, `flashFor`, `potCardLabel`, `seatStatus`), so none of them imports another in a circle.
+
+`poker-ledger.tsx` is 2,934 lines. **Move proof:** the 11 changed files' code lines match before and after. **Checked:** types, lint, 563 unit tests, 55 route checks and both browser tests pass. With Playwright on the testbed, with no console errors: undoing a call; the raise help sheet; the Table view, and acting from it; an all-in hand with uneven stacks (main ₹6,000, side ₹16,000), each pot awarded to a different player, the confirmation and the winner card; the bust player's rebuy (₹5,000, shown in the standings as "Start ₹10,000 · Buy-ins ₹5,000"); adding a player; cashing one out; the blind plan (blinds go up, then shown as the next level) and rebuy rules (2, kept on reopening); a split pot; a single winner; Undo hand; the Hand rankings page (10 hands); a quick ledger's buy-in, add player, cash-out (₹12,000 with its confirmation) and discard. Test games left on the testbed by failed probe runs were deleted. **Next:** the `PokerLedger` function itself (2,524 lines). It holds the app's state, effects and handlers, so splitting it means custom hooks rather than moved declarations; it needs a plan and the user's go-ahead first.
