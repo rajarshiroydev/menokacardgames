@@ -1,4 +1,6 @@
-import { expect, type Page, test } from "@playwright/test";
+import { expect, test } from "@playwright/test";
+
+import { dealThreePlayerGame, signInAsBikram } from "./helpers";
 
 // The browser smoke tests (pre-launch audit M5): a host's main paths on a
 // phone, against the testbed. They save or share real games in the testbed,
@@ -12,33 +14,6 @@ test.afterEach(async ({ page }, testInfo) => {
     console.log(`Ended at ${page.url()}`);
   }
 });
-
-async function signInAsBikram(page: Page) {
-  const home = page.getByRole("heading", { name: "Bikram Big Host", level: 1 });
-  const refused = page.getByRole("alert").filter({ hasText: /Sign-in failed/ });
-  for (let attempt = 1; ; attempt += 1) {
-    await page.goto("/auth/sign-in", { waitUntil: "networkidle" });
-    await page.getByRole("button", { name: /^Bikram Big Host/ }).click();
-    await expect(home.or(refused)).toBeVisible();
-    if ((await refused.count()) === 0) return;
-    // A refused sign-in comes back with Neon Auth's reason (?testbed=…).
-    // Its limit on sign-ins from one address (the route checks run just
-    // before in CI) passes after a short wait; anything else fails here.
-    const limited = page.url().includes("over_request_rate_limit");
-    expect(limited && attempt < 5, `sign-in refused: ${page.url()}`).toBe(true);
-    await page.waitForTimeout(5_000 * attempt);
-  }
-}
-
-async function dealThreePlayerGame(page: Page, name: string) {
-  await page.getByRole("navigation", { name: "Main" }).getByRole("button", { name: "Play" }).click();
-  await page.getByRole("button", { name: /Hand by hand/i }).click();
-  await page.getByRole("textbox", { name: /Game name/i }).fill(name);
-  for (const player of [/^Bikram Big Host/, /^Aditi A\.$/, /^Dev C\.$/]) {
-    await page.getByRole("button", { name: player }).click();
-  }
-  await page.getByRole("button", { name: "Deal First Hand" }).click();
-}
 
 test("a host signs in, plays a hand, saves the game and settles up", async ({
   page,

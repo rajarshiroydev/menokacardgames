@@ -81,7 +81,7 @@ jobs:
             echo "::notice::No testbed secrets here, so the route checks and the browser test are skipped (docs/LAUNCH-AUDIT.md, M5)."
           fi
 
-  # Route checks and the browser smoke test (audit M5) against the separate
+  # Route checks and the browser tests (audit M5) against the separate
   # menoka-testbed project, which holds only test data. The app runs on this
   # runner in testbed mode (testbed/lib/env.mjs), with every production
   # credential blank. No traces or reports are uploaded: this repository is
@@ -111,7 +111,7 @@ jobs:
 
       - run: npm ci
 
-      - name: Browser for the smoke test
+      - name: Browser for the browser tests
         run: npx playwright install --with-deps chromium
 
       - name: Start the app in testbed mode
@@ -127,7 +127,7 @@ jobs:
       - name: Route checks
         run: npm run testbed:routes
 
-      - name: Browser smoke test
+      - name: Browser tests
         run: npm run testbed:e2e
 
       - name: Server log

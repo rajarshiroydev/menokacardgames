@@ -1,9 +1,10 @@
 import { defineConfig, devices } from "@playwright/test";
 
 /**
- * The browser smoke test (pre-launch audit M5), on a phone-sized screen
- * against the testbed app, which must already be running: npm run
- * testbed:dev locally, npm run testbed:start in CI.
+ * The browser tests (pre-launch audit M5, and the live-game suite for the
+ * PokerLedger refactor), on a phone-sized screen against the testbed app,
+ * which must already be running: npm run testbed:dev locally, npm run
+ * testbed:start in CI.
  * Usage: npm run testbed:e2e
  */
 export default defineConfig({
