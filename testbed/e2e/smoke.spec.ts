@@ -6,6 +6,13 @@ import { expect, test } from "@playwright/test";
 
 type SavedSession = { id: string; name?: string };
 
+// CI keeps no traces (public repository), so a failure says where it ended.
+test.afterEach(async ({ page }, testInfo) => {
+  if (testInfo.status !== testInfo.expectedStatus) {
+    console.log(`Ended at ${page.url()}`);
+  }
+});
+
 test("a host signs in, plays a hand, saves the game and settles up", async ({
   page,
   baseURL,
@@ -14,9 +21,13 @@ test("a host signs in, plays a hand, saves the game and settles up", async ({
   const api = { Origin: baseURL ?? "" };
 
   await test.step("sign in as a test host", async () => {
-    await page.goto("/auth/sign-in");
+    await page.goto("/auth/sign-in", { waitUntil: "networkidle" });
     await page.getByRole("button", { name: /^Bikram Big Host/ }).click();
-    await expect(page.getByRole("heading", { name: "Bikram Big Host", level: 1 })).toBeVisible();
+    const home = page.getByRole("heading", { name: "Bikram Big Host", level: 1 });
+    const refused = page.getByRole("alert").filter({ hasText: /Sign-in failed/ });
+    await expect(home.or(refused)).toBeVisible();
+    // A refused sign-in comes back with Neon Auth's reason (?testbed=…).
+    expect(await refused.count(), `sign-in refused: ${page.url()}`).toBe(0);
   });
 
   await test.step("set up a three-player game", async () => {

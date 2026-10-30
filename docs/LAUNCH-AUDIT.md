@@ -106,7 +106,7 @@ Also high: `sharp`, `source-map-js`, `zod` (inside `@neondatabase/auth`) and `de
 - a locked account gets 423 on the ledger but can still manage itself and recover;
 - the public routes behave.
 
-`test/api-routes.test.ts` fails when a route isn't listed. A Playwright smoke test on a phone screen (`npm run testbed:e2e`) signs in, plays a hand, saves, settles up and cleans up. The CI `testbed` job runs both against a production build once the four `TESTBED_*` secrets exist (`npm run testbed:ci-secrets`).
+`test/api-routes.test.ts` fails when a route isn't listed. A Playwright smoke test on a phone screen (`npm run testbed:e2e`) signs in, plays a hand, saves, settles up and cleans up. The CI `testbed` job runs both against a production build; the four `TESTBED_*` secrets were added 2026-10-30 and its first run passed.
 
 **M6. Local game data stays on the device after sign-out.** The game in progress, the live link token and the device ID stay in `localStorage` after sign-out. On a shared or borrowed phone, the next person can read them. **Fix:** clear the account's keys on sign-out. ASVS V14 (client-side data). **Status 2026-10-29: fixed and pushed.** Sign-out backs up the game, then removes it and the live link from the phone. Pre-account data stays, because it may exist nowhere else.
 
@@ -163,4 +163,4 @@ Recorded 2026-10-30 (user: "proceed with the things that doesn't require additio
 - **Preview database:** `cutover-rehearsal` (`br-tiny-forest-ayt6f3fe`) is at 0012, 21 migrations behind, and holds a September copy of production data. Previews aren't used today. When they are, the cleaner fix is a new schema-only branch (no production data) with its own Neon Auth; you then set the preview `DATABASE_URL`, `NEON_AUTH_BASE_URL` and cookie secret in Vercel, and the old branch is deleted.
 - **L3, the Neon Auth SDK:** 0.7.0-beta fixes none of the advisories; review the exceptions by 2026-11-30.
 - **M4** (split `poker-ledger.tsx`).
-- **M5 secrets** (you, once): run `npm run testbed:ci-secrets` so CI runs the route checks and the browser test. Dependabot's pull requests don't get Actions secrets; add the same four as Dependabot secrets if you want them checked too.
+- **Dependabot and M5:** Dependabot's pull requests don't get Actions secrets, so their `testbed` job is skipped; add the same four as Dependabot secrets if you want them checked too.
