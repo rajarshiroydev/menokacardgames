@@ -16,13 +16,6 @@
       "reviewBy": "2026-11-30"
     },
     {
-      "advisory": "GHSA-q84f-53jg-9ppm",
-      "package": "better-auth",
-      "severity": "high",
-      "reason": "Device authorization approval screen lacks client details. Needs the opt-in deviceAuthorization plugin on the Better Auth server, which Neon Auth doesn't offer to this app. Fixed in better-auth 1.7.0, but @neondatabase/auth pins an older release.",
-      "reviewBy": "2026-11-30"
-    },
-    {
       "advisory": "GHSA-mrhx-c7xc-m3w5",
       "package": "zod",
       "severity": "high",
