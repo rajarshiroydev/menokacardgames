@@ -32,7 +32,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     items: [
       {
         tag: "improved",
-        text: "Every hand in the action log is now folded to its winner, including the latest two, and the boxes between hands are folded to their heading, so the log is short to scroll. Tap a box to open it, and again to fold it.",
+        text: "Every hand in the action log is now folded to its winner, including the latest two, so the log is short to scroll. Tap a hand to see its actions, and again to fold it.",
       },
       {
         tag: "improved",

@@ -3934,6 +3934,10 @@ textarea::placeholder {
   padding: 10px 12px 4px;
 }
 
+.log-hand.plain {
+  padding-top: 4px;
+}
+
 .log-hand-head {
   display: flex;
   align-items: center;

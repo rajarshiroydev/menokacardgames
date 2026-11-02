@@ -50,9 +50,9 @@ function recentGroups(groups: LogGroup[]) {
 /**
  * The action log, newest first: each hand in its own box headed by its
  * number, split by street, one row per action with who, what and how much.
- * Every box starts folded until tapped: a hand to its heading and result,
- * a break between hands ("Before hand 30") or a box of notes to its heading.
- * Closed, the log lists the latest two hands; Show all lists every hand.
+ * Every hand starts folded to its heading and result until tapped; breaks
+ * between hands ("Before hand 30") and notes always show in full. Closed,
+ * the log lists the latest two hands; Show all lists every hand.
  */
 export function ActionLog({
   lines,
@@ -131,28 +131,20 @@ export function ActionLog({
     <>
       <div className="action-log">
         {shown.map((group, groupIndex) => {
-          // Counted from the oldest box, so an opened box stays open as new
+          // Counted from the oldest box, so an opened hand stays open as new
           // ones arrive on top.
           const key = `${group.title}-${groups.length - groupIndex}`;
           const isHand = group.hand !== null;
-          const folded = !opened.has(key);
-          // A hand counts its actions, the rows under its streets; any other
-          // box counts its rows.
-          const count = group.streets.reduce(
-            (sum, street) =>
-              sum + (street.street || !isHand ? street.entries.length : 0),
+          // Only hands fold, to their result until tapped.
+          const folded = isHand && !opened.has(key);
+          // A hand's actions are the rows under its streets.
+          const actions = group.streets.reduce(
+            (count, street) => count + (street.street ? street.entries.length : 0),
             0,
           );
-          const countLabel = isHand
-            ? `${count} action${count === 1 ? "" : "s"}`
-            : `${count} item${count === 1 ? "" : "s"}`;
-          // Folded, a hand keeps its result; any other box shows only its
-          // heading.
           const streets = !folded
             ? group.streets
-            : !isHand
-              ? []
-              : group.streets
+            : group.streets
                 .filter((street) => street.street === null)
                 .map((street) => ({
                   ...street,
@@ -172,24 +164,31 @@ export function ActionLog({
               return next;
             });
           return (
-            <section key={key} className={`log-hand ${folded ? "folded" : ""}`}>
-              <button
-                className="log-hand-head"
-                type="button"
-                aria-expanded={!folded}
-                onClick={toggle}
-              >
-                <span className="log-hand-title">
-                  {/* Lines from no hand or break (the blind clock, a
-                      continued game) are headed as notes. */}
-                  <b>{group.title ?? "Notes"}</b>
-                  {live}
-                </span>
-                <span className="log-hand-count">
-                  {countLabel}
-                  <ChevronIcon open={!folded} />
-                </span>
-              </button>
+            <section
+              key={key}
+              className={`log-hand ${group.title ? "" : "plain"} ${folded ? "folded" : ""}`}
+            >
+              {isHand ? (
+                <button
+                  className="log-hand-head"
+                  type="button"
+                  aria-expanded={!folded}
+                  onClick={toggle}
+                >
+                  <span className="log-hand-title">
+                    <b>{group.title}</b>
+                    {live}
+                  </span>
+                  <span className="log-hand-count">
+                    {actions} action{actions === 1 ? "" : "s"}
+                    <ChevronIcon open={!folded} />
+                  </span>
+                </button>
+              ) : group.title ? (
+                <header className="log-hand-head">
+                  <b>{group.title}</b>
+                </header>
+              ) : null}
               {streets.map((street, streetIndex) => (
                 <div key={`${street.street}-${streetIndex}`} className="log-street">
                   {street.street ? (
