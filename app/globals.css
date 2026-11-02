@@ -3934,10 +3934,6 @@ textarea::placeholder {
   padding: 10px 12px 4px;
 }
 
-.log-hand.plain {
-  padding-top: 4px;
-}
-
 .log-hand-head {
   display: flex;
   align-items: center;
@@ -3970,6 +3966,12 @@ button.log-hand-head {
 
 .log-hand.folded:not(:has(.log-row)) {
   padding-bottom: 2px;
+}
+
+.log-hand-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .log-hand-count {
@@ -4071,8 +4073,6 @@ button.log-hand-head {
   border-radius: 50%;
   background: var(--glass2);
   color: var(--ink2);
-  font-size: 14px;
-  font-weight: 700;
 }
 
 .log-copy {
@@ -4184,6 +4184,7 @@ button.log-hand-head {
 
 .log-blinds .log-verb,
 .log-rake .log-verb,
+.log-refund .log-verb,
 .log-note .log-verb {
   --tone: var(--ink2);
   background: none;

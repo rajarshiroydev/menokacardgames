@@ -27,6 +27,24 @@ export const CHANGE_TAG_LABELS: Record<ChangeTag, string> = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    date: "2026-11-02",
+    title: "Tidier action log",
+    items: [
+      {
+        tag: "improved",
+        text: "Every hand in the action log is now folded to its winner, including the latest two, and the boxes between hands are folded to their heading, so the log is short to scroll. Tap a box to open it, and again to fold it.",
+      },
+      {
+        tag: "improved",
+        text: "Blind changes, the house rake and returned uncalled bets now sit between hands, with rebuys and cash-outs, so each hand shows only its betting and its winner.",
+      },
+      {
+        tag: "improved",
+        text: "Clearer icons for blind changes, rake and notes in the action log.",
+      },
+    ],
+  },
+  {
     date: "2026-10-30",
     title: "Live link fix",
     items: [

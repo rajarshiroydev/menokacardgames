@@ -3,23 +3,29 @@
 import { useState } from "react";
 
 import { Avatar } from "@/components/ledger/avatar";
-import { ChevronIcon } from "@/components/ledger/icons";
+import {
+  BlindsSetIcon,
+  BlindsUpIcon,
+  ChevronIcon,
+  NoteIcon,
+  RakeIcon,
+} from "@/components/ledger/icons";
 import {
   groupLog,
   linesToSave,
   LOG_LIMIT,
   type LogEntry,
   type LogGroup,
-  type LogKind,
 } from "@/lib/poker/action-log";
 import type { GameState, SavedActionLog } from "@/lib/poker/types";
 
 // The mark beside lines that aren't about one player.
-const LOG_ICONS: Partial<Record<LogKind, string>> = {
-  blinds: "↑",
-  rake: "%",
-  note: "•",
-};
+function LogIcon({ entry }: { entry: LogEntry }) {
+  if (entry.kind === "blinds") {
+    return entry.verb === "Blinds up" ? <BlindsUpIcon /> : <BlindsSetIcon />;
+  }
+  return entry.kind === "rake" ? <RakeIcon /> : <NoteIcon />;
+}
 
 /** The game's log as it is saved, with the players its lines name. */
 export function savedActionLog(game: GameState): SavedActionLog {
@@ -44,8 +50,9 @@ function recentGroups(groups: LogGroup[]) {
 /**
  * The action log, newest first: each hand in its own box headed by its
  * number, split by street, one row per action with who, what and how much.
- * Closed, it shows the latest two hands; Show all lists every hand, older
- * ones folded to their heading and result until tapped.
+ * Every box starts folded until tapped: a hand to its heading and result,
+ * a break between hands ("Before hand 30") or a box of notes to its heading.
+ * Closed, the log lists the latest two hands; Show all lists every hand.
  */
 export function ActionLog({
   lines,
@@ -106,7 +113,7 @@ export function ActionLog({
           </span>
         ) : (
           <span className="log-icon" aria-hidden="true">
-            {LOG_ICONS[entry.kind] ?? "•"}
+            <LogIcon entry={entry} />
           </span>
         )}
         <span className="log-copy">
@@ -124,18 +131,40 @@ export function ActionLog({
     <>
       <div className="action-log">
         {shown.map((group, groupIndex) => {
-          const key = `${group.title}-${groupIndex}`;
-          // Older hands fold to their result; the latest two stay open.
-          const foldable = group.hand !== null && groupIndex >= recent;
-          const folded = foldable && !opened.has(key);
-          // A hand's actions are the rows under its streets.
-          const actions = group.streets.reduce(
-            (count, street) => count + (street.street ? street.entries.length : 0),
+          // Counted from the oldest box, so an opened box stays open as new
+          // ones arrive on top.
+          const key = `${group.title}-${groups.length - groupIndex}`;
+          const isHand = group.hand !== null;
+          const folded = !opened.has(key);
+          // A hand counts its actions, the rows under its streets; any other
+          // box counts its rows.
+          const count = group.streets.reduce(
+            (sum, street) =>
+              sum + (street.street || !isHand ? street.entries.length : 0),
             0,
           );
-          const streets = folded
-            ? group.streets.filter((street) => street.street === null)
-            : group.streets;
+          const countLabel = isHand
+            ? `${count} action${count === 1 ? "" : "s"}`
+            : `${count} item${count === 1 ? "" : "s"}`;
+          // Folded, a hand keeps its result; any other box shows only its
+          // heading.
+          const streets = !folded
+            ? group.streets
+            : !isHand
+              ? []
+              : group.streets
+                .filter((street) => street.street === null)
+                .map((street) => ({
+                  ...street,
+                  entries: street.entries.filter(
+                    (entry) => entry.kind === "win" || entry.kind === "split",
+                  ),
+                }))
+                .filter((street) => street.entries.length);
+          const live =
+            group.hand !== null && group.hand === liveHand ? (
+              <span className="log-live">In play</span>
+            ) : null;
           const toggle = () =>
             setOpened((current) => {
               const next = new Set(current);
@@ -143,33 +172,24 @@ export function ActionLog({
               return next;
             });
           return (
-            <section
-              key={key}
-              className={`log-hand ${group.title ? "" : "plain"} ${folded ? "folded" : ""}`}
-            >
-              {group.title ? (
-                foldable ? (
-                  <button
-                    className="log-hand-head"
-                    type="button"
-                    aria-expanded={!folded}
-                    onClick={toggle}
-                  >
-                    <b>{group.title}</b>
-                    <span className="log-hand-count">
-                      {actions} action{actions === 1 ? "" : "s"}
-                      <ChevronIcon open={!folded} />
-                    </span>
-                  </button>
-                ) : (
-                  <header className="log-hand-head">
-                    <b>{group.title}</b>
-                    {group.hand !== null && group.hand === liveHand ? (
-                      <span className="log-live">In play</span>
-                    ) : null}
-                  </header>
-                )
-              ) : null}
+            <section key={key} className={`log-hand ${folded ? "folded" : ""}`}>
+              <button
+                className="log-hand-head"
+                type="button"
+                aria-expanded={!folded}
+                onClick={toggle}
+              >
+                <span className="log-hand-title">
+                  {/* Lines from no hand or break (the blind clock, a
+                      continued game) are headed as notes. */}
+                  <b>{group.title ?? "Notes"}</b>
+                  {live}
+                </span>
+                <span className="log-hand-count">
+                  {countLabel}
+                  <ChevronIcon open={!folded} />
+                </span>
+              </button>
               {streets.map((street, streetIndex) => (
                 <div key={`${street.street}-${streetIndex}`} className="log-street">
                   {street.street ? (
@@ -177,7 +197,7 @@ export function ActionLog({
                   ) : null}
                   <ul>
                     {street.entries.map((entry, index) =>
-                      row(entry, index, group.hand !== null),
+                      row(entry, index, isHand),
                     )}
                   </ul>
                 </div>

@@ -27,6 +27,7 @@ export type LogKind =
   | "take-back"
   | "blinds"
   | "rake"
+  | "refund"
   | "note";
 
 export type LogEntry = {
@@ -195,6 +196,11 @@ function tableAction(text: string): Parts {
       note: blinds[3] ? capitalise(blinds[3]) : null,
     };
   }
+  // An uncalled bet given back as the pots are paid. It reads as a sentence,
+  // so it stays one, like a note.
+  if (/^\S+ returned to .+ \(not called\)$/.test(text)) {
+    return { kind: "refund", verb: capitalise(text), amount: null, note: null };
+  }
   const rake = text.match(/^house rake (\S+)$/);
   if (rake) {
     return { kind: "rake", verb: "House rake", amount: rake[1], note: null };
@@ -276,9 +282,9 @@ export function groupLog(
     }
     section.entries.push(entry);
   });
-  // Lifted buy-ins join the "Before hand N" lines next to them (cash-outs,
-  // joins), so a break between hands is one group.
-  return groups.flatMap(liftBuyIns).reduce<LogGroup[]>((merged, group) => {
+  // Lifted buy-ins, rake and blind changes join the "Before hand N" lines
+  // next to them (cash-outs, joins), so a break between hands is one group.
+  return groups.flatMap(liftOutOfHand).reduce<LogGroup[]>((merged, group) => {
     const last = merged.at(-1);
     if (
       last &&
@@ -294,29 +300,53 @@ export function groupLog(
   }, []);
 }
 
+// Lines logged against a hand that move out of its box.
+const AFTER_HAND: ReadonlySet<LogKind> = new Set(["buy-in", "rake", "refund"]);
+const BEFORE_HAND: ReadonlySet<LogKind> = new Set(["blinds"]);
+
 /**
- * A buy-in logged against a hand ("Hand N: …" after it ended, "During hand
- * N: …" while it ran) plays no part in it: the player plays from the next
- * hand. So it moves out into a "Before hand N+1" group just above (newer
- * than) the hand. The stored lines keep their prefixes, since undo and
- * saving match them.
+ * Lines logged against a hand that aren't part of its play move out to the
+ * break beside it, like joins and cash-outs. A buy-in ("Hand N: …" after it
+ * ended, "During hand N: …" while it ran) counts from the next hand, and the
+ * house rake and an uncalled bet's return happen as the pot is paid, so they
+ * go to a "Before hand N+1" group just above (newer than) the hand; the
+ * rake and the return note their hand ("In hand N"). A blind change is logged at the deal of the hand it starts with, so
+ * it goes to a "Before hand N" group just below (older than) it. The stored
+ * lines keep their prefixes, since undo and saving match them.
  */
-function liftBuyIns(group: LogGroup): LogGroup[] {
-  if (group.hand === null) return [group];
-  const buyIns = group.streets.flatMap((street) =>
-    street.entries.filter((entry) => entry.kind === "buy-in"),
+function liftOutOfHand(group: LogGroup): LogGroup[] {
+  const hand = group.hand;
+  if (hand === null) return [group];
+  const lifted = (kinds: ReadonlySet<LogKind>) =>
+    group.streets.flatMap((street) =>
+      street.entries.filter((entry) => kinds.has(entry.kind)),
+    );
+  const after = lifted(AFTER_HAND).map((entry) =>
+    entry.kind === "buy-in" ? entry : { ...entry, note: `In hand ${hand}` },
   );
-  if (!buyIns.length) return [group];
+  const blinds = lifted(BEFORE_HAND);
+  if (!after.length && !blinds.length) return [group];
   const streets = group.streets
     .map((street) => ({
       ...street,
-      entries: street.entries.filter((entry) => entry.kind !== "buy-in"),
+      entries: street.entries.filter(
+        (entry) => !AFTER_HAND.has(entry.kind) && !BEFORE_HAND.has(entry.kind),
+      ),
     }))
     .filter((street) => street.entries.length);
-  const lifted: LogGroup = {
-    hand: null,
-    title: `Before hand ${group.hand + 1}`,
-    streets: [{ street: null, entries: buyIns }],
-  };
-  return streets.length ? [lifted, { ...group, streets }] : [lifted];
+  const between = (hand: number, entries: LogEntry[]): LogGroup[] =>
+    entries.length
+      ? [
+          {
+            hand: null,
+            title: `Before hand ${hand}`,
+            streets: [{ street: null, entries }],
+          },
+        ]
+      : [];
+  return [
+    ...between(hand + 1, after),
+    ...(streets.length ? [{ ...group, streets }] : []),
+    ...between(hand, blinds),
+  ];
 }

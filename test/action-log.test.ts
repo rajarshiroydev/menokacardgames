@@ -173,6 +173,75 @@ describe("groupLog", () => {
     );
   });
 
+  test("moves the rake and an uncalled bet out to the break after its hand", () => {
+    const groups = groupLog(
+      [
+        "Before hand 7: Dev cashes out with ₹800",
+        "Hand 6: Asha buys in again for ₹1,000",
+        "Hand 6: ₹500 returned to Asha Rao (not called)",
+        "Hand 6: house rake ₹20",
+        "Hand 6: Dev wins ₹300 (others folded)",
+        "Hand 6 PREFLOP: Asha folds",
+      ],
+      names,
+    );
+    assert.deepEqual(
+      groups.map((group) => [
+        group.title,
+        group.streets.flatMap((street) =>
+          street.entries.map((entry) => [entry.verb, entry.note]),
+        ),
+      ]),
+      [
+        [
+          "Before hand 7",
+          [
+            ["Cashes out", null],
+            ["Buys in again", null],
+            ["₹500 returned to Asha Rao (not called)", "In hand 6"],
+            ["House rake", "In hand 6"],
+          ],
+        ],
+        ["Hand 6", [["Wins", "others folded"], ["Folds", null]]],
+      ],
+    );
+  });
+
+  test("moves a blind change out to the break before its hand", () => {
+    const groups = groupLog(
+      [
+        "Hand 4: Dev wins ₹300 (others folded)",
+        "Hand 4 PREFLOP: Asha folds",
+        "Hand 4: blinds up to ₹100/₹200 (level 2)",
+        "Before hand 4: Asha Rao cashes out with ₹800",
+        "Hand 3: Dev buys in for ₹1,000",
+        "Hand 3: Asha wins ₹100 (others folded)",
+      ],
+      names,
+    );
+    assert.deepEqual(
+      groups.map((group) => [
+        group.title,
+        group.streets.flatMap((street) =>
+          street.entries.map((entry) => entry.verb),
+        ),
+      ]),
+      [
+        ["Hand 4", ["Wins", "Folds"]],
+        // With the cash-out and buy-in from the same break, newest first.
+        ["Before hand 4", ["Blinds up", "Cashes out", "Buys in"]],
+        ["Hand 3", ["Wins"]],
+      ],
+    );
+    // A hand just dealt, with no action yet, leaves only the break.
+    assert.deepEqual(
+      groupLog(["Hand 5: blinds up to ₹200/₹400 (level 3)"], names).map(
+        (group) => [group.title, group.hand],
+      ),
+      [["Before hand 5", null]],
+    );
+  });
+
   test("numbers betting actions from 1 within each hand", () => {
     const lines = [
       "Hand 2: Dev wins pot ₹300",

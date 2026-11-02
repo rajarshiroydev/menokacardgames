@@ -173,3 +173,68 @@ export function PlayIcon() {
     </svg>
   );
 }
+
+/**
+ * The action log's marks for rows that aren't about one player, drawn
+ * centred on a 24 px grid so they sit square in the log's round badge (typed
+ * glyphs sat off centre in the display font).
+ */
+function LogMark({ children }: { children: React.ReactNode }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width="16"
+      height="16"
+      aria-hidden="true"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      style={{ display: "block" }}
+    >
+      {children}
+    </svg>
+  );
+}
+
+/** Blinds up: a line rising to the top right. */
+export function BlindsUpIcon() {
+  return (
+    <LogMark>
+      <path d="M3 17.5 9 11.5l4 4 8-8" />
+      <path d="M15 7.5h6v6" />
+    </LogMark>
+  );
+}
+
+/** Blinds set (changed, not raised): two level sliders. */
+export function BlindsSetIcon() {
+  return (
+    <LogMark>
+      <path d="M4 8h2.5M11.5 8H20M4 16h8.5M17.5 16H20" />
+      <circle cx="9" cy="8" r="2.5" />
+      <circle cx="15" cy="16" r="2.5" />
+    </LogMark>
+  );
+}
+
+/** House rake: a drawn percent sign. */
+export function RakeIcon() {
+  return (
+    <LogMark>
+      <path d="M18.5 5.5l-13 13" />
+      <circle cx="7" cy="7" r="2.5" />
+      <circle cx="17" cy="17" r="2.5" />
+    </LogMark>
+  );
+}
+
+/** Any other note: lines of text. */
+export function NoteIcon() {
+  return (
+    <LogMark>
+      <path d="M5 7h14M5 12h14M5 17h9" />
+    </LogMark>
+  );
+}
