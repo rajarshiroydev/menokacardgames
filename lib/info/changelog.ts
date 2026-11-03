@@ -46,6 +46,10 @@ export const CHANGELOG: ChangelogEntry[] = [
         tag: "improved",
         text: "On a phone, tapping the bet amount box now moves the action card up so Fold, Call and Bet or Raise show above the keyboard, and the keyboard closes when you tap Bet or Raise.",
       },
+      {
+        tag: "improved",
+        text: "The Bet or Raise button stays off until the amount you type reaches the minimum.",
+      },
     ],
   },
   {

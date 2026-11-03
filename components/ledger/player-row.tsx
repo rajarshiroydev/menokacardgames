@@ -68,6 +68,9 @@ export function PlayerRow({
     ? (parseChips(amount, unit) ?? 0) - committed
     : Math.min(minimum, player.stack);
   const allIn = betAmount >= player.stack;
+  // The button stays off until the amount reaches the minimum, which is
+  // already capped at the stack, so a short all-in still counts.
+  const belowMinimum = betAmount < minimum;
   const role = seatRole(game, playerIndex);
   // Everything this player has put in this hand, blinds and ante included,
   // since players ask for the hand's total more than this street's.
@@ -306,7 +309,7 @@ export function PlayerRow({
             <button
               className="accent-button"
               type="button"
-              disabled={!(betAmount > 0)}
+              disabled={!(betAmount > 0) || belowMinimum}
               onClick={() => {
                 // Close the phone keyboard: the next player's card reuses
                 // this input, which would otherwise keep the focus.
@@ -363,20 +366,26 @@ function RaiseHelp({
 /** Once the phone keyboard is up, scrolls just enough that the Fold, Call
  *  and Bet buttons under the amount box show above it (and above the tab
  *  bar, when that shows), without pushing the box itself off the top.
- *  Does nothing where the buttons already show. */
+ *  Does nothing where the buttons already show. Checked in iOS Safari
+ *  (simulator) and Chrome. */
 function keepActionRowInView(input: HTMLInputElement) {
   const viewport = window.visualViewport;
   if (!viewport) return;
+  const root = document.documentElement;
   let timer = 0;
+  let passes = 0;
   const adjust = () => {
     viewport.removeEventListener("resize", settle);
     if (document.activeElement !== input) return;
     const row = input.closest(".seat-card")?.querySelector(".action-row");
     if (!row) return;
-    const visibleTop = viewport.offsetTop;
-    let visibleBottom = viewport.offsetTop + viewport.height;
-    // The keyboard usually hides the fixed tab bar, but where the browser
-    // shrinks the whole page for it the bar sits above it, over the buttons.
+    // Where the visible area starts, in the same terms as
+    // getBoundingClientRect: iOS Safari measures elements from the visible
+    // area itself (0 here), Chrome from the layout viewport.
+    const visibleTop = viewport.pageTop - window.scrollY;
+    let visibleBottom = visibleTop + viewport.height;
+    // iOS 26 Safari keeps the fixed tab bar on top of the keyboard, over
+    // the buttons; elsewhere the keyboard usually hides it.
     const tabBar = document.querySelector(".tab-bar")?.getBoundingClientRect();
     if (tabBar && tabBar.top < visibleBottom && tabBar.bottom > visibleTop) {
       visibleBottom = tabBar.top;
@@ -384,7 +393,23 @@ function keepActionRowInView(input: HTMLInputElement) {
     const shortBy = row.getBoundingClientRect().bottom + 12 - visibleBottom;
     const room = input.getBoundingClientRect().top - 8 - visibleTop;
     const by = Math.min(shortBy, room);
-    if (by > 0) window.scrollBy({ top: by, behavior: "smooth" });
+    if (by < 1) return;
+    // Near the end of the page there may be nothing left to scroll into, so
+    // add room below the page until the box loses focus.
+    const left = root.scrollHeight - (viewport.pageTop + viewport.height);
+    if (by > left) {
+      root.style.setProperty("--keyboard-room", `${Math.ceil(by - left) + 16}px`);
+      input.addEventListener(
+        "blur",
+        () => root.style.removeProperty("--keyboard-room"),
+        { once: true },
+      );
+    }
+    window.scrollBy({ top: by, behavior: "instant" });
+    // Safari's toolbar can shrink as the page scrolls, which changes the
+    // page's height and eats some of the scroll, so measure again.
+    passes += 1;
+    if (passes < 4) timer = window.setTimeout(adjust, 120);
   };
   // The keyboard resizes the visual viewport as it slides up, in one step or
   // several; act once it has settled. If it was already open, nothing
