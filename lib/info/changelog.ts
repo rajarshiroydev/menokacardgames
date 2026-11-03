@@ -27,6 +27,20 @@ export const CHANGE_TAG_LABELS: Record<ChangeTag, string> = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    date: "2026-11-03",
+    title: "Clearer Home cards",
+    items: [
+      {
+        tag: "improved",
+        text: "Home's game card shows the blinds in their own column beside the pot, makes the Your stack and Chip leader labels easier to read, and its Live badge now pulses while the game is on.",
+      },
+      {
+        tag: "improved",
+        text: "Last session on Home shows its date inside the card, beside the game's details.",
+      },
+    ],
+  },
+  {
     date: "2026-11-02",
     title: "Tidier action log",
     items: [

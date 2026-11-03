@@ -1,6 +1,6 @@
 "use client";
 
-import { useContext, useEffect, useState } from "react";
+import { useContext, useEffect, useState, type CSSProperties } from "react";
 
 import { AvatarArt } from "@/components/avatar-art";
 import { BrandMark } from "@/components/brand-mark";
@@ -28,7 +28,7 @@ function greeting(hour: number) {
   return "Good evening";
 }
 
-/** "Sun 28 Sep": the date beside Last Session. */
+/** "Sun 28 Sep": the date in the Last Session card. */
 function shortDay(timestamp: number) {
   const date = new Date(timestamp);
   const part = (options: Intl.DateTimeFormatOptions) =>
@@ -324,6 +324,15 @@ function UnfinishedGameCard({
   );
 }
 
+/** The arrow at the right end of the live cards' Back to the… button. */
+function CtaArrow() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M4 12h15M13 6l6 6-6 6" />
+    </svg>
+  );
+}
+
 /** Home's card while a game is on: the pot, blinds and stacks at a glance. */
 function HomeLiveCard({
   game,
@@ -341,11 +350,11 @@ function HomeLiveCard({
   const hand = game.hand;
   const blinds = blindStatus(game);
   const name = game.sessionLabel || game.gameName;
-  const meta = [
-    name,
-    hand ? `Hand ${hand.no}` : "Between hands",
-    hand ? STAGES[hand.stage] : null,
-  ].filter(Boolean);
+  // The street is over the pot ("Pot · Flop").
+  const meta = [name, hand ? `Hand ${hand.no}` : "Between hands"].filter(
+    Boolean,
+  );
+  const pot = hand ? money(hand.pot) : String(game.handNo);
   const me = selfPlayerId
     ? game.players.find((player) => player.id === selfPlayerId)
     : undefined;
@@ -365,16 +374,28 @@ function HomeLiveCard({
         </span>
         <span className="home-live-meta">{meta.join(" · ")}</span>
       </span>
+      {/* The pot and the blinds as a pair: each a label over its value,
+          the blinds in a column of their own behind a thin rule. */}
       <span className="home-live-pot-row">
-        <span>
-          <span className="home-kicker">{hand ? "Pot" : "Hands dealt"}</span>
-          <span className="home-live-pot">
-            {hand ? money(hand.pot) : game.handNo}
+        <span className="home-live-pot-main">
+          <span className="home-kicker">
+            {hand ? `Pot · ${STAGES[hand.stage]}` : "Hands dealt"}
+          </span>
+          <span
+            className="home-live-pot"
+            style={{ "--chars": pot.length } as CSSProperties}
+          >
+            {pot}
           </span>
         </span>
-        <span className="home-live-blinds">
-          {money(blinds.smallBlind)} / {money(blinds.bigBlind)}
-          {blinds.schedule ? <em> L{blinds.level + 1}</em> : null}
+        <span className="home-live-side">
+          <span className="home-kicker">
+            Blinds{blinds.schedule ? ` · L${blinds.level + 1}` : ""}
+          </span>
+          <b>
+            {money(blinds.smallBlind)} / {money(blinds.bigBlind)}
+          </b>
+          {game.bigBlindAnte ? <small>Ante {money(blinds.bigBlind)}</small> : null}
         </span>
       </span>
       <span className="home-live-stats">
@@ -400,7 +421,10 @@ function HomeLiveCard({
           </span>
         ) : null}
       </span>
-      <span className="home-live-cta">Back to the table</span>
+      <span className="home-live-cta">
+        Back to the table
+        <CtaArrow />
+      </span>
     </button>
   );
 }
@@ -461,7 +485,10 @@ function HomeLedgerCard({
           <b>{money(totals.cashedOut)}</b>
         </span>
       </span>
-      <span className="home-live-cta">Back to the game</span>
+      <span className="home-live-cta">
+        Back to the game
+        <CtaArrow />
+      </span>
     </button>
   );
 }
@@ -599,33 +626,39 @@ function HomeLastSessionCard({
     <>
       <div className="home-section-heading">
         <h2>Last session</h2>
-        <span>{shortDay(session.date)}</span>
       </div>
       <button className="glass home-last-card" type="button" onClick={onOpen}>
-        <span className="home-last-top">
-          <span className="home-last-main">
+        <span className="home-last-summary">
+          <span className="home-last-head">
             <small className="literal-text">{details.join(" · ")}</small>
-            <strong className={toneClass(featured.net)}>
-              {signedMoney(featured)}
-            </strong>
-            <small>
-              {mine ? "Your result" : (
-                <>
-                  Top winner · <span className="literal-text">{winner.name}</span>
-                </>
-              )}
-              {featuredReturn === null
-                ? ""
-                : ` · ${formatShortPercent(featuredReturn)} return`}
-            </small>
+            <time dateTime={new Date(session.date).toISOString()}>
+              {shortDay(session.date)}
+            </time>
           </span>
-          {mine && winner !== mine ? (
-            <span className="home-last-winner">
-              <small>Top winner</small>
-              <b className="literal-text">{winner.name}</b>
-              <em className={toneClass(winner.net)}>{signedMoney(winner)}</em>
+          <span className="home-last-top">
+            <span className="home-last-main">
+              <strong className={toneClass(featured.net)}>
+                {signedMoney(featured)}
+              </strong>
+              <small>
+                {mine ? "Your result" : (
+                  <>
+                    Top winner · <span className="literal-text">{winner.name}</span>
+                  </>
+                )}
+                {featuredReturn === null
+                  ? ""
+                  : ` · ${formatShortPercent(featuredReturn)} return`}
+              </small>
             </span>
-          ) : null}
+            {mine && winner !== mine ? (
+              <span className="home-last-winner">
+                <small>Top winner</small>
+                <b className="literal-text">{winner.name}</b>
+                <em className={toneClass(winner.net)}>{signedMoney(winner)}</em>
+              </span>
+            ) : null}
+          </span>
         </span>
         <span className="home-last-bars">
           {results.map((result) => {
