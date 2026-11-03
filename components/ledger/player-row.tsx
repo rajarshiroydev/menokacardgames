@@ -227,7 +227,6 @@ export function PlayerRow({
                 aria-label={raising ? "Raise to" : "Bet amount"}
                 value={amount}
                 onChange={(event) => setAmount(event.target.value)}
-                onFocus={(event) => keepActionRowInView(event.currentTarget)}
               />
               {/* With an amount in, the pencil becomes a clear button,
                   which also turns Fold and Check or Call back on. */}
@@ -310,15 +309,11 @@ export function PlayerRow({
               className="accent-button"
               type="button"
               disabled={!(betAmount > 0) || belowMinimum}
-              onClick={() => {
-                // Close the phone keyboard: the next player's card reuses
-                // this input, which would otherwise keep the focus.
-                if (document.activeElement instanceof HTMLElement) {
-                  document.activeElement.blur();
-                }
-                if (allIn) onAct(playerIndex, "all-in");
-                else onAct(playerIndex, "bet", betAmount);
-              }}
+              onClick={() =>
+                allIn
+                  ? onAct(playerIndex, "all-in")
+                  : onAct(playerIndex, "bet", betAmount)
+              }
             >
               {raiseLabel}
             </button>
@@ -361,63 +356,4 @@ function RaiseHelp({
       )}
     </InfoSheet>
   );
-}
-
-/** Once the phone keyboard is up, scrolls just enough that the Fold, Call
- *  and Bet buttons under the amount box show above it (and above the tab
- *  bar, when that shows), without pushing the box itself off the top.
- *  Does nothing where the buttons already show. Checked in iOS Safari
- *  (simulator) and Chrome. */
-function keepActionRowInView(input: HTMLInputElement) {
-  const viewport = window.visualViewport;
-  if (!viewport) return;
-  const root = document.documentElement;
-  let timer = 0;
-  let passes = 0;
-  const adjust = () => {
-    viewport.removeEventListener("resize", settle);
-    if (document.activeElement !== input) return;
-    const row = input.closest(".seat-card")?.querySelector(".action-row");
-    if (!row) return;
-    // Where the visible area starts, in the same terms as
-    // getBoundingClientRect: iOS Safari measures elements from the visible
-    // area itself (0 here), Chrome from the layout viewport.
-    const visibleTop = viewport.pageTop - window.scrollY;
-    let visibleBottom = visibleTop + viewport.height;
-    // iOS 26 Safari keeps the fixed tab bar on top of the keyboard, over
-    // the buttons; elsewhere the keyboard usually hides it.
-    const tabBar = document.querySelector(".tab-bar")?.getBoundingClientRect();
-    if (tabBar && tabBar.top < visibleBottom && tabBar.bottom > visibleTop) {
-      visibleBottom = tabBar.top;
-    }
-    const shortBy = row.getBoundingClientRect().bottom + 12 - visibleBottom;
-    const room = input.getBoundingClientRect().top - 8 - visibleTop;
-    const by = Math.min(shortBy, room);
-    if (by < 1) return;
-    // Near the end of the page there may be nothing left to scroll into, so
-    // add room below the page until the box loses focus.
-    const left = root.scrollHeight - (viewport.pageTop + viewport.height);
-    if (by > left) {
-      root.style.setProperty("--keyboard-room", `${Math.ceil(by - left) + 16}px`);
-      input.addEventListener(
-        "blur",
-        () => root.style.removeProperty("--keyboard-room"),
-        { once: true },
-      );
-    }
-    window.scrollBy({ top: by, behavior: "instant" });
-    // Safari's toolbar can shrink as the page scrolls, which changes the
-    // page's height and eats some of the scroll, so measure again.
-    passes += 1;
-    if (passes < 4) timer = window.setTimeout(adjust, 120);
-  };
-  // The keyboard resizes the visual viewport as it slides up, in one step or
-  // several; act once it has settled. If it was already open, nothing
-  // resizes, so the first wait is a little longer.
-  const settle = () => {
-    window.clearTimeout(timer);
-    timer = window.setTimeout(adjust, 150);
-  };
-  viewport.addEventListener("resize", settle);
-  timer = window.setTimeout(adjust, 450);
 }

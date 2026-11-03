@@ -82,14 +82,6 @@ html {
   background: var(--bg);
 }
 
-/* Room below the page while the bet box has the phone keyboard up, so the
-   action card can scroll above it (keepActionRowInView in player-row.tsx). */
-body::after {
-  content: "";
-  display: block;
-  height: var(--keyboard-room, 0px);
-}
-
 body {
   position: relative;
   min-height: 100vh;
