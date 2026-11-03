@@ -224,6 +224,7 @@ export function PlayerRow({
                 aria-label={raising ? "Raise to" : "Bet amount"}
                 value={amount}
                 onChange={(event) => setAmount(event.target.value)}
+                onFocus={(event) => keepActionRowInView(event.currentTarget)}
               />
               {/* With an amount in, the pencil becomes a clear button,
                   which also turns Fold and Check or Call back on. */}
@@ -306,11 +307,15 @@ export function PlayerRow({
               className="accent-button"
               type="button"
               disabled={!(betAmount > 0)}
-              onClick={() =>
-                allIn
-                  ? onAct(playerIndex, "all-in")
-                  : onAct(playerIndex, "bet", betAmount)
-              }
+              onClick={() => {
+                // Close the phone keyboard: the next player's card reuses
+                // this input, which would otherwise keep the focus.
+                if (document.activeElement instanceof HTMLElement) {
+                  document.activeElement.blur();
+                }
+                if (allIn) onAct(playerIndex, "all-in");
+                else onAct(playerIndex, "bet", betAmount);
+              }}
             >
               {raiseLabel}
             </button>
@@ -353,4 +358,41 @@ function RaiseHelp({
       )}
     </InfoSheet>
   );
+}
+
+/** Once the phone keyboard is up, scrolls just enough that the Fold, Call
+ *  and Bet buttons under the amount box show above it (and above the tab
+ *  bar, when that shows), without pushing the box itself off the top.
+ *  Does nothing where the buttons already show. */
+function keepActionRowInView(input: HTMLInputElement) {
+  const viewport = window.visualViewport;
+  if (!viewport) return;
+  let timer = 0;
+  const adjust = () => {
+    viewport.removeEventListener("resize", settle);
+    if (document.activeElement !== input) return;
+    const row = input.closest(".seat-card")?.querySelector(".action-row");
+    if (!row) return;
+    const visibleTop = viewport.offsetTop;
+    let visibleBottom = viewport.offsetTop + viewport.height;
+    // The keyboard usually hides the fixed tab bar, but where the browser
+    // shrinks the whole page for it the bar sits above it, over the buttons.
+    const tabBar = document.querySelector(".tab-bar")?.getBoundingClientRect();
+    if (tabBar && tabBar.top < visibleBottom && tabBar.bottom > visibleTop) {
+      visibleBottom = tabBar.top;
+    }
+    const shortBy = row.getBoundingClientRect().bottom + 12 - visibleBottom;
+    const room = input.getBoundingClientRect().top - 8 - visibleTop;
+    const by = Math.min(shortBy, room);
+    if (by > 0) window.scrollBy({ top: by, behavior: "smooth" });
+  };
+  // The keyboard resizes the visual viewport as it slides up, in one step or
+  // several; act once it has settled. If it was already open, nothing
+  // resizes, so the first wait is a little longer.
+  const settle = () => {
+    window.clearTimeout(timer);
+    timer = window.setTimeout(adjust, 150);
+  };
+  viewport.addEventListener("resize", settle);
+  timer = window.setTimeout(adjust, 450);
 }

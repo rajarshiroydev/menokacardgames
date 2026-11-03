@@ -42,6 +42,10 @@ export const CHANGELOG: ChangelogEntry[] = [
         tag: "improved",
         text: "Clearer choices on the New Game screen: Hand by hand is for playing in the app, Quick ledger for playing with real chips and noting just the buy-ins and final count.",
       },
+      {
+        tag: "improved",
+        text: "On a phone, tapping the bet amount box now moves the action card up so Fold, Call and Bet or Raise show above the keyboard, and the keyboard closes when you tap Bet or Raise.",
+      },
     ],
   },
   {
