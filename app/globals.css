@@ -804,6 +804,10 @@ textarea::placeholder {
   margin: 0 auto;
   padding: max(12px, env(safe-area-inset-top)) var(--gutter)
     calc(var(--tabbar-space) + env(safe-area-inset-bottom));
+  /* The action card slides in from the right (dock-arrive). Left unclipped,
+     it pokes past the screen edge and mobile Chrome briefly widens the page,
+     which makes the fixed tab bar jump. */
+  overflow-x: clip;
 }
 
 .app {
