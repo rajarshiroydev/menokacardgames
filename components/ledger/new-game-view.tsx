@@ -10,23 +10,23 @@ const GAME_KINDS: ReadonlyArray<{
 }> = [
   {
     kind: "hands",
-    kicker: "Blinds and bets",
+    kicker: "Play in the app",
     title: "Hand by hand",
-    text: "Seat players, set stacks, deal",
+    text: "Track every bet, fold and pot",
     suit: "♦",
   },
   {
     kind: "ledger",
-    kicker: "Just the money",
+    kicker: "Play with real chips",
     title: "Quick ledger",
-    text: "Buy-ins and cash-outs, then count the chips",
+    text: "Just buy-ins and the final count",
     suit: "♣",
   },
   {
     kind: "tournament",
-    kicker: "Last one standing",
+    kicker: "Play to one winner",
     title: "Tournament",
-    text: "Rising blinds, play to a winner",
+    text: "Blinds go up, last one left wins",
     suit: "♥",
   },
 ];

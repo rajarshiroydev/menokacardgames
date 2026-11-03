@@ -38,6 +38,10 @@ export const CHANGELOG: ChangelogEntry[] = [
         tag: "improved",
         text: "Last session on Home shows its date inside the card, beside the game's details.",
       },
+      {
+        tag: "improved",
+        text: "Clearer choices on the New Game screen: Hand by hand is for playing in the app, Quick ledger for playing with real chips and noting just the buy-ins and final count.",
+      },
     ],
   },
   {
