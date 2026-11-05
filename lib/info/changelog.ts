@@ -40,6 +40,10 @@ export const CHANGELOG: ChangelogEntry[] = [
       },
       {
         tag: "improved",
+        text: "A quick ledger's Action Log now looks like a hand by hand game's: each change on its own row with the player's avatar, a coloured tag and the amount.",
+      },
+      {
+        tag: "improved",
         text: "In a quick ledger, a player who cashes out with exactly what they bought in now shows ₹0 in green, since it isn't a loss, in the app and on the live table link.",
       },
       {

@@ -47,6 +47,19 @@ function recentGroups(groups: LogGroup[]) {
   return index < 0 ? groups.length : index + 1;
 }
 
+/** The groups cut down to their first `limit` lines, newest first. */
+function firstLines(groups: LogGroup[], limit: number) {
+  let left = limit;
+  return groups.flatMap((group) => {
+    const streets = group.streets.flatMap((street) => {
+      const entries = street.entries.slice(0, Math.max(left, 0));
+      left -= entries.length;
+      return entries.length ? [{ ...street, entries }] : [];
+    });
+    return streets.length ? [{ ...group, streets }] : [];
+  });
+}
+
 /**
  * The action log, newest first: each hand in its own box headed by its
  * number, split by street, one row per action with who, what and how much.
@@ -58,12 +71,18 @@ export function ActionLog({
   lines,
   players,
   liveHand = null,
+  closedLines,
 }: {
   lines: string[];
   /** The game's players in order, as the log's names refer to them. */
   players: ReadonlyArray<{ id?: string; name: string }>;
   /** The hand being played, marked In play. */
   liveHand?: number | null;
+  /**
+   * For a log with no hands (a quick ledger): how many lines it lists
+   * closed, with Show all for the rest.
+   */
+  closedLines?: number;
 }) {
   const [showAll, setShowAll] = useState(false);
   const [opened, setOpened] = useState<ReadonlySet<string>>(new Set());
@@ -74,9 +93,23 @@ export function ActionLog({
     players.map((player) => player.name),
     { complete: lines.length < LOG_LIMIT },
   );
-  const recent = recentGroups(groups);
-  const shown = showAll ? groups : groups.slice(0, recent);
   const handCount = groups.filter((group) => group.hand !== null).length;
+  const lineCount = groups.reduce(
+    (count, group) =>
+      count +
+      group.streets.reduce((sum, street) => sum + street.entries.length, 0),
+    0,
+  );
+  // Without hands, the log closes to its latest lines instead.
+  const byLines = closedLines !== undefined && handCount === 0;
+  const recent = byLines ? groups.length : recentGroups(groups);
+  const shown =
+    showAll || (byLines && lineCount <= closedLines)
+      ? groups
+      : byLines
+        ? firstLines(groups, closedLines)
+        : groups.slice(0, recent);
+  const more = byLines ? lineCount > closedLines : groups.length > recent;
   // Inside a hand every row but the result keeps the number's place, so
   // the avatars line up.
   const row = (entry: LogEntry, index: number, inHand: boolean) => {
@@ -205,13 +238,17 @@ export function ActionLog({
           );
         })}
       </div>
-      {groups.length > recent ? (
+      {more ? (
         <button
           className="text-button"
           type="button"
           onClick={() => setShowAll((all) => !all)}
         >
-          {showAll ? "Show fewer" : `Show all ${handCount} hands`}
+          {showAll
+            ? "Show fewer"
+            : byLines
+              ? `Show all ${lineCount} lines`
+              : `Show all ${handCount} hands`}
         </button>
       ) : null}
     </>

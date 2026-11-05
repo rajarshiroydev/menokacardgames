@@ -2,6 +2,7 @@
 
 import { type CSSProperties, FormEvent, useState } from "react";
 
+import { ActionLog } from "@/components/ledger/action-log";
 import { Avatar } from "@/components/ledger/avatar";
 import { UndoIcon } from "@/components/ledger/icons";
 import { LedgerTable } from "@/components/ledger/ledger-table";
@@ -66,11 +67,9 @@ function LedgerScreen({
   const [counting, setCounting] = useState(false);
   // Chips counted for each player at the table, by player index; empty is 0.
   const [counts, setCounts] = useState<Array<number | null>>([]);
-  const [showFullLog, setShowFullLog] = useState(false);
   const totals = ledgerTotals(game);
   const seated = ledgerSeated(game);
   const undoLine = ledgerUndoLine(game);
-  const logLines = showFullLog ? game.log : game.log.slice(0, 6);
   const boughtNote = (index: number) => {
     const buyIns = playerBuyIns(game, index);
     return `${buyIns.length} buy-in${buyIns.length === 1 ? "" : "s"} · ${money(
@@ -322,21 +321,8 @@ function LedgerScreen({
 
       {game.log.length ? (
         <section className="glass card">
-          <span className="label">Log</span>
-          <div className="rows log">
-            {logLines.map((line, index) => (
-              <div key={`${line}-${index}`}>{line}</div>
-            ))}
-          </div>
-          {game.log.length > 6 ? (
-            <button
-              className="text-button"
-              type="button"
-              onClick={() => setShowFullLog((shown) => !shown)}
-            >
-              {showFullLog ? "Show fewer" : `Show all ${game.log.length} lines`}
-            </button>
-          ) : null}
+          <h2 className="card-title">Action Log</h2>
+          <ActionLog lines={game.log} players={game.players} closedLines={6} />
         </section>
       ) : null}
     </div>

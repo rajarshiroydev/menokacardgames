@@ -458,7 +458,11 @@ function SavedLog({ sessionId, saved }: { sessionId: string; saved: boolean }) {
           </button>
         </p>
       ) : state.log?.lines.length ? (
-        <ActionLog lines={state.log.lines} players={state.log.players} />
+        <ActionLog
+          lines={state.log.lines}
+          players={state.log.players}
+          closedLines={6}
+        />
       ) : (
         <p className="muted">
           No action log was saved with this game. Games keep their log from

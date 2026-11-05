@@ -163,7 +163,7 @@ function playerAction(rest: string): Parts | null {
       }),
     ],
     [
-      /^returns to the table with (\S+)$/,
+      /^(?:returns to the table|is back at the table) with (\S+)$/,
       (m) => ({ kind: "buy-in", verb: "Returns", amount: m[1], note: null }),
     ],
   ];

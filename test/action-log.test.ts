@@ -31,6 +31,25 @@ describe("parseLogLine", () => {
     );
   });
 
+  test("reads a quick ledger's lines, which name no hand", () => {
+    const read = (line: string) => {
+      const { entry, hand, title } = parseLogLine(line, names);
+      return [entry.kind, entry.player, entry.verb, entry.amount, hand, title];
+    };
+    assert.deepEqual(read("Dev buys in again for ₹1,000"), [
+      "buy-in", 2, "Buys in again", "₹1,000", null, null,
+    ]);
+    assert.deepEqual(read("Asha Rao joins for ₹500"), [
+      "buy-in", 1, "Joins", "₹500", null, null,
+    ]);
+    assert.deepEqual(read("Asha cashes out with ₹2,400"), [
+      "cash-out", 0, "Cashes out", "₹2,400", null, null,
+    ]);
+    assert.deepEqual(read("Asha is back at the table with ₹1,800"), [
+      "buy-in", 0, "Returns", "₹1,800", null, null,
+    ]);
+  });
+
   test("reads folds, checks, calls and bets", () => {
     const kinds = [
       "Hand 3 PREFLOP: Dev folds",
