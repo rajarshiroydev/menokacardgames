@@ -15,6 +15,7 @@ import {
   prefetchResultsCard,
   ShareResultsButton,
 } from "@/components/ledger/results-card";
+import { APP_NAME } from "@/lib/brand";
 import { formatDate } from "@/lib/poker/game";
 import { formatChips, formatSignedMoney, plainChipsCode } from "@/lib/poker/money";
 import {
@@ -25,7 +26,30 @@ import {
 } from "@/lib/poker/settle-up";
 import type { ChipValue, PokerSession } from "@/lib/poker/types";
 
-/** The text Share sends: the game, its chip value and who pays whom. */
+const SITE_URL = "https://pokerize.app";
+/** Second line of the text; the bare domain is auto-linked by chat apps. */
+const CREDIT_LINE = `Scored with ${APP_NAME}.app`;
+
+function escapeHtml(text: string) {
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+/** The same lines as HTML, so rich-text pastes keep the credit as a link. */
+function settlementHtml(text: string) {
+  return text
+    .split("\n")
+    .map((line) =>
+      line === CREDIT_LINE
+        ? `<a href="${SITE_URL}">${escapeHtml(line)}</a>`
+        : escapeHtml(line),
+    )
+    .join("<br>");
+}
+
+/** The text Share sends: the game, the credit, its chip value and who pays whom. */
 function settlementText(
   session: PokerSession,
   settlement: Settlement,
@@ -33,6 +57,7 @@ function settlementText(
 ) {
   const lines = [
     `Settle up · ${session.name || `Game ${session.sessionNumber ?? ""}`.trim()} (${formatDate(session.date)})`,
+    CREDIT_LINE,
   ];
   if (session.chipValue) {
     lines.push(describeChipValue(session.chipValue, session.chipUnit, currency));
@@ -121,7 +146,17 @@ export function SettleUpSheet({
       return;
     }
     try {
-      await navigator.clipboard.writeText(text);
+      try {
+        // Rich copy first, so pasting into mail or notes keeps the link.
+        await navigator.clipboard.write([
+          new ClipboardItem({
+            "text/plain": new Blob([text], { type: "text/plain" }),
+            "text/html": new Blob([settlementHtml(text)], { type: "text/html" }),
+          }),
+        ]);
+      } catch {
+        await navigator.clipboard.writeText(text);
+      }
       onCopied();
     } catch {
       // Clipboard blocked: the list is on screen to copy by hand.
