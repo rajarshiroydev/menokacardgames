@@ -36,6 +36,7 @@ import {
   WinnerPicker,
 } from "@/components/ledger/pot-winners";
 import { TableHand } from "@/components/ledger/table-hand";
+import { useTimePlayed } from "@/components/ledger/time-played";
 import {
   blindStatus,
   dealablePlayerCount,
@@ -78,6 +79,7 @@ export function GameView(props: GameViewProps) {
 function GameScreen(props: GameViewProps) {
   const { currency, unit, money, signedMoney } = useMoney();
   const { game } = props;
+  const played = useTimePlayed(game.startedAt);
   const hand = game.hand;
   const net = (index: number) =>
     game.players[index].stack - totalBuyIns(game, index);
@@ -330,7 +332,10 @@ function GameScreen(props: GameViewProps) {
       )}
 
       <section className="glass card session-standings">
-        <h2 className="card-title">Session Standings</h2>
+        <div className="card-row">
+          <h2 className="card-title">Session Standings</h2>
+          <span className="card-note">{played} played</span>
+        </div>
         {game.rakeRules ? (
           <p className="muted small-note">
             {describeRakeRules(game.rakeRules, money)} · house has taken{" "}

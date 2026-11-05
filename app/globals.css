@@ -4311,10 +4311,21 @@ button.log-hand-head {
   color: var(--ink2);
 }
 
-/* Quick ledger: buy-ins, cash-outs and the final count. */
-.ledger-tiles strong {
-  font-size: 18px;
-  overflow-wrap: anywhere;
+/* Quick ledger: buy-ins, cash-outs and the final count. The totals are
+   the action card's tiles, three across. --chars is the longest of the three
+   amounts; they shrink together below 20px so each stays on one line (its
+   digits average under 0.56em wide). */
+.ledger-stats {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.ledger-stats .bet-stat {
+  container-type: inline-size;
+}
+
+.ledger-stats .bet-stat b {
+  font-size: min(20px, calc(100cqi / (var(--chars, 7) * 0.56)));
+  text-overflow: clip;
 }
 
 .ledger-row {
@@ -4322,6 +4333,15 @@ button.log-hand-head {
   align-items: center;
   gap: 12px;
   padding: 10px 0;
+}
+
+/* The card's own spacing frames the list; row padding is only for dividers. */
+.rows > .ledger-row:first-child {
+  padding-top: 0;
+}
+
+.rows > .ledger-row:last-child {
+  padding-bottom: 0;
 }
 
 .ledger-row.left .standing-name b {

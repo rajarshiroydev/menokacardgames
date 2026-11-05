@@ -27,6 +27,16 @@ export const CHANGE_TAG_LABELS: Record<ChangeTag, string> = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    date: "2026-11-05",
+    title: "Time played",
+    items: [
+      {
+        tag: "new",
+        text: "Each saved game in Games shows how long it was played, and the game screen shows how long the game in progress has been going, beside Session Standings (or Players in a quick ledger).",
+      },
+    ],
+  },
+  {
     date: "2026-11-03",
     title: "Clearer Home cards",
     items: [

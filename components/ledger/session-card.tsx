@@ -13,6 +13,7 @@ import {
   useMoney,
 } from "@/components/ledger/money";
 import { ShareResultsButton } from "@/components/ledger/results-card";
+import { timePlayed } from "@/components/ledger/time-played";
 import { describeRebuyRules } from "@/lib/poker/buy-ins";
 import {
   describeRakeRules,
@@ -143,6 +144,8 @@ function SessionCardBody({
     ]);
   }
 
+  const length = timePlayed(session.date, session.ended);
+
   const hasDetails = details.length > 0 || !sameStart || blinds !== null;
   const [showDetails, setShowDetails] = useState(false);
   // The log has its own toggle, so Details stays short (user request).
@@ -159,6 +162,7 @@ function SessionCardBody({
             {formatDate(session.date)} ·{" "}
             {ledger ? "Quick ledger" : "Hand by hand"} ·{" "}
             {session.results.length} players
+            {length ? ` · ${length}` : null}
           </p>
         </div>
         {/* The results card needs chips that add up, like Settle up. */}

@@ -1,10 +1,11 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { type CSSProperties, FormEvent, useState } from "react";
 
 import { Avatar, toneClass } from "@/components/ledger/avatar";
 import { UndoIcon } from "@/components/ledger/icons";
 import { ChipInput, GameAmounts, useMoney } from "@/components/ledger/money";
+import { useTimePlayed } from "@/components/ledger/time-played";
 import { playerBuyIns, totalBuyIns } from "@/lib/poker/game";
 import {
   ledgerCountGap,
@@ -46,6 +47,7 @@ function LedgerScreen({
   onDiscard,
 }: LedgerViewProps) {
   const { money, signedMoney } = useMoney();
+  const played = useTimePlayed(game.startedAt);
   const [counting, setCounting] = useState(false);
   // Chips counted for each player at the table, by player index; empty is 0.
   const [counts, setCounts] = useState<Array<number | null>>([]);
@@ -166,22 +168,31 @@ function LedgerScreen({
   return (
     <div className="stack-list game-view ledger-view">
       <section className="glass card between-card">
-        <span className="eyebrow">
-          {seated.length} at the table
-        </span>
-        <h2 className="card-title">Buy-Ins</h2>
-        <div className="profile-tiles ledger-tiles">
-          <div>
-            <strong>{money(totals.bought)}</strong>
-            <small>Bought in</small>
+        <h2 className="card-title">Table</h2>
+        {/* Drawn like the Stack and In this hand tiles on the action card. */}
+        <div
+          className="bet-stats ledger-stats"
+          style={
+            {
+              "--chars": Math.max(
+                ...[totals.bought, totals.cashedOut, totals.onTable].map(
+                  (amount) => money(amount).length,
+                ),
+              ),
+            } as CSSProperties
+          }
+        >
+          <div className="bet-stat">
+            <span>Bought in</span>
+            <b>{money(totals.bought)}</b>
           </div>
-          <div>
-            <strong>{money(totals.cashedOut)}</strong>
-            <small>Cashed out</small>
+          <div className="bet-stat">
+            <span>Cashed out</span>
+            <b>{money(totals.cashedOut)}</b>
           </div>
-          <div>
-            <strong className="blue">{money(totals.onTable)}</strong>
-            <small>On the table</small>
+          <div className="bet-stat">
+            <span>On the table</span>
+            <b>{money(totals.onTable)}</b>
           </div>
         </div>
         <div className="button-pair">
@@ -196,8 +207,10 @@ function LedgerScreen({
 
       <section className="glass card">
         <div className="card-row">
-          <h2 className="card-title">Players</h2>
-          <span className="card-note">Usual buy-in {money(game.startStack)}</span>
+          <h2 className="card-title">
+            {game.players.length} {game.players.length === 1 ? "Player" : "Players"}
+          </h2>
+          <span className="card-note">{played} played</span>
         </div>
         <div className="rows">
           {game.players.map((player, index) => (
