@@ -1,4 +1,5 @@
 import { getDatabase } from "@/lib/poker/database";
+import type { LiveLedgerView } from "@/lib/poker/live-ledger";
 import { isLiveToken, type LiveView } from "@/lib/poker/live-view";
 import { liveTokenHashHex } from "@/lib/poker/live-token";
 import { timed, withServerTiming } from "@/lib/server-timing";
@@ -6,7 +7,7 @@ import { timed, withServerTiming } from "@/lib/server-timing";
 export const dynamic = "force-dynamic";
 
 type LiveViewRow = {
-  snapshot: LiveView;
+  snapshot: LiveView | LiveLedgerView;
   updated_at: Date | string;
 };
 

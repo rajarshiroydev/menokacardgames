@@ -6141,6 +6141,34 @@ button.log-hand-head {
 }
 
 /* Folded, busted or cashed out: faded, as on the game screen. */
+/* A quick ledger's player rows: tap to highlight your own, as above. */
+.live-ledger-row {
+  width: 100%;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+
+.rows > .live-ledger-row + .live-ledger-row {
+  border-top: 1px solid var(--line);
+}
+
+.live-ledger-row.me {
+  width: calc(100% + 16px);
+  margin: 0 -8px;
+  padding-inline: 8px;
+  border-radius: var(--rs);
+  background: var(--glass2);
+  box-shadow: inset 3px 0 0 var(--g);
+}
+
+.live-ledger-row.left {
+  opacity: 0.6;
+}
+
 .live-player.out {
   opacity: 0.5;
 }

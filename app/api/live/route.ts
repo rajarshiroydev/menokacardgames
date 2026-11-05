@@ -6,6 +6,11 @@ import {
   validateLiveSnapshot,
   type LiveView,
 } from "@/lib/poker/live-view";
+import {
+  deriveLiveLedgerView,
+  type LiveLedgerView,
+  validateLiveLedgerSnapshot,
+} from "@/lib/poker/live-ledger";
 import { createLiveToken, liveTokenHashHex } from "@/lib/poker/live-token";
 import { readJsonBody, SMALL_JSON_BODY_LIMIT } from "@/lib/security/json-body";
 import { withServerTiming } from "@/lib/server-timing";
@@ -23,15 +28,18 @@ function json(body: object, status = 200) {
 async function readLiveView(
   request: Request,
   currency: string,
-): Promise<{ view: LiveView } | { response: Response }> {
+): Promise<{ view: LiveView | LiveLedgerView } | { response: Response }> {
   const read = await readJsonBody(request, SMALL_JSON_BODY_LIMIT);
   if (!read.ok) return { response: json({ error: read.error }, read.status) };
   try {
-    const body = (read.body ?? {}) as { snapshot?: unknown };
+    const body = (read.body ?? {}) as { snapshot?: { kind?: unknown } };
+    // A quick ledger has its own snapshot; anything else is hand by hand.
+    const view =
+      body.snapshot?.kind === "ledger"
+        ? deriveLiveLedgerView(validateLiveLedgerSnapshot(body.snapshot))
+        : deriveLiveView(validateLiveSnapshot(body.snapshot));
     // The currency comes from the host's account, not from the device.
-    return {
-      view: { ...deriveLiveView(validateLiveSnapshot(body.snapshot)), currency },
-    };
+    return { view: { ...view, currency } };
   } catch (error) {
     return {
       response: json(

@@ -25,6 +25,10 @@ type LedgerViewProps = {
   /** Chips counted for each player still at the table, by player index. */
   onSave: (counts: Array<number | null>) => void;
   onDiscard: () => void;
+  /** The live link is on, and whether its updates are failing. */
+  liveSharing: boolean;
+  liveFailing: boolean;
+  onShareLive: () => void;
 };
 
 /** A quick ledger's screen, with its amounts in the game's own chip unit. */
@@ -45,6 +49,9 @@ function LedgerScreen({
   onUndo,
   onSave,
   onDiscard,
+  liveSharing,
+  liveFailing,
+  onShareLive,
 }: LedgerViewProps) {
   const { money, signedMoney } = useMoney();
   const played = useTimePlayed(game.startedAt);
@@ -257,6 +264,23 @@ function LedgerScreen({
             </div>
           ))}
         </div>
+        {/* Where hand by hand has Share live standings, under its list. */}
+        <button
+          className={`glass-button full live-share-button${
+            liveSharing ? " sharing" : ""
+          }`}
+          type="button"
+          onClick={onShareLive}
+        >
+          {liveSharing ? (
+            <>
+              <span className="live-dot" aria-hidden="true" />
+              {liveFailing ? "Live link not updating" : "Sharing live · show link"}
+            </>
+          ) : (
+            "Share live table"
+          )}
+        </button>
       </section>
 
       {undoLine ? (

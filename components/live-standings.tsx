@@ -18,7 +18,9 @@ import {
   type LiveStanding,
   type LiveView,
 } from "@/lib/poker/live-view";
+import { isLiveLedgerView, type LiveLedgerView } from "@/lib/poker/live-ledger";
 import { AvatarArt } from "@/components/avatar-art";
+import { LiveLedger } from "@/components/live-ledger";
 import {
   BlindsPill,
   BlindTimer,
@@ -31,7 +33,8 @@ import {
 } from "@/components/game-parts";
 import { ThemeToggle } from "@/components/theme-toggle";
 
-type LiveResponse = LiveView & { updatedAt: number };
+/** A quick ledger's link has its own view (`kind: "ledger"`). */
+type LiveResponse = (LiveView | LiveLedgerView) & { updatedAt: number };
 
 type LoadState =
   | { kind: "loading" }
@@ -316,6 +319,39 @@ export function LiveStandings({ token }: { token: string }) {
   const { view, failed } = state;
   const age = now - view.updatedAt;
   const stale = failed || age > LIVE_VIEW_STALE_MS;
+  const header = (
+    <header className="screen-header">
+      <div className="screen-heading">
+        <h1 style={{ ["--chars" as string]: Math.max(8, view.gameName.length) }}>
+          {view.gameName}
+        </h1>
+        {/* Whether the page is live, right under the game's name. */}
+        <p className={`live-updated${stale ? " stale" : ""}`} role="status">
+          <span className="live-dot" aria-hidden="true" />
+          <span>
+            {isLiveLedgerView(view) ? "Live table" : "Live standings"} ·{" "}
+            {failed
+              ? `This phone can't reach the app. Last update ${ago(age)}`
+              : stale
+                ? `Last update ${ago(age)}. The host's phone may be offline or asleep`
+                : `Updated ${ago(age)}`}
+          </span>
+        </p>
+      </div>
+      <ThemeToggle />
+    </header>
+  );
+  if (isLiveLedgerView(view)) {
+    return (
+      <LiveLedger
+        view={view}
+        header={header}
+        now={now}
+        me={me}
+        onToggleMe={toggleMe}
+      />
+    );
+  }
   // Chips with a value are counts, not money (lib/poker/settle-up.ts).
   const code = view.plainChips ? plainChipsCode(view.currency) : view.currency;
   const rebuyNote = describeRebuyRules(view.rebuyRules, code, view.chipUnit);
@@ -401,26 +437,7 @@ export function LiveStandings({ token }: { token: string }) {
 
   return (
     <main className="ledger-shell live-shell">
-      <header className="screen-header">
-        <div className="screen-heading">
-          <h1 style={{ ["--chars" as string]: Math.max(8, view.gameName.length) }}>
-            {view.gameName}
-          </h1>
-          {/* Whether the page is live, right under the game's name. */}
-          <p className={`live-updated${stale ? " stale" : ""}`} role="status">
-            <span className="live-dot" aria-hidden="true" />
-            <span>
-              Live standings ·{" "}
-              {failed
-                ? `This phone can't reach the app. Last update ${ago(age)}`
-                : stale
-                  ? `Last update ${ago(age)}. The host's phone may be offline or asleep`
-                  : `Updated ${ago(age)}`}
-            </span>
-          </p>
-        </div>
-        <ThemeToggle />
-      </header>
+      {header}
 
       <section className="glass card live-help" aria-label="How this page works">
         <span className="label">How this page works</span>

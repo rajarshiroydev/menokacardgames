@@ -197,7 +197,9 @@ export default function PrivacyPage() {
             {LIVE_VIEW_EXPIRY_HOURS} hours after the host&apos;s last update):
             each player&apos;s actions and position in the hand being played,
             who won the last hand and the biggest pot, and every player&apos;s
-            result over recent hands. Share it only with the table.
+            result over recent hands. For a quick ledger it shows what each
+            player has bought in, who cashed out with what and the latest
+            changes the host noted. Share it only with the table.
           </li>
           <li>
             <b>Us.</b> We can see account information to run the service, answer

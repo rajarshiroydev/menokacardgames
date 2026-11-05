@@ -28,8 +28,12 @@ export const CHANGE_TAG_LABELS: Record<ChangeTag, string> = {
 export const CHANGELOG: ChangelogEntry[] = [
   {
     date: "2026-11-05",
-    title: "Time played",
+    title: "Live table for quick ledgers",
     items: [
+      {
+        tag: "new",
+        text: "Quick ledgers can be shared live: Share live table under Players gives the table a link showing what everyone has bought in, who cashed out with what, the totals and the latest changes.",
+      },
       {
         tag: "new",
         text: "Each saved game in Games shows how long it was played, and the game screen shows how long the game in progress has been going, beside Session Standings (or Players in a quick ledger).",

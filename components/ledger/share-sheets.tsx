@@ -405,6 +405,7 @@ export function InviteSheet({
 }
 
 export function LiveShareSheet({
+  ledger = false,
   token,
   busy,
   failing,
@@ -413,6 +414,8 @@ export function LiveShareSheet({
   onCopied,
   onClose,
 }: {
+  /** A quick ledger: the link shows buy-ins and cash-outs, not stacks. */
+  ledger?: boolean;
   token: string | null;
   busy: boolean;
   failing: boolean;
@@ -426,7 +429,10 @@ export function LiveShareSheet({
 
   async function share() {
     try {
-      await navigator.share({ title: "Live standings", url });
+      await navigator.share({
+        title: ledger ? "Live table" : "Live standings",
+        url,
+      });
     } catch {
       // The host closed the share sheet.
     }
@@ -454,16 +460,18 @@ export function LiveShareSheet({
         aria-modal="true"
         aria-labelledby="live-share-title"
       >
-        <h2 id="live-share-title">Live Standings</h2>
+        <h2 id="live-share-title">{ledger ? "Live Table" : "Live Standings"}</h2>
         {token ? (
           <>
             <p className="muted rule-note">
-              Players scan this or open the link to see every stack and this
-              game&apos;s standings on their own phones. It updates a few
-              seconds after each change and ends when you save or discard the
-              game.
+              Players scan this to follow{" "}
+              {ledger ? "buy-ins and cash-outs" : "stacks and standings"} live.
+              It ends when you save or discard the game.
             </p>
-            <QrCode text={url} label="QR code for the live standings link" />
+            <QrCode
+              text={url}
+              label={`QR code for the live ${ledger ? "table" : "standings"} link`}
+            />
             <p className="live-link">{url}</p>
             {failing ? (
               <p className="field-error">
@@ -495,10 +503,10 @@ export function LiveShareSheet({
         ) : (
           <>
             <p className="muted rule-note">
-              Create a link players can open without signing in. They see each
-              player&apos;s stack, total bought in and net for this game only,
-              read-only. Anyone with the link can see it until the game is
-              saved or discarded, or you stop sharing.
+              A read-only link to this game&apos;s{" "}
+              {ledger ? "buy-ins and cash-outs" : "stacks and standings"}. No
+              sign-in needed. Anyone with it can look until you save, discard or
+              stop sharing.
             </p>
             <button
               className="primary full"

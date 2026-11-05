@@ -428,6 +428,13 @@ The **Profile** tab replaced the Players tab on 30 September 2026. From the top:
 - **What the link does not show:** the host's player list, other games, saved history, all-time standings, the action log (only the last hand's winners), money values when chips have a price, or anything else in the host's account.
 - **When the link stops working.** It ends when the host saves or discards the game, on any phone (since 30 October 2026, also on a phone the game moved to after the link was shared), taps **Stop sharing**, or deletes their account. It also stops 12 hours after the host's last update. Afterwards it shows "This game has ended". Sharing again makes a new link; old links never come back.
 - **Who can see it.** Anyone who has the link can see those names and chip counts until it ends, so share it only with the table. The button reads "Sharing live · show link" while a link is active, and "Live link not updating" if the host's updates keep failing.
+- **Quick ledger** (since 5 November 2026). A quick ledger has a **Share live table** button under its Players card, opening the same sheet headed **Live Table** (its notes say players see buy-ins and cash-outs). There are no stacks or results until the count, so its page is different. From the top:
+  - the game name and "● Live table · Updated 12s ago", with the same warnings as above;
+  - **How this page works**: **Tap your name** ("Highlights your row"), **Buy-ins and cash-outs** ("Show a few seconds after the host notes them") and **Results** ("Come when the host counts the chips at the end");
+  - **Table**, with the time played on the right ("1h 12m played") and the host's three tiles: **Bought in**, **Cashed out** and **On the table**;
+  - **3 Players**: everyone still at the table in the host's order, each with their avatar and "2 buy-ins · ₹20,000", then those who cashed out, faded, with "Cashed out with ₹18,000 · +₹8,000"; nothing is ranked. Tapping your name highlights your row (remembered on that phone; there is no Your game card);
+  - **Latest changes**: the 10 newest lines of the host's log, newest first, as the host's phone words them ("Asha buys in again for ₹10,000"), without times.
+  A cash-out typed larger than what's on the table shows as it is (On the table goes below zero) rather than stopping the updates. Speed, the 12-hour expiry, chip value and when the link ends work as above; saving the quick ledger ends it too.
 
 ## 20. Friends
 
@@ -547,7 +554,8 @@ Added 13 October 2026 (user request). For hosts who don't want to play every han
 - **Saved game card.** Reads "Quick ledger" where other games read "Hand by hand", with no hands, big blind or blind history under **Details** and no **Continue game** button: a saved quick ledger can't be reopened.
 - **Home.** While one is on, the Home card shows **Live**, the game name and "Quick ledger", the total bought in, how many are at the table, your own buy-ins (or the number of players) and the total cashed out, and **Back to the game**. Last session reads "Quick ledger" instead of the hand count.
 - **Backups, discarding and devices** work as in section 10: the quick ledger is backed up while it is on and can be restored on another device. **Discard game** asks "Discard this game? Its buy-ins and cash-outs are lost." with a **Discard game** button.
-- **Not in a quick ledger:** the live standings link (there are no stacks to show until the count), continuing a saved game, and turning a quick ledger into a hand-by-hand game or back.
+- **Live link** (since 5 November 2026): **Share live table** under the Players card shows players the totals, everyone's buy-ins and cash-outs and the latest changes (section 19).
+- **Not in a quick ledger:** continuing a saved game, and turning a quick ledger into a hand-by-hand game or back.
 
 ---
 

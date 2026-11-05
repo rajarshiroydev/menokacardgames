@@ -156,6 +156,7 @@ import {
   standingsKey,
 } from "@/lib/poker/standings";
 import type { ProfileSummary } from "@/lib/profile/stats";
+import { buildLiveLedgerSnapshot } from "@/lib/poker/live-ledger";
 import {
   buildLiveSnapshot,
   LIVE_VIEW_HEARTBEAT_MS,
@@ -179,6 +180,16 @@ import type {
   RebuyRules,
   SavedActionLog,
 } from "@/lib/poker/types";
+
+/** What the live link is sent: a quick ledger has its own kind of snapshot. */
+function liveSnapshotOf(
+  game: GameState,
+  avatarOf: (player: GameState["players"][number]) => string | undefined,
+) {
+  return isLedgerGame(game)
+    ? buildLiveLedgerSnapshot(game, avatarOf)
+    : buildLiveSnapshot(game, avatarOf);
+}
 
 export function PokerLedger({
   accountId,
@@ -598,7 +609,7 @@ export function PokerLedger({
       liveSync.current.lastSent = Date.now();
       try {
         await liveApi("PUT", {
-          snapshot: buildLiveSnapshot(current, avatarOfSeat.current),
+          snapshot: liveSnapshotOf(current, avatarOfSeat.current),
         });
         liveSync.current.failures = 0;
         setLiveFailing(false);
@@ -812,7 +823,7 @@ export function PokerLedger({
     setLiveBusy(true);
     try {
       const data = await liveApi<{ token: string }>("POST", {
-        snapshot: buildLiveSnapshot(game, avatarOfSeat.current),
+        snapshot: liveSnapshotOf(game, avatarOfSeat.current),
       });
       liveSync.current.lastSent = Date.now();
       rememberLiveToken(data.token);
@@ -832,7 +843,11 @@ export function PokerLedger({
       await liveApi("DELETE");
       rememberLiveToken(null);
       setSharingLive(false);
-      showToast("Stopped sharing live standings");
+      showToast(
+        isLedgerGame(game)
+          ? "Stopped sharing the live table"
+          : "Stopped sharing live standings",
+      );
     } catch (error) {
       showToast(
         error instanceof Error ? error.message : "Could not stop sharing",
@@ -1740,6 +1755,7 @@ export function PokerLedger({
         method: "POST",
         body: JSON.stringify({ sessions: [session] }),
       });
+      endLiveSharing();
       setGame(null);
       navigate("history", { replace: true });
       await refreshHistory();
@@ -2382,6 +2398,9 @@ export function PokerLedger({
             onUndo={undoLedger}
             onSave={saveLedgerGame}
             onDiscard={discardGame}
+            liveSharing={Boolean(liveToken)}
+            liveFailing={liveFailing}
+            onShareLive={() => setSharingLive(true)}
           />
         ) : game ? (
           <GameView
@@ -2525,6 +2544,7 @@ export function PokerLedger({
       </GameAmounts>
       {sharingLive && game ? (
         <LiveShareSheet
+          ledger={isLedgerGame(game)}
           token={liveToken}
           busy={liveBusy}
           failing={liveFailing}
