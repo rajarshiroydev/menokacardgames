@@ -2254,8 +2254,12 @@ export function PokerLedger({
               <ThemeToggle />
             </>
           ) : null}
-          {view === "game" && game?.hand ? (
-            <div className="layout-toggle" role="radiogroup" aria-label="Show the hand as">
+          {view === "game" && (game?.hand || isLedgerGame(game)) ? (
+            <div
+              className="layout-toggle"
+              role="radiogroup"
+              aria-label={isLedgerGame(game) ? "Show the game as" : "Show the hand as"}
+            >
               {(["list", "table"] as const).map((layout) => (
                 <button
                   key={layout}
@@ -2391,6 +2395,7 @@ export function PokerLedger({
         ) : game && isLedgerGame(game) ? (
           <LedgerView
             game={game}
+            layout={handLayout}
             onBuyIn={(playerIndex) => setBuyingIn(playerIndex)}
             onAddPlayer={() => setTableSheet("add")}
             onCashOut={() => setTableSheet("cash-out")}

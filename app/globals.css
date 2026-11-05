@@ -80,6 +80,11 @@
 html {
   min-height: 100%;
   background: var(--bg);
+  /* Keep room for the scrollbar even on a page short enough not to need
+     one, so the layout doesn't shift sideways when a page grows or shrinks
+     (the quick ledger's List | Table switch moved its heading). Phones use
+     overlay scrollbars, so nothing changes there. */
+  scrollbar-gutter: stable;
 }
 
 body {

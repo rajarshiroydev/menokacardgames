@@ -2,8 +2,9 @@
 
 import { type CSSProperties, FormEvent, useState } from "react";
 
-import { Avatar, toneClass } from "@/components/ledger/avatar";
+import { Avatar } from "@/components/ledger/avatar";
 import { UndoIcon } from "@/components/ledger/icons";
+import { LedgerTable } from "@/components/ledger/ledger-table";
 import { ChipInput, GameAmounts, useMoney } from "@/components/ledger/money";
 import { useTimePlayed } from "@/components/ledger/time-played";
 import { playerBuyIns, totalBuyIns } from "@/lib/poker/game";
@@ -13,10 +14,13 @@ import {
   ledgerTotals,
   ledgerUndoLine,
 } from "@/lib/poker/ledger";
+import type { HandLayout } from "@/lib/poker/storage";
 import type { GameState } from "@/lib/poker/types";
 
 type LedgerViewProps = {
   game: GameState;
+  /** List or Table, the same switch and choice as a hand by hand game. */
+  layout: HandLayout;
   onBuyIn: (playerIndex: number) => void;
   onAddPlayer: () => void;
   onCashOut: () => void;
@@ -42,6 +46,7 @@ export function LedgerView(props: LedgerViewProps) {
 
 function LedgerScreen({
   game,
+  layout,
   onBuyIn,
   onAddPlayer,
   onCashOut,
@@ -54,6 +59,9 @@ function LedgerScreen({
   onShareLive,
 }: LedgerViewProps) {
   const { money, signedMoney } = useMoney();
+  // A player's result colour. No gain or loss is green too, since it isn't
+  // a loss (user decision 2026-11-05); plain "₹0" read as unclear.
+  const tone = (net: number) => (net < 0 ? "neg" : "pos");
   const played = useTimePlayed(game.startedAt);
   const [counting, setCounting] = useState(false);
   // Chips counted for each player at the table, by player index; empty is 0.
@@ -96,7 +104,7 @@ function LedgerScreen({
                       {count !== null ? (
                         <>
                           {" · "}
-                          <span className={toneClass(net)}>
+                          <span className={tone(net)}>
                             {signedMoney(net)}
                           </span>
                         </>
@@ -127,7 +135,7 @@ function LedgerScreen({
                     <b>{player.name}</b>
                     <small>
                       Cashed out ·{" "}
-                      <span className={toneClass(player.stack - totalBuyIns(game, index))}>
+                      <span className={tone(player.stack - totalBuyIns(game, index))}>
                         {signedMoney(player.stack - totalBuyIns(game, index))}
                       </span>
                     </small>
@@ -174,6 +182,7 @@ function LedgerScreen({
 
   return (
     <div className="stack-list game-view ledger-view">
+      {layout === "table" ? <LedgerTable game={game} /> : null}
       <section className="glass card between-card">
         <h2 className="card-title">Table</h2>
         {/* Drawn like the Stack and In this hand tiles on the action card. */}
@@ -233,7 +242,7 @@ function LedgerScreen({
                     <>
                       Cashed out with {money(player.stack)} ·{" "}
                       <span
-                        className={toneClass(player.stack - totalBuyIns(game, index))}
+                        className={tone(player.stack - totalBuyIns(game, index))}
                       >
                         {signedMoney(player.stack - totalBuyIns(game, index))}
                       </span>

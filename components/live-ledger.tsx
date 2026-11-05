@@ -111,11 +111,9 @@ export function LiveLedger({
                     {left ? (
                       <>
                         Cashed out with {money(player.cashedOut!)} ·{" "}
-                        <span
-                          className={
-                            player.net! > 0 ? "pos" : player.net! < 0 ? "neg" : undefined
-                          }
-                        >
+                        {/* No gain or loss is green too: it isn't a loss
+                            (user decision 2026-11-05, as in the app). */}
+                        <span className={player.net! < 0 ? "neg" : "pos"}>
                           {signed(player.net!)}
                         </span>
                       </>

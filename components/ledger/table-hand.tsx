@@ -38,7 +38,7 @@ import { readTableTurn, storeTableTurn } from "@/lib/poker/storage";
  * Where a seat sits around the oval, in percent of the table area. Seat 0 is
  * at the top and the rest follow clockwise, the order the deal goes round.
  */
-function seatPosition(index: number, count: number, reach = 1) {
+export function seatPosition(index: number, count: number, reach = 1) {
   const angle = ((-90 + (index * 360) / count) * Math.PI) / 180;
   return {
     x: 50 + 38 * reach * Math.cos(angle),
@@ -272,7 +272,7 @@ export function TableHand({
   );
 }
 
-function nameLength(name: string): "long" | "longer" | undefined {
+export function nameLength(name: string): "long" | "longer" | undefined {
   if (name.length > 28) return "longer";
   if (name.length > 14) return "long";
   return undefined;

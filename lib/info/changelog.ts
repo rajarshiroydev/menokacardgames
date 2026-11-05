@@ -36,6 +36,14 @@ export const CHANGELOG: ChangelogEntry[] = [
       },
       {
         tag: "new",
+        text: "Quick ledgers have the List | Table switch too. Table puts everyone round the oval with what they've bought in altogether and the chips on the table in the middle, above the usual Table and Players cards.",
+      },
+      {
+        tag: "improved",
+        text: "In a quick ledger, a player who cashes out with exactly what they bought in now shows ₹0 in green, since it isn't a loss, in the app and on the live table link.",
+      },
+      {
+        tag: "new",
         text: "Each saved game in Games shows how long it was played, and the game screen shows how long the game in progress has been going, beside Session Standings (or Players in a quick ledger).",
       },
     ],
