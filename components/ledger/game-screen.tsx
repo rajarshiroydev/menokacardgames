@@ -26,8 +26,17 @@ import {
   UndoHandButton,
   UndoTurnButton,
 } from "@/components/ledger/hand-buttons";
-import { PauseIcon, PlayIcon } from "@/components/ledger/icons";
-import { describeBlindSchedule, GameAmounts, useMoney } from "@/components/ledger/money";
+import {
+  GraphIcon,
+  ListIcon,
+  PauseIcon,
+  PlayIcon,
+} from "@/components/ledger/icons";
+import {
+  describeBlindSchedule,
+  GameAmounts,
+  useMoney,
+} from "@/components/ledger/money";
 import { PlayerRow } from "@/components/ledger/player-row";
 import {
   PotBreakdown,
@@ -37,6 +46,8 @@ import {
 } from "@/components/ledger/pot-winners";
 import { TableHand } from "@/components/ledger/table-hand";
 import { useTimePlayed } from "@/components/ledger/time-played";
+import { Segmented } from "@/components/ledger/segmented";
+import { StackChart } from "@/components/ledger/stack-chart";
 import {
   blindStatus,
   dealablePlayerCount,
@@ -79,6 +90,7 @@ export function GameView(props: GameViewProps) {
 function GameScreen(props: GameViewProps) {
   const { currency, unit, money, signedMoney } = useMoney();
   const { game } = props;
+  const [standingsView, setStandingsView] = useState<"list" | "graph">("list");
   const played = useTimePlayed(game.startedAt);
   const hand = game.hand;
   const net = (index: number) =>
@@ -200,7 +212,11 @@ function GameScreen(props: GameViewProps) {
           {!game.winnerAnnouncement ? (
             <>
               {enoughPlayers ? (
-                <button className="cta" type="button" onClick={props.onNextHand}>
+                <button
+                  className="cta"
+                  type="button"
+                  onClick={props.onNextHand}
+                >
                   Deal The Next Hand
                 </button>
               ) : null}
@@ -334,7 +350,16 @@ function GameScreen(props: GameViewProps) {
       <section className="glass card session-standings">
         <div className="card-row">
           <h2 className="card-title">Session Standings</h2>
-          <span className="card-note">{played} played</span>
+          <Segmented
+            label="Show standings as"
+            className="standings-view"
+            options={[
+              { value: "list", label: "List", icon: <ListIcon /> },
+              { value: "graph", label: "Graph", icon: <GraphIcon /> },
+            ]}
+            value={standingsView}
+            onChange={setStandingsView}
+          />
         </div>
         {game.rakeRules ? (
           <p className="muted small-note">
@@ -342,19 +367,23 @@ function GameScreen(props: GameViewProps) {
             {money(game.rake ?? 0)}
           </p>
         ) : null}
-        <div className="rows">
-          {standings.map(({ player, index }, rank) => (
-            <StandingRow
-              key={index}
-              rank={rank + 1}
-              name={player.name}
-              note={`${player.left ? "Cashed out · " : ""}${standingBuyIns(game, index, money)}`}
-              stack={money(player.stack)}
-              net={signedMoney(net(index))}
-              netTone={toneClass(net(index))}
-            />
-          ))}
-        </div>
+        {standingsView === "graph" ? (
+          <StackChart game={game} />
+        ) : (
+          <div className="rows">
+            {standings.map(({ player, index }, rank) => (
+              <StandingRow
+                key={index}
+                rank={rank + 1}
+                name={player.name}
+                note={`${player.left ? "Cashed out · " : ""}${standingBuyIns(game, index, money)}`}
+                stack={money(player.stack)}
+                net={signedMoney(net(index))}
+                netTone={toneClass(net(index))}
+              />
+            ))}
+          </div>
+        )}
         <button
           className={`glass-button full live-share-button${
             props.liveSharing ? " sharing" : ""
@@ -394,7 +423,10 @@ function GameScreen(props: GameViewProps) {
 
       {game.log.length ? (
         <section className="glass card">
-          <h2 className="card-title">Action Log</h2>
+          <div className="card-row">
+            <h2 className="card-title">Action Log</h2>
+            <span className="card-note">{played} played</span>
+          </div>
           <ActionLog
             lines={game.log}
             players={game.players}

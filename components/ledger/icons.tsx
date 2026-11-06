@@ -257,3 +257,42 @@ export function NoteIcon() {
     </LogMark>
   );
 }
+
+/** Three rows: the standings as a list. */
+export function ListIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width="16"
+      height="16"
+      aria-hidden="true"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+    >
+      <path d="M9 6h11M9 12h11M9 18h11" />
+      <path d="M4 6h.01M4 12h.01M4 18h.01" />
+    </svg>
+  );
+}
+
+/** A rising line on axes: the standings as a graph. */
+export function GraphIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width="16"
+      height="16"
+      aria-hidden="true"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M4 4v16h16" />
+      <path d="m7 15 4-4 3 3 5-6" />
+    </svg>
+  );
+}

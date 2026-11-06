@@ -8,6 +8,7 @@ export function Segmented<T extends string | number>({
   value,
   onChange,
   columns,
+  className,
 }: {
   label: string;
   /** With `icon`, the chip shows the icon and `label` becomes its accessible name. */
@@ -16,10 +17,14 @@ export function Segmented<T extends string | number>({
   onChange: (value: T) => void;
   /** Wrap into rows of this many equal chips instead of one row. */
   columns?: number;
+  /** Extra classes, for a compact chip set such as a view switch. */
+  className?: string;
 }) {
   return (
     <div
-      className={columns ? "segmented grid" : "segmented"}
+      className={[columns ? "segmented grid" : "segmented", className]
+        .filter(Boolean)
+        .join(" ")}
       style={columns ? { gridTemplateColumns: `repeat(${columns}, 1fr)` } : undefined}
       role="radiogroup"
       aria-label={label}

@@ -27,6 +27,20 @@ export const CHANGE_TAG_LABELS: Record<ChangeTag, string> = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    date: "2026-11-06",
+    title: "Standings graph",
+    items: [
+      {
+        tag: "new",
+        text: "Session Standings has a List | Graph switch at its top right. Graph draws a coloured line for each player showing the chips they've won or lost after every hand; tap a name to pick out their line.",
+      },
+      {
+        tag: "improved",
+        text: "The time played moved from Session Standings (or Players in a quick ledger) to beside the Action Log heading, making room for the switch.",
+      },
+    ],
+  },
+  {
     date: "2026-11-05",
     title: "Paid marks and live tables",
     items: [

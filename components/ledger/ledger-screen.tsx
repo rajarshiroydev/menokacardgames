@@ -60,10 +60,10 @@ function LedgerScreen({
   onShareLive,
 }: LedgerViewProps) {
   const { money, signedMoney } = useMoney();
+  const played = useTimePlayed(game.startedAt);
   // A player's result colour. No gain or loss is green too, since it isn't
   // a loss (user decision 2026-11-05); plain "₹0" read as unclear.
   const tone = (net: number) => (net < 0 ? "neg" : "pos");
-  const played = useTimePlayed(game.startedAt);
   const [counting, setCounting] = useState(false);
   // Chips counted for each player at the table, by player index; empty is 0.
   const [counts, setCounts] = useState<Array<number | null>>([]);
@@ -225,7 +225,6 @@ function LedgerScreen({
           <h2 className="card-title">
             {game.players.length} {game.players.length === 1 ? "Player" : "Players"}
           </h2>
-          <span className="card-note">{played} played</span>
         </div>
         <div className="rows">
           {game.players.map((player, index) => (
@@ -321,7 +320,10 @@ function LedgerScreen({
 
       {game.log.length ? (
         <section className="glass card">
-          <h2 className="card-title">Action Log</h2>
+          <div className="card-row">
+            <h2 className="card-title">Action Log</h2>
+            <span className="card-note">{played} played</span>
+          </div>
           <ActionLog lines={game.log} players={game.players} closedLines={6} />
         </section>
       ) : null}

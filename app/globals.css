@@ -8338,3 +8338,35 @@ span.name-with-badge {
   color: var(--ink3);
   font-size: 12px;
 }
+
+/* Session Standings' List / Graph switch, at the right of its heading. */
+.session-standings > .card-row {
+  align-items: center;
+}
+
+.segmented.standings-view {
+  flex: none;
+  padding: 3px;
+}
+
+.segmented.standings-view button {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 34px;
+  height: 28px;
+  padding: 0;
+}
+
+.stack-chart {
+  margin: 0;
+}
+
+.stack-chart figcaption {
+  margin: 2px 0 8px;
+}
+
+.stack-chart-empty {
+  padding: 18px 0;
+  text-align: center;
+}

@@ -81,7 +81,7 @@ export function chartLinesFromGroup(group: GroupStandings): ChartLine[] {
 }
 
 /** An axis amount, short enough for the graph's edge: "+₹50K", "−₹1.5M". */
-function compactSignedMoney(value: number, symbol: string) {
+export function compactSignedMoney(value: number, symbol: string) {
   if (value === 0) return `${symbol}0`;
   const amount = Math.abs(value);
   const short =
