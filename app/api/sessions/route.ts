@@ -5,6 +5,11 @@ import {
 import { deriveSessionAccounting } from "@/lib/poker/accounting";
 import { continuationError } from "@/lib/poker/continue-session";
 import { consumeRateLimit, runAsAuthenticatedUser } from "@/lib/poker/database";
+import { paymentGameKey } from "@/lib/poker/payments";
+import {
+  keepMatchingPayments,
+  readVisiblePayments,
+} from "@/lib/poker/payments-server";
 import { playerNameKey } from "@/lib/poker/player-validation";
 import {
   isSameSession,
@@ -52,23 +57,29 @@ async function handleGet() {
   const authUserId = authResult.session.user.id;
 
   try {
-    const [sessionsResult, counterResult] = await runAsAuthenticatedUser(
-      authUserId,
-      (sql) => [
+    // Paid marks are read alongside; a failure there just shows none.
+    const [[sessionsResult, counterResult], payments] = await Promise.all([
+      runAsAuthenticatedUser(authUserId, (sql) => [
         selectSessions(sql, ownerId, null),
         sql`
           SELECT next_session_number
           FROM accounts
           WHERE id = ${ownerId}::uuid
         `,
-      ],
-    );
+      ]),
+      readVisiblePayments(authUserId),
+    ]);
     const rows = sessionsResult as SessionRow[];
     const [counter] = counterResult as Array<{
       next_session_number: number | string;
     }>;
     const allSessions = rows.map(mapSession);
-    const sessions = allSessions.filter((session) => !session.discardedAt);
+    const sessions = allSessions
+      .filter((session) => !session.discardedAt)
+      .map((session) => {
+        const ticks = payments.get(paymentGameKey(ownerId, session.id));
+        return ticks?.length ? { ...session, payments: ticks } : session;
+      });
     const discardedSessions = allSessions.filter(
       (session) => session.discardedAt,
     );
@@ -712,6 +723,12 @@ async function handlePut(request: Request) {
       `,
     ]);
     if (!results[2].length) return sessionChangedResponse();
+    // Ticks for payments the continued game no longer has are cleared. The
+    // chip value isn't part of a continued save, so the saved one counts.
+    await keepMatchingPayments(authUserId, {
+      ...resolved,
+      chipValue: existing.chipValue,
+    });
     return json({ saved: 1 });
   } catch (error) {
     const limited = limitErrorResponse(error);
@@ -840,7 +857,11 @@ async function setChipValue(
     `,
   ]);
   if (!result.length) return json({ error: "Saved game not found" }, 404);
-  return json({ id, chipValue: chipValue ?? null });
+  // The amounts changed with the price, so ticks for payments Settle up no
+  // longer shows are cleared (user decision 2026-11-05; the phone asked first).
+  const saved = (await loadSavedSessions(authUserId, ownerId, [id])).get(id);
+  const cleared = saved ? await keepMatchingPayments(authUserId, saved) : 0;
+  return json({ id, chipValue: chipValue ?? null, clearedPayments: cleared ?? 0 });
 }
 
 async function handleDelete(request: Request) {

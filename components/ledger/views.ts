@@ -7,6 +7,7 @@ export type View =
   | "sessions"
   | "profile"
   | "settings"
+  | "owed"
   | "hands"
   | "whoWins";
 
@@ -19,6 +20,7 @@ export const VIEWS: readonly View[] = [
   "sessions",
   "profile",
   "settings",
+  "owed",
   "hands",
   "whoWins",
 ];

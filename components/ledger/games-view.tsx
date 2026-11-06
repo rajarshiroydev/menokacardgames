@@ -14,6 +14,7 @@ import {
   type GroupStandings,
   hostedGameName,
 } from "@/lib/friends/group-standings";
+import type { SettlementPayment } from "@/lib/poker/payments";
 import type { PokerSession } from "@/lib/poker/types";
 
 /**
@@ -25,12 +26,24 @@ export function SessionsView({
   groups,
   groupsError,
   onCopied,
+  onError,
+  onStale,
+  onGroupPayments,
   ...props
 }: Parameters<typeof OwnSessionsView>[0] & {
+  /** A friend's game changed since it was loaded: reload friends' games. */
+  onStale: () => void;
   /** "mine", or the friend's account id whose games open first. */
   initialHost: string;
   /** Settle up's Copy list on a friend's game. */
   onCopied: () => void;
+  onError: (message: string) => void;
+  /** A friend's game's ticks changed (found by host and start time). */
+  onGroupPayments: (
+    hostAccountId: string,
+    date: number,
+    payments: SettlementPayment[],
+  ) => void;
   /** Friends' groups, kept by the app so the picker shows at once. */
   groups: GroupStandings[];
   groupsError: string;
@@ -48,7 +61,15 @@ export function SessionsView({
       />
       {groupsError ? <p className="muted small-note">{groupsError}</p> : null}
       {group ? (
-        <GroupGamesView group={group} onCopied={onCopied} />
+        <GroupGamesView
+          group={group}
+          onCopied={onCopied}
+          onError={onError}
+          onStale={onStale}
+          onPayments={(date, payments) =>
+            onGroupPayments(group.hostAccountId, date, payments)
+          }
+        />
       ) : (
         <OwnSessionsView {...props} />
       )}
@@ -64,9 +85,15 @@ export function SessionsView({
 function GroupGamesView({
   group,
   onCopied,
+  onError,
+  onStale,
+  onPayments,
 }: {
   group: GroupStandings;
   onCopied: () => void;
+  onError: (message: string) => void;
+  onStale: () => void;
+  onPayments: (date: number, payments: SettlementPayment[]) => void;
 }) {
   const [settlingId, setSettlingId] = useState<string | null>(null);
   // Older answers from the server may not have the games yet.
@@ -102,6 +129,13 @@ function GroupGamesView({
             <SettleUpSheet
               key={settling.session.id}
               session={settling.session}
+              paymentTarget={{
+                hostAccountId: group.hostAccountId,
+                date: settling.session.date,
+              }}
+              onPayments={(payments) => onPayments(settling.session.date, payments)}
+              onStale={onStale}
+              onError={onError}
               onCopied={onCopied}
               onClose={() => setSettlingId(null)}
             />,
@@ -134,6 +168,7 @@ export function groupGameSession(group: GroupStandings, game: GroupGame) {
     ...(game.rakeRules ? { rakeRules: game.rakeRules } : {}),
     ...(game.rake ? { rake: game.rake } : {}),
     ...(game.chipValue ? { chipValue: game.chipValue } : {}),
+    ...(game.payments ? { payments: game.payments } : {}),
     // Everything the card shows; the avatar and You tag are handled apart.
     results: game.results.map((result) => ({
       name: result.name,

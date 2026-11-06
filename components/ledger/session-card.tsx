@@ -12,6 +12,7 @@ import {
   GameAmounts,
   useMoney,
 } from "@/components/ledger/money";
+import { CheckIcon } from "@/components/ledger/icons";
 import { ShareResultsButton } from "@/components/ledger/results-card";
 import { timePlayed } from "@/components/ledger/time-played";
 import { describeRebuyRules } from "@/lib/poker/buy-ins";
@@ -23,6 +24,7 @@ import {
   smallBlindFor,
 } from "@/lib/poker/game";
 import { formatSignedMoney } from "@/lib/poker/money";
+import { paidSummary } from "@/lib/poker/payments";
 import { sessionMoney } from "@/lib/poker/settle-up";
 import type { PokerSession, SavedActionLog } from "@/lib/poker/types";
 
@@ -145,6 +147,9 @@ function SessionCardBody({
   }
 
   const length = timePlayed(session.date, session.ended);
+  // A green tick in Settle up once every payment is ticked (user request
+  // 2026-11-06); nothing while any is open, or when nobody owes anything.
+  const settled = useMemo(() => paidSummary(session)?.done === true, [session]);
 
   const hasDetails = details.length > 0 || !sameStart || blinds !== null;
   const [showDetails, setShowDetails] = useState(false);
@@ -250,11 +255,12 @@ function SessionCardBody({
               ) : null}
               {onSettle ? (
                 <button
-                  className="pill-button"
+                  className={`pill-button${settled ? " settle-done" : ""}`}
                   type="button"
                   onClick={() => onSettle(session.id)}
                 >
-                  Settle up
+                  {settled ? <CheckIcon /> : null}
+                  {settled ? "Settled up" : "Settle up"}
                 </button>
               ) : null}
             </>

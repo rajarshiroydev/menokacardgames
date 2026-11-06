@@ -2,6 +2,8 @@
 export const SMALL_JSON_BODY_LIMIT = 16 * 1024;
 /** Session saves and imports carry up to 250 sessions with blind history. */
 export const SESSION_BATCH_BODY_LIMIT = 2 * 1024 * 1024;
+/** Mark all paid: up to 500 payments of about 150 bytes each. */
+export const PAYMENT_BATCH_BODY_LIMIT = 96 * 1024;
 
 export type JsonBodyResult =
   | { ok: true; body: unknown; bytes: number }

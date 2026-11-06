@@ -259,12 +259,22 @@ function sortTransfers(transfers: Transfer[]) {
 /** The name the house goes by in a settle-up. */
 export const HOUSE_NAME = "The house";
 
+/** The house's key in a payment; players are keyed by their place in the results. */
+export const HOUSE_KEY = "house";
+
+/**
+ * A payment Settle up shows, with who pays whom as keys that don't change
+ * with names: each player's index in the game's results ("0" to "9"), or
+ * "house". Paid marks are stored against these (lib/poker/payments.ts).
+ */
+export type SettlementTransfer = Transfer & { fromKey: string; toKey: string };
+
 export type Settlement = {
   /** Each player's result in money, biggest winner first. */
   players: Array<{ name: string; playerId?: string; net: number }>;
   /** The house's rake in hundredths; 0 without rake. */
   house: number;
-  transfers: Transfer[];
+  transfers: SettlementTransfer[];
 };
 
 /**
@@ -293,9 +303,17 @@ export function settleSession(
       net: money.results[index].net,
     }))
     .sort((a, b) => b.net - a.net);
+  const keys = new Map<string, string>(
+    names.map((name, index) => [name, String(index)]),
+  );
+  if (money.house) keys.set(HOUSE_NAME, HOUSE_KEY);
   const transfers = settleUp([
     ...players.map(({ name, net }) => ({ name, cents: net })),
     ...(money.house ? [{ name: HOUSE_NAME, cents: money.house }] : []),
-  ]);
+  ]).map((transfer) => ({
+    ...transfer,
+    fromKey: keys.get(transfer.from)!,
+    toKey: keys.get(transfer.to)!,
+  }));
   return { players, house: money.house, transfers };
 }

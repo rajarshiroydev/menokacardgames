@@ -230,10 +230,13 @@ describe("settle up", () => {
       ],
     );
     assert.equal(settlement.transfers.length, 3);
+    // Keyed by each player's place in the results, for paid marks.
     assert.deepEqual(settlement.transfers[0], {
       from: "Bikram",
       to: "Asha",
       cents: 50_000,
+      fromKey: "2",
+      toKey: "0",
     });
     assert.deepEqual(
       settledBalances(
@@ -326,7 +329,7 @@ describe("settle up", () => {
     });
     const settlement = settleSession(session);
     assert.deepEqual(settlement.transfers, [
-      { from: "arjun (2)", to: "Arjun", cents: 50_000 },
+      { from: "arjun (2)", to: "Arjun", cents: 50_000, fromKey: "1", toKey: "0" },
     ]);
   });
 });
@@ -400,7 +403,7 @@ describe("chip value across the app", () => {
     assert.deepEqual(saved.chipValue, { chips: 10_000, cents: 50_000 });
     assert.deepEqual(
       settleSession(saved).transfers,
-      [{ from: "Bikram", to: "Asha", cents: 25_000 }],
+      [{ from: "Bikram", to: "Asha", cents: 25_000, fromKey: "1", toKey: "0" }],
     );
   });
 

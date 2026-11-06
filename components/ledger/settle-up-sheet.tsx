@@ -1,9 +1,9 @@
 "use client";
 
-import { useContext, useEffect, useMemo, useState } from "react";
+import { useContext, useMemo, useState } from "react";
 
-import { toneClass } from "@/components/ledger/avatar";
-import { PencilIcon } from "@/components/ledger/icons";
+import { ApiError, paymentsBatchApi } from "@/components/ledger/api";
+import { CheckIcon, PencilIcon } from "@/components/ledger/icons";
 import {
   CurrencyContext,
   describeChipValue,
@@ -11,20 +11,34 @@ import {
   formatCents,
   PriceInput,
 } from "@/components/ledger/money";
-import {
-  prefetchResultsCard,
-  ShareResultsButton,
-} from "@/components/ledger/results-card";
 import { APP_NAME } from "@/lib/brand";
 import { formatDate } from "@/lib/poker/game";
-import { formatChips, formatSignedMoney, plainChipsCode } from "@/lib/poker/money";
+import { formatChips, plainChipsCode } from "@/lib/poker/money";
 import {
-  HOUSE_NAME,
+  type PaymentLine,
+  paymentLines,
+  type SettlementPayment,
+  ticksClearedBy,
+} from "@/lib/poker/payments";
+import {
   MAX_CHIP_VALUE_CENTS,
   type Settlement,
   settleSession,
 } from "@/lib/poker/settle-up";
 import type { ChipValue, PokerSession } from "@/lib/poker/types";
+
+/** Where a tick is sent: your own game by ID, a friend's by host and start time. */
+export type PaymentTarget =
+  | { sessionId: string }
+  | { hostAccountId: string; date: number };
+
+/** "Paid · marked by Bikram · 5 Nov 2026". */
+function paidNote(paid: SettlementPayment) {
+  const by = paid.markedByMe
+    ? "you"
+    : (paid.markedBy ?? "a former member");
+  return `Paid · marked by ${by} · ${formatDate(paid.paidAt)}`;
+}
 
 const SITE_URL = "https://pokerize.app";
 /** Second line of the text; the bare domain is auto-linked by chat apps. */
@@ -53,26 +67,31 @@ function settlementHtml(text: string) {
 function settlementText(
   session: PokerSession,
   settlement: Settlement,
+  lines: PaymentLine[],
+  isPaid: (line: PaymentLine) => boolean,
   currency: string,
 ) {
-  const lines = [
+  const out = [
     `Settle up · ${session.name || `Game ${session.sessionNumber ?? ""}`.trim()} (${formatDate(session.date)})`,
     CREDIT_LINE,
   ];
   if (session.chipValue) {
-    lines.push(describeChipValue(session.chipValue, session.chipUnit, currency));
+    out.push(describeChipValue(session.chipValue, session.chipUnit, currency));
   }
-  lines.push("");
+  out.push("");
   if (settlement.transfers.length) {
-    for (const transfer of settlement.transfers) {
-      lines.push(
-        `${transfer.from} pays ${transfer.to} ${formatCents(transfer.cents, currency)}`,
+    for (const line of lines) {
+      const { transfer } = line;
+      out.push(
+        `${transfer.from} pays ${transfer.to} ${formatCents(transfer.cents, currency)}${
+          isPaid(line) ? " (paid)" : ""
+        }`,
       );
     }
   } else {
-    lines.push("Nobody owes anything.");
+    out.push("Nobody owes anything.");
   }
-  return lines.join("\n");
+  return out.join("\n");
 }
 
 /**
@@ -83,12 +102,29 @@ function settlementText(
 export function SettleUpSheet({
   session,
   onSaveChipValue,
+  paymentTarget,
+  onPayments,
+  onStale,
+  onError,
   onCopied,
   onClose,
 }: {
   session: PokerSession;
   /** Absent for a game at a friend's table: only the host sets the price. */
   onSaveChipValue?: (value: ChipValue | null) => Promise<boolean>;
+  /**
+   * Where ticks go. Like Splitwise, the host and friends who played may tick
+   * any payment (user decision 2026-11-05); absent shows no ticks.
+   */
+  paymentTarget?: PaymentTarget;
+  /** The game's ticks changed; the card and Still owed follow. */
+  onPayments?: (payments: SettlementPayment[]) => void;
+  /**
+   * The game changed elsewhere (another device or tab), so the server refused
+   * a tick: reload the games, and Settle up shows the game as it is now.
+   */
+  onStale?: () => void;
+  onError?: (message: string) => void;
   onCopied: () => void;
   onClose: () => void;
 }) {
@@ -102,6 +138,14 @@ export function SettleUpSheet({
   const [editing, setEditing] = useState(false);
   const [price, setPrice] = useState<number | null>(stackPrice);
   const [saving, setSaving] = useState(false);
+  // Ticks a new price would clear, once the host has been told.
+  const [clearing, setClearing] = useState(0);
+  // Ticks changed here but not saved yet, by payment key: what each should
+  // become. Ticking is instant; Save sends them (user request 2026-11-06).
+  const [draft, setDraft] = useState<ReadonlyMap<string, boolean>>(new Map());
+  const [savingTicks, setSavingTicks] = useState(false);
+  // Done was pressed with unsaved ticks: ask once before throwing them away.
+  const [confirmClose, setConfirmClose] = useState(false);
   const settlement = useMemo(() => {
     try {
       return settleSession(session);
@@ -109,13 +153,15 @@ export function SettleUpSheet({
       return null;
     }
   }, [session]);
-  // Settle up opens right after a save, when people want the card: have it
-  // ready so its preview opens at once.
-  useEffect(() => {
-    if (!settlement) return;
-    const timer = setTimeout(() => prefetchResultsCard(session), 1000);
-    return () => clearTimeout(timer);
-  }, [session, settlement]);
+  const lines = useMemo(
+    () => paymentLines(session, settlement),
+    [session, settlement],
+  );
+  const keyOf = (line: PaymentLine) =>
+    `${line.transfer.fromKey}>${line.transfer.toKey}`;
+  /** Whether a line shows as paid: its unsaved change, else what's saved. */
+  const shownPaid = (line: PaymentLine) => draft.get(keyOf(line)) ?? Boolean(line.paid);
+  const paidCount = lines.filter(shownPaid).length;
   const cash = (cents: number) => formatCents(cents, currency);
   const stackChips = formatChips(
     session.startStack,
@@ -124,19 +170,92 @@ export function SettleUpSheet({
   );
   const priceValid =
     price !== null && price >= 1 && price <= MAX_CHIP_VALUE_CENTS;
+  /** The field emptied or 0 on a priced game: Save clears the price, so
+   *  1 chip counts as 1 unit again (user request 2026-11-06). */
+  const resetting = Boolean(value) && !price;
   const canShare = typeof navigator !== "undefined" && "share" in navigator;
 
   async function save(next: ChipValue | null) {
     if (!onSaveChipValue) return;
+    // The amounts change with the price, so ticks that no longer match a
+    // payment are cleared: say how many first (user decision 2026-11-05).
+    const cleared = ticksClearedBy(session, {
+      ...session,
+      ...(next ? { chipValue: next } : { chipValue: undefined }),
+    });
+    if (cleared && clearing !== cleared) {
+      setClearing(cleared);
+      return;
+    }
     setSaving(true);
     const saved = await onSaveChipValue(next);
     setSaving(false);
-    if (saved) setEditing(false);
+    if (saved) {
+      setEditing(false);
+      setClearing(0);
+      // The amounts changed, so unsaved ticks no longer name these payments.
+      setDraft(new Map());
+    }
+  }
+
+  /** Flips a tick on screen only; Save sends it. */
+  function toggle(line: PaymentLine) {
+    const key = keyOf(line);
+    const next = new Map(draft);
+    const want = !shownPaid(line);
+    if (want === Boolean(line.paid)) next.delete(key);
+    else next.set(key, want);
+    setDraft(next);
+    setConfirmClose(false);
+  }
+
+  async function saveTicks() {
+    if (!paymentTarget || !draft.size || savingTicks) return;
+    setSavingTicks(true);
+    try {
+      const { payments } = await paymentsBatchApi(
+        lines.flatMap((line) =>
+          draft.has(keyOf(line))
+            ? [
+                {
+                  ...paymentTarget,
+                  from: line.transfer.fromKey,
+                  to: line.transfer.toKey,
+                  cents: line.transfer.cents,
+                  paid: draft.get(keyOf(line)),
+                },
+              ]
+            : [],
+        ),
+      );
+      if (payments) onPayments?.(payments);
+      setDraft(new Map());
+      setConfirmClose(false);
+    } catch (error) {
+      if (error instanceof ApiError && error.code === "payment-changed") {
+        setDraft(new Map());
+        onStale?.();
+      }
+      onError?.(
+        error instanceof Error ? error.message : "Could not save the payments",
+      );
+    } finally {
+      setSavingTicks(false);
+    }
+  }
+
+  /** Closes, but asks once first if ticks aren't saved. */
+  function close() {
+    if (draft.size && !confirmClose) {
+      setConfirmClose(true);
+      return;
+    }
+    onClose();
   }
 
   async function share() {
     if (!settlement) return;
-    const text = settlementText(session, settlement, currency);
+    const text = settlementText(session, settlement, lines, shownPaid, currency);
     if (canShare) {
       try {
         await navigator.share({ text });
@@ -167,7 +286,7 @@ export function SettleUpSheet({
     <div
       className="modal show"
       onMouseDown={(event) => {
-        if (event.target === event.currentTarget) onClose();
+        if (event.target === event.currentTarget && !savingTicks) close();
       }}
     >
       <div
@@ -203,56 +322,52 @@ export function SettleUpSheet({
                     currency,
                   )}
                 </p>
+              ) : resetting ? (
+                <p className="muted small-note">
+                  No price: 1 chip = {cash(100)}
+                </p>
               ) : null}
               <div className="button-pair">
                 <button
                   className="ghost"
                   type="button"
                   disabled={saving}
-                  onClick={() => setEditing(false)}
+                  onClick={() => {
+                    setEditing(false);
+                    setClearing(0);
+                  }}
                 >
                   Cancel
                 </button>
                 <button
                   className="primary"
                   type="button"
-                  disabled={!priceValid || saving}
+                  disabled={!(priceValid || resetting) || saving}
                   onClick={() =>
-                    void save({ chips: session.startStack, cents: price! })
+                    void save(
+                      resetting ? null : { chips: session.startStack, cents: price! },
+                    )
                   }
                 >
-                  {saving ? "Saving…" : "Save price"}
+                  {saving
+                    ? "Saving…"
+                    : clearing
+                      ? "Save and clear"
+                      : resetting
+                        ? "Remove price"
+                        : "Save price"}
                 </button>
               </div>
-              {value ? (
-                <button
-                  className="text-button"
-                  type="button"
-                  disabled={saving}
-                  onClick={() => void save(null)}
-                >
-                  Clear the price (1 chip = {cash(100)})
-                </button>
+              {clearing ? (
+                <p className="settle-warning" role="status">
+                  The amounts change with the price, so {clearing} paid mark
+                  {clearing === 1 ? "" : "s"} will be cleared.
+                </p>
               ) : null}
             </>
           ) : (
             <>
-              <div className="settle-value-head">
-                <span className="label">Chip value</span>
-                {isHost ? (
-                  <button
-                    className="pill-button settle-change"
-                    type="button"
-                    onClick={() => {
-                      setPrice(stackPrice);
-                      setEditing(true);
-                    }}
-                  >
-                    <PencilIcon />
-                    {value ? "Change" : "Set price"}
-                  </button>
-                ) : null}
-              </div>
+              <span className="label">Chip value</span>
               {value && stackPrice !== null ? (
                 <>
                   <p className="settle-equation">
@@ -275,73 +390,108 @@ export function SettleUpSheet({
                     </span>
                     <span className="settle-price">{cash(100)}</span>
                   </p>
-                  <span className="settle-value-note">
-                    {isHost
-                      ? "No price set. Change it if chips cost something else."
-                      : "The host set no price."}
-                  </span>
+                  {isHost ? null : (
+                    <span className="settle-value-note">The host set no price.</span>
+                  )}
                 </>
               )}
+              {/* A full-width button at the foot of the box (user request
+                  2026-11-06), in place of a note under the price. */}
+              {isHost ? (
+                <button
+                  className="glass-button full settle-change"
+                  type="button"
+                  onClick={() => {
+                    setPrice(stackPrice);
+                    setEditing(true);
+                  }}
+                >
+                  <PencilIcon />
+                  {value ? "Change" : "Set price"}
+                </button>
+              ) : null}
             </>
           )}
         </div>
 
         {settlement ? (
           <>
-            <span className="label">Results</span>
-            <div className="rows">
-              {settlement.players.map((player) => (
-                <div className="result-row" key={player.name}>
-                  <span className="result-name">{player.name}</span>
-                  <span className={`result-amount ${toneClass(player.net)}`}>
-                    {formatSignedMoney(player.net / 100, currency)}
-                  </span>
-                </div>
-              ))}
-              {settlement.house ? (
-                <div className="result-row">
-                  <span className="result-name">{HOUSE_NAME} (rake)</span>
-                  <span className="result-amount pos">
-                    {formatSignedMoney(settlement.house / 100, currency)}
-                  </span>
-                </div>
+            <div className="settle-pays-head">
+              <span className="label">Who pays whom</span>
+              {lines.length ? (
+                <span className={`settle-paid-count${paidCount === lines.length ? " done" : ""}`}>
+                  {paidCount === lines.length
+                    ? "All paid"
+                    : `${paidCount} of ${lines.length} paid`}
+                </span>
               ) : null}
             </div>
-
-            <span className="label">Who pays whom</span>
-            {settlement.transfers.length ? (
+            {lines.length ? (
               <div className="rows">
-                {settlement.transfers.map((transfer) => (
-                  <div
-                    className="result-row"
-                    key={`${transfer.from}>${transfer.to}`}
-                  >
-                    <span className="result-name">
-                      {transfer.from} <span className="muted">pays</span>{" "}
-                      {transfer.to}
-                    </span>
-                    <span className="result-amount">{cash(transfer.cents)}</span>
-                  </div>
-                ))}
+                {lines.map((line) => {
+                  const { transfer } = line;
+                  const key = keyOf(line);
+                  const paid = shownPaid(line);
+                  const unsaved = draft.has(key);
+                  return (
+                    <div
+                      className={`result-row payment-row${paid ? " paid" : ""}`}
+                      key={key}
+                    >
+                      {paymentTarget ? (
+                        <button
+                          className="payment-tick"
+                          type="button"
+                          aria-pressed={Boolean(paid)}
+                          aria-label={`${transfer.from} pays ${transfer.to}: ${
+                            paid ? "paid, tap to undo" : "mark as paid"
+                          }`}
+                          disabled={savingTicks}
+                          onClick={() => toggle(line)}
+                        >
+                          {paid ? <CheckIcon /> : null}
+                        </button>
+                      ) : null}
+                      <span className="result-name">
+                        {transfer.from} <span className="muted">pays</span>{" "}
+                        {transfer.to}
+                        {unsaved ? (
+                          <small className="payment-unsaved">
+                            {paid ? "Paid · not saved yet" : "Unticked · not saved yet"}
+                          </small>
+                        ) : line.paid ? (
+                          <small>{paidNote(line.paid)}</small>
+                        ) : null}
+                      </span>
+                      <span className="result-amount">{cash(transfer.cents)}</span>
+                    </div>
+                  );
+                })}
               </div>
             ) : (
               <p className="muted small-note">Nobody owes anything.</p>
             )}
-            <div className="button-pair">
+            {/* Always there when there are ticks to make; it works once a
+                tick has changed (user request 2026-11-06). */}
+            {paymentTarget && lines.length ? (
               <button
-                className="primary"
+                className="primary full"
                 type="button"
-                disabled={editing}
-                onClick={() => void share()}
+                disabled={!draft.size || savingTicks}
+                onClick={() => void saveTicks()}
               >
-                {canShare ? "Share list" : "Copy list"}
+                {savingTicks ? "Saving…" : "Save changes"}
               </button>
-              <ShareResultsButton
-                session={session}
-                className="ghost share-button"
-                label="Results card"
-              />
-            </div>
+            ) : null}
+            {/* Who pays whom as text, for the group chat. */}
+            <button
+              className={`${paymentTarget && lines.length ? "ghost" : "primary"} full`}
+              type="button"
+              disabled={editing}
+              onClick={() => void share()}
+            >
+              {canShare ? "Share payments" : "Copy payments"}
+            </button>
           </>
         ) : (
           <p className="field-error">
@@ -349,8 +499,18 @@ export function SettleUpSheet({
             settled.
           </p>
         )}
-        <button className="ghost full" type="button" onClick={onClose}>
-          Done
+        {confirmClose ? (
+          <p className="field-error">
+            {draft.size} change{draft.size === 1 ? " isn't" : "s aren't"} saved.
+          </p>
+        ) : null}
+        <button
+          className="ghost full"
+          type="button"
+          disabled={savingTicks}
+          onClick={close}
+        >
+          {confirmClose ? "Close without saving" : "Done"}
         </button>
       </div>
     </div>

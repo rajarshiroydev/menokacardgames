@@ -19,6 +19,7 @@ export const SIGNED_IN_ROUTES: Record<string, { path: string; methods: HttpMetho
   "groups/card": { path: "/api/groups/card?host=route-check&date=1", methods: ["GET"] },
   invites: { path: "/api/invites", methods: ["POST"] },
   live: { path: "/api/live", methods: ["POST", "PUT", "DELETE"] },
+  payments: { path: "/api/payments", methods: ["POST"] },
   players: { path: "/api/players?id=route-check", methods: ["GET", "POST", "PATCH", "DELETE"] },
   profile: { path: "/api/profile", methods: ["GET"] },
   sessions: {

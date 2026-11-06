@@ -99,6 +99,8 @@ export function ProfileView({
   profile,
   accountEmail,
   onOpenSettings,
+  owedCount,
+  onOpenOwed,
   onSignOut,
   onProfile,
   players,
@@ -128,6 +130,9 @@ export function ProfileView({
   profile: AccountProfile;
   accountEmail: string;
   onOpenSettings: () => void;
+  /** Payments nobody has ticked yet, counted for the Still owed button. */
+  owedCount: number;
+  onOpenOwed: () => void;
   onSignOut: () => void;
   onProfile: (profile: AccountProfile) => void;
   players: PlayerProfile[];
@@ -408,6 +413,8 @@ export function ProfileView({
         profile={profile}
         accountEmail={accountEmail}
         onOpenSettings={onOpenSettings}
+        owedCount={owedCount}
+        onOpenOwed={onOpenOwed}
         onProfile={onProfile}
         onScannedCode={(code) => {
           setScannedCode(code);
@@ -757,6 +764,8 @@ function ProfileCard({
   profile,
   accountEmail,
   onOpenSettings,
+  owedCount,
+  onOpenOwed,
   onSignOut,
   onProfile,
   onScannedCode,
@@ -767,6 +776,8 @@ function ProfileCard({
   profile: AccountProfile;
   accountEmail: string;
   onOpenSettings: () => void;
+  owedCount: number;
+  onOpenOwed: () => void;
   onProfile: (profile: AccountProfile) => void;
   /** A friend's user code read with Scan Code. */
   onScannedCode: (code: string) => void;
@@ -1129,6 +1140,21 @@ function ProfileCard({
           ))}
         </select>
       </label>
+      {/* Still owed opens its own page (user request 2026-11-06; before, a
+          card at the top of Games). */}
+      <button className="profile-settings-link" type="button" onClick={onOpenOwed}>
+        <span>
+          <small>
+            {owedCount
+              ? `${owedCount} payment${owedCount === 1 ? "" : "s"} not ticked as paid`
+              : "Every payment is ticked as paid"}
+          </small>
+          <b>Still owed</b>
+        </span>
+        <span className="settings-chevron" aria-hidden="true">
+          ›
+        </span>
+      </button>
       <button className="profile-settings-link" type="button" onClick={onOpenSettings}>
         <span>
           <small>Sounds, privacy and more</small>

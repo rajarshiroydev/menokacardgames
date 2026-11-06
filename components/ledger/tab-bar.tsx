@@ -27,7 +27,7 @@ const TABS: ReadonlyArray<{ target: TabTarget; icon: ReactNode; label: string }>
 function tabForView(view: View): TabTarget {
   if (view === "newGame" || view === "setup" || view === "game") return "play";
   if (view === "hands" || view === "whoWins") return "home";
-  if (view === "settings") return "profile";
+  if (view === "settings" || view === "owed") return "profile";
   return view;
 }
 

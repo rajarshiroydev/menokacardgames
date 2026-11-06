@@ -112,7 +112,8 @@ export default function AccountDeletionPage() {
           Friends keep the players and games in their own ledgers, because those
           are their records of games they hosted. They are no longer linked to
           your account. To have your name changed in a friend&apos;s ledger, ask
-          them to rename or remove you.
+          them to rename or remove you. Settle up payments you ticked as paid in
+          their games stay ticked, shown as marked by a former member.
         </p>
       </InfoSection>
 

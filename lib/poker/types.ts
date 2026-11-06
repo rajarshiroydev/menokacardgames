@@ -1,4 +1,5 @@
 import type { ChipUnit } from "./money.ts";
+import type { SettlementPayment } from "./payments.ts";
 
 export type Player = {
   id?: string;
@@ -441,6 +442,11 @@ export type PokerSession = {
    * opening it is worth a request. Never sent when saving.
    */
   hasActionLog?: true;
+  /**
+   * Set when reading: Settle up payments ticked as paid (lib/poker/payments.ts).
+   * Never sent when saving.
+   */
+  payments?: SettlementPayment[];
 };
 
 /** A saved game's log: its lines, newest first, and who they name. */

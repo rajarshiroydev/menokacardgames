@@ -42,6 +42,7 @@ import {
   takeBackRebuys,
   unplayedRebuys,
 } from "@/lib/poker/game";
+import type { SettlementPayment } from "@/lib/poker/payments";
 import {
   isValidBuyIn,
   normalizeRebuyRules,
@@ -105,6 +106,7 @@ import {
   gameBackupApi,
   liveApi,
   needsRecentSignIn,
+  paymentsBatchApi,
   playersApi,
   sessionsApi,
 } from "@/components/ledger/api";
@@ -117,6 +119,7 @@ import { BlindEditor, RebuyEditor } from "@/components/ledger/game-editors";
 import { GameView } from "@/components/ledger/game-screen";
 import type { LastTurn } from "@/components/ledger/game-shared";
 import { SessionsView } from "@/components/ledger/games-view";
+import { owedItems, StillOwedView } from "@/components/ledger/still-owed-view";
 import { titleCase } from "@/components/ledger/hand-buttons";
 import { PokerHandsChart } from "@/components/ledger/hand-rankings";
 import { HomeView } from "@/components/ledger/home-view";
@@ -417,7 +420,14 @@ export function PokerLedger({
       if (nextView === "home" || nextView === "profile") void refreshFriends();
       if (nextView === "profile") void refreshProfileStats();
       // Home's last game can be one played at a friend's table.
-      if (nextView === "home" || nextView === "history" || nextView === "sessions") {
+      // Profile counts, and Still owed lists, payments in friends' games too.
+      if (
+        nextView === "home" ||
+        nextView === "history" ||
+        nextView === "sessions" ||
+        nextView === "profile" ||
+        nextView === "owed"
+      ) {
         void refreshGroups();
       }
     },
@@ -2182,11 +2192,50 @@ export function PokerLedger({
                 ? { title: "Profile" }
                 : view === "settings"
                   ? { title: "Settings" }
+                  : view === "owed"
+                    ? { title: "Still Owed" }
                   : view === "hands"
                     ? { title: "Hand Rankings" }
                   : view === "whoWins"
                     ? { title: "Who Wins?" }
                   : null;
+  /** Mark all paid on Still owed: ticks these payments, then the lists reload. */
+  const markAllPaid = async (items: object[]) => {
+    try {
+      const { marked } = await paymentsBatchApi(items);
+      await Promise.all([refreshHistory(), refreshGroups()]);
+      showToast(`Marked ${marked} payment${marked === 1 ? "" : "s"} as paid`);
+      return true;
+    } catch (error) {
+      if (error instanceof ApiError && error.code === "payment-changed") {
+        void refreshHistory();
+        void refreshGroups();
+      }
+      showToast(
+        error instanceof Error ? error.message : "Could not mark the payments",
+      );
+      return false;
+    }
+  };
+  /** A friend's game's ticks changed (found by host and start time). */
+  const setGroupPayments = (
+    hostAccountId: string,
+    date: number,
+    payments: SettlementPayment[],
+  ) =>
+    setGroups((current) =>
+      current.map((group) =>
+        group.hostAccountId === hostAccountId
+          ? {
+              ...group,
+              sharedGames: group.sharedGames.map((game) =>
+                game.date === date ? { ...game, payments } : game,
+              ),
+            }
+          : group,
+      ),
+    );
+  const owedCount = owedItems(history, groups, profile.currency).length;
   const homeView = (
     <HomeView
       game={game}
@@ -2307,6 +2356,9 @@ export function PokerLedger({
             groups={groups}
             groupsError={groupsError}
             onCopied={() => showToast("Copied")}
+            onError={showToast}
+            onStale={() => void refreshGroups()}
+            onGroupPayments={setGroupPayments}
             discardedSessions={discardedSessions}
             history={history}
             loading={historyLoading}
@@ -2325,6 +2377,8 @@ export function PokerLedger({
             profile={profile}
             accountEmail={accountEmail}
             onOpenSettings={() => navigate("settings")}
+            owedCount={owedCount}
+            onOpenOwed={() => navigate("owed")}
             onSignOut={() => void signOutHere()}
             onProfile={(next) => {
               setProfile(next);
@@ -2357,6 +2411,18 @@ export function PokerLedger({
             onReloadFriends={() => void refreshFriends()}
             stats={profileStats}
             statsError={profileStatsError}
+          />
+        ) : view === "owed" ? (
+          <StillOwedView
+            history={history}
+            groups={groups}
+            loading={historyLoading}
+            onSettle={setSettlingId}
+            onMarkAll={markAllPaid}
+            onGroupPayments={setGroupPayments}
+            onStale={() => void refreshGroups()}
+            onError={showToast}
+            onCopied={() => showToast("Copied")}
           />
         ) : view === "settings" ? (
           <SettingsView
@@ -2478,6 +2544,18 @@ export function PokerLedger({
           onSaveChipValue={(value) =>
             saveChipValue(settlingSession.id, value)
           }
+          paymentTarget={{ sessionId: settlingSession.id }}
+          onPayments={(payments) =>
+            setHistory((current) =>
+              current.map((session) =>
+                session.id === settlingSession.id
+                  ? { ...session, payments }
+                  : session,
+              ),
+            )
+          }
+          onStale={() => void refreshHistory()}
+          onError={showToast}
           onClose={() => setSettlingId(null)}
         />
       ) : null}

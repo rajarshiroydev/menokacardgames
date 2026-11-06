@@ -1,5 +1,6 @@
 import { RECENT_SIGN_IN_REQUIRED } from "@/lib/auth/recent-sign-in";
 import { apiErrorMessage } from "@/lib/security/rate-limit-message";
+import type { SettlementPayment } from "@/lib/poker/payments";
 
 export class ApiError extends Error {
   constructor(
@@ -182,4 +183,59 @@ export async function playersApi<T>(
     );
   }
   return data;
+}
+
+/** Ticks or unticks a Settle up payment; returns the game's ticks after. */
+export async function paymentsApi(
+  body: object,
+): Promise<{ payments: SettlementPayment[] }> {
+  const response = await fetch("/api/payments", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const data = (await response.json().catch(() => ({}))) as {
+    payments?: SettlementPayment[];
+    code?: string;
+    error?: string;
+  };
+  if (!response.ok) {
+    throw new ApiError(
+      apiErrorMessage(response.status, data.error, "Could not mark the payment"),
+      response.status,
+      data.code,
+    );
+  }
+  return { payments: data.payments ?? [] };
+}
+
+/**
+ * Saves several ticks and unticks in one go (Mark all paid, or Settle up's
+ * Save). `payments` is the game's ticks after, when they were all one game's.
+ */
+export async function paymentsBatchApi(
+  items: object[],
+): Promise<{ marked: number; payments?: SettlementPayment[] }> {
+  const response = await fetch("/api/payments", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ items }),
+  });
+  const data = (await response.json().catch(() => ({}))) as {
+    marked?: number;
+    payments?: SettlementPayment[];
+    code?: string;
+    error?: string;
+  };
+  if (!response.ok) {
+    throw new ApiError(
+      apiErrorMessage(response.status, data.error, "Could not mark the payments"),
+      response.status,
+      data.code,
+    );
+  }
+  return {
+    marked: data.marked ?? 0,
+    ...(data.payments ? { payments: data.payments } : {}),
+  };
 }

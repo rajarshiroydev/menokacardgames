@@ -28,8 +28,12 @@ export const CHANGE_TAG_LABELS: Record<ChangeTag, string> = {
 export const CHANGELOG: ChangelogEntry[] = [
   {
     date: "2026-11-05",
-    title: "Live table for quick ledgers",
+    title: "Paid marks and live tables",
     items: [
+      {
+        tag: "new",
+        text: "Mark payments as paid, like Splitwise: tick each line in Settle up, and everyone who played sees who ticked it. a game's button turns to Settled up with a green tick once everything is paid, and Still owed on your Profile lists what's left, with Mark all paid for games settled long ago.",
+      },
       {
         tag: "new",
         text: "Quick ledgers can be shared live: Share live table under Players gives the table a link showing what everyone has bought in, who cashed out with what, the totals and the latest changes.",

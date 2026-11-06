@@ -8,6 +8,7 @@ import {
 } from "@/lib/friends/group-standings";
 import { friendErrorFromDatabase } from "@/lib/friends/requests";
 import { runAsAuthenticatedUser } from "@/lib/poker/database";
+import { readVisiblePayments } from "@/lib/poker/payments-server";
 import { withServerTiming } from "@/lib/server-timing";
 
 export const dynamic = "force-dynamic";
@@ -57,9 +58,12 @@ async function handleGet() {
     const groups = (
       (rows as Array<{ result: GroupSessions[] | null }>)[0]?.result ?? []
     ).filter(playedInGroup);
-    const relations = await readRelations(authUserId, groupAccountIds(groups));
+    const [relations, payments] = await Promise.all([
+      readRelations(authUserId, groupAccountIds(groups)),
+      groups.length ? readVisiblePayments(authUserId) : new Map(),
+    ]);
     return json({
-      groups: groups.map((group) => buildGroupStandings(group, relations)),
+      groups: groups.map((group) => buildGroupStandings(group, relations, payments)),
     });
   } catch (error) {
     const known = friendErrorFromDatabase(error);

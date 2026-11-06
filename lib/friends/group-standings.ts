@@ -4,6 +4,7 @@ import {
   standingsKey,
 } from "../poker/standings.ts";
 import { type ChipUnit, DEFAULT_CURRENCY } from "../poker/money.ts";
+import { paymentGameKey, type SettlementPayment } from "../poker/payments.ts";
 import { normalizeChipValue } from "../poker/settle-up.ts";
 import type { ChipValue, GameKind, PokerSession, SessionResult } from "../poker/types";
 import { fallbackAvatarId } from "../avatars.ts";
@@ -111,6 +112,8 @@ export type GroupGame = {
   rakeRules?: PokerSession["rakeRules"];
   rake?: number;
   chipValue?: ChipValue;
+  /** Settle up payments ticked as paid (migration 0034); absent is none. */
+  payments?: SettlementPayment[];
   /** In the host's seating order, as the host's own card gets them. */
   results: Array<
     {
@@ -186,6 +189,8 @@ export function groupAccountIds(groups: GroupSessions[]): string[] {
 export function buildGroupStandings(
   group: GroupSessions,
   relations: FriendRelations = {},
+  /** Ticked payments by game (paymentGameKey); matched here, IDs stay on the server. */
+  payments: ReadonlyMap<string, SettlementPayment[]> = new Map(),
 ): GroupStandings {
   const shared = group.sessions.filter((session) =>
     session.results.some((result) => result.playerId === group.myPlayerId),
@@ -286,6 +291,9 @@ export function buildGroupStandings(
           ...(session.rakeRules ? { rakeRules: session.rakeRules } : {}),
           ...(session.rake ? { rake: Number(session.rake) } : {}),
           ...(chipValue ? { chipValue } : {}),
+          ...(payments.get(paymentGameKey(group.hostAccountId, session.id))?.length
+            ? { payments: payments.get(paymentGameKey(group.hostAccountId, session.id)) }
+            : {}),
           results: session.results.map((result) => ({
             name: result.name,
             avatar: result.avatar || fallbackAvatarId(result.name),

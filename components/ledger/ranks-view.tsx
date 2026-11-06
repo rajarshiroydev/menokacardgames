@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 
 import { friendsApi } from "@/components/ledger/api";
 import { Avatar, toneClass } from "@/components/ledger/avatar";
@@ -74,7 +74,7 @@ function StandingCard({
   /** Under the badge's "is on Pokerize" when it is tapped. */
   badgeHint?: string;
   /** Under the details: Add Friend, in a friend's standings. */
-  action?: React.ReactNode;
+  action?: ReactNode;
   /** Label new players; off while everyone is shown for lack of regulars. */
   markNew: boolean;
 }) {
@@ -286,10 +286,13 @@ export function HostPicker({
 function StandingsHeading({
   intro,
   hidden,
+  action,
 }: {
   intro: string;
   /** For a friend's group: what is kept from you to protect other players. */
   hidden?: readonly string[];
+  /** Shown at the right end of the heading line, such as the Newcomers switch. */
+  action?: ReactNode;
 }) {
   const [showRankingHelp, setShowRankingHelp] = useState(false);
   return (
@@ -306,6 +309,7 @@ function StandingsHeading({
             i
           </button>
         </div>
+        {action}
       </div>
       {showRankingHelp ? (
         <RankingHelp
@@ -319,9 +323,9 @@ function StandingsHeading({
 }
 
 /**
- * The Newcomers switch with its "i", on a row of its own under the
- * standings heading: by the list it filters, not above the graph (user
- * decision 2026-10-26).
+ * The Newcomers switch with its "i", at the right end of the standings
+ * heading: by the list it filters, not above the graph (user decisions
+ * 2026-10-26, moved onto the heading line 2026-11-06).
  */
 function NewPlayersBar({
   showNew,
@@ -435,9 +439,9 @@ function GroupStandingsView({
         <StandingsHeading
           intro={`Your ranking among the players you've sat with in games hosted by ${hostName}.`}
           hidden={GROUP_HIDDEN_INFO}
+          action={newPlayersBar}
         />
       ) : null}
-      {newPlayersBar}
       {rows.length ? (
         visible.map((row, index) => (
           <StandingCard
@@ -648,8 +652,10 @@ function StandingsView({
         <LeaderboardChart sessionCount={standings.timeline.length} lines={lines} />
       ) : null}
 
-      <StandingsHeading intro="This is the overall ranking of everyone who has played in sessions you hosted." />
-      {newPlayersBar}
+      <StandingsHeading
+        intro="This is the overall ranking of everyone who has played in sessions you hosted."
+        action={newPlayersBar}
+      />
       {visible.map(standingCard)}
       {leaderboard.length > STANDINGS_START ? (
         <button

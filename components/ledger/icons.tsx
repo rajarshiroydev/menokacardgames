@@ -115,6 +115,25 @@ export function ClearIcon() {
   );
 }
 
+/** A tick: a payment marked as paid. */
+export function CheckIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width="14"
+      height="14"
+      aria-hidden="true"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="3"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="m5 12.5 4.5 4.5L19 7.5" />
+    </svg>
+  );
+}
+
 /** An arrow leaving a tray: share. */
 export function ShareIcon() {
   return (

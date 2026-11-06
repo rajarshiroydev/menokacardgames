@@ -83,6 +83,12 @@ export default function PrivacyPage() {
             your friends.
           </li>
           <li>
+            <b>Paid marks:</b> which Settle up payments in a saved game were
+            ticked as paid, the amount, when, and whose account ticked it.
+            They are stored with the game, so they are deleted with it. No
+            money moves through {APP_NAME}.
+          </li>
+          <li>
             <b>The game in progress:</b> while you play, your phone sends us a
             copy of the game every few seconds (players, chips, bets and the
             action log), so you can carry on from another device if your phone
@@ -188,8 +194,10 @@ export default function PrivacyPage() {
             saved games built only from the games of theirs you played in. In
             those games they see everyone&apos;s result, as at the table, and
             the standings show each player&apos;s invested and net totals
-            across them. They never see your email or games they weren&apos;t
-            in.
+            across them. In those games they can also tick Settle up payments
+            as paid or untick them, as you can, and everyone in the game sees
+            who ticked each one. They never see your email or games they
+            weren&apos;t in.
           </li>
           <li>
             <b>Anyone with a live standings link</b> sees the names, avatars and
