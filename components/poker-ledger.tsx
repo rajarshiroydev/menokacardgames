@@ -1865,7 +1865,9 @@ export function PokerLedger({
       });
       endLiveSharing();
       setGame(null);
-      navigate("history", { replace: true });
+      // Games, with the new game on top, is under Settle up, so closing it
+      // lands there (user request 2026-11-10; it was the Ranks standings).
+      navigate("sessions", { replace: true });
       await refreshHistory();
       showToast("Session saved");
       // The end of the night is when people settle up.
@@ -2009,7 +2011,8 @@ export function PokerLedger({
       savedLogs.delete(session.id);
       endLiveSharing();
       setGame(null);
-      navigate("history", { replace: true });
+      // Games is under Settle up, as for a quick ledger (user, 2026-11-10).
+      navigate("sessions", { replace: true });
       await refreshHistory();
       showToast("Session saved");
       setSettlingId(session.id);
