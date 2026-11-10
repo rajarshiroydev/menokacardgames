@@ -262,6 +262,49 @@ export const HOUSE_NAME = "The house";
 /** The house's key in a payment; players are keyed by their place in the results. */
 export const HOUSE_KEY = "house";
 
+/** The bank's name when the host was the bank but didn't play. */
+export const BANK_NAME = "The bank";
+
+/** The bank's key in a payment when it isn't one of the players. */
+export const BANK_KEY = "bank";
+
+/**
+ * Whether a saved game had the host as the bank: every result says what was
+ * paid at the table. Throws when only some do, or the amounts can't be right.
+ */
+export function bankGame(session: Pick<PokerSession, "results">) {
+  const marked = session.results.filter(
+    (result) =>
+      result.bankPaidIn !== undefined || result.bankPaidOut !== undefined,
+  ).length;
+  if (!marked) {
+    if (session.results.some((result) => result.bank)) {
+      throw new Error("Only a bank game has a bank");
+    }
+    return false;
+  }
+  if (marked !== session.results.length) {
+    throw new Error("Every result in a bank game says what was paid");
+  }
+  if (session.results.filter((result) => result.bank).length > 1) {
+    throw new Error("A game has one bank");
+  }
+  for (const result of session.results) {
+    const paidIn = result.bankPaidIn;
+    const paidOut = result.bankPaidOut;
+    if (
+      !Number.isSafeInteger(paidIn) ||
+      !Number.isSafeInteger(paidOut) ||
+      paidIn! < 0 ||
+      paidOut! < 0 ||
+      paidOut! > Math.max(0, result.end)
+    ) {
+      throw new Error(`Check what ${result.name} paid at the table`);
+    }
+  }
+  return true;
+}
+
 /**
  * A payment Settle up shows, with who pays whom as keys that don't change
  * with names: each player's index in the game's results ("0" to "9"), or
@@ -274,6 +317,18 @@ export type Settlement = {
   players: Array<{ name: string; playerId?: string; net: number }>;
   /** The house's rake in hundredths; 0 without rake. */
   house: number;
+  /**
+   * The host was the bank: money paid at the table is taken off, so the
+   * transfers cover only what is still owed. Absent in other games.
+   */
+  bank?: {
+    /** Paid to the bank at the table, in hundredths. */
+    paidIn: number;
+    /** Paid out by the bank at the table, in hundredths. */
+    paidOut: number;
+    /** The bank's name in the transfers: the host's, or "The bank". */
+    name: string;
+  };
   transfers: SettlementTransfer[];
 };
 
@@ -307,13 +362,46 @@ export function settleSession(
     names.map((name, index) => [name, String(index)]),
   );
   if (money.house) keys.set(HOUSE_NAME, HOUSE_KEY);
+
+  // Each person is owed their result. In a bank game, money paid at the
+  // table moves between them and the bank: a player who paid the bank is
+  // owed it back, one the bank paid out is owed that much less, and the
+  // bank the other way round. The balances still add up to zero.
+  const balances = money.results.map((result) => result.net);
+  let bank: Settlement["bank"];
+  // Owed to (or by) a bank that isn't one of the players.
+  let bankBalance = 0;
+  const banked = bankGame(session);
+  if (banked) {
+    const paidIn = session.results.map((result) =>
+      chipsToCents(result.bankPaidIn!, session),
+    );
+    const paidOut = session.results.map((result) =>
+      chipsToCents(result.bankPaidOut!, session),
+    );
+    const totalIn = paidIn.reduce((sum, cents) => sum + cents, 0);
+    const totalOut = paidOut.reduce((sum, cents) => sum + cents, 0);
+    paidIn.forEach((cents, index) => {
+      balances[index] += cents - paidOut[index];
+    });
+    const host = session.results.findIndex((result) => result.bank);
+    if (host >= 0) balances[host] += totalOut - totalIn;
+    bank = {
+      paidIn: totalIn,
+      paidOut: totalOut,
+      name: host >= 0 ? names[host] : BANK_NAME,
+    };
+    if (host < 0) keys.set(BANK_NAME, BANK_KEY);
+    if (host < 0) bankBalance = totalOut - totalIn;
+  }
   const transfers = settleUp([
-    ...players.map(({ name, net }) => ({ name, cents: net })),
+    ...names.map((name, index) => ({ name, cents: balances[index] })),
     ...(money.house ? [{ name: HOUSE_NAME, cents: money.house }] : []),
+    ...(bankBalance ? [{ name: BANK_NAME, cents: bankBalance }] : []),
   ]).map((transfer) => ({
     ...transfer,
     fromKey: keys.get(transfer.from)!,
     toKey: keys.get(transfer.to)!,
   }));
-  return { players, house: money.house, transfers };
+  return { players, house: money.house, ...(bank ? { bank } : {}), transfers };
 }

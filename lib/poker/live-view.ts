@@ -1,5 +1,6 @@
 import { isAvatarId } from "../avatars.ts";
 import { deriveSessionAccounting } from "./accounting.ts";
+import { liveBankFields, validLiveBankFields } from "./bank.ts";
 import { MAX_BUY_INS, parseRebuyRules } from "./buy-ins.ts";
 import {
   blindStatus,
@@ -95,6 +96,9 @@ export type LiveSnapshotPlayer = {
   role?: string;
   /** Deals until they're the big blind (0 is this hand); absent if not dealt in. */
   bigBlindIn?: number;
+  /** The host is the bank: what they still owe it, or it owes them. */
+  owed?: number;
+  bankOwes?: number;
 };
 
 export type LiveSnapshot = {
@@ -169,6 +173,9 @@ export type LiveStanding = {
   nets?: (number | null)[];
   /** The seat they sit in, so the hand's "to act" can be matched. */
   seat?: number;
+  /** The host is the bank: what they still owe it, or it owes them. */
+  owed?: number;
+  bankOwes?: number;
 };
 
 export type LiveView = {
@@ -297,6 +304,7 @@ export function buildLiveSnapshot(
         buyIns,
         settledStack,
         ...(player.left ? { left: true } : {}),
+        ...liveBankFields(game, index),
         ...(hand
           ? {
               status: seatStatusParts(game, index),
@@ -510,6 +518,10 @@ export function validateLiveSnapshot(input: unknown): LiveSnapshot {
     if (bigBlindIn !== undefined && bigBlindIn > MAX_LIVE_PLAYERS) {
       throw new Error(`Invalid turn in the big blind for ${name}`);
     }
+    const bank = validLiveBankFields(player, name, {
+      invested: buyIns.reduce((sum, amount) => sum + amount, 0),
+      cashedOut: player.left ? stack : undefined,
+    });
     return {
       name,
       ...(avatar ? { avatar } : {}),
@@ -517,6 +529,7 @@ export function validateLiveSnapshot(input: unknown): LiveSnapshot {
       buyIns,
       settledStack,
       ...(player.left ? { left: true } : {}),
+      ...bank,
       ...(status ? { status } : {}),
       ...(inHand === undefined ? {} : { inHand }),
       ...(role ? { role } : {}),
@@ -667,6 +680,8 @@ export function deriveLiveView(snapshot: LiveSnapshot): LiveView {
       net: result.net,
       rebuys,
       ...(player.left ? { left: true } : {}),
+      ...(player.owed ? { owed: player.owed } : {}),
+      ...(player.bankOwes ? { bankOwes: player.bankOwes } : {}),
       ...(player.status ? { status: player.status } : {}),
       ...(player.inHand === undefined ? {} : { inHand: player.inHand }),
       ...(player.role ? { role: player.role } : {}),

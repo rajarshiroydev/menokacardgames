@@ -67,6 +67,9 @@ function canonicalContent(session: PokerSession, name: string) {
       joinedAt: result.joinedAt ?? null,
       leftHand: result.leftHand ?? null,
       leftAt: result.leftAt ?? null,
+      bankPaidIn: result.bankPaidIn ?? null,
+      bankPaidOut: result.bankPaidOut ?? null,
+      bank: result.bank === true,
     })),
   });
 }

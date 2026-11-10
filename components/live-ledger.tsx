@@ -123,6 +123,14 @@ export function LiveLedger({
                       )}`
                     )}
                   </small>
+                  {/* The host is the bank: what's still owed either way. */}
+                  {player.owed ? (
+                    <small className="neg">Owes the bank {money(player.owed)}</small>
+                  ) : player.bankOwes ? (
+                    <small className="neg">
+                      The bank owes {money(player.bankOwes)}
+                    </small>
+                  ) : null}
                 </span>
               </button>
             );

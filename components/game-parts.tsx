@@ -263,6 +263,7 @@ export function StandingRow({
   stack,
   net,
   netTone,
+  extra,
 }: {
   rank: number;
   name: string;
@@ -271,6 +272,8 @@ export function StandingRow({
   net: string;
   /** The net's colour class: "pos", "neg" or none. */
   netTone?: string;
+  /** Under the note, such as what a player owes the bank. */
+  extra?: ReactNode;
 }) {
   return (
     <div className="standing-row">
@@ -278,6 +281,7 @@ export function StandingRow({
       <div className="standing-name">
         <b>{name}</b>
         <small>{note}</small>
+        {extra}
       </div>
       <div className="standing-values">
         <b>{stack}</b>

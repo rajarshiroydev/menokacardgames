@@ -61,6 +61,8 @@ export type GameViewProps = {
   liveSharing: boolean;
   liveFailing: boolean;
   onShareLive: () => void;
+  /** Bank games: open a player's payments (BankSheet). */
+  onBankPayments: (playerIndex: number) => void;
 };
 
 /**

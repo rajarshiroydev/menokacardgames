@@ -9,6 +9,8 @@ import {
   plainChipsCode,
 } from "../lib/poker/money.ts";
 import {
+  BANK_NAME,
+  bankGame,
   chipsToCents,
   HOUSE_NAME,
   normalizeChipValue,
@@ -429,5 +431,184 @@ describe("chip value across the app", () => {
     assert.equal(JSON.stringify(snapshot).includes("50000"), false);
     const view = deriveLiveView(validateLiveSnapshot(snapshot));
     assert.equal(view.plainChips, true);
+  });
+});
+
+/** Marks a game as banked: paid in and paid out (chips) per result, in order. */
+function banked(
+  session: PokerSession,
+  paid: Array<[number, number]>,
+  host: number | null = 0,
+): PokerSession {
+  return {
+    ...session,
+    results: session.results.map((result, index) => ({
+      ...result,
+      bankPaidIn: paid[index][0],
+      bankPaidOut: paid[index][1],
+      ...(index === host ? { bank: true as const } : {}),
+    })),
+  };
+}
+
+const transferList = (session: PokerSession) =>
+  settleSession(session).transfers.map((transfer) => [
+    transfer.from,
+    transfer.to,
+    transfer.cents / 100,
+    transfer.fromKey,
+    transfer.toKey,
+  ]);
+
+describe("host is the bank", () => {
+  const three = game([
+    ["Asha", 0],
+    ["Bikram", 10_000],
+    ["Lakshmi", -10_000],
+  ]);
+
+  it("pays out the winner from the bank when everyone paid", () => {
+    const session = banked(three, [
+      [10_000, 0],
+      [10_000, 0],
+      [10_000, 0],
+    ]);
+    assert.deepEqual(transferList(session), [
+      ["Asha", "Bikram", 20_000, "0", "1"],
+    ]);
+    const settlement = settleSession(session);
+    assert.deepEqual(settlement.bank, {
+      paidIn: 3_000_000,
+      paidOut: 0,
+      name: "Asha",
+    });
+    // Results are unchanged: only who pays whom moves.
+    assert.deepEqual(
+      settlement.players.map((player) => player.net / 100),
+      [10_000, 0, -10_000],
+    );
+  });
+
+  it("asks for an unpaid buy-in from the player who owes it", () => {
+    // Lakshmi never paid; Bikram paid. The bank holds 20,000 and Lakshmi
+    // owes 10,000 of Bikram's 20,000, so she pays him straight.
+    const session = banked(three, [
+      [10_000, 0],
+      [10_000, 0],
+      [0, 0],
+    ]);
+    assert.deepEqual(transferList(session), [
+      ["Asha", "Bikram", 10_000, "0", "1"],
+      ["Lakshmi", "Bikram", 10_000, "2", "1"],
+    ]);
+  });
+
+  it("doesn't pay a cash-out twice", () => {
+    // Bikram cashed out with 20,000 and was paid at the table.
+    const session = banked(three, [
+      [10_000, 0],
+      [10_000, 20_000],
+      [10_000, 0],
+    ]);
+    assert.deepEqual(transferList(session), []);
+  });
+
+  it("is the same as a plain game when nobody paid anything", () => {
+    const session = banked(three, [
+      [0, 0],
+      [0, 0],
+      [0, 0],
+    ]);
+    assert.deepEqual(transferList(session), transferList(three));
+  });
+
+  it("names the bank when the host didn't play", () => {
+    const session = banked(
+      game([
+        ["Bikram", 10_000],
+        ["Lakshmi", -10_000],
+      ]),
+      [
+        [10_000, 0],
+        [10_000, 0],
+      ],
+      null,
+    );
+    assert.deepEqual(transferList(session), [
+      [BANK_NAME, "Bikram", 20_000, "bank", "0"],
+    ]);
+    assert.equal(settleSession(session).bank?.name, BANK_NAME);
+  });
+
+  it("keeps the rake with the house", () => {
+    const session = banked(
+      game(
+        [
+          ["Asha", 0],
+          ["Bikram", 9_000],
+          ["Lakshmi", -10_000],
+        ],
+        { rake: 1_000 },
+      ),
+      [
+        [10_000, 0],
+        [10_000, 0],
+        [10_000, 0],
+      ],
+    );
+    assert.deepEqual(transferList(session), [
+      ["Asha", "Bikram", 19_000, "0", "1"],
+      ["Asha", HOUSE_NAME, 1_000, "0", "house"],
+    ]);
+  });
+
+  it("still adds up at a chip value", () => {
+    const session = banked(
+      game(
+        [
+          ["Asha", 3_333],
+          ["Bikram", 3_333],
+          ["Lakshmi", -6_666],
+        ],
+        { chipValue: { chips: 3, cents: 100 } },
+      ),
+      [
+        [10_000, 0],
+        [0, 0],
+        [10_000, 3_334],
+      ],
+    );
+    const settlement = settleSession(session);
+    const paid = settlement.transfers.reduce((sum, t) => sum + t.cents, 0);
+    assert.ok(paid > 0);
+  });
+
+  it("refuses a game where only some results say what was paid", () => {
+    const session = banked(three, [
+      [10_000, 0],
+      [10_000, 0],
+      [10_000, 0],
+    ]);
+    const plain = { ...session.results[2] };
+    delete plain.bankPaidIn;
+    delete plain.bankPaidOut;
+    assert.throws(() =>
+      bankGame({ results: [...session.results.slice(0, 2), plain] }),
+    );
+    assert.throws(() =>
+      bankGame({
+        results: session.results.map((result) => ({ ...result, bank: true })),
+      }),
+    );
+    assert.throws(() =>
+      bankGame(
+        banked(three, [
+          [10_000, 0],
+          [10_000, 20_001],
+          [10_000, 0],
+        ]),
+      ),
+    );
+    assert.equal(bankGame(three), false);
   });
 });

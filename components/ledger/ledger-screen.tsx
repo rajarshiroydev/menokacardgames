@@ -4,6 +4,7 @@ import { type CSSProperties, FormEvent, useState } from "react";
 
 import { ActionLog } from "@/components/ledger/action-log";
 import { Avatar } from "@/components/ledger/avatar";
+import { BankStatus } from "@/components/ledger/bank-sheet";
 import { UndoIcon } from "@/components/ledger/icons";
 import { LedgerTable } from "@/components/ledger/ledger-table";
 import { ChipInput, GameAmounts, useMoney } from "@/components/ledger/money";
@@ -34,6 +35,8 @@ type LedgerViewProps = {
   liveSharing: boolean;
   liveFailing: boolean;
   onShareLive: () => void;
+  /** Bank games: open a player's payments (BankSheet). */
+  onBankPayments: (playerIndex: number) => void;
 };
 
 /** A quick ledger's screen, with its amounts in the game's own chip unit. */
@@ -58,6 +61,7 @@ function LedgerScreen({
   liveSharing,
   liveFailing,
   onShareLive,
+  onBankPayments,
 }: LedgerViewProps) {
   const { money, signedMoney } = useMoney();
   const played = useTimePlayed(game.startedAt);
@@ -250,6 +254,13 @@ function LedgerScreen({
                   )}
                 </small>
               </div>
+              {/* Left of the button, on the row's line (user request). */}
+              <BankStatus
+                game={game}
+                playerIndex={index}
+                onOpen={() => onBankPayments(index)}
+                short
+              />
               {player.left ? (
                 <button
                   className="pill-button"

@@ -153,7 +153,7 @@ const GROUPS: FeatureGroup[] = [
       },
       {
         name: "Settle up",
-        text: "See everyone's result in money and who pays whom, with the fewest payments possible, then share the list with the table. Tick each payment as paid, like Splitwise: everyone who played can, and Still owed on your Profile lists what's left.",
+        text: "See everyone's result in money and who pays whom, with the fewest payments possible, then share the list with the table. Tick each payment as paid, like Splitwise: everyone who played can, and Still owed on your Profile lists what's left. If you were the bank, buy-ins paid to you at the table are taken off first.",
       },
       {
         name: "Results card",

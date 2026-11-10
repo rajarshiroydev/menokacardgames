@@ -87,6 +87,8 @@ export function SetupView({
     bigBlindAnte: boolean;
     rakeRules: RakeRules | null;
     chipValue: ChipValue | null;
+    /** The host is the bank: players pay them for each buy-in. */
+    hostIsBank: boolean;
     players: PlayerProfile[];
     buyIns: number[] | null;
     randomDealer: boolean;
@@ -99,6 +101,9 @@ export function SetupView({
   const [chipValueOn, setChipValueOn] = useState(false);
   const [buyInPrice, setBuyInPrice] = useState<number | null>(null);
   const [showChipValueHelp, setShowChipValueHelp] = useState(false);
+  // Off by default: no change for games that settle between players.
+  const [hostIsBank, setHostIsBank] = useState(false);
+  const [showBankHelp, setShowBankHelp] = useState(false);
   const chipsCode = chipCurrency(currency, chipValueOn) ?? currency;
   const symbol = currencySymbol(chipsCode);
   // Every amount in this form is in hundredths, so 0.25 and 10,000 use the
@@ -509,6 +514,7 @@ export function SetupView({
     onStart({
       kind,
       chipValue: setupChipValue,
+      hostIsBank,
       bigBlindAnte,
       rakeRules: rakeOn
         ? {
@@ -1184,6 +1190,52 @@ export function SetupView({
                 </p>
               )}
             </>
+          ) : null}
+        </section>
+
+        <section className="glass card">
+          <div className="card-row">
+            <span className="label">Bank</span>
+            <div className="heading-with-info">
+              <label className="switch-row">
+                <span>I&apos;m the bank</span>
+                <button
+                  className="switch"
+                  type="button"
+                  role="switch"
+                  aria-checked={hostIsBank}
+                  aria-label="I'm the bank"
+                  onClick={() => setHostIsBank((on) => !on)}
+                />
+              </label>
+              <button
+                className="info-button"
+                type="button"
+                aria-label="About the bank"
+                onClick={() => setShowBankHelp(true)}
+              >
+                i
+              </button>
+            </div>
+          </div>
+          {showBankHelp ? (
+            <InfoSheet label="About the bank" onClose={() => setShowBankHelp(false)}>
+              <p>
+                <b>I&apos;m The Bank On:</b> players pay you for each buy-in
+                at the table, and you pay out players who cash out. Each buy-in
+                is marked Paid now or Owes, and Settle up only asks for what is
+                still owed.
+              </p>
+              <p>
+                <b>I&apos;m The Bank Off:</b> nobody pays during the game, and
+                Settle up says who pays whom at the end.
+              </p>
+            </InfoSheet>
+          ) : null}
+          {hostIsBank ? (
+            <p className="muted small-note">
+              Buy-ins start as Paid now. Mark anyone who owes from their row.
+            </p>
           ) : null}
         </section>
 

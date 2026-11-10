@@ -36,6 +36,14 @@ export type Player = {
    * first rebuy or finished hand.
    */
   buyInsPlayed?: number;
+  /**
+   * Games where the host is the bank (`GameState.hostIsBank`): the places in
+   * `buyIns` not paid to the bank at the table yet. Absent is all paid.
+   * Places past the end of `buyIns` (after an undo) are ignored.
+   */
+  unpaidBuyIns?: number[];
+  /** Cashed out and paid their chips by the bank at the table. */
+  paidOut?: true;
 };
 
 /**
@@ -373,6 +381,14 @@ export type GameState = {
    * Absent in older games, which can't know those for hands already played.
    */
   tracksPlayers?: true;
+  /**
+   * The host is the bank (plan entry "buy-ins paid to the bank (plan)"):
+   * players pay the host for each buy-in at the table, and the host pays out
+   * cash-outs, so Settle up only covers what is still owed. Set at setup.
+   */
+  hostIsBank?: true;
+  /** The host's own player, when the host has one: their buy-ins are paid. */
+  bankPlayerId?: string;
   _setupCount: number;
 };
 
@@ -393,6 +409,15 @@ export type SessionResult = {
   joinedAt?: number;
   leftHand?: number;
   leftAt?: number;
+  /**
+   * Games where the host was the bank: every result has both. What this
+   * player paid the bank at the table for their buy-ins, and what the bank
+   * paid them at the table when they cashed out (chips). Absent otherwise.
+   */
+  bankPaidIn?: number;
+  bankPaidOut?: number;
+  /** The host's own result in such a game: they were the bank. */
+  bank?: true;
 };
 
 export type PokerSession = {

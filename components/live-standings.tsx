@@ -609,6 +609,17 @@ export function LiveStandings({ token }: { token: string }) {
                         </span>
                       </>
                     )}
+                    {/* The host is the bank: what's still owed either way. */}
+                    {row.owed ? (
+                      <span className="bank-owed">
+                        Owes bank <b>{money(row.owed)}</b>
+                      </span>
+                    ) : null}
+                    {row.bankOwes ? (
+                      <span className="bank-owed">
+                        Bank owes <b>{money(row.bankOwes)}</b>
+                      </span>
+                    ) : null}
                   </span>
                 </span>
               </button>

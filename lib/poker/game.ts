@@ -179,7 +179,7 @@ export function canJoinGame(
   );
 }
 
-function tableLog(game: GameState, line: string) {
+export function tableLog(game: GameState, line: string) {
   // Not "Hand N:", so undoing a hand keeps the line, like the change.
   game.log.unshift(`Before hand ${game.handNo + 1}: ${line}`);
   game.log = game.log.slice(0, LOG_LIMIT);
@@ -232,10 +232,13 @@ export function cashOutPlayer(
   game: GameState,
   playerIndex: number,
   now = Date.now(),
+  /** Bank games: the bank paid them their chips at the table. */
+  paidOut = true,
 ) {
   const player = game.players[playerIndex];
   if (game.hand || !player || player.left) return false;
   player.left = true;
+  if (game.hostIsBank && paidOut) player.paidOut = true;
   if (game.tracksPlayers) {
     player.leftHand = game.handNo;
     player.leftAt = now;
@@ -255,6 +258,8 @@ export function returnToTable(game: GameState, playerIndex: number) {
   delete player.left;
   delete player.leftHand;
   delete player.leftAt;
+  // Paid out or not, they play on with the chips they left with.
+  delete player.paidOut;
   game.lastHand = null;
   tableLog(
     game,

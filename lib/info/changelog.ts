@@ -27,6 +27,16 @@ export const CHANGE_TAG_LABELS: Record<ChangeTag, string> = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    date: "2026-11-10",
+    title: "Be the bank",
+    items: [
+      {
+        tag: "new",
+        text: "Turn on I'm the bank when you set up a game and players pay you for their buy-ins at the table. Mark each buy-in Paid now or Owes, and each cash-out paid out or owed. Players see what they owe on their rows and on the live link, and Settle up only asks for what is still owed.",
+      },
+    ],
+  },
+  {
     date: "2026-11-06",
     title: "Standings graph",
     items: [

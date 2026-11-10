@@ -1,4 +1,5 @@
 import { isAvatarId } from "../avatars.ts";
+import { liveBankFields, validLiveBankFields } from "./bank.ts";
 import { MAX_BUY_INS } from "./buy-ins.ts";
 import { MAX_GAME_PLAYERS } from "./game.ts";
 import { type ChipUnit, isChipUnit } from "./money.ts";
@@ -27,6 +28,12 @@ export type LiveLedgerSnapshotPlayer = {
   buyIns: number[];
   /** Cashed out and left with this many chips; absent while seated. */
   cashedOut?: number;
+  /**
+   * The host is the bank: chips this player still owes the bank for buy-ins,
+   * and the bank still owes them for a cash-out. Absent is none.
+   */
+  owed?: number;
+  bankOwes?: number;
 };
 
 export type LiveLedgerSnapshot = {
@@ -53,6 +60,9 @@ export type LiveLedgerPlayer = {
   /** What they left with, and the result that makes; absent while seated. */
   cashedOut?: number;
   net?: number;
+  /** The host is the bank: what they still owe it, or it owes them. */
+  owed?: number;
+  bankOwes?: number;
 };
 
 export type LiveLedgerView = {
@@ -86,13 +96,14 @@ export function buildLiveLedgerSnapshot(
     ...(game.chipValue ? { plainChips: true } : {}),
     startedAt: game.startedAt,
     startStack: game.startStack,
-    players: game.players.map((player) => {
+    players: game.players.map((player, index) => {
       const avatar = avatarOf(player);
       return {
         name: player.name,
         ...(avatar ? { avatar } : {}),
         buyIns: player.buyIns?.length ? [...player.buyIns] : [game.startStack],
         ...(player.left ? { cashedOut: player.stack } : {}),
+        ...liveBankFields(game, index),
       };
     }),
     activity: game.log.slice(0, LIVE_LEDGER_ACTIVITY),
@@ -164,11 +175,16 @@ export function validateLiveLedgerSnapshot(input: unknown): LiveLedgerSnapshot {
         : asChips(player.cashedOut, `${name}'s cash-out`);
     // An avatar the server doesn't know is dropped; the page draws a stand-in.
     const avatar = isAvatarId(player.avatar) ? player.avatar : undefined;
+    const bank = validLiveBankFields(player, name, {
+      invested: buyIns.reduce((sum, amount) => sum + amount, 0),
+      cashedOut,
+    });
     return {
       name,
       ...(avatar ? { avatar } : {}),
       buyIns,
       ...(cashedOut === undefined ? {} : { cashedOut }),
+      ...bank,
     };
   });
   if (!Array.isArray(snapshot.activity)) throw new Error("Invalid activity");
@@ -207,6 +223,8 @@ export function deriveLiveLedgerView(snapshot: LiveLedgerSnapshot): LiveLedgerVi
       ...(player.cashedOut === undefined
         ? {}
         : { cashedOut: player.cashedOut, net: player.cashedOut - invested }),
+      ...(player.owed ? { owed: player.owed } : {}),
+      ...(player.bankOwes ? { bankOwes: player.bankOwes } : {}),
     };
   });
   const bought = rows.reduce((sum, row) => sum + row.invested, 0);

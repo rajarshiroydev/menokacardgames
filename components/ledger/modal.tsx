@@ -25,6 +25,11 @@ export type ModalState =
       /** A link under the message for another way to go on, such as a different amount. */
       alternative?: { label: string; onChoose: () => void };
       /**
+       * Show the alternative as a button beside the confirm button, for two
+       * equal answers (a bank game's cash-out: Not paid yet | Paid out).
+       */
+      alternativeBeside?: boolean;
+      /**
        * Saving with rebuys nobody played with: Keep or Take back for each,
        * then `onSave` with the players whose rebuys are taken back.
        */
@@ -148,7 +153,7 @@ export function Modal({
             ))}
           </div>
         ) : null}
-        {state.kind === "confirm" && state.alternative ? (
+        {state.kind === "confirm" && state.alternative && !state.alternativeBeside ? (
           <button
             className="text-button"
             type="button"
@@ -160,14 +165,32 @@ export function Modal({
             {state.alternative.label}
           </button>
         ) : null}
-        <button
-          className={
-            state.kind === "confirm" && state.danger ? "danger" : "primary"
-          }
-          onClick={confirm}
-        >
-          {state.confirmLabel}
-        </button>
+        {state.kind === "confirm" && state.alternative && state.alternativeBeside ? (
+          <div className="button-pair modal-pair">
+            <button
+              className="glass-button"
+              type="button"
+              onClick={() => {
+                state.alternative?.onChoose();
+                onConfirm();
+              }}
+            >
+              {state.alternative.label}
+            </button>
+            <button className="primary" type="button" onClick={confirm}>
+              {state.confirmLabel}
+            </button>
+          </div>
+        ) : (
+          <button
+            className={
+              state.kind === "confirm" && state.danger ? "danger" : "primary"
+            }
+            onClick={confirm}
+          >
+            {state.confirmLabel}
+          </button>
+        )}
         {state.kind === "confirm" && state.hideDismiss ? null : (
           <button className="ghost" onClick={onClose}>
             {(state.kind === "confirm" && state.dismissLabel) || "Cancel"}

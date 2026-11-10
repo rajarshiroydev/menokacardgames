@@ -8370,3 +8370,84 @@ span.name-with-badge {
   padding: 18px 0;
   text-align: center;
 }
+
+/* The host is the bank: a player's payments, under their name. Tapping it
+   opens their payments sheet. Owing (either way) is red; paid is green. */
+.bank-status {
+  display: inline-flex;
+  align-items: center;
+  margin-top: 4px;
+  padding: 2px 8px;
+  border: 1px solid color-mix(in oklch, var(--g) 45%, transparent);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--g);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 16px;
+  cursor: pointer;
+}
+
+/* Quick ledger rows: beside the Buy in / Return button, not under the name. */
+/* As tall as the + Buy in / Return button beside it (user request
+   2026-11-10: the same height, 30 px). */
+.ledger-row .bank-status {
+  flex: none;
+  height: 30px;
+  margin-top: 0;
+  padding: 0 10px;
+}
+
+/* No coloured outline here, which made the pill look bigger than the
+   button (user, 2026-11-10): a soft tint of its colour instead, with an
+   invisible border so it stays exactly 30 px. */
+.ledger-row .bank-status {
+  border-color: transparent;
+  background: color-mix(in oklch, var(--g) 14%, transparent);
+}
+
+.ledger-row .bank-status.owing {
+  border-color: transparent;
+  background: color-mix(in oklch, var(--neg) 16%, transparent);
+}
+
+.bank-status.owing {
+  border-color: color-mix(in oklch, var(--neg) 55%, transparent);
+  color: var(--neg);
+}
+
+.bank-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 4px 0 12px;
+}
+
+.bank-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.bank-line > span {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.bank-line small {
+  color: var(--ink2);
+  font-size: 12px;
+}
+
+/* Two equal choices wide enough for "Paid out" and "Owes". */
+.bank-line .segmented {
+  flex: 0 0 168px;
+}
+
+/* Live standings: what a player still owes the bank, or it owes them. */
+.live-player-thin .bank-owed,
+.live-player-thin .bank-owed b {
+  color: var(--neg);
+}

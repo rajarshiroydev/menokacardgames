@@ -40,7 +40,7 @@ export type VisiblePaymentRow = {
   markedByMe: boolean;
 };
 
-const KEY = /^([0-9]|house)$/;
+const KEY = /^([0-9]|house|bank)$/;
 
 export function isPaymentKey(value: unknown): value is string {
   return typeof value === "string" && KEY.test(value);

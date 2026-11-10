@@ -21,6 +21,7 @@ import {
   ticksClearedBy,
 } from "@/lib/poker/payments";
 import {
+  BANK_NAME,
   MAX_CHIP_VALUE_CENTS,
   type Settlement,
   settleSession,
@@ -426,6 +427,16 @@ export function SettleUpSheet({
                 </span>
               ) : null}
             </div>
+            {settlement.bank ? (
+              <p className="muted small-note">
+                {settlement.bank.name === BANK_NAME
+                  ? "The host was the bank"
+                  : `${settlement.bank.name} was the bank`}
+                : {cash(settlement.bank.paidIn)} paid in and{" "}
+                {cash(settlement.bank.paidOut)} paid out at the table are taken
+                into account.
+              </p>
+            ) : null}
             {lines.length ? (
               <div className="rows">
                 {lines.map((line) => {

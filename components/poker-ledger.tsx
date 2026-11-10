@@ -54,6 +54,13 @@ import {
   splitPotBetween,
   undoPlayerAction,
 } from "@/lib/poker/actions";
+import {
+  bankResult,
+  isBankPlayer,
+  noteBuyInPaid,
+  tableSetBuyInPaid,
+  tableSetPaidOut,
+} from "@/lib/poker/bank";
 import { gameFromSession } from "@/lib/poker/continue-session";
 import {
   createLedgerGame,
@@ -62,6 +69,8 @@ import {
   ledgerCashOut,
   ledgerJoin,
   ledgerReturn,
+  ledgerSetBuyInPaid,
+  ledgerSetPaidOut,
   ledgerSession,
   undoLedgerStep,
 } from "@/lib/poker/ledger";
@@ -138,6 +147,7 @@ import { profileStatsApi, ProfileView } from "@/components/ledger/profile-view";
 import { RanksView } from "@/components/ledger/ranks-view";
 import { savedLogs } from "@/components/ledger/session-card";
 import { SettleUpSheet } from "@/components/ledger/settle-up-sheet";
+import { BankSheet } from "@/components/ledger/bank-sheet";
 import { SetupView } from "@/components/ledger/setup-view";
 import { LiveShareSheet } from "@/components/ledger/share-sheets";
 import { TabBar } from "@/components/ledger/tab-bar";
@@ -260,6 +270,8 @@ export function PokerLedger({
   const [editingBlinds, setEditingBlinds] = useState(false);
   const [editingRebuys, setEditingRebuys] = useState(false);
   const [tableSheet, setTableSheet] = useState<"add" | "cash-out" | null>(null);
+  // Bank games: the player whose payments sheet is open, by index.
+  const [bankSheet, setBankSheet] = useState<number | null>(null);
   // Which setup Table Setup shows: Home has a button for each kind of game.
   const [setupKind, setSetupKind] = useState<"hands" | "ledger">("hands");
   // The busted player whose own buy-in amount is being typed.
@@ -957,6 +969,8 @@ export function PokerLedger({
       rakeRules: RakeRules | null;
       /** What the chips cost; null is a chip per unit of the currency. */
       chipValue: ChipValue | null;
+      /** The host is the bank: players pay them for each buy-in. */
+      hostIsBank: boolean;
       players: PlayerProfile[];
       /**
        * Each player's own first buy-in, in seat order, when players choose
@@ -980,6 +994,8 @@ export function PokerLedger({
           })),
           buyIns: input.buyIns,
           startedAt: Date.now(),
+          hostIsBank: input.hostIsBank,
+          ...(profile.selfPlayerId ? { bankPlayerId: profile.selfPlayerId } : {}),
         });
         if (!ledgerGame) {
           showToast("Every player's buy-in must be more than 0");
@@ -1079,13 +1095,21 @@ export function PokerLedger({
         dealerIndex: firstDealer - 1,
         log: [],
         tracksPlayers: true,
+        ...(input.hostIsBank
+          ? {
+              hostIsBank: true as const,
+              ...(profile.selfPlayerId
+                ? { bankPlayerId: profile.selfPlayerId }
+                : {}),
+            }
+          : {}),
         _setupCount: input.players.length,
       };
       dealNewHand(nextGame);
       setGame(nextGame);
       navigate("game", { replace: true });
     },
-    [currency, navigate, nextSessionNumber, showToast],
+    [currency, navigate, nextSessionNumber, profile.selfPlayerId, showToast],
   );
 
   function continueSession(id: string) {
@@ -1564,8 +1588,9 @@ export function PokerLedger({
     if (!game) return;
     const amount = nextBuyIn(game, playerIndex);
     if (amount === null) return;
-    // Players who choose their own amount type it in the buy-in sheet.
-    if (game.customBuyIns) {
+    // Players who choose their own amount type it in the buy-in sheet, and
+    // in a bank game the sheet asks whether it was paid.
+    if (game.customBuyIns || game.hostIsBank) {
       setBuyingIn(playerIndex);
       return;
     }
@@ -1586,12 +1611,13 @@ export function PokerLedger({
     });
   }
 
-  function confirmBuyIn(playerIndex: number, amount: number) {
+  function confirmBuyIn(playerIndex: number, amount: number, paid = true) {
     if (!game) return;
     const handNo = game.hand?.no;
     const next = structuredClone(game);
     const confirmedAmount = buyInPlayer(next, playerIndex, amount);
     if (confirmedAmount === null) return;
+    noteBuyInPaid(next, playerIndex, paid);
     const confirmedPlayer = next.players[playerIndex];
     // Not "Hand N:" during a hand, so cancelling it keeps the line, like
     // the buy-in.
@@ -1631,7 +1657,12 @@ export function PokerLedger({
     showToast(pausing ? "Blind clock paused" : "Blind clock resumed");
   }
 
-  function addLatePlayer(playerId: string, seat: number, amount: number) {
+  function addLatePlayer(
+    playerId: string,
+    seat: number,
+    amount: number,
+    paid = true,
+  ) {
     if (!game || game.hand) return;
     const profile = players.find((player) => player.id === playerId);
     if (!profile) return;
@@ -1639,6 +1670,7 @@ export function PokerLedger({
     if (!joinGame(next, { id: profile.id, name: profile.name }, seat, amount)) {
       return;
     }
+    noteBuyInPaid(next, seat, paid);
     setGame(next);
     setTableSheet(null);
     showToast(`${profile.name} joins for ${money(amount)}`);
@@ -1650,16 +1682,71 @@ export function PokerLedger({
     if (!player || player.left) return;
     // The confirmation replaces the sheet rather than opening under it.
     setTableSheet(null);
+    const finish = (paidOut: boolean) => {
+      const next = structuredClone(game);
+      if (!cashOutPlayer(next, playerIndex, Date.now(), paidOut)) return;
+      setGame(next);
+      showToast(`${player.name} cashed out with ${money(player.stack)}`);
+    };
+    if (game.hostIsBank && !isBankPlayer(game, playerIndex)) {
+      askCashOutPayment(
+        `${player.name} leaves with ${money(player.stack)} and can come back later.`,
+        player.stack,
+        finish,
+      );
+      return;
+    }
     ask(
       `Cash out ${player.name} with ${money(player.stack)}? They can return later.`,
       `Cash Out · ${money(player.stack)}`,
-      () => {
-        const next = structuredClone(game);
-        if (!cashOutPlayer(next, playerIndex)) return;
-        setGame(next);
-        showToast(`${player.name} cashed out with ${money(player.stack)}`);
-      },
+      () => finish(true),
     );
+  }
+
+  /**
+   * A bank game's cash-out: Paid out (the bank paid them at the table, the
+   * default) or, below it, owed, so Settle up pays them later.
+   */
+  function askCashOutPayment(
+    message: string,
+    chips: number,
+    finish: (paidOut: boolean) => void,
+  ) {
+    setModal({
+      kind: "confirm",
+      // Plain and short (user request 2026-11-10): who leaves with what,
+      // then the one question the two buttons answer.
+      message: `${message} As the bank, have you paid them yet?`,
+      confirmLabel: "Paid out",
+      onConfirm: () => finish(true),
+      // Two equal answers side by side (user request 2026-11-10). The
+      // alternative button only closes the modal, so it finishes here.
+      alternative: {
+        label: "Not paid yet",
+        onChoose: () => finish(false),
+      },
+      alternativeBeside: true,
+    });
+  }
+
+  /** Bank games: marks one of a player's buy-ins paid to the bank, or owed. */
+  function markBuyInPaid(playerIndex: number, place: number, paid: boolean) {
+    if (!game) return;
+    const next = structuredClone(game);
+    const changed = isLedgerGame(next)
+      ? ledgerSetBuyInPaid(next, playerIndex, place, paid)
+      : tableSetBuyInPaid(next, playerIndex, place, paid);
+    if (changed) setGame(next);
+  }
+
+  /** Bank games: marks whether the bank paid a player who cashed out. */
+  function markPaidOut(playerIndex: number, paid: boolean) {
+    if (!game) return;
+    const next = structuredClone(game);
+    const changed = isLedgerGame(next)
+      ? ledgerSetPaidOut(next, playerIndex, paid)
+      : tableSetPaidOut(next, playerIndex, paid);
+    if (changed) setGame(next);
   }
 
   function returnPlayer(playerIndex: number) {
@@ -1673,21 +1760,23 @@ export function PokerLedger({
     showToast(`${player.name} is back with ${money(player.stack)}`);
   }
 
-  function addLedgerBuyIn(playerIndex: number, amount: number) {
+  function addLedgerBuyIn(playerIndex: number, amount: number, paid = true) {
     if (!game) return;
     const next = structuredClone(game);
-    if (!ledgerBuyIn(next, playerIndex, amount)) return;
+    if (!ledgerBuyIn(next, playerIndex, amount, paid)) return;
     setGame(next);
     setBuyingIn(null);
     showToast(`${next.players[playerIndex].name} buys in for ${money(amount)}`);
   }
 
-  function addLedgerPlayer(playerId: string, amount: number) {
+  function addLedgerPlayer(playerId: string, amount: number, paid = true) {
     if (!game) return;
     const profile = players.find((player) => player.id === playerId);
     if (!profile) return;
     const next = structuredClone(game);
-    if (!ledgerJoin(next, { id: profile.id, name: profile.name }, amount)) {
+    if (
+      !ledgerJoin(next, { id: profile.id, name: profile.name }, amount, Date.now(), paid)
+    ) {
       return;
     }
     setGame(next);
@@ -1701,15 +1790,24 @@ export function PokerLedger({
     if (!player || player.left) return;
     // The confirmation replaces the sheet rather than opening under it.
     setTableSheet(null);
+    const finish = (paidOut: boolean) => {
+      const next = structuredClone(game);
+      if (!ledgerCashOut(next, playerIndex, chips, Date.now(), paidOut)) return;
+      setGame(next);
+      showToast(`${player.name} cashed out with ${money(chips)}`);
+    };
+    if (game.hostIsBank && !isBankPlayer(game, playerIndex)) {
+      askCashOutPayment(
+        `${player.name} leaves with ${money(chips)}.`,
+        chips,
+        finish,
+      );
+      return;
+    }
     ask(
       `Cash out ${player.name} with ${money(chips)}? That's their result for the game.`,
       `Cash Out · ${money(chips)}`,
-      () => {
-        const next = structuredClone(game);
-        if (!ledgerCashOut(next, playerIndex, chips)) return;
-        setGame(next);
-        showToast(`${player.name} cashed out with ${money(chips)}`);
-      },
+      () => finish(true),
     );
   }
 
@@ -1882,6 +1980,7 @@ export function PokerLedger({
           ? { buyIns: player.buyIns }
           : {}),
         ...savedPlayerRecord(game, index, completedHands),
+        ...bankResult(game, index, endStacks[index]),
       })),
       actionLog: savedActionLog(game),
     };
@@ -2472,6 +2571,7 @@ export function PokerLedger({
             liveSharing={Boolean(liveToken)}
             liveFailing={liveFailing}
             onShareLive={() => setSharingLive(true)}
+            onBankPayments={setBankSheet}
           />
         ) : game ? (
           <GameView
@@ -2502,6 +2602,7 @@ export function PokerLedger({
             liveSharing={Boolean(liveToken)}
             liveFailing={liveFailing}
             onShareLive={() => setSharingLive(true)}
+            onBankPayments={setBankSheet}
           />
         ) : (
           homeView
@@ -2586,10 +2687,10 @@ export function PokerLedger({
             roster={players}
             selfPlayerId={profile.selfPlayerId}
             onClose={() => setTableSheet(null)}
-            onAdd={(playerId, seat, amount) =>
+            onAdd={(playerId, seat, amount, paid) =>
               isLedgerGame(game)
-                ? addLedgerPlayer(playerId, amount)
-                : addLatePlayer(playerId, seat, amount)
+                ? addLedgerPlayer(playerId, amount, paid)
+                : addLatePlayer(playerId, seat, amount, paid)
             }
           />
         ) : null}
@@ -2602,11 +2703,20 @@ export function PokerLedger({
             game={game}
             playerIndex={buyingIn}
             onClose={() => setBuyingIn(null)}
-            onBuyIn={(amount) =>
+            onBuyIn={(amount, paid) =>
               isLedgerGame(game)
-                ? addLedgerBuyIn(buyingIn, amount)
-                : confirmBuyIn(buyingIn, amount)
+                ? addLedgerBuyIn(buyingIn, amount, paid)
+                : confirmBuyIn(buyingIn, amount, paid)
             }
+          />
+        ) : null}
+        {bankSheet !== null && game?.hostIsBank && game.players[bankSheet] ? (
+          <BankSheet
+            game={game}
+            playerIndex={bankSheet}
+            onSetBuyIn={(place, paid) => markBuyInPaid(bankSheet, place, paid)}
+            onSetPaidOut={(paid) => markPaidOut(bankSheet, paid)}
+            onClose={() => setBankSheet(null)}
           />
         ) : null}
         {tableSheet === "cash-out" && game && isLedgerGame(game) ? (

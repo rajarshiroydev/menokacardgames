@@ -13,6 +13,7 @@ import {
   StandingRow,
 } from "@/components/game-parts";
 import { ActionLog } from "@/components/ledger/action-log";
+import { BankStatus } from "@/components/ledger/bank-sheet";
 import { Avatar, toneClass } from "@/components/ledger/avatar";
 import { BuyInOptions } from "@/components/ledger/buy-in-sheets";
 import {
@@ -380,6 +381,13 @@ function GameScreen(props: GameViewProps) {
                 stack={money(player.stack)}
                 net={signedMoney(net(index))}
                 netTone={toneClass(net(index))}
+                extra={
+                  <BankStatus
+                    game={game}
+                    playerIndex={index}
+                    onOpen={() => props.onBankPayments(index)}
+                  />
+                }
               />
             ))}
           </div>

@@ -1,4 +1,5 @@
 import { LOG_LIMIT } from "./action-log.ts";
+import { restoreBankPlayer } from "./bank.ts";
 import { bigBlindAtLevel, sessionBlindHistory } from "./game.ts";
 import type { SavedSession } from "./session-conflict.ts";
 import type {
@@ -59,6 +60,7 @@ export function gameFromSession(
   const tracked = session.results.every(
     (result) => result.handsPlayed !== undefined,
   );
+  const bankPlayerId = session.results.find((result) => result.bank)?.playerId;
 
   return {
     ...(session.name ? { gameName: session.name } : {}),
@@ -88,7 +90,15 @@ export function gameFromSession(
     ...(session.rakeRules ? { rakeRules: { ...session.rakeRules } } : {}),
     ...(session.rake ? { rake: session.rake } : {}),
     startedAt: session.date,
+    // The host stays the bank, with what was still owed at the save.
+    ...(session.results.some((result) => result.bankPaidIn !== undefined)
+      ? {
+          hostIsBank: true as const,
+          ...(bankPlayerId ? { bankPlayerId } : {}),
+        }
+      : {}),
     players: session.results.map((result) => ({
+      ...restoreBankPlayer(session, result),
       ...(result.playerId ? { id: result.playerId } : {}),
       name: (result.playerId && names.get(result.playerId)) || result.name,
       stack: result.end,

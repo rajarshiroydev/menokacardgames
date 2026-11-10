@@ -7,7 +7,7 @@ import {
 } from "./buy-ins.ts";
 import { normalizeRakeRules } from "./game.ts";
 import { isChipUnit } from "./money.ts";
-import { parseChipValue } from "./settle-up.ts";
+import { bankGame, parseChipValue } from "./settle-up.ts";
 import type {
   BlindHistory,
   BlindSchedule,
@@ -404,6 +404,7 @@ export function validateSession(input: unknown): PokerSession {
       end,
       ...(buyIns ? { buyIns } : {}),
       ...parsePlayerRecord(result, { ledger, hands, date, ended }),
+      ...parseBankRecord(result, { end, invested: end - net }),
     };
   });
   // A hand-by-hand game that tracked players records everyone's hands.
@@ -432,5 +433,44 @@ export function validateSession(input: unknown): PokerSession {
     ...(actionLog ? { actionLog } : {}),
   };
   deriveSessionAccounting(session);
+  // A bank game says what was paid for every player, with one bank at most.
+  bankGame(session);
   return session;
+}
+
+/**
+ * A result's bank record (games where the host was the bank): paid in is
+ * at most what they bought in, paid out at most what they finished with.
+ */
+function parseBankRecord(
+  result: Record<string, unknown>,
+  player: { end: number; invested: number },
+): Pick<SessionResult, "bankPaidIn" | "bankPaidOut" | "bank"> {
+  if (
+    result.bankPaidIn === undefined &&
+    result.bankPaidOut === undefined &&
+    result.bank === undefined
+  ) {
+    return {};
+  }
+  const bankPaidIn = asSafeInteger(result.bankPaidIn, "paid to the bank", {
+    min: 0,
+  });
+  const bankPaidOut = asSafeInteger(result.bankPaidOut, "paid by the bank", {
+    min: 0,
+  });
+  if (bankPaidIn > player.invested) {
+    throw new Error("Paid to the bank is more than was bought in");
+  }
+  if (bankPaidOut > player.end) {
+    throw new Error("Paid by the bank is more than the chips left with");
+  }
+  if (result.bank !== undefined && result.bank !== true) {
+    throw new Error("Invalid bank");
+  }
+  return {
+    bankPaidIn,
+    bankPaidOut,
+    ...(result.bank === true ? { bank: true as const } : {}),
+  };
 }

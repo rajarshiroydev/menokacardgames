@@ -180,6 +180,10 @@ export function groupGameSession(group: GroupStandings, game: GroupGame) {
       ...(result.joinedAt !== undefined ? { joinedAt: result.joinedAt } : {}),
       ...(result.leftHand !== undefined ? { leftHand: result.leftHand } : {}),
       ...(result.leftAt !== undefined ? { leftAt: result.leftAt } : {}),
+      ...(result.bankPaidIn !== undefined
+        ? { bankPaidIn: result.bankPaidIn, bankPaidOut: result.bankPaidOut ?? 0 }
+        : {}),
+      ...(result.bank ? { bank: true as const } : {}),
     })),
   };
   const you = game.results.findIndex((result) => result.isMe);

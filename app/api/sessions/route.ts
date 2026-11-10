@@ -382,7 +382,10 @@ async function handlePost(request: Request) {
                 joined_hand,
                 joined_at,
                 left_hand,
-                left_at
+                left_at,
+                bank_paid_in,
+                bank_paid_out,
+                is_bank
               )
               SELECT
                 ${ownerId}::uuid,
@@ -397,7 +400,10 @@ async function handlePost(request: Request) {
                 (source.value->>'joinedHand')::integer,
                 timestamptz 'epoch' + (source.value->>'joinedAt')::bigint * interval '1 millisecond',
                 (source.value->>'leftHand')::integer,
-                timestamptz 'epoch' + (source.value->>'leftAt')::bigint * interval '1 millisecond'
+                timestamptz 'epoch' + (source.value->>'leftAt')::bigint * interval '1 millisecond',
+                (source.value->>'bankPaidIn')::bigint,
+                (source.value->>'bankPaidOut')::bigint,
+                CASE WHEN (source.value->>'bank')::boolean THEN true END
               FROM inserted_session
               CROSS JOIN source_results AS source
               RETURNING owner_id, session_record_id, player_id
@@ -673,7 +679,10 @@ async function handlePut(request: Request) {
             joined_hand,
             joined_at,
             left_hand,
-            left_at
+            left_at,
+            bank_paid_in,
+            bank_paid_out,
+            is_bank
           )
           SELECT
             ${ownerId}::uuid,
@@ -688,7 +697,10 @@ async function handlePut(request: Request) {
             (source.value->>'joinedHand')::integer,
             timestamptz 'epoch' + (source.value->>'joinedAt')::bigint * interval '1 millisecond',
             (source.value->>'leftHand')::integer,
-            timestamptz 'epoch' + (source.value->>'leftAt')::bigint * interval '1 millisecond'
+            timestamptz 'epoch' + (source.value->>'leftAt')::bigint * interval '1 millisecond',
+            (source.value->>'bankPaidIn')::bigint,
+            (source.value->>'bankPaidOut')::bigint,
+            CASE WHEN (source.value->>'bank')::boolean THEN true END
           FROM source_results AS source
           RETURNING owner_id, session_record_id, player_id
         )

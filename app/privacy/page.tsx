@@ -89,6 +89,12 @@ export default function PrivacyPage() {
             money moves through {APP_NAME}.
           </li>
           <li>
+            <b>Payments to the bank:</b> in a game where you are the bank,
+            whether each buy-in was paid to you at the table and whether you
+            paid out each cash-out; a saved game keeps each player&apos;s
+            totals. They are stored with the game, so they are deleted with it.
+          </li>
+          <li>
             <b>The game in progress:</b> while you play, your phone sends us a
             copy of the game every few seconds (players, chips, bets and the
             action log), so you can carry on from another device if your phone

@@ -4,6 +4,7 @@ import { FormEvent, useState } from "react";
 
 import { Avatar } from "@/components/ledger/avatar";
 import { ChipInput, useMoney } from "@/components/ledger/money";
+import { Segmented } from "@/components/ledger/segmented";
 import { describeRebuyRules, isUnusualBuyIn, isValidBuyIn } from "@/lib/poker/buy-ins";
 import {
   canJoinGame,
@@ -11,6 +12,7 @@ import {
   nextBuyIn,
   rebuyBlockReason,
 } from "@/lib/poker/game";
+import { isBankPlayer } from "@/lib/poker/bank";
 import { isLedgerGame } from "@/lib/poker/ledger";
 import { chipCurrency } from "@/lib/poker/money";
 import type { GameState, PlayerProfile } from "@/lib/poker/types";
@@ -55,6 +57,33 @@ function BuyInAmountField({
   );
 }
 
+/**
+ * Games where the host is the bank: whether this buy-in was paid at the
+ * table. Starts on Paid now (user decision 2026-11-10).
+ */
+function PaidChoice({
+  paid,
+  onChange,
+}: {
+  paid: boolean;
+  onChange: (paid: boolean) => void;
+}) {
+  return (
+    <>
+      <span className="label">Paid to the bank</span>
+      <Segmented
+        label="Paid to the bank"
+        options={[
+          { value: "paid", label: "Paid now" },
+          { value: "owes", label: "Owes" },
+        ]}
+        value={paid ? "paid" : "owes"}
+        onChange={(value) => onChange(value === "paid")}
+      />
+    </>
+  );
+}
+
 export function BuyInSheet({
   game,
   playerIndex,
@@ -64,16 +93,19 @@ export function BuyInSheet({
   game: GameState;
   playerIndex: number;
   onClose: () => void;
-  onBuyIn: (amount: number) => void;
+  /** `paid`: in a bank game, whether it was paid at the table; else true. */
+  onBuyIn: (amount: number, paid: boolean) => void;
 }) {
   const { money } = useMoney();
   const player = game.players[playerIndex];
   const [amount, setAmount] = useState(game.startStack);
+  const [paid, setPaid] = useState(true);
   const valid = isValidBuyIn(amount);
+  const asksPaid = Boolean(game.hostIsBank) && !isBankPlayer(game, playerIndex);
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (valid) onBuyIn(amount);
+    if (valid) onBuyIn(amount, !asksPaid || paid);
   }
 
   return (
@@ -104,6 +136,7 @@ export function BuyInSheet({
           value={amount}
           onChange={setAmount}
         />
+        {asksPaid ? <PaidChoice paid={paid} onChange={setPaid} /> : null}
         <button className="primary full" type="submit" disabled={!valid}>
           {valid ? `Buy In · ${money(amount)}` : "Buy In"}
         </button>
@@ -126,7 +159,8 @@ export function JoinGameSheet({
   roster: PlayerProfile[];
   selfPlayerId: string | null;
   onClose: () => void;
-  onAdd: (playerId: string, seat: number, amount: number) => void;
+  /** `paid`: in a bank game, whether it was paid at the table; else true. */
+  onAdd: (playerId: string, seat: number, amount: number, paid: boolean) => void;
 }) {
   const { money } = useMoney();
   // A quick ledger has no seats or deal: the player is just added.
@@ -145,12 +179,16 @@ export function JoinGameSheet({
   const [chosenId, setChosenId] = useState<string | null>(null);
   const [seat, setSeat] = useState(() => (seats.at(-1)?.index ?? -1) + 1);
   const [amount, setAmount] = useState(game.startStack);
+  const [paid, setPaid] = useState(true);
   const chosen = candidates.find((player) => player.id === chosenId);
   const amountValid = isValidBuyIn(amount);
+  // The host is the bank, so only others are asked.
+  const asksPaid =
+    Boolean(game.hostIsBank) && Boolean(chosen) && chosen?.id !== game.bankPlayerId;
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (chosen && amountValid) onAdd(chosen.id, seat, amount);
+    if (chosen && amountValid) onAdd(chosen.id, seat, amount, !asksPaid || paid);
   }
 
   return (
@@ -231,6 +269,7 @@ export function JoinGameSheet({
               value={amount}
               onChange={setAmount}
             />
+            {asksPaid ? <PaidChoice paid={paid} onChange={setPaid} /> : null}
           </>
         )}
         <button

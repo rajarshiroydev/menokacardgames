@@ -1,4 +1,12 @@
 import { LOG_LIMIT } from "./action-log.ts";
+import {
+  bankLine,
+  bankResult,
+  noteBuyInPaid,
+  paidOutLine,
+  setBuyInPaid,
+  setPaidOut,
+} from "./bank.ts";
 import { isValidBuyIn, MAX_BUY_INS } from "./buy-ins.ts";
 import {
   canJoinGame,
@@ -73,6 +81,9 @@ export function createLedgerGame(input: {
   players: Array<{ id?: string; name: string }>;
   buyIns: number[] | null;
   startedAt: number;
+  /** The host is the bank; `bankPlayerId` is the host's own player, if any. */
+  hostIsBank?: boolean;
+  bankPlayerId?: string;
 }): GameState | null {
   const { players, buyIns } = input;
   if (
@@ -118,6 +129,12 @@ export function createLedgerGame(input: {
     dealerIndex: -1,
     log: [],
     tracksPlayers: true,
+    ...(input.hostIsBank
+      ? {
+          hostIsBank: true as const,
+          ...(input.bankPlayerId ? { bankPlayerId: input.bankPlayerId } : {}),
+        }
+      : {}),
     _setupCount: players.length,
   };
 }
@@ -127,7 +144,13 @@ export function createLedgerGame(input: {
  * the table can buy more chips at any time, busted or not. Returns false,
  * changing nothing, when it isn't allowed.
  */
-export function ledgerBuyIn(game: GameState, playerIndex: number, amount: number) {
+export function ledgerBuyIn(
+  game: GameState,
+  playerIndex: number,
+  amount: number,
+  /** Bank games: paid to the bank at the table, or still owed. */
+  paid = true,
+) {
   const player = game.players[playerIndex];
   if (
     !isLedgerGame(game) ||
@@ -142,6 +165,7 @@ export function ledgerBuyIn(game: GameState, playerIndex: number, amount: number
   const before = snapshot(game);
   player.buyIns = [...(player.buyIns ?? [game.startStack]), amount];
   noteBuyInAmount(game, amount);
+  noteBuyInPaid(game, playerIndex, paid);
   record(game, before, `${player.name} buys in again for ${money(game, amount)}`);
   return true;
 }
@@ -152,6 +176,8 @@ export function ledgerJoin(
   player: { id?: string; name: string },
   amount: number,
   now = Date.now(),
+  /** Bank games: paid to the bank at the table, or still owed. */
+  paid = true,
 ) {
   if (
     !isLedgerGame(game) ||
@@ -169,6 +195,7 @@ export function ledgerJoin(
     ...(game.tracksPlayers ? { joinedAt: now } : {}),
   });
   noteBuyInAmount(game, amount);
+  noteBuyInPaid(game, game.players.length - 1, paid);
   record(game, before, `${player.name} joins for ${money(game, amount)}`);
   return true;
 }
@@ -179,6 +206,8 @@ export function ledgerCashOut(
   playerIndex: number,
   chips: number,
   now = Date.now(),
+  /** Bank games: the bank paid them their chips at the table. */
+  paidOut = true,
 ) {
   const player = game.players[playerIndex];
   if (
@@ -194,6 +223,7 @@ export function ledgerCashOut(
   player.left = true;
   player.stack = chips;
   if (game.tracksPlayers) player.leftAt = now;
+  if (game.hostIsBank && paidOut) player.paidOut = true;
   record(game, before, `${player.name} cashes out with ${money(game, chips)}`);
   return true;
 }
@@ -209,12 +239,40 @@ export function ledgerReturn(game: GameState, playerIndex: number) {
   const chips = player.stack;
   delete player.left;
   delete player.leftAt;
+  // Paid out or not, the chips are back on the table and count at the end.
+  delete player.paidOut;
   player.stack = 0;
   record(
     game,
     before,
     `${player.name} is back at the table with ${money(game, chips)}`,
   );
+  return true;
+}
+
+/**
+ * Marks one of a player's buy-ins paid to the bank, or owed again. Undo
+ * takes it back. Returns false, changing nothing, when it doesn't apply.
+ */
+export function ledgerSetBuyInPaid(
+  game: GameState,
+  playerIndex: number,
+  place: number,
+  paid: boolean,
+) {
+  if (!isLedgerGame(game)) return false;
+  const before = snapshot(game);
+  if (!setBuyInPaid(game, playerIndex, place, paid)) return false;
+  record(game, before, bankLine(game, playerIndex, place, paid));
+  return true;
+}
+
+/** Marks whether the bank paid a player who cashed out. Undo takes it back. */
+export function ledgerSetPaidOut(game: GameState, playerIndex: number, paid: boolean) {
+  if (!isLedgerGame(game)) return false;
+  const before = snapshot(game);
+  if (!setPaidOut(game, playerIndex, paid)) return false;
+  record(game, before, paidOutLine(game, playerIndex, paid));
   return true;
 }
 
@@ -326,6 +384,7 @@ export function ledgerSession(
           ? { buyIns }
           : {}),
         ...savedPlayerRecord(game, index, 0),
+        ...bankResult(game, index, end),
       };
     }),
     actionLog: {

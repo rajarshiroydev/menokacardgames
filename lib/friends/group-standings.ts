@@ -92,10 +92,20 @@ export type GroupChartLine = Array<[number, number, number, number]>;
  * IDs, and no game name or number, which would reveal how many games the
  * host has. The fields from migration 0027 are absent before it.
  */
-/** A player's late join, cash-out and hands played (migration 0028). */
+/**
+ * A player's late join, cash-out and hands played (migration 0028), and in
+ * a game where the host was the bank, what was paid at the table (0035).
+ */
 type SeatRecord = Pick<
   SessionResult,
-  "handsPlayed" | "joinedHand" | "joinedAt" | "leftHand" | "leftAt"
+  | "handsPlayed"
+  | "joinedHand"
+  | "joinedAt"
+  | "leftHand"
+  | "leftAt"
+  | "bankPaidIn"
+  | "bankPaidOut"
+  | "bank"
 >;
 
 export type GroupGame = {
@@ -355,13 +365,24 @@ export function findSharedGame(
 
 /** The parts of a result's seat record that are set. */
 function seatRecord(result: SeatRecord): SeatRecord {
-  const keys = ["handsPlayed", "joinedHand", "joinedAt", "leftHand", "leftAt"] as const;
-  return Object.fromEntries(
-    keys.flatMap((key) =>
-      result[key] === undefined || result[key] === null
-        ? []
-        : [[key, Number(result[key])]],
+  const keys = [
+    "handsPlayed",
+    "joinedHand",
+    "joinedAt",
+    "leftHand",
+    "leftAt",
+    "bankPaidIn",
+    "bankPaidOut",
+  ] as const;
+  return {
+    ...Object.fromEntries(
+      keys.flatMap((key) =>
+        result[key] === undefined || result[key] === null
+          ? []
+          : [[key, Number(result[key])]],
+      ),
     ),
-  );
+    ...(result.bank === true ? { bank: true as const } : {}),
+  };
 }
 

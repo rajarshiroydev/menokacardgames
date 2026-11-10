@@ -25,7 +25,7 @@ export const MINIMUM_AGE = 18;
 /** Where the database and the app's servers run. */
 export const DATA_LOCATION = "the United States";
 
-export const PRIVACY_UPDATED = "2026-11-05";
+export const PRIVACY_UPDATED = "2026-11-10";
 export const TERMS_UPDATED = "2026-10-28";
 export const DELETION_UPDATED = "2026-11-05";
 
