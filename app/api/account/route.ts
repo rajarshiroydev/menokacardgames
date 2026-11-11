@@ -10,10 +10,12 @@ import {
   replaceUserCode,
   requestAccountDeletion,
   updateAvatar,
+  updateChipSet,
   updateCurrency,
   updateDisplayName,
 } from "@/lib/accounts/server";
 import { isAvatarId } from "@/lib/avatars";
+import { readChipSet } from "@/lib/poker/chip-set";
 import { isCurrencyCode } from "@/lib/poker/money";
 import {
   auth,
@@ -133,6 +135,25 @@ async function handlePost(request: Request) {
     } catch (error) {
       console.error("account set-currency error", error);
       return json({ error: "Could not save your currency" }, 500);
+    }
+  }
+
+  // The host's chips by colour; null removes the set (migration 0036).
+  if (action === "set-chip-set") {
+    const accessError = accountAccessError(account);
+    if (accessError) return json({ error: accessError }, 423);
+    const value = (read.body as { chipSet?: unknown }).chipSet;
+    const checked = value === null ? { chipSet: null } : readChipSet(value);
+    if ("error" in checked) return json({ error: checked.error }, 400);
+    try {
+      const profile = await updateChipSet(session.user.id, checked.chipSet);
+      if (!profile) {
+        return json({ error: "This account is locked while deletion is pending" }, 423);
+      }
+      return json({ profile });
+    } catch (error) {
+      console.error("account set-chip-set error", error);
+      return json({ error: "Could not save your chips" }, 500);
     }
   }
 

@@ -27,7 +27,7 @@ export const DATA_LOCATION = "the United States";
 
 export const PRIVACY_UPDATED = "2026-11-10";
 export const TERMS_UPDATED = "2026-10-28";
-export const DELETION_UPDATED = "2026-11-05";
+export const DELETION_UPDATED = "2026-11-10";
 
 /** Hours the database provider keeps recovery copies of deleted data. */
 export const PROVIDER_BACKUP_HOURS = 6;

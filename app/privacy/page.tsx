@@ -68,7 +68,9 @@ export default function PrivacyPage() {
         <ul>
           <li>
             <b>Your profile:</b> the name you choose, your avatar (one of our
-            drawings, never a photo), your user code and your currency.
+            drawings, never a photo), your user code, your currency and, if
+            you set one up, your chip set (the colours of your chips and what
+            each is worth, for counting stacks).
           </li>
           <li>
             <b>Your players:</b> the names and avatars of the guests you add.
@@ -303,7 +305,7 @@ export default function PrivacyPage() {
             saved games. For a copy of everything, email us.
           </li>
           <li>
-            <b>Correct it:</b> change your name, avatar and currency on Profile,
+            <b>Correct it:</b> change your name, avatar, currency and chip set on Profile,
             and rename or remove guests.
           </li>
           <li>

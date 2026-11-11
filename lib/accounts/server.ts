@@ -1,6 +1,7 @@
 import "server-only";
 
 import { consumeRateLimit, runAsAuthenticatedUser } from "@/lib/poker/database";
+import { type ChipSet, storedChipSet } from "@/lib/poker/chip-set";
 import type { RateLimitBucket } from "@/lib/security/limits";
 
 import type { AccountProfile } from "./identity-code";
@@ -61,7 +62,8 @@ export async function provisionHostAccount(
             display_name,
             currency,
             self_player_id,
-            avatar
+            avatar,
+            chip_set
           FROM accounts
           WHERE auth_user_id = ${authUserId}::uuid
         ),
@@ -80,7 +82,8 @@ export async function provisionHostAccount(
             display_name,
             currency,
             self_player_id,
-            avatar
+            avatar,
+            chip_set
         )
         SELECT * FROM existing
         UNION ALL
@@ -155,6 +158,7 @@ type ProfileRow = {
   currency: string;
   self_player_id: string | null;
   avatar: string;
+  chip_set: unknown;
 };
 
 function mapProfile(row: ProfileRow): AccountProfile {
@@ -164,6 +168,7 @@ function mapProfile(row: ProfileRow): AccountProfile {
     currency: row.currency,
     selfPlayerId: row.self_player_id,
     avatar: row.avatar,
+    chipSet: storedChipSet(row.chip_set),
   };
 }
 
@@ -184,7 +189,7 @@ export async function updateDisplayName(
         updated_at = now()
       WHERE auth_user_id = ${authUserId}::uuid
         AND lifecycle_state = 'active'
-      RETURNING user_code, display_name, currency, self_player_id, avatar
+      RETURNING user_code, display_name, currency, self_player_id, avatar, chip_set
     `,
   ]);
   const rows = result as ProfileRow[];
@@ -203,14 +208,14 @@ export async function replaceUserCode(authUserId: string) {
         SET user_code = public.new_identity_code(), updated_at = now()
         WHERE auth_user_id = ${authUserId}::uuid
           AND lifecycle_state = 'active'
-        RETURNING id, user_code, display_name, currency, self_player_id, avatar
+        RETURNING id, user_code, display_name, currency, self_player_id, avatar, chip_set
       ),
       audit AS (
         INSERT INTO audit_events (owner_id, actor_auth_user_id, action, target_kind, target_id)
         SELECT id, ${authUserId}::uuid, 'account.user_code_replaced', 'account', id::text
         FROM replaced
       )
-      SELECT user_code, display_name, currency, self_player_id, avatar FROM replaced
+      SELECT user_code, display_name, currency, self_player_id, avatar, chip_set FROM replaced
     `,
   ]);
   const rows = result as ProfileRow[];
@@ -225,7 +230,23 @@ export async function updateCurrency(authUserId: string, currency: string) {
       SET currency = ${currency}, updated_at = now()
       WHERE auth_user_id = ${authUserId}::uuid
         AND lifecycle_state = 'active'
-      RETURNING user_code, display_name, currency, self_player_id, avatar
+      RETURNING user_code, display_name, currency, self_player_id, avatar, chip_set
+    `,
+  ]);
+  const rows = result as ProfileRow[];
+  return rows[0] ? mapProfile(rows[0]) : null;
+}
+
+/** Sets or clears the host's chip set; `chipSet` comes from readChipSet. */
+export async function updateChipSet(authUserId: string, chipSet: ChipSet | null) {
+  const [result] = await runAsAuthenticatedUser(authUserId, (sql) => [
+    sql`
+      UPDATE accounts
+      SET chip_set = ${chipSet === null ? null : JSON.stringify(chipSet)}::jsonb,
+        updated_at = now()
+      WHERE auth_user_id = ${authUserId}::uuid
+        AND lifecycle_state = 'active'
+      RETURNING user_code, display_name, currency, self_player_id, avatar, chip_set
     `,
   ]);
   const rows = result as ProfileRow[];
@@ -240,7 +261,7 @@ export async function updateAvatar(authUserId: string, avatar: string) {
       SET avatar = ${avatar}, updated_at = now()
       WHERE auth_user_id = ${authUserId}::uuid
         AND lifecycle_state = 'active'
-      RETURNING user_code, display_name, currency, self_player_id, avatar
+      RETURNING user_code, display_name, currency, self_player_id, avatar, chip_set
     `,
   ]);
   const rows = result as ProfileRow[];

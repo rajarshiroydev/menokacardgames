@@ -11,6 +11,7 @@ import {
 
 import { AvatarArt } from "@/components/avatar-art";
 import { accountApi, friendsApi } from "@/components/ledger/api";
+import { ChipSetSheet, ChipSwatch } from "@/components/ledger/chip-count-sheet";
 import { toneClass } from "@/components/ledger/avatar";
 import type { AskOptions } from "@/components/ledger/modal";
 import { useMoney } from "@/components/ledger/money";
@@ -32,6 +33,7 @@ import {
 import { APP_NAME } from "@/lib/brand";
 import { linkableFriends } from "@/lib/friends/link-guest";
 import type { FriendOverview } from "@/lib/friends/requests";
+import type { ChipSet } from "@/lib/poker/chip-set";
 import { formatDate } from "@/lib/poker/game";
 import { CURRENCIES } from "@/lib/poker/money";
 import { buildStandings, standingsKey } from "@/lib/poker/standings";
@@ -796,6 +798,7 @@ function ProfileCard({
   const [replacing, setReplacing] = useState(false);
   const [choosingAvatar, setChoosingAvatar] = useState(false);
   const [showingCode, setShowingCode] = useState(false);
+  const [editingChips, setEditingChips] = useState(false);
   const copiedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(
@@ -882,6 +885,21 @@ function ProfileCard({
       onToast(
         error instanceof Error ? error.message : "Could not save your avatar",
       );
+      return false;
+    }
+  }
+
+  async function saveChipSet(chipSet: ChipSet) {
+    try {
+      const data = await accountApi<{ profile: AccountProfile }>({
+        action: "set-chip-set",
+        chipSet,
+      });
+      onProfile(data.profile);
+      onToast("Chips Saved");
+      return true;
+    } catch (error) {
+      onToast(error instanceof Error ? error.message : "Could not save your chips");
       return false;
     }
   }
@@ -1140,6 +1158,35 @@ function ProfileCard({
           ))}
         </select>
       </label>
+      {/* The host's chips by colour, for counting a quick ledger's stacks
+          (plan entry "count chips by colour (plan)"). */}
+      <button
+        className="profile-settings-link"
+        type="button"
+        onClick={() => setEditingChips(true)}
+      >
+        <span>
+          <small>Chip set · for counting chips by colour</small>
+          <b>
+            {profile.chipSet
+              ? `${profile.chipSet.length} colour${profile.chipSet.length === 1 ? "" : "s"}`
+              : "Not set up"}
+          </b>
+        </span>
+        <span className="chip-set-preview" aria-hidden="true">
+          {profile.chipSet?.map((chip) => (
+            <ChipSwatch key={chip.colour} colour={chip.colour} />
+          ))}
+          <span className="settings-chevron">›</span>
+        </span>
+      </button>
+      {editingChips ? (
+        <ChipSetSheet
+          chipSet={profile.chipSet}
+          onSave={saveChipSet}
+          onClose={() => setEditingChips(false)}
+        />
+      ) : null}
       {/* Still owed opens its own page (user request 2026-11-06; before, a
           card at the top of Games). */}
       <button className="profile-settings-link" type="button" onClick={onOpenOwed}>

@@ -296,3 +296,25 @@ export function GraphIcon() {
     </svg>
   );
 }
+
+/** A stack of three chips, for counting a stack by colour. */
+export function ChipStackIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width="18"
+      height="18"
+      aria-hidden="true"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <ellipse cx="12" cy="6" rx="8" ry="3" />
+      <path d="M4 6v4c0 1.66 3.58 3 8 3s8-1.34 8-3V6" />
+      <path d="M4 10v4c0 1.66 3.58 3 8 3s8-1.34 8-3v-4" />
+      <path d="M4 14v4c0 1.66 3.58 3 8 3s8-1.34 8-3v-4" />
+    </svg>
+  );
+}

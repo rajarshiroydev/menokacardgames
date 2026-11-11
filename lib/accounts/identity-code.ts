@@ -1,4 +1,5 @@
 import { visibleText } from "../visible-text.ts";
+import type { ChipSet } from "../poker/chip-set.ts";
 
 /**
  * User codes (for accounts) and player codes (for a host's player profiles).
@@ -47,4 +48,6 @@ export type AccountProfile = {
   selfPlayerId: string | null;
   /** The avatar this person chose (lib/avatars.ts; migration 0015). */
   avatar: string;
+  /** The host's chips by colour, for counting stacks (migration 0036). */
+  chipSet: ChipSet | null;
 };

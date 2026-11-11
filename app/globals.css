@@ -8446,6 +8446,198 @@ span.name-with-badge {
   flex: 0 0 168px;
 }
 
+/* Count chips by colour (plan entry "count chips by colour (plan)"): a sheet
+   over Count The Chips or Cash out, so it sits above other sheets. */
+.chip-modal {
+  z-index: 70;
+}
+
+.chip-count-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.chip-count-line,
+.chip-edit-line {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.chip-swatch {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  border: 3px dashed rgba(255, 255, 255, 0.75);
+  border-radius: 50%;
+  background: var(--chip);
+  box-shadow: 0 0 0 1px var(--line), inset 0 0 0 3px var(--chip);
+}
+
+.chip-white { --chip: #f2f2ee; border-color: rgba(30, 60, 140, 0.55); }
+.chip-red { --chip: #c62f2f; }
+.chip-blue { --chip: #2f5fc6; }
+.chip-green { --chip: #1f8a4c; }
+.chip-black { --chip: #1b1d1f; }
+.chip-purple { --chip: #6d3fb8; }
+.chip-yellow { --chip: #e3b320; border-color: rgba(0, 0, 0, 0.35); }
+.chip-orange { --chip: #e0731f; }
+.chip-pink { --chip: #e06aa8; }
+.chip-grey { --chip: #8a9096; }
+
+.chip-count-name {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.chip-count-name small {
+  color: var(--ink2);
+  font-size: 12px;
+}
+
+.chip-stepper {
+  display: flex;
+  flex: none;
+  align-items: center;
+  overflow: hidden;
+  border: 1px solid var(--gb);
+  border-radius: var(--rs);
+  background: var(--field);
+}
+
+.chip-stepper button {
+  width: 34px;
+  height: 38px;
+  color: var(--ink);
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.chip-stepper button:disabled {
+  opacity: 0.35;
+}
+
+/* Beats the sheet's full-width input style. */
+.sheet .chip-stepper input {
+  flex: none;
+  width: 44px;
+  height: 38px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--ink);
+  font-size: 16px;
+  font-weight: 700;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.chip-count-sum {
+  flex: 0 0 70px;
+  color: var(--ink2);
+  font-size: 13px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.chip-count-total {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border-radius: var(--rs);
+  background: var(--field);
+}
+
+.chip-count-total span {
+  color: var(--ink2);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.chip-count-total b {
+  font-size: 22px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.chip-edit-line .select-control {
+  flex: 1;
+  min-width: 0;
+}
+
+.sheet .chip-edit-line .field {
+  flex: 0 0 96px;
+  width: 96px;
+  text-align: right;
+}
+
+.chip-remove {
+  flex: none;
+  width: 32px;
+  height: 38px;
+  color: var(--ink2);
+  font-size: 20px;
+}
+
+.chip-remove:disabled {
+  opacity: 0.3;
+}
+
+/* Profile's Chip set row: the colours, smallest value first. */
+.chip-set-preview {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 2px;
+}
+
+.chip-set-preview .chip-swatch {
+  width: 16px;
+  height: 16px;
+  margin-left: -6px;
+  border-width: 2px;
+}
+
+.chip-set-preview .settings-chevron {
+  margin-left: 6px;
+}
+
+/* The button beside a chips box that opens the colour count. */
+.chip-count-button {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--gb);
+  border-radius: var(--rs);
+  background: var(--glass2);
+  color: var(--ink);
+}
+
+.chip-input-row {
+  display: flex;
+  gap: 8px;
+}
+
+.chip-input-row .field {
+  flex: 1;
+  min-width: 0;
+}
+
+.chip-input-row .chip-count-button {
+  width: 48px;
+  height: 48px;
+}
+
 /* Live standings: what a player still owes the bank, or it owes them. */
 .live-player-thin .bank-owed,
 .live-player-thin .bank-owed b {

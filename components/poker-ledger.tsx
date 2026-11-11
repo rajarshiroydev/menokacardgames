@@ -110,6 +110,7 @@ import { emptyWhoWinsDraft, HandChecker } from "@/components/hand-checker";
 import { NotificationBell } from "@/components/notification-bell";
 import { savedActionLog } from "@/components/ledger/action-log";
 import {
+  accountApi,
   ApiError,
   friendsApi,
   gameBackupApi,
@@ -158,6 +159,7 @@ import {
   type AccountProfile,
 } from "@/lib/accounts/identity-code";
 import { DELETION_GRACE_PERIOD_DAYS } from "@/lib/accounts/lifecycle";
+import type { ChipSet } from "@/lib/poker/chip-set";
 import {
   type GroupStandings,
 } from "@/lib/friends/group-standings";
@@ -2367,6 +2369,22 @@ export function PokerLedger({
     ? history.find((session) => session.id === settlingId)
     : undefined;
 
+  // The host's chips by colour, kept on the account (migration 0036).
+  async function saveChipSet(chipSet: ChipSet) {
+    try {
+      const data = await accountApi<{ profile: AccountProfile }>({
+        action: "set-chip-set",
+        chipSet,
+      });
+      setProfile(data.profile);
+      showToast("Chips Saved");
+      return true;
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Could not save your chips");
+      return false;
+    }
+  }
+
   return (
     <CurrencyContext.Provider value={currency}>
     <AvatarContext.Provider value={avatarLookup}>
@@ -2575,6 +2593,8 @@ export function PokerLedger({
             liveFailing={liveFailing}
             onShareLive={() => setSharingLive(true)}
             onBankPayments={setBankSheet}
+            chipSet={profile.chipSet}
+            onSaveChipSet={saveChipSet}
           />
         ) : game ? (
           <GameView
@@ -2728,6 +2748,8 @@ export function PokerLedger({
             onClose={() => setTableSheet(null)}
             onCashOut={cashOutLedgerPlayer}
             onReturn={returnLedgerPlayer}
+            chipSet={profile.chipSet}
+            onSaveChipSet={saveChipSet}
           />
         ) : tableSheet === "cash-out" && game && !game.hand ? (
           <CashOutSheet

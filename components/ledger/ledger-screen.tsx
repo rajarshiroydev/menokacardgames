@@ -5,7 +5,12 @@ import { type CSSProperties, FormEvent, useState } from "react";
 import { ActionLog } from "@/components/ledger/action-log";
 import { Avatar } from "@/components/ledger/avatar";
 import { BankStatus } from "@/components/ledger/bank-sheet";
-import { UndoIcon } from "@/components/ledger/icons";
+import {
+  ChipCountSheet,
+  type ColourCounts,
+  type SaveChipSet,
+} from "@/components/ledger/chip-count-sheet";
+import { ChipStackIcon, UndoIcon } from "@/components/ledger/icons";
 import { LedgerTable } from "@/components/ledger/ledger-table";
 import { ChipInput, GameAmounts, useMoney } from "@/components/ledger/money";
 import { useTimePlayed } from "@/components/ledger/time-played";
@@ -16,6 +21,7 @@ import {
   ledgerTotals,
   ledgerUndoLine,
 } from "@/lib/poker/ledger";
+import type { ChipSet } from "@/lib/poker/chip-set";
 import type { HandLayout } from "@/lib/poker/storage";
 import type { GameState } from "@/lib/poker/types";
 
@@ -37,6 +43,9 @@ type LedgerViewProps = {
   onShareLive: () => void;
   /** Bank games: open a player's payments (BankSheet). */
   onBankPayments: (playerIndex: number) => void;
+  /** The host's chips, for counting a stack by colour; null until set up. */
+  chipSet: ChipSet | null;
+  onSaveChipSet: SaveChipSet;
 };
 
 /** A quick ledger's screen, with its amounts in the game's own chip unit. */
@@ -62,6 +71,8 @@ function LedgerScreen({
   liveFailing,
   onShareLive,
   onBankPayments,
+  chipSet,
+  onSaveChipSet,
 }: LedgerViewProps) {
   const { money, signedMoney } = useMoney();
   const played = useTimePlayed(game.startedAt);
@@ -71,6 +82,16 @@ function LedgerScreen({
   const [counting, setCounting] = useState(false);
   // Chips counted for each player at the table, by player index; empty is 0.
   const [counts, setCounts] = useState<Array<number | null>>([]);
+  // Colour counts behind a total, by player index, so reopening the colour
+  // sheet shows them; typing the total by hand drops them.
+  const [colourCounts, setColourCounts] = useState<Record<number, ColourCounts>>({});
+  const [countingColours, setCountingColours] = useState<number | null>(null);
+  const setCount = (index: number, chips: number | null) =>
+    setCounts((current) => {
+      const next = [...current];
+      next[index] = chips;
+      return next;
+    });
   const totals = ledgerTotals(game);
   const seated = ledgerSeated(game);
   const undoLine = ledgerUndoLine(game);
@@ -114,18 +135,27 @@ function LedgerScreen({
                       ) : null}
                     </small>
                   </div>
+                  <button
+                    className="chip-count-button"
+                    type="button"
+                    aria-label={`Count ${player.name}'s chips by colour`}
+                    onClick={() => setCountingColours(index)}
+                  >
+                    <ChipStackIcon />
+                  </button>
                   <ChipInput
                     className="field ledger-count"
                     aria-label={`${player.name}'s chips`}
                     placeholder="0"
                     value={count}
-                    onChange={(chips) =>
-                      setCounts((current) => {
-                        const next = [...current];
-                        next[index] = chips;
+                    onChange={(chips) => {
+                      setCount(index, chips);
+                      setColourCounts((current) => {
+                        const next = { ...current };
+                        delete next[index];
                         return next;
-                      })
-                    }
+                      });
+                    }}
                   />
                 </div>
               );
@@ -179,6 +209,20 @@ function LedgerScreen({
         >
           Back to buy-ins
         </button>
+        {countingColours !== null && game.players[countingColours] ? (
+          <ChipCountSheet
+            name={game.players[countingColours].name}
+            chipSet={chipSet}
+            initialCounts={colourCounts[countingColours]}
+            onSaveChipSet={onSaveChipSet}
+            onUse={(chips, byColour) => {
+              setCount(countingColours, chips);
+              setColourCounts((current) => ({ ...current, [countingColours]: byColour }));
+              setCountingColours(null);
+            }}
+            onClose={() => setCountingColours(null)}
+          />
+        ) : null}
       </div>
     );
   }
@@ -351,15 +395,21 @@ export function LedgerCashOutSheet({
   onClose,
   onCashOut,
   onReturn,
+  chipSet,
+  onSaveChipSet,
 }: {
   game: GameState;
   onClose: () => void;
   onCashOut: (playerIndex: number, chips: number) => void;
   onReturn: (playerIndex: number) => void;
+  chipSet: ChipSet | null;
+  onSaveChipSet: SaveChipSet;
 }) {
   const { money } = useMoney();
   const [chosen, setChosen] = useState<number | null>(null);
   const [chips, setChips] = useState<number | null>(null);
+  const [colourCounts, setColourCounts] = useState<ColourCounts | undefined>();
+  const [countingColours, setCountingColours] = useState(false);
   const seated = ledgerSeated(game);
   const gone = game.players.flatMap((player, index) =>
     player.left ? [index] : [],
@@ -400,7 +450,10 @@ export function LedgerCashOutSheet({
                 key={game.players[index].id || index}
                 type="button"
                 aria-pressed={index === chosen}
-                onClick={() => setChosen(index)}
+                onClick={() => {
+                  if (index !== chosen) setColourCounts(undefined);
+                  setChosen(index);
+                }}
               >
                 <Avatar
                   name={game.players[index].name}
@@ -422,13 +475,40 @@ export function LedgerCashOutSheet({
             <label className="label" htmlFor="ledger-cash-out-chips">
               {player.name}&apos;s chips
             </label>
-            <ChipInput
-              className="field"
-              id="ledger-cash-out-chips"
-              placeholder="0"
-              value={chips}
-              onChange={setChips}
-            />
+            <div className="chip-input-row">
+              <ChipInput
+                className="field"
+                id="ledger-cash-out-chips"
+                placeholder="0"
+                value={chips}
+                onChange={(typed) => {
+                  setChips(typed);
+                  setColourCounts(undefined);
+                }}
+              />
+              <button
+                className="chip-count-button"
+                type="button"
+                aria-label={`Count ${player.name}'s chips by colour`}
+                onClick={() => setCountingColours(true)}
+              >
+                <ChipStackIcon />
+              </button>
+            </div>
+            {countingColours ? (
+              <ChipCountSheet
+                name={player.name}
+                chipSet={chipSet}
+                initialCounts={colourCounts}
+                onSaveChipSet={onSaveChipSet}
+                onUse={(total, byColour) => {
+                  setChips(total);
+                  setColourCounts(byColour);
+                  setCountingColours(false);
+                }}
+                onClose={() => setCountingColours(false)}
+              />
+            ) : null}
           </>
         ) : null}
         <button

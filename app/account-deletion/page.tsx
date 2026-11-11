@@ -88,7 +88,7 @@ export default function AccountDeletionPage() {
         </p>
         <ul>
           <li>your sign-in identity and email address;</li>
-          <li>your name, avatar, user code and currency;</li>
+          <li>your name, avatar, user code, currency and chip set;</li>
           <li>
             every player, game, result, buy-in and record in your ledger,
             including the copy of a game in progress;

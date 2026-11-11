@@ -5139,3 +5139,21 @@ ALTER TABLE settlement_payments
     AND to_key ~ '^([0-9]|house|bank)$'
     AND from_key <> to_key
   );
+
+-- 0036: the host's chip set (plan entry "count chips by colour (plan)"): up to
+-- 8 {"colour", "value"} objects, values in hundredths of the game's counting
+-- unit; checked by lib/poker/chip-set.ts. NULL until the host makes one.
+ALTER TABLE accounts
+  ADD COLUMN IF NOT EXISTS chip_set jsonb;
+
+ALTER TABLE accounts
+  DROP CONSTRAINT IF EXISTS accounts_chip_set_shape;
+ALTER TABLE accounts
+  ADD CONSTRAINT accounts_chip_set_shape CHECK (
+    chip_set IS NULL
+    OR (
+      jsonb_typeof(chip_set) = 'array'
+      AND jsonb_array_length(chip_set) BETWEEN 1 AND 8
+      AND octet_length(chip_set::text) <= 1024
+    )
+  );
