@@ -203,6 +203,7 @@ function OwnSessionsView({
   onDeletePermanently,
   onExport,
   onImport,
+  onAddPastGame,
 }: {
   history: PokerSession[];
   discardedSessions: PokerSession[];
@@ -216,6 +217,8 @@ function OwnSessionsView({
   onDeletePermanently: (id: string) => void;
   onExport: () => void;
   onImport: (event: ChangeEvent<HTMLInputElement>) => void;
+  /** Opens Add A Past Game, for a game played without the app. */
+  onAddPastGame: () => void;
 }) {
   const latestSessions = useMemo(
     () => [...history].sort((a, b) => b.date - a.date),
@@ -282,6 +285,9 @@ function OwnSessionsView({
       ) : null}
 
       <section className="glass card">
+        <button className="glass-button raised full" type="button" onClick={onAddPastGame}>
+          Add a past game
+        </button>
         <div className="button-pair">
           <button className="glass-button raised" type="button" onClick={onExport}>
             Export backup

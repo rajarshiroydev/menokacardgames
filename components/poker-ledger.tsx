@@ -149,6 +149,7 @@ import { RanksView } from "@/components/ledger/ranks-view";
 import { savedLogs } from "@/components/ledger/session-card";
 import { SettleUpSheet } from "@/components/ledger/settle-up-sheet";
 import { BankSheet } from "@/components/ledger/bank-sheet";
+import { PastGameSheet } from "@/components/ledger/past-game-sheet";
 import { SetupView } from "@/components/ledger/setup-view";
 import { LiveShareSheet } from "@/components/ledger/share-sheets";
 import { TabBar } from "@/components/ledger/tab-bar";
@@ -269,6 +270,7 @@ export function PokerLedger({
   const [modal, setModal] = useState<ModalState | null>(null);
   // The saved game whose Settle up sheet is open, by ID.
   const [settlingId, setSettlingId] = useState<string | null>(null);
+  const [addingPastGame, setAddingPastGame] = useState(false);
   const [editingBlinds, setEditingBlinds] = useState(false);
   const [editingRebuys, setEditingRebuys] = useState(false);
   const [tableSheet, setTableSheet] = useState<"add" | "cash-out" | null>(null);
@@ -2369,6 +2371,26 @@ export function PokerLedger({
     ? history.find((session) => session.id === settlingId)
     : undefined;
 
+  // A game played without the app, saved as a quick ledger (plan entry
+  // "enter a past game (plan)"). It never touches a game in progress.
+  async function savePastGame(session: PokerSession) {
+    showToast("Saving…");
+    try {
+      await sessionsApi("", {
+        method: "POST",
+        body: JSON.stringify({ sessions: [session] }),
+      });
+      setAddingPastGame(false);
+      await refreshHistory();
+      showToast("Game saved");
+      setSettlingId(session.id);
+      return true;
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "The game was not saved");
+      return false;
+    }
+  }
+
   // The host's chips by colour, kept on the account (migration 0036).
   async function saveChipSet(chipSet: ChipSet) {
     try {
@@ -2490,6 +2512,7 @@ export function PokerLedger({
             onRestore={(id) => void updateSessionState(id, "restore")}
             onDeletePermanently={deleteSessionPermanently}
             onExport={exportData}
+            onAddPastGame={() => setAddingPastGame(true)}
             onImport={importData}
           />
         ) : view === "profile" ? (
@@ -2760,6 +2783,16 @@ export function PokerLedger({
           />
         ) : null}
       </GameAmounts>
+      {addingPastGame ? (
+        <PastGameSheet
+          players={players}
+          selfPlayerId={profile.selfPlayerId}
+          chipSet={profile.chipSet}
+          onSaveChipSet={saveChipSet}
+          onSave={savePastGame}
+          onClose={() => setAddingPastGame(false)}
+        />
+      ) : null}
       {sharingLive && game ? (
         <LiveShareSheet
           ledger={isLedgerGame(game)}

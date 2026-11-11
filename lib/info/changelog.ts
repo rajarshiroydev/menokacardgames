@@ -28,11 +28,15 @@ export const CHANGE_TAG_LABELS: Record<ChangeTag, string> = {
 export const CHANGELOG: ChangelogEntry[] = [
   {
     date: "2026-11-11",
-    title: "Count chips by colour",
+    title: "Chip colours and past games",
     items: [
       {
         tag: "new",
         text: "Count chips by colour in a quick ledger: set up your chips once on Profile (their colours and what each is worth), then tap the chip button beside a player's box on Count The Chips or Cash out and enter how many of each colour they have. The app adds it up.",
+      },
+      {
+        tag: "new",
+        text: "Add a past game from the Games tab: enter a game played without the app (its date, players, buy-ins and chips at the end) and it counts towards the standings like any other.",
       },
     ],
   },

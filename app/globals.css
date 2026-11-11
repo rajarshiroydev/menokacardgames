@@ -8638,6 +8638,92 @@ span.name-with-badge {
   height: 48px;
 }
 
+/* Add A Past Game (plan entry "enter a past game (plan)"). */
+.past-game-when {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px;
+}
+
+/* Room for the date and time pickers' own text and icons. */
+.sheet .past-game-when input {
+  padding: 0 10px;
+  font-size: 15px;
+}
+
+.past-game-sheet select {
+  text-transform: none;
+}
+
+.past-game-sheet label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.past-game-player {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--gb);
+  border-radius: var(--rs);
+  background: var(--glass2);
+}
+
+.past-game-player-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.past-game-player-head b {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.past-game-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.past-game-line > span:first-child {
+  flex: 0 0 104px;
+  color: var(--ink2);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.sheet .past-game-line .field {
+  flex: 1;
+  height: 44px;
+  text-align: right;
+}
+
+.past-game-line .chip-count-button {
+  width: 44px;
+  height: 44px;
+}
+
+.past-game-rebuy {
+  align-self: flex-start;
+}
+
+.past-game-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--g);
+  border-radius: var(--rs);
+  background: var(--field);
+}
+
 /* Live standings: what a player still owes the bank, or it owes them. */
 .live-player-thin .bank-owed,
 .live-player-thin .bank-owed b {
