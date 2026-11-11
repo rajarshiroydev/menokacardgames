@@ -5,6 +5,7 @@ import { describe, it } from "node:test";
 import { continuationError } from "../lib/poker/continue-session.ts";
 import { summarizeGameBackup, validateGameBackupState } from "../lib/poker/game-backup.ts";
 import {
+  averageStack,
   createLedgerGame,
   LEDGER_UNDO_LIMIT,
   ledgerBuyIn,
@@ -334,5 +335,15 @@ describe("quick ledger backups", () => {
       players: 3,
       updatedAt: START,
     });
+  });
+});
+
+describe("average stack", () => {
+  it("shares the chips on the table among those seated", () => {
+    assert.equal(averageStack(50_000, 4), 12_500);
+    assert.equal(averageStack(10_000, 3), 3_333);
+    assert.equal(averageStack(5, 2), 3);
+    assert.equal(averageStack(0, 2), 0);
+    assert.equal(averageStack(10_000, 0), null);
   });
 });

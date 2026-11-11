@@ -4,6 +4,7 @@ import type { CSSProperties, ReactNode } from "react";
 
 import { AvatarArt } from "@/components/avatar-art";
 import { SeatAvatar } from "@/components/game-parts";
+import { AverageStackLine } from "@/components/ledger/average-stack";
 import { formatTimePlayed } from "@/components/ledger/time-played";
 import type { LiveLedgerView } from "@/lib/poker/live-ledger";
 import { formatChips, formatSignedChips, plainChipsCode } from "@/lib/poker/money";
@@ -82,6 +83,11 @@ export function LiveLedger({
             </div>
           ))}
         </div>
+        <AverageStackLine
+          onTable={view.onTable}
+          seated={view.players.filter((player) => player.cashedOut === undefined).length}
+          money={money}
+        />
       </section>
 
       <section className="glass card" aria-label="Players">

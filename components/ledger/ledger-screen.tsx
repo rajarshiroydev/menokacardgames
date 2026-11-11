@@ -4,6 +4,7 @@ import { type CSSProperties, FormEvent, useState } from "react";
 
 import { ActionLog } from "@/components/ledger/action-log";
 import { Avatar } from "@/components/ledger/avatar";
+import { AverageStackLine } from "@/components/ledger/average-stack";
 import { BankStatus } from "@/components/ledger/bank-sheet";
 import {
   ChipCountSheet,
@@ -260,6 +261,7 @@ function LedgerScreen({
             <b>{money(totals.onTable)}</b>
           </div>
         </div>
+        <AverageStackLine onTable={totals.onTable} seated={seated.length} money={money} />
         <div className="button-pair">
           <button className="glass-button" type="button" onClick={onAddPlayer}>
             Add player

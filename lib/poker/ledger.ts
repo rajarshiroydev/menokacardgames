@@ -326,6 +326,15 @@ export function ledgerTotals(game: GameState): LedgerTotals {
   return { bought, cashedOut, onTable: bought - cashedOut };
 }
 
+/**
+ * The chips on the table shared by the players still seated, rounded to a
+ * whole stored chip (a cent in a cents game); null with nobody seated (plan
+ * entry "average stack (plan)").
+ */
+export function averageStack(onTable: number, seated: number) {
+  return seated > 0 ? Math.round(onTable / seated) : null;
+}
+
 /** Indexes of the players whose chips are counted at the end: everyone seated. */
 export function ledgerSeated(game: GameState) {
   return game.players.flatMap((player, index) => (player.left ? [] : [index]));

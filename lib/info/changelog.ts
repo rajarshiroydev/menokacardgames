@@ -28,7 +28,7 @@ export const CHANGE_TAG_LABELS: Record<ChangeTag, string> = {
 export const CHANGELOG: ChangelogEntry[] = [
   {
     date: "2026-11-11",
-    title: "Chip colours, past games and buy-in times",
+    title: "Chip colours, past games, buy-in times",
     items: [
       {
         tag: "new",
@@ -41,6 +41,10 @@ export const CHANGELOG: ChangelogEntry[] = [
       {
         tag: "new",
         text: "Buy-in times: each player's row shows when they last bought in (\"last 10:42 PM\", or \"joined 10:42 PM\" for a late arrival), and the Action Log shows the time of every rebuy and late join, in both kinds of game. The saved game's log keeps them.",
+      },
+      {
+        tag: "new",
+        text: "A quick ledger's Table card shows the average stack (what's on the table shared by the players still seated), and so does its live link.",
       },
     ],
   },

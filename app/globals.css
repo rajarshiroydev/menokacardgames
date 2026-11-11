@@ -4333,6 +4333,18 @@ button.log-hand-head {
   text-overflow: clip;
 }
 
+/* "Average stack ₹12,500 · 4 at the table" under the Table tiles. */
+.ledger-average {
+  margin: 0;
+  color: var(--ink2);
+  font-size: 13px;
+}
+
+.ledger-average b {
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
 .ledger-row {
   display: flex;
   align-items: center;
