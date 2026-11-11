@@ -27,16 +27,22 @@ export const CHANGE_TAG_LABELS: Record<ChangeTag, string> = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    date: "2026-11-11",
+    title: "Count chips by colour",
+    items: [
+      {
+        tag: "new",
+        text: "Count chips by colour in a quick ledger: set up your chips once on Profile (their colours and what each is worth), then tap the chip button beside a player's box on Count The Chips or Cash out and enter how many of each colour they have. The app adds it up.",
+      },
+    ],
+  },
+  {
     date: "2026-11-10",
     title: "Be the bank",
     items: [
       {
         tag: "new",
         text: "Turn on I'm the bank when you set up a game and players pay you for their buy-ins at the table. Mark each buy-in Paid now or Owes, and each cash-out paid out or owed. Players see what they owe on their rows and on the live link, and Settle up only asks for what is still owed.",
-      },
-      {
-        tag: "new",
-        text: "Count chips by colour in a quick ledger: set up your chips once on Profile (their colours and what each is worth), then tap the chip button beside a player's box on Count The Chips or Cash out and enter how many of each colour they have. The app adds it up.",
       },
     ],
   },
