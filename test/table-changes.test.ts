@@ -1,3 +1,4 @@
+import { splitLogTime } from "../lib/poker/buy-in-times.ts";
 import { strict as assert } from "node:assert";
 import { describe, it } from "node:test";
 
@@ -42,14 +43,18 @@ function betweenHands(): GameState {
 describe("late join", () => {
   it("seats the player for the starting stack and deals them in next", () => {
     const game = betweenHands();
-    assert.equal(joinGame(game, { id: "d", name: "Dev" }, 3), true);
+    assert.equal(joinGame(game, { id: "d", name: "Dev" }, 3, 10_000, 1_000), true);
     assert.deepEqual(game.players[3], {
       id: "d",
       name: "Dev",
       stack: 10_000,
       buyIns: [10_000],
+      buyInTimes: [1_000],
     });
-    assert.equal(game.log[0], "Before hand 4: Dev joins and buys in for ₹10,000");
+    assert.equal(
+      splitLogTime(game.log[0]).text,
+      "Before hand 4: Dev joins and buys in for ₹10,000",
+    );
     assert.equal(game.lastHand, null);
     dealNewHand(game, 2);
     assert.equal(game.hand?.in[3], true);
@@ -196,7 +201,7 @@ describe("players choosing their own buy-in", () => {
     const game = custom();
     assert.equal(joinGame(game, { id: "d", name: "Dev" }, 3, 20_000), true);
     assert.deepEqual(game.players[3].buyIns, [20_000]);
-    assert.equal(game.log[0], "Before hand 4: Dev joins and buys in for ₹20,000");
+    assert.equal(splitLogTime(game.log[0]).text, "Before hand 4: Dev joins and buys in for ₹20,000");
     assert.equal(joinGame(custom(), { id: "d", name: "Dev" }, 3, 0), false);
   });
 

@@ -154,7 +154,9 @@ export function ActionLog({
             {player ? <b>{player.name}</b> : null}
             <span className="log-verb">{entry.verb}</span>
           </span>
-          {entry.note ? <small>{entry.note}</small> : null}
+          {entry.note || entry.time ? (
+            <small>{[entry.note, entry.time].filter(Boolean).join(" · ")}</small>
+          ) : null}
         </span>
         {entry.amount ? <span className="log-amount">{entry.amount}</span> : null}
       </li>

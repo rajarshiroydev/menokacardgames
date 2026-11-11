@@ -27,8 +27,18 @@ describe("parseLogLine", () => {
         amount: "₹1,300",
         note: null,
         number: null,
+        time: null,
       },
     );
+  });
+
+  test("reads the time at the end of a buy-in line", () => {
+    const parsed = parseLogLine("Before hand 4: Dev joins and buys in for ₹20,000 at 10:42 pm", names);
+    assert.equal(parsed.title, "Before hand 4");
+    assert.equal(parsed.entry.kind, "buy-in");
+    assert.equal(parsed.entry.amount, "₹20,000");
+    assert.equal(parsed.entry.time, "10:42 pm");
+    assert.equal(parsed.entry.player, 2);
   });
 
   test("reads a quick ledger's lines, which name no hand", () => {

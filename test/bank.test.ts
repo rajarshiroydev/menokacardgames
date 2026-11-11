@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { splitLogTime } from "../lib/poker/buy-in-times.ts";
 import { describe, it } from "node:test";
 
 import {
@@ -54,7 +55,7 @@ describe("host is the bank: quick ledger", () => {
     assert.ok(ledgerBuyIn(game, 1, 10_000, false));
     assert.deepEqual(unpaidBuyIns(game, 1), [1]);
     assert.equal(owedToBank(game, 1), 10_000);
-    assert.equal(undoLedgerStep(game), "Bikram buys in again for ₹10,000");
+    assert.equal(splitLogTime(undoLedgerStep(game) ?? "").text, "Bikram buys in again for ₹10,000");
     assert.equal(owedToBank(game, 1), 0);
   });
 

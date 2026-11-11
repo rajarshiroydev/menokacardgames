@@ -7,6 +7,8 @@
  * as a note.
  */
 
+import { splitLogTime } from "./buy-in-times.ts";
+
 /**
  * The most lines a game's log keeps: a whole session (a long night is about
  * 2,000), with a ceiling so storage and backups stay bounded.
@@ -42,6 +44,8 @@ export type LogEntry = {
   amount: string | null;
   /** What's left over: "others folded", "Asha, Dev", "level 3". */
   note: string | null;
+  /** When a buy-in happened, as written at the end of its line ("10:42 pm"). */
+  time: string | null;
   /**
    * A betting action's place in its hand, from 1 for the hand's first; null
    * for everything else, and for a hand whose start fell off the log.
@@ -92,7 +96,7 @@ function capitalise(text: string) {
   return text.replace(/^./, (first) => first.toUpperCase());
 }
 
-type Parts = Omit<LogEntry, "line" | "player" | "number">;
+type Parts = Omit<LogEntry, "line" | "player" | "number" | "time">;
 
 const BETTING: ReadonlySet<LogKind> = new Set([
   "fold",
@@ -228,13 +232,15 @@ export function linesToSave(lines: readonly string[], unfinishedHand: number | n
 
 /** One stored line read into its parts, with the hand and street it names. */
 export function parseLogLine(line: string, names: readonly string[]) {
-  const [, prefix, number, stage, text] = line.match(PREFIX) ?? [];
-  const body = text ?? line;
+  // A buy-in line ends with its time (lib/poker/buy-in-times.ts).
+  const { text: untimed, time } = splitLogTime(line);
+  const [, prefix, number, stage, text] = untimed.match(PREFIX) ?? [];
+  const body = text ?? untimed;
   const who = findPlayer(body, names);
   const action = who ? playerAction(body.slice(who.length + 1)) : null;
   const entry: LogEntry = action
-    ? { line, player: who!.index, number: null, ...action }
-    : { line, player: null, number: null, ...tableAction(body) };
+    ? { line, player: who!.index, number: null, time, ...action }
+    : { line, player: null, number: null, time, ...tableAction(body) };
   const hand = number && prefix !== "Before hand" ? Number(number) : null;
   return {
     entry,

@@ -1,5 +1,6 @@
 import { isAvatarId } from "../avatars.ts";
 import { liveBankFields, validLiveBankFields } from "./bank.ts";
+import { splitLogTime } from "./buy-in-times.ts";
 import { MAX_BUY_INS } from "./buy-ins.ts";
 import { MAX_GAME_PLAYERS } from "./game.ts";
 import { type ChipUnit, isChipUnit } from "./money.ts";
@@ -106,7 +107,10 @@ export function buildLiveLedgerSnapshot(
         ...liveBankFields(game, index),
       };
     }),
-    activity: game.log.slice(0, LIVE_LEDGER_ACTIVITY),
+    // The link's lines carry no times (user decision 2026-11-05).
+    activity: game.log
+      .slice(0, LIVE_LEDGER_ACTIVITY)
+      .map((line) => splitLogTime(line).text),
   };
 }
 

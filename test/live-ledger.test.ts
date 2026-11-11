@@ -55,6 +55,8 @@ describe("quick ledger live link", () => {
     ]);
     assert.equal(snapshot.activity[0], "Asha cashes out with ₹1,800");
     assert.equal(snapshot.activity.length, 2);
+    // The host's line has the rebuy's time; the link's doesn't.
+    assert.equal(snapshot.activity[1], "Arjun buys in again for ₹1,000");
   });
 
   it("keeps only the latest changes", () => {

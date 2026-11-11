@@ -66,6 +66,7 @@ import {
   STAGES,
   totalBuyIns,
 } from "@/lib/poker/game";
+import { buyInTimeNote } from "@/lib/poker/buy-in-times";
 import type { GameState } from "@/lib/poker/types";
 
 /** Ticks once a second, but only while a timed blind schedule is running. */
@@ -448,7 +449,8 @@ function GameScreen(props: GameViewProps) {
 
 /**
  * What a player put in, for the standings: their own starting buy-in, then
- * any rebuys together ("Start ₹10,000 · Buy-ins ₹20,000").
+ * any rebuys together ("Start ₹10,000 · Buy-ins ₹20,000"), then when the
+ * latest one was ("last 10:42 pm", or "joined 10:42 pm" for a late join).
  */
 function standingBuyIns(
   game: GameState,
@@ -457,9 +459,12 @@ function standingBuyIns(
 ) {
   const [start = 0, ...rebuys] = playerBuyIns(game, playerIndex);
   const more = rebuys.reduce((total, amount) => total + amount, 0);
-  return more > 0
-    ? `Start ${money(start)} · Buy-ins ${money(more)}`
-    : `Start ${money(start)}`;
+  const time = buyInTimeNote(game.players[playerIndex], game.startedAt);
+  return [
+    `Start ${money(start)}`,
+    ...(more > 0 ? [`Buy-ins ${money(more)}`] : []),
+    ...(time ? [time] : []),
+  ].join(" · ");
 }
 
 /**

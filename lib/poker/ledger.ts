@@ -7,6 +7,7 @@ import {
   setBuyInPaid,
   setPaidOut,
 } from "./bank.ts";
+import { noteBuyInTime, splitLogTime, withLogTime } from "./buy-in-times.ts";
 import { isValidBuyIn, MAX_BUY_INS } from "./buy-ins.ts";
 import {
   canJoinGame,
@@ -123,6 +124,7 @@ export function createLedgerGame(input: {
       name: player.name,
       stack: 0,
       buyIns: [buyIns?.[index] ?? input.startStack],
+      buyInTimes: [input.startedAt],
     })),
     hand: null,
     handNo: 0,
@@ -150,6 +152,7 @@ export function ledgerBuyIn(
   amount: number,
   /** Bank games: paid to the bank at the table, or still owed. */
   paid = true,
+  now = Date.now(),
 ) {
   const player = game.players[playerIndex];
   if (
@@ -164,9 +167,14 @@ export function ledgerBuyIn(
   }
   const before = snapshot(game);
   player.buyIns = [...(player.buyIns ?? [game.startStack]), amount];
+  noteBuyInTime(player, now);
   noteBuyInAmount(game, amount);
   noteBuyInPaid(game, playerIndex, paid);
-  record(game, before, `${player.name} buys in again for ${money(game, amount)}`);
+  record(
+    game,
+    before,
+    withLogTime(`${player.name} buys in again for ${money(game, amount)}`, now),
+  );
   return true;
 }
 
@@ -192,11 +200,12 @@ export function ledgerJoin(
     name: player.name,
     stack: 0,
     buyIns: [amount],
+    buyInTimes: [now],
     ...(game.tracksPlayers ? { joinedAt: now } : {}),
   });
   noteBuyInAmount(game, amount);
   noteBuyInPaid(game, game.players.length - 1, paid);
-  record(game, before, `${player.name} joins for ${money(game, amount)}`);
+  record(game, before, withLogTime(`${player.name} joins for ${money(game, amount)}`, now));
   return true;
 }
 
@@ -277,8 +286,10 @@ export function ledgerSetPaidOut(game: GameState, playerIndex: number, paid: boo
 }
 
 /** The change Undo would take back, or null. */
+/** What Undo would take back, as its log line without a buy-in's time. */
 export function ledgerUndoLine(game: GameState) {
-  return game.ledgerUndo?.[0]?.line ?? null;
+  const line = game.ledgerUndo?.[0]?.line;
+  return line ? splitLogTime(line).text : null;
 }
 
 /** Takes back the latest change. Returns its log line, or null with nothing to undo. */

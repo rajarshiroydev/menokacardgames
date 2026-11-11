@@ -28,7 +28,7 @@ export const CHANGE_TAG_LABELS: Record<ChangeTag, string> = {
 export const CHANGELOG: ChangelogEntry[] = [
   {
     date: "2026-11-11",
-    title: "Chip colours and past games",
+    title: "Chip colours, past games and buy-in times",
     items: [
       {
         tag: "new",
@@ -37,6 +37,10 @@ export const CHANGELOG: ChangelogEntry[] = [
       {
         tag: "new",
         text: "Add a past game from the Games tab: enter a game played without the app (its date, players, buy-ins and chips at the end) and it counts towards the standings like any other.",
+      },
+      {
+        tag: "new",
+        text: "Buy-in times: each player's row shows when they last bought in (\"last 10:42 PM\", or \"joined 10:42 PM\" for a late arrival), and the Action Log shows the time of every rebuy and late join, in both kinds of game. The saved game's log keeps them.",
       },
     ],
   },

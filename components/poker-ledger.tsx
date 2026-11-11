@@ -160,6 +160,7 @@ import {
   type AccountProfile,
 } from "@/lib/accounts/identity-code";
 import { DELETION_GRACE_PERIOD_DAYS } from "@/lib/accounts/lifecycle";
+import { splitLogTime, withLogTime } from "@/lib/poker/buy-in-times";
 import type { ChipSet } from "@/lib/poker/chip-set";
 import {
   type GroupStandings,
@@ -1091,6 +1092,7 @@ export function PokerLedger({
             name: player.name,
             stack: amount,
             buyIns: [amount],
+            buyInTimes: [startedAt],
           };
         }),
         hand: null,
@@ -1619,7 +1621,8 @@ export function PokerLedger({
     if (!game) return;
     const handNo = game.hand?.no;
     const next = structuredClone(game);
-    const confirmedAmount = buyInPlayer(next, playerIndex, amount);
+    const now = Date.now();
+    const confirmedAmount = buyInPlayer(next, playerIndex, amount, now);
     if (confirmedAmount === null) return;
     noteBuyInPaid(next, playerIndex, paid);
     const confirmedPlayer = next.players[playerIndex];
@@ -1627,7 +1630,10 @@ export function PokerLedger({
     // the buy-in.
     recordWin(
       next,
-      `${handNo ? `During hand ${handNo}` : `Hand ${next.handNo}`}: ${confirmedPlayer.name} buys in for ${money(confirmedAmount)}`,
+      withLogTime(
+        `${handNo ? `During hand ${handNo}` : `Hand ${next.handNo}`}: ${confirmedPlayer.name} buys in for ${money(confirmedAmount)}`,
+        now,
+      ),
     );
     setGame(next);
     setBuyingIn(null);
@@ -1832,7 +1838,7 @@ export function PokerLedger({
     const line = undoLedgerStep(next);
     if (!line) return;
     setGame(next);
-    showToast(`Undone: ${line}`);
+    showToast(`Undone: ${splitLogTime(line).text}`);
   }
 
   function saveLedgerGame(counts: Array<number | null>) {

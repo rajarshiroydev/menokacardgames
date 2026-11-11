@@ -21,6 +21,7 @@ import {
   ledgerTotals,
   ledgerUndoLine,
 } from "@/lib/poker/ledger";
+import { buyInTimeNote } from "@/lib/poker/buy-in-times";
 import type { ChipSet } from "@/lib/poker/chip-set";
 import type { HandLayout } from "@/lib/poker/storage";
 import type { GameState } from "@/lib/poker/types";
@@ -97,9 +98,10 @@ function LedgerScreen({
   const undoLine = ledgerUndoLine(game);
   const boughtNote = (index: number) => {
     const buyIns = playerBuyIns(game, index);
+    const time = buyInTimeNote(game.players[index], game.startedAt);
     return `${buyIns.length} buy-in${buyIns.length === 1 ? "" : "s"} · ${money(
       totalBuyIns(game, index),
-    )}`;
+    )}${time ? ` · ${time}` : ""}`;
   };
 
   if (counting) {

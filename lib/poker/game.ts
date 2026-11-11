@@ -1,4 +1,5 @@
 import { LOG_LIMIT } from "./action-log.ts";
+import { noteBuyInTime, withLogTime } from "./buy-in-times.ts";
 import {
   describeRebuyRules,
   isValidBuyIn,
@@ -207,6 +208,7 @@ export function joinGame(
     name: player.name,
     stack: amount,
     buyIns: [amount],
+    buyInTimes: [now],
     // Late only once a hand has been dealt; they play from the next one.
     ...(game.tracksPlayers
       ? { handsPlayed: 0, ...(game.handNo > 0 ? { joinedHand: game.handNo + 1, joinedAt: now } : {}) }
@@ -218,7 +220,10 @@ export function joinGame(
   game.lastHand = null;
   tableLog(
     game,
-    `${player.name} joins and buys in for ${formatChips(amount, game.chipUnit, chipCurrency(game.currency, game.chipValue))}`,
+    withLogTime(
+      `${player.name} joins and buys in for ${formatChips(amount, game.chipUnit, chipCurrency(game.currency, game.chipValue))}`,
+      now,
+    ),
   );
   return true;
 }
@@ -285,6 +290,7 @@ export function buyInPlayer(
   game: GameState,
   playerIndex: number,
   chosen?: number,
+  now = Date.now(),
 ) {
   const offered = nextBuyIn(game, playerIndex);
   if (offered === null) return null;
@@ -300,6 +306,7 @@ export function buyInPlayer(
   // Buy-ins before the first one counted here were played with.
   player.buyInsPlayed ??= playerBuyIns(game, playerIndex).length;
   player.buyIns = [...playerBuyIns(game, playerIndex), amount];
+  noteBuyInTime(player, now);
   player.stack = amount;
   const hand = game.hand;
   if (hand) {

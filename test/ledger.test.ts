@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { splitLogTime } from "../lib/poker/buy-in-times.ts";
 import { describe, it } from "node:test";
 
 import { continuationError } from "../lib/poker/continue-session.ts";
@@ -101,7 +102,7 @@ describe("quick ledger game", () => {
     assert.equal(ledgerBuyIn(game, 1, 500), true);
     assert.deepEqual(game.players[1].buyIns, [1000, 1000, 500]);
     assert.equal(game.customBuyIns, true);
-    assert.equal(game.log[0], "Arjun buys in again for ₹500");
+    assert.equal(splitLogTime(game.log[0]).text, "Arjun buys in again for ₹500");
     assert.equal(ledgerTotals(game).bought, 4500);
     assert.equal(ledgerBuyIn(game, 1, 0), false);
     assert.equal(ledgerBuyIn(game, 9, 1000), false);
@@ -112,7 +113,7 @@ describe("quick ledger game", () => {
     assert.equal(ledgerJoin(game, { id: "p-chirag", name: "Chirag" }, 1500), true);
     assert.equal(game.players[3].name, "Chirag");
     assert.deepEqual(game.players[3].buyIns, [1500]);
-    assert.equal(game.log[0], "Chirag joins for ₹1,500");
+    assert.equal(splitLogTime(game.log[0]).text, "Chirag joins for ₹1,500");
     // Already in the game.
     assert.equal(ledgerJoin(game, { id: "p-asha", name: "Asha" }, 1000), false);
   });
@@ -150,7 +151,7 @@ describe("quick ledger game", () => {
 
     assert.equal(undoLedgerStep(game), "Bikram cashes out with ₹0");
     assert.equal(game.players[2].left, undefined);
-    assert.equal(undoLedgerStep(game), "Arjun buys in again for ₹500");
+    assert.equal(splitLogTime(undoLedgerStep(game) ?? "").text, "Arjun buys in again for ₹500");
     assert.deepEqual(game.players[1].buyIns, [1000]);
     // The own-amounts flag the rebuy turned on goes back too.
     assert.equal(game.customBuyIns, undefined);

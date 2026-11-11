@@ -8,6 +8,11 @@ export type Player = {
   /** Initial stack followed by each rebuy amount. */
   buyIns?: number[];
   /**
+   * When each of `buyIns` happened, in ms (games started from 2026-11-11;
+   * lib/poker/buy-in-times.ts). Absent or short in older games.
+   */
+  buyInTimes?: number[];
+  /**
    * Cashed out and left the table: not dealt in, and `stack` is the chips
    * they left with, which is their result. Absent while seated.
    */
