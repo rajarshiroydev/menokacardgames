@@ -79,9 +79,11 @@ test("a hand-by-hand game: side pots, rebuys, table sheets, a split pot and undo
     await expect(page.getByText("₹150", { exact: true }).first()).toBeVisible();
     await button(page, "About the raise amount").click();
     await page.getByRole("dialog").getByRole("button", { name: /Got it/i }).click();
-    await page.getByRole("radio", { name: "Table" }).click();
+    // Session Standings has its own List | Graph switch, so name the hand's.
+    const layout = page.getByRole("radiogroup", { name: "Show the hand as" });
+    await layout.getByRole("radio", { name: "Table" }).click();
     await expect(button(page, "Move every seat one place clockwise")).toBeVisible();
-    await page.getByRole("radio", { name: "List" }).click();
+    await layout.getByRole("radio", { name: "List" }).click();
   });
 
   await test.step("everyone is all in: a main pot and a side pot", async () => {
@@ -122,7 +124,8 @@ test("a hand-by-hand game: side pots, rebuys, table sheets, a split pot and undo
     await add.getByRole("button", { name: "Meera", exact: true }).click();
     await add.getByRole("textbox", { name: "Buy-in amount" }).fill("3000");
     await add.getByRole("button", { name: "Add Meera · ₹3,000" }).click();
-    await expect(page.getByText("Start ₹3,000", { exact: true })).toBeVisible();
+    // A late joiner's row also says when they joined (since 11 November 2026).
+    await expect(page.getByText(/^Start ₹3,000 · joined /)).toBeVisible();
 
     await button(page, "Cash out").click();
     await page.getByRole("dialog", { name: "Cash Out" }).getByRole("button", { name: /^Aditi A\. ₹6,000/ }).click();
@@ -224,7 +227,8 @@ test("a quick ledger: buy-ins, a late player, a cash-out, then discarded", async
     await sheet.getByRole("textbox", { name: "Dev C.'s chips" }).fill("12000");
     await sheet.getByRole("button", { name: /^Cash out/i }).last().click();
     await page.getByRole("dialog", { name: "Confirm action" }).getByRole("button", { name: "Cash Out · ₹12,000" }).click();
-    await expect(page.locator("main")).toContainText(/₹12,000\s*Cashed out/i);
+    // The Table card's tiles put the label over the amount (since 5 November 2026).
+    await expect(page.getByText("Cashed out with ₹12,000 · +₹2,000")).toBeVisible();
   });
 
   await test.step("the ledger is discarded", async () => {
