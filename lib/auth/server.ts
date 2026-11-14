@@ -155,14 +155,14 @@ export async function requireHostAccount(
   return result;
 }
 
-/** True when the verified session was created by a recent sign-in link. */
+/** True when the verified session was created by a recent sign-in. */
 export function hasRecentSignIn(session: HostSession) {
   return signedInRecently(session.session?.createdAt);
 }
 
 /**
  * Permanent deletion requires an active account whose verified session was
- * created by a recent sign-in link, in place of a shared deletion password.
+ * created by a recent sign-in, in place of a shared deletion password.
  */
 export async function requireRecentHostAccount(): Promise<AccountAccess> {
   const result = await requireHostAccount("writes");

@@ -11,7 +11,7 @@ export function stripSessionCookies(cookieHeader: string | null) {
 
 /**
  * Existing session cookies make the Neon Auth SDK answer get-session from its
- * cache without exchanging the verifier, so a sign-in link used while signed in
+ * cache without exchanging the verifier, so a Google sign-in (or, before 2026-11-14, an email link) used while signed in
  * would never create a fresh session. Dropping them forces the exchange.
  */
 export function withoutSessionCookies(request: Request) {

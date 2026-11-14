@@ -6036,6 +6036,65 @@ button.log-hand-head {
   background: var(--gb);
 }
 
+/* Email sign-in with a 6-digit code (components/email-code-sign-in.tsx), on
+   the auth pages (.auth-form) and in a ledger sheet (.code-sign-in). */
+.code-sign-in {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+  text-align: left;
+}
+
+.code-sign-in-intro {
+  margin: 0;
+  color: var(--ink2);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.code-sign-in-intro strong {
+  color: var(--ink);
+}
+
+.code-sign-in label {
+  color: var(--ink3);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.auth-form .code-sign-in-input,
+.code-sign-in .code-sign-in-input {
+  font-family: var(--fd);
+  font-size: 28px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.4em;
+  text-align: center;
+}
+
+.code-sign-in-links {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 4px 18px;
+}
+
+.auth-form .code-sign-in-links .auth-secondary {
+  min-height: 36px;
+  padding: 0 4px;
+  border: 0;
+  background: none;
+  box-shadow: none;
+  color: var(--ink2);
+  font-family: var(--fb);
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-transform: none;
+}
+
 /* Testbed mode only (npm run testbed:dev): one button per fake persona. */
 .testbed-personas {
   display: grid;

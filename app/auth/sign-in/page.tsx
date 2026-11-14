@@ -13,7 +13,7 @@ import { testbedMode } from "@/lib/testbed/server";
 import { googleSignInEnabled } from "@/lib/auth/providers";
 
 import { GoogleSignInButton } from "./google-sign-in-button";
-import { MagicLinkForm } from "./magic-link-form";
+import { EmailCodeForm } from "./email-code-form";
 import { TestbedPersonas } from "./testbed-personas";
 
 export const dynamic = "force-dynamic";
@@ -35,7 +35,8 @@ export default async function SignInPage({
   const testbedError =
     typeof params.testbed === "string" ? params.testbed.slice(0, 60) : null;
   // Back from a sign-in that didn't finish: Google cancelled or failed
-  // (`GOOGLE`), or an email link that was already used or expired.
+  // (`GOOGLE`), or an old email sign-in link (links were replaced by codes
+  // on 2026-11-14).
   const signInFailed = typeof params.error === "string";
   const showGoogle = googleSignInEnabled();
 
@@ -73,7 +74,7 @@ export default async function SignInPage({
         {testbedMode() ? (
           <TestbedPersonas error={testbedError} invite={invite} />
         ) : (
-          <MagicLinkForm invite={invite} />
+          <EmailCodeForm invite={invite} />
         )}
         <p className="auth-legal">
           By signing in you agree to the <Link href="/terms">Terms of Use</Link>{" "}

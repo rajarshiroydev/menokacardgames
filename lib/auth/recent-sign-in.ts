@@ -1,20 +1,20 @@
-/** How recently the host must have used a sign-in link to permanently delete data. */
+/** How recently the host must have signed in to permanently delete data. */
 export const RECENT_SIGN_IN_WINDOW_MS = 10 * 60_000;
 
-/** How recently an admin must have used a sign-in link to open /admin (user decision 2026-10-29). */
+/** How recently an admin must have signed in to open /admin (user decision 2026-10-29). */
 export const ADMIN_SIGN_IN_WINDOW_MS = 60 * 60_000;
 
 /**
  * How long a sign-in lasts at most, however often it is used (user decision
  * 2026-10-29). Neon Auth keeps extending a session that is used; after this
- * the app treats it as signed out, and a new email link starts a new one.
+ * the app treats it as signed out, and a new sign-in starts a new one.
  */
 export const MAX_SESSION_AGE_MS = 90 * 24 * 60 * 60_000;
 
 /** Tolerated clock difference between the auth provider and this server. */
 const CLOCK_SKEW_MS = 60_000;
 
-/** Error code the client uses to offer a fresh sign-in link. */
+/** Error code the client uses to offer a fresh sign-in (an emailed code). */
 export const RECENT_SIGN_IN_REQUIRED = "recent-sign-in-required";
 
 function timeOf(value: Date | string | number | null | undefined) {

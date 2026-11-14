@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 
+import { EmailCodeSignIn } from "@/components/email-code-sign-in";
 import { Avatar } from "@/components/ledger/avatar";
 import { Segmented } from "@/components/ledger/segmented";
 import { RECENT_SIGN_IN_WINDOW_MS } from "@/lib/auth/recent-sign-in";
@@ -48,8 +49,8 @@ export type ModalState =
       kind: "recent-sign-in";
       purpose: string;
       email: string;
-      confirmLabel: string;
-      onConfirm: () => void;
+      /** After the emailed code has signed this device in again. */
+      onSignedIn: () => void;
     };
 
 export function Modal({
@@ -66,6 +67,7 @@ export function Modal({
   const rebuys = state.kind === "confirm" ? state.rebuys : undefined;
 
   function confirm() {
+    if (state.kind !== "confirm") return;
     if (rebuys) rebuys.onSave(takeBack);
     else state.onConfirm();
     onConfirm();
@@ -89,10 +91,8 @@ export function Modal({
           {state.kind === "recent-sign-in" ? (
             <>
               For safety, {state.purpose} needs a sign-in from the last{" "}
-              {RECENT_SIGN_IN_WINDOW_MS / 60_000} minutes. We will email a new
-              sign-in link to{" "}
-              <span className="literal-text">{state.email}</span>. Open it on
-              this device, then try again.
+              {RECENT_SIGN_IN_WINDOW_MS / 60_000} minutes. Sign in again with a
+              code from your email, then try again.
             </>
           ) : state.points?.length ? (
             <>
@@ -181,11 +181,18 @@ export function Modal({
               {state.confirmLabel}
             </button>
           </div>
+        ) : state.kind === "recent-sign-in" ? (
+          <EmailCodeSignIn
+            variant="sheet"
+            email={state.email}
+            onSignedIn={() => {
+              state.onSignedIn();
+              onConfirm();
+            }}
+          />
         ) : (
           <button
-            className={
-              state.kind === "confirm" && state.danger ? "danger" : "primary"
-            }
+            className={state.danger ? "danger" : "primary"}
             onClick={confirm}
           >
             {state.confirmLabel}

@@ -48,8 +48,8 @@ export default function AccountDeletionPage() {
         </ol>
         <p>
           For your safety this only works within {RECENT_SIGN_IN_MINUTES} minutes
-          of signing in. If it has been longer, the app offers to email you a
-          fresh sign-in link; open it on the same phone and try again.
+          of signing in. If it has been longer, the app emails you a 6-digit code;
+          enter it and try again.
         </p>
       </InfoSection>
 

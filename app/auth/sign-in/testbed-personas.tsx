@@ -2,7 +2,7 @@ import { TESTBED_PERSONAS } from "@/lib/testbed/personas";
 
 import { signInAsPersona } from "./testbed-actions";
 
-/** Testbed mode only: one button per fake persona, in place of email links. */
+/** Testbed mode only: one button per fake persona, in place of email codes. */
 export function TestbedPersonas({
   error,
   invite,

@@ -9,6 +9,7 @@ import {
 } from "@/lib/auth/recent-sign-in";
 import { apiErrorMessage } from "@/lib/security/rate-limit-message";
 import { BrandMark } from "@/components/brand-mark";
+import { EmailCodeSignIn } from "@/components/email-code-sign-in";
 import { ThemeToggle } from "@/components/theme-toggle";
 
 function formatDeadline(timestamp: number) {
@@ -33,7 +34,7 @@ export function AccountLocked({
   recoverable: boolean;
 }) {
   const [status, setStatus] = useState<
-    "idle" | "working" | "needs-sign-in" | "link-sent" | "error"
+    "idle" | "working" | "needs-sign-in" | "error"
   >("idle");
   const [error, setError] = useState("");
   const router = useRouter();
@@ -73,24 +74,6 @@ export function AccountLocked({
     }
   }
 
-  async function sendLink() {
-    setStatus("working");
-    try {
-      // Loaded only when needed, as in poker-ledger.tsx.
-      const { authClient } = await import("@/lib/auth/client");
-      const { error: linkError } = await authClient.signIn.magicLink({
-        email,
-        callbackURL: "/auth/callback",
-      });
-      if (linkError) throw new Error(linkError.code);
-      setStatus("link-sent");
-    } catch (linkError) {
-      console.error("recovery sign-in link request failed", linkError);
-      setError("We could not send the sign-in link. Please try again.");
-      setStatus("error");
-    }
-  }
-
   return (
     <main className="auth-page">
       <ThemeToggle className="page-theme-toggle" />
@@ -114,23 +97,10 @@ export function AccountLocked({
               <div className="auth-confirmation" role="status">
                 <p>
                   For safety, recovery needs a sign-in from the last{" "}
-                  {RECENT_SIGN_IN_WINDOW_MS / 60_000} minutes. We will email a
-                  new sign-in link to <strong className="literal-text">{email}</strong>. Open it on this
-                  device, then recover again.
+                  {RECENT_SIGN_IN_WINDOW_MS / 60_000} minutes. Sign in with a
+                  code, and the account is recovered straight away.
                 </p>
-                <button type="button" onClick={() => void sendLink()}>
-                  Email me a sign-in link
-                </button>
-              </div>
-            ) : status === "link-sent" ? (
-              <div className="auth-confirmation" role="status">
-                <span className="auth-confirmation-icon" aria-hidden="true">
-                  ✓
-                </span>
-                <h2>Check your email</h2>
-                <p>
-                  Open the link on this device, then choose Recover my account.
-                </p>
+                <EmailCodeSignIn email={email} onSignedIn={() => void recover()} />
               </div>
             ) : (
               <button

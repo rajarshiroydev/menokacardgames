@@ -1268,26 +1268,8 @@ export function PokerLedger({
       kind: "recent-sign-in",
       purpose,
       email: accountEmail,
-      confirmLabel: "Email Me A Sign-In Link",
-      onConfirm: () => void sendRecentSignInLink(),
+      onSignedIn: () => showToast("Signed In Again. Try Again Now."),
     });
-  }
-
-  async function sendRecentSignInLink() {
-    try {
-      // Loaded only when needed: the auth client's validation library probes
-      // for eval, which the Content Security Policy reports on every load.
-      const { authClient } = await import("@/lib/auth/client");
-      const { error } = await authClient.signIn.magicLink({
-        email: accountEmail,
-        callbackURL: "/auth/callback",
-      });
-      if (error) throw new Error(error.code);
-      showToast("Sign-In Link Sent. Open It On This Device.");
-    } catch (error) {
-      console.error("recent sign-in link request failed", error);
-      showToast("We Could Not Send The Sign-In Link");
-    }
   }
 
   /**
@@ -1337,7 +1319,7 @@ export function PokerLedger({
       message: "Sign out of all devices?",
       points: [
         "You're signed out on every phone and browser, this one included.",
-        "Sign in again with an email link on each device you use.",
+        "Sign in again on each device you use.",
       ],
       confirmLabel: "Sign Out Everywhere",
       onConfirm: () => {

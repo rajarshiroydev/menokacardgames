@@ -25,7 +25,7 @@ const GROUPS: FeatureGroup[] = [
     features: [
       {
         name: "No passwords",
-        text: "Tap Continue with Google, or type your email and open the sign-in link we send you. You stay signed in as long as you open the app at least once a week, for up to 90 days.",
+        text: "Tap Continue with Google, or type your email and enter the 6-digit code we send you. You stay signed in as long as you open the app at least once a week, for up to 90 days.",
       },
       {
         name: "Private by default",

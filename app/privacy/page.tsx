@@ -55,7 +55,7 @@ export default function PrivacyPage() {
         <h3>When you sign in</h3>
         <ul>
           <li>
-            <b>Your email address</b>, to send you sign-in links and to know
+            <b>Your email address</b>, to send you sign-in codes and to know
             which account is yours. There are no passwords.
           </li>
           <li>

@@ -28,15 +28,19 @@ export const CHANGE_TAG_LABELS: Record<ChangeTag, string> = {
 export const CHANGELOG: ChangelogEntry[] = [
   {
     date: "2026-11-14",
-    title: "Sign in with Google",
+    title: "Sign in with Google or a code",
     items: [
       {
         tag: "new",
-        text: "Continue with Google: sign in with one tap instead of waiting for an email link. If your Google account uses the same email as your Pokerize account, you land straight in it with all your games.",
+        text: "Continue with Google: sign in with one tap. If your Google account uses the same email as your Pokerize account, you land straight in it with all your games.",
+      },
+      {
+        tag: "improved",
+        text: "Email sign-in now sends a 6-digit code to type in, instead of a link. Some email apps opened sign-in links before you could, so they stopped working; a code can't be used up that way. Signing in again to delete something or recover your account works the same way, right where you are.",
       },
       {
         tag: "fixed",
-        text: "When a sign-in doesn't finish, for example an email link that was already used, the sign-in page now says so instead of quietly starting over.",
+        text: "When a Google sign-in doesn't finish, the sign-in page now says so instead of quietly starting over.",
       },
     ],
   },

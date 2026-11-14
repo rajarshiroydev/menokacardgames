@@ -16,7 +16,7 @@ function isForbidden(error: unknown) {
   return error instanceof Error && error.message.includes("admin:forbidden");
 }
 
-/** An admin whose last email sign-in is more than an hour old. */
+/** An admin whose last sign-in is more than an hour old. */
 export type AdminSignInAgain = { status: "sign-in-again"; email: string };
 
 /**
@@ -24,8 +24,9 @@ export type AdminSignInAgain = { status: "sign-in-again"; email: string };
  * signed-in person. The database decides who is an admin (`app_admins`,
  * migration 0018): "signed-out" and "forbidden" are the only refusals, and
  * the page shows both as not found so it doesn't reveal itself. An admin
- * also needs an email sign-in from the last hour (pre-launch audit step 5);
- * otherwise nothing is loaded and the page offers a fresh sign-in link.
+ * also needs a sign-in from the last hour (pre-launch audit step 5);
+ * otherwise nothing is loaded and the page offers a fresh sign-in with an
+ * emailed code.
  * `detailAccountId` also loads one person in full, which is audited.
  */
 export async function loadAdminData(

@@ -12,7 +12,7 @@ import { authClient } from "@/lib/auth/client";
  * globals.css). Don't recolour or resize the "G" or change the wording.
  *
  * Neon Auth sends the person to Google, then back to `/auth/callback` with a
- * session verifier, the same exchange email links use. `invite` brings them
+ * session verifier, the same exchange email links used. `invite` brings them
  * back to the invite page afterwards.
  */
 export function GoogleSignInButton({ invite }: { invite: string | null }) {
