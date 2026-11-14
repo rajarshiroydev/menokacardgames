@@ -158,7 +158,7 @@ Recorded 2026-10-30 (user: "proceed with the things that doesn't require additio
 
 ## Free, still open (2026-10-30)
 
-- **Enforce the CSP** after a week with no new CSP issues in Sentry (from 2026-11-06), deciding first about Zod's `eval` probe (H1).
+- ~~**Enforce the CSP**~~ Done 2026-11-14: Zod's `eval` probe switched off with `jitless` (`lib/security/zod-jitless.ts`), then the policy enforced (H1). Watch Sentry for `CSP blocked` warnings.
 - **Dependabot pull requests:** #1 (Neon Auth SDK 0.7.0-beta) was rehearsed on the testbed, including a real email-link sign-in, and merged 2026-10-30 (plan entry "Dependabot #1 rehearsal"); it cleared one reviewed advisory. The rehearsal also found Google sign-in on in the testbed's Neon Auth; it was removed, and `testbed/setup.mjs` now keeps social sign-in off. #2 (the monthly group) was merged 2026-10-30 after review: see the plan entry "Dependabot #2 merged".
 - **Preview database:** `cutover-rehearsal` (`br-tiny-forest-ayt6f3fe`) is at 0012, 21 migrations behind, and holds a September copy of production data. Previews aren't used today. When they are, the cleaner fix is a new schema-only branch (no production data) with its own Neon Auth; you then set the preview `DATABASE_URL`, `NEON_AUTH_BASE_URL` and cookie secret in Vercel, and the old branch is deleted.
 - **L3, the Neon Auth SDK:** 0.7.0-beta (merged 2026-10-30) fixed one advisory (GHSA-q84f-53jg-9ppm); three exceptions remain (Better Auth below 1.7.7, Zod below 4.6.6), to review by 2026-11-30.

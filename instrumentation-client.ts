@@ -1,3 +1,6 @@
+// First, before anything that could load Zod (lib/security/zod-jitless.ts).
+import "@/lib/security/zod-jitless";
+
 import * as Sentry from "@sentry/nextjs";
 
 import { sentryOptions } from "@/lib/monitoring/sentry-options";

@@ -5,6 +5,7 @@ import { InfoPage, InfoSection } from "@/components/info-page";
 import { APP_NAME } from "@/lib/brand";
 import {
   CONTACT_EMAIL,
+  FOUNDER_PRICE_PER_YEAR,
   MINIMUM_AGE,
   OPERATOR_COUNTRY,
   OPERATOR_NAME,
@@ -125,7 +126,16 @@ export default function TermsPage() {
 
       <InfoSection title="The service">
         <p>
-          {APP_NAME} is free. We may add, change or remove features, and we may
+          {APP_NAME} is in early access: it is free to use while early access
+          lasts. We plan to add a paid plan, {APP_NAME} Pro, later. Before any
+          paid plan starts, we will announce it in{" "}
+          <Link href="/whats-new">What&apos;s New</Link>. Everyone who joined
+          during early access will be able to get {APP_NAME} Pro at a founder
+          price of {FOUNDER_PRICE_PER_YEAR} a year, kept for as long as they
+          stay subscribed.
+        </p>
+        <p>
+          We may add, change or remove features, and we may
           stop the service. If we plan to shut it down, we will give at least 30
           days&apos; notice in the app, so you can export your games first
           (Export Backup on the Games tab).

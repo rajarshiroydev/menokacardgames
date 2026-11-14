@@ -4,11 +4,13 @@
  * request; Next.js reads it from the policy and puts it on its own scripts,
  * and the root layout puts it on the theme script.
  *
- * Report-only for now: browsers report what the policy would block to
- * CSP_REPORT_PATH and block nothing. To enforce it, change CSP_HEADER to
- * "Content-Security-Policy".
+ * Enforced since 2026-11-14, after two weeks report-only: browsers block
+ * what the policy doesn't allow and report it to CSP_REPORT_PATH. The only
+ * production report then was Zod's eval probe, now switched off
+ * (lib/security/zod-jitless.ts). To go back to reporting only, change
+ * CSP_HEADER to "Content-Security-Policy-Report-Only".
  */
-export const CSP_HEADER = "Content-Security-Policy-Report-Only";
+export const CSP_HEADER = "Content-Security-Policy";
 
 /** Request header that carries the page's nonce to the root layout. */
 export const NONCE_HEADER = "x-nonce";

@@ -28,8 +28,12 @@ export const CHANGE_TAG_LABELS: Record<ChangeTag, string> = {
 export const CHANGELOG: ChangelogEntry[] = [
   {
     date: "2026-11-14",
-    title: "Sign in with Google or a code",
+    title: "Early access, and sign in with Google",
     items: [
+      {
+        tag: "new",
+        text: "Pokerize is now open to everyone as an early access app, free to use while early access lasts. A paid plan, Pokerize Pro, will come later and will be announced here first. Everyone who joins during early access will be able to get Pro at a founder price of $49.99 a year, kept for as long as they stay subscribed. Tell us what to improve with Contact Us in Settings.",
+      },
       {
         tag: "new",
         text: "Continue with Google: sign in with one tap. If your Google account uses the same email as your Pokerize account, you land straight in it with all your games.",

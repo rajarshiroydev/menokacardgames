@@ -26,7 +26,13 @@ export const MINIMUM_AGE = 18;
 export const DATA_LOCATION = "the United States";
 
 export const PRIVACY_UPDATED = "2026-11-14";
-export const TERMS_UPDATED = "2026-10-28";
+export const TERMS_UPDATED = "2026-11-14";
+
+/**
+ * Early access (user decision 2026-11-14): free while it lasts; people who
+ * join during it can get Pokerize Pro at this yearly founder price later.
+ */
+export const FOUNDER_PRICE_PER_YEAR = "$49.99";
 export const DELETION_UPDATED = "2026-11-14";
 
 /** Hours the database provider keeps recovery copies of deleted data. */

@@ -1,6 +1,6 @@
 # Feature list
 
-Updated: 29 October 2026
+Updated: 14 November 2026
 
 This is a plain-language list of everything Pokerize can do today. It is written for anyone, technical or not. It describes how the app behaves right now; plans and future ideas live in the [feature plan](./FEATURE-PLAN.md).
 
@@ -546,9 +546,9 @@ Added 5 October 2026 (user request).
   - **Features:** a plain-language tour of the app in ten groups (private ledger, setting up, playing a hand, fixing mistakes, saved games, standings, friends, live standings, profile, safety and privacy).
   - **What's New:** every release day since the first version (27 July 2026), newest first, each with a short title and items tagged **New**, **Improved** or **Fixed**.
   - **Privacy Policy:** who runs the app (Rajarshi Roy, India), what is kept and why, who can see it, the services used (Neon, Vercel, Healthchecks.io, Sentry), that data is stored in the United States, how long it's kept (30-day recovery, 6-hour provider copies), your rights under India's DPDP Act 2023, the 18+ age limit and how to complain.
-  - **Terms of Use:** 18 or over; a scorekeeper, not a gambling service; you follow local laws; numbers can be wrong and money between players is your own arrangement; fair use; 30 days' notice before any shutdown; liability limits; Indian law.
+  - **Terms of Use:** 18 or over; a scorekeeper, not a gambling service; you follow local laws; numbers can be wrong and money between players is your own arrangement; fair use; 30 days' notice before any shutdown; liability limits; Indian law. Since 14 November 2026 it also says Pokerize is in **early access**: free while early access lasts, a paid plan (Pokerize Pro) to come later and be announced in What's New first, and everyone who joined during early access able to get Pro at a founder price of $49.99 a year, kept while they stay subscribed.
   - **Account Deletion:** how to delete in the app, what happens straight away, the 30 days to recover, what is deleted and kept, deleting single things, and emailing us if you can't sign in.
-- **Sign-in page.** Under the sign-in form: "By signing in you agree to the Terms of Use and Privacy Policy. You must be 18 or over.", plus a link to the Features page.
+- **Sign-in page.** Under the sign-in form (since 14 November 2026): "By continuing, you agree to the Terms and Privacy Policy.", with links to both pages. The 18+ age limit is stated in the Terms and Privacy Policy, not on the sign-in page (user decision 14 November 2026).
 - **Security contact.** `/.well-known/security.txt` gives therajarshiroy@gmail.com for reporting security problems (the standard place researchers look; renewed yearly).
 
 ## 23. Quick ledger
