@@ -78,17 +78,26 @@ await neon("PATCH", `/branches/${branch.id}/auth/email_and_password`, {
 await neon("PATCH", `/branches/${branch.id}/auth/plugins/magic-link`, {
   enabled: false,
 });
-// No social sign-in, as on production: this project's Neon Auth came with
-// Google on (found 2026-10-30), and the Better Auth advisory excepted in
-// scripts/audit-exceptions.json needs a provider and magic links together.
+// Social sign-in: only Google with our own Google client, which the user adds
+// in the Neon Console (FEATURE-PLAN.md, "Google and Apple sign-in: plan";
+// Neon runs a Better Auth with the takeover advisory fixed since 2026-11-06).
+// Any other provider, and Google on Neon's shared keys (which this project
+// came with, found 2026-10-30), is removed.
 const { providers = [] } = await neon("GET", `/branches/${branch.id}/auth/oauth_providers`);
+let googleKept = false;
 for (const provider of providers) {
+  if (provider.id === "google" && provider.type === "standard" && provider.client_id) {
+    googleKept = true;
+    continue;
+  }
   await neon("DELETE", `/branches/${branch.id}/auth/oauth_providers/${provider.id}`);
 }
 await neon("PATCH", `/branches/${branch.id}/auth/allow_localhost`, {
   allow_localhost: true,
 });
-console.log("Password sign-in on, magic links and social sign-in off, localhost allowed");
+console.log(
+  `Password sign-in on, magic links off, Google ${googleKept ? "on (own client)" : "off: add our Google client in the Neon Console"}, localhost allowed`,
+);
 
 // 3. Schema. The numbered migrations assume the tables that predate them, so
 // an empty database starts from schema.sql (the full current schema) and

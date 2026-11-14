@@ -10,6 +10,9 @@ import { MINIMUM_AGE } from "@/lib/info/legal";
 import { isInviteToken, invitePath } from "@/lib/friends/invites";
 import { testbedMode } from "@/lib/testbed/server";
 
+import { googleSignInEnabled } from "@/lib/auth/providers";
+
+import { GoogleSignInButton } from "./google-sign-in-button";
 import { MagicLinkForm } from "./magic-link-form";
 import { TestbedPersonas } from "./testbed-personas";
 
@@ -31,6 +34,10 @@ export default async function SignInPage({
   const deletionRequested = params.deletion === "requested";
   const testbedError =
     typeof params.testbed === "string" ? params.testbed.slice(0, 60) : null;
+  // Back from a sign-in that didn't finish: Google cancelled or failed
+  // (`GOOGLE`), or an email link that was already used or expired.
+  const signInFailed = typeof params.error === "string";
+  const showGoogle = googleSignInEnabled();
 
   return (
     <main className="auth-page">
@@ -40,8 +47,8 @@ export default async function SignInPage({
         <p className="eyebrow">{APP_NAME}</p>
         <h1 id="sign-in-title">Your private poker ledger</h1>
         <p className="auth-intro">
-          Sign in with your email to manage your friend list, games, and
-          standings. No password is needed.
+          Sign in with {showGoogle ? "Google or your email" : "your email"} to
+          manage your friend list, games, and standings. No password is needed.
         </p>
         {deletionRequested ? (
           <p className="auth-notice" role="status">
@@ -49,6 +56,19 @@ export default async function SignInPage({
             device. Sign in within {DELETION_GRACE_PERIOD_DAYS} days to recover
             it; after that, everything is permanently deleted.
           </p>
+        ) : null}
+        {signInFailed ? (
+          <p className="auth-error" role="alert">
+            Sign-in didn&apos;t finish. Please try again.
+          </p>
+        ) : null}
+        {showGoogle ? (
+          <>
+            <GoogleSignInButton invite={invite} />
+            <p className="auth-divider" aria-hidden="true">
+              <span>or</span>
+            </p>
+          </>
         ) : null}
         {testbedMode() ? (
           <TestbedPersonas error={testbedError} invite={invite} />

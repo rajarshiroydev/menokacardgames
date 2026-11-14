@@ -103,7 +103,10 @@ export default function AccountDeletionPage() {
           and each copy is deleted within {SNAPSHOT_KEEP_DAYS} days. If we ever
           restore from it, we delete your account again. Nothing can be
           recovered after that. Signing in again with the same email
-          starts a brand-new, empty account.
+          starts a brand-new, empty account. If you signed in with Google,
+          deleting your account also removes its link to your Google account
+          from our sign-in system; you can also remove {APP_NAME}&apos;s access
+          in your Google Account, under Security.
         </p>
       </InfoSection>
 

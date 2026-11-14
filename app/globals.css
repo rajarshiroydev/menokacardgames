@@ -5966,6 +5966,76 @@ button.log-hand-head {
   text-underline-offset: 3px;
 }
 
+/* "Continue with Google": Google's branding guidelines fix these values
+   (developers.google.com/identity/branding-guidelines). Dark theme: fill
+   #131314, 1px inside stroke #8E918F, text #E3E3E3; light theme: fill
+   #FFFFFF, stroke #747775, text #1F1F1F; 14/20 medium text; 12px before the
+   logo, 10px after it, 12px after the text. Don't restyle it to match the
+   app's own buttons. */
+.google-sign-in-wrap {
+  display: grid;
+  gap: 8px;
+}
+
+.google-sign-in {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 40px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 20px;
+  background: #131314;
+  box-shadow: inset 0 0 0 1px #8e918f;
+  color: #e3e3e3;
+  font-family: "Google Sans", Roboto, Arial, sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 20px;
+  letter-spacing: 0.25px;
+  /* Google's exact wording: never title-cased by the page's text styles. */
+  text-transform: none;
+  cursor: pointer;
+}
+
+:root[data-theme="light"] .google-sign-in {
+  background: #ffffff;
+  box-shadow: inset 0 0 0 1px #747775;
+  color: #1f1f1f;
+}
+
+.google-sign-in:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.google-sign-in-logo {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  margin-right: 10px;
+}
+
+.auth-divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 2px 0;
+  color: var(--ink3);
+  font-size: 12px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.auth-divider::before,
+.auth-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--gb);
+}
+
 /* Testbed mode only (npm run testbed:dev): one button per fake persona. */
 .testbed-personas {
   display: grid;

@@ -6,7 +6,7 @@ never touched. Plan and decisions: `docs/FEATURE-PLAN.md`, entry "testbed".
 
 | Command | What it does |
 | --- | --- |
-| `npm run testbed:setup` | Builds or refreshes the project: roles, schema (`schema.sql` on an empty database, then newer migrations), Neon Auth with password sign-in, and `.env.testbed.local`. Rerun it after adding a migration. |
+| `npm run testbed:setup` | Builds or refreshes the project: roles, schema (`schema.sql` on an empty database, then newer migrations), Neon Auth with password sign-in (and Google, if our Google client is set up in the Neon Console; any other provider is removed), and `.env.testbed.local`. Rerun it after adding a migration. |
 | `npm run testbed:dev` | Runs the app on http://localhost:3006 in testbed mode. Stop the normal dev server first (one `next dev` per folder). In the preview pane it's the `testbed` launch configuration. |
 | `npm run testbed:seed` | Creates the personas in `lib/testbed/personas.ts` with their players, games and friend requests, through the app's own API. Needs `testbed:dev` running. |
 | `npm run testbed:reset` | Empties all app data and sign-ins, so the seed can run again. |
@@ -26,7 +26,7 @@ If `testbed:dev` reloads the page over and over after packages change, the
 dev cache in `.next/dev` is stale: stop the server, move `.next/dev` aside and
 start again.
 
-The sign-in page shows one **Sign in as** button per persona in testbed mode.
+The sign-in page shows **Continue with Google** (a real Google sign-in through our own Google client; your Google account must be a test user while the consent screen is in Testing) and one **Sign in as** button per persona in testbed mode.
 Two browser windows (one private) let you be two people at once.
 
 Needs `TESTBED_NEON_API_KEY` in `.env.local`: a Neon API key scoped to the

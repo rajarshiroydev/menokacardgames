@@ -21,11 +21,11 @@ const GROUPS: FeatureGroup[] = [
   {
     icon: "♠",
     title: "Your private ledger",
-    lead: "Sign in with your email and everything you record is yours alone.",
+    lead: "Sign in with Google or your email, and everything you record is yours alone.",
     features: [
       {
         name: "No passwords",
-        text: "Type your email and open the sign-in link we send you. You stay signed in as long as you open the app at least once a week, for up to 90 days.",
+        text: "Tap Continue with Google, or type your email and open the sign-in link we send you. You stay signed in as long as you open the app at least once a week, for up to 90 days.",
       },
       {
         name: "Private by default",

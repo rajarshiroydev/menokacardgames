@@ -59,6 +59,15 @@ export default function PrivacyPage() {
             which account is yours. There are no passwords.
           </li>
           <li>
+            <b>If you sign in with Google:</b> Google tells us your email
+            address, your name and a link to your Google profile picture, and
+            our sign-in provider keeps them with the sign-in tokens Google
+            issues. We use only the email address, to find your account. The
+            name and picture {APP_NAME} shows are the ones you choose in the
+            app. We ask Google for nothing else, such as your contacts or
+            files.
+          </li>
+          <li>
             <b>Sign-in records</b> kept by our sign-in provider to keep you
             signed in and spot misuse. These can include when you signed in,
             your IP address and the type of browser or phone you used.
@@ -238,6 +247,13 @@ export default function PrivacyPage() {
           <li>
             <b>Neon</b> runs our database and our sign-in system, and sends the
             sign-in emails.
+          </li>
+          <li>
+            <b>Google</b>, only if you choose Continue with Google, confirms who
+            you are. Google&apos;s own privacy policy covers what Google keeps
+            about that sign-in. You can remove {APP_NAME}&apos;s access at any
+            time in your Google Account, under Security, Your connections to
+            third-party apps and services.
           </li>
           <li>
             <b>Vercel</b> hosts the app and keeps short-lived request logs for

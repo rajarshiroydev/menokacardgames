@@ -27,6 +27,20 @@ export const CHANGE_TAG_LABELS: Record<ChangeTag, string> = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    date: "2026-11-14",
+    title: "Sign in with Google",
+    items: [
+      {
+        tag: "new",
+        text: "Continue with Google: sign in with one tap instead of waiting for an email link. If your Google account uses the same email as your Pokerize account, you land straight in it with all your games.",
+      },
+      {
+        tag: "fixed",
+        text: "When a sign-in doesn't finish, for example an email link that was already used, the sign-in page now says so instead of quietly starting over.",
+      },
+    ],
+  },
+  {
     date: "2026-11-11",
     title: "Chip colours, past games, buy-in times",
     items: [
