@@ -6,7 +6,6 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { DELETION_GRACE_PERIOD_DAYS } from "@/lib/accounts/lifecycle";
 import { getHostSession } from "@/lib/auth/server";
 import { APP_NAME } from "@/lib/brand";
-import { MINIMUM_AGE } from "@/lib/info/legal";
 import { isInviteToken, invitePath } from "@/lib/friends/invites";
 import { testbedMode } from "@/lib/testbed/server";
 
@@ -75,8 +74,7 @@ export default async function SignInPage({
         )}
         <p className="auth-legal">
           By continuing, you agree to the <Link href="/terms">Terms</Link> and{" "}
-          <Link href="/privacy">Privacy Policy</Link> and confirm you&apos;re{" "}
-          {MINIMUM_AGE}+.
+          <Link href="/privacy">Privacy Policy</Link>.
         </p>
       </section>
     </main>
