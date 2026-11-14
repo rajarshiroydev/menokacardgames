@@ -639,8 +639,7 @@ function StandingsView({
     return (
       <section className="glass card">
         <p className="muted">
-          No saved sessions yet. Finish a game with “Finish And Save Session”
-          and it will show up here.
+          Play and save games to see your ranking.
         </p>
       </section>
     );

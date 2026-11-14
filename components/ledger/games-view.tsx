@@ -307,11 +307,6 @@ function OwnSessionsView({
           hidden
           onChange={onImport}
         />
-        <p className="muted small-note">
-          History is shared from Neon across every device. Export gives you an
-          extra offline backup; importing never overwrites and only adds
-          sessions that are not already in the ledger.
-        </p>
       </section>
     </div>
   );
