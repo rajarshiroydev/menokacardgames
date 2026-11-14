@@ -1273,6 +1273,25 @@ export function PokerLedger({
   }
 
   /**
+   * Account deletion with an old sign-in (user decision 2026-11-14): the
+   * emailed code is the confirmation, so once it's accepted the deletion is
+   * requested again straight away, with no "sign in again" step to explain.
+   */
+  function askForCodeToDeleteAccount() {
+    setModal({
+      kind: "recent-sign-in",
+      purpose: "deleting your account",
+      email: accountEmail,
+      onSignedIn: () => void requestAccountDeletion(),
+      confirm: {
+        title: "Delete your account",
+        note: "Enter it to delete your account.",
+        label: "Delete My Account",
+      },
+    });
+  }
+
+  /**
    * Before signing out on this device (user decision 2026-10-29): the game in
    * progress is backed up, then removed from the device with the live link,
    * so the next person on a shared phone finds nothing of this account. The
@@ -1374,7 +1393,7 @@ export function PokerLedger({
       router.replace("/auth/sign-in?deletion=requested");
     } catch (error) {
       if (needsRecentSignIn(error)) {
-        askForRecentSignIn("deleting your account");
+        askForCodeToDeleteAccount();
         return;
       }
       showToast(

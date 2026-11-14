@@ -42,6 +42,14 @@ export const CHANGELOG: ChangelogEntry[] = [
         tag: "fixed",
         text: "When a Google sign-in doesn't finish, the sign-in page now says so instead of quietly starting over.",
       },
+      {
+        tag: "improved",
+        text: "A cleaner sign-in page: just Google or your email, with far less to read.",
+      },
+      {
+        tag: "improved",
+        text: "Deleting your account after a while away: we email you a code, and entering it and tapping Delete My Account deletes the account, with no separate sign-in step first.",
+      },
     ],
   },
   {

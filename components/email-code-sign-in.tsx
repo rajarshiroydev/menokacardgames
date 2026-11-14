@@ -1,6 +1,6 @@
 "use client";
 
-import { type FormEvent, useRef, useState } from "react";
+import { type FormEvent, type ReactNode, useRef, useState } from "react";
 
 import { TOO_MANY_REQUESTS_MESSAGE } from "@/lib/security/rate-limit-message";
 
@@ -16,16 +16,29 @@ const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
  *
  * `email` fixes the address (signing in again for a recent sign-in); without
  * it the person types one. `onSignedIn` runs once the new session exists.
- * `variant` picks the auth page's form styles or a ledger sheet's buttons.
+ * `variant` picks the auth page's form styles or a ledger sheet's buttons;
+ * the auth pages also hide the email label and say Continue (2026-11-14).
  */
 export function EmailCodeSignIn({
   email: fixedEmail,
   onSignedIn,
   variant = "page",
+  note,
+  submitLabel,
+  danger = false,
+  cancel,
 }: {
   email?: string;
   onSignedIn: () => void;
   variant?: "page" | "sheet";
+  /** Said after the fixed address, such as "Enter it to delete your account." */
+  note?: string;
+  /** The code button's text when the code also confirms an action. */
+  submitLabel?: string;
+  /** Red code button, for a code that deletes something; a full code then waits for the tap. */
+  danger?: boolean;
+  /** A sheet's Cancel, drawn under the main button so "Send a new code" comes last. */
+  cancel?: ReactNode;
 }) {
   const [email, setEmail] = useState(fixedEmail ?? "");
   const [step, setStep] = useState<"email" | "code">("email");
@@ -108,12 +121,14 @@ export function EmailCodeSignIn({
     const digits = value.replace(/\D/g, "").slice(0, CODE_LENGTH);
     setCode(digits);
     // A full code (typed, pasted or filled in from the email by the phone)
-    // signs in straight away.
-    if (digits.length === CODE_LENGTH) void checkCode(digits);
+    // signs in straight away, except when the code deletes something: then
+    // only the red button confirms (user decision 2026-11-14).
+    if (digits.length === CODE_LENGTH && !danger) void checkCode(digits);
   }
 
+  const page = variant === "page";
   const primary = variant === "sheet" ? "primary" : undefined;
-  const secondary = variant === "sheet" ? "ghost" : "auth-secondary";
+  const codeButton = danger ? "danger" : primary;
   const formClass = variant === "sheet" ? "code-sign-in" : "auth-form";
 
   const messages = (
@@ -136,19 +151,22 @@ export function EmailCodeSignIn({
       <form onSubmit={submitEmail} className={formClass} noValidate>
         {fixedEmail ? (
           <p className="code-sign-in-intro">
-            We&apos;ll email a 6-digit code to{" "}
+            We&apos;ll email {page ? "a 6-digit code" : "a code"} to{" "}
             <strong className="literal-text">{fixedEmail}</strong>.
+            {note ? ` ${note}` : null}
           </p>
         ) : (
           <>
-            <label htmlFor="email">Email address</label>
+            <label htmlFor="email" className={page ? "visually-hidden" : undefined}>
+              Email address
+            </label>
             <input
               id="email"
               name="email"
               type="email"
               autoComplete="email"
               inputMode="email"
-              placeholder="you@example.com"
+              placeholder={page ? "Email address" : "you@example.com"}
               value={email}
               onChange={(event) => setEmail(event.target.value)}
               required
@@ -157,8 +175,13 @@ export function EmailCodeSignIn({
         )}
         {messages}
         <button type="submit" className={primary} disabled={isPending}>
-          {isPending ? "Sending code…" : "Email me a code"}
+          {isPending
+            ? "Sending code…"
+            : page && !fixedEmail
+              ? "Continue"
+              : "Email me a code"}
         </button>
+        {cancel}
       </form>
     );
   }
@@ -166,11 +189,11 @@ export function EmailCodeSignIn({
   return (
     <form onSubmit={submitCode} className={formClass} noValidate>
       <p className="code-sign-in-intro" role="status">
-        We sent a 6-digit code to{" "}
-        <strong className="literal-text">{email}</strong>. Enter it here; it
-        works once and expires in 5 minutes.
+        Enter the code sent to <strong className="literal-text">{email}</strong>
       </p>
-      <label htmlFor="sign-in-code">Code</label>
+      <label htmlFor="sign-in-code" className="visually-hidden">
+        Code
+      </label>
       <input
         id="sign-in-code"
         name="code"
@@ -187,13 +210,14 @@ export function EmailCodeSignIn({
         required
       />
       {messages}
-      <button type="submit" className={primary} disabled={isPending}>
-        {isPending ? "Checking…" : "Sign in"}
+      <button type="submit" className={codeButton} disabled={isPending}>
+        {isPending ? "Checking…" : (submitLabel ?? "Sign in")}
       </button>
+      {cancel}
       <div className="code-sign-in-links">
         <button
           type="button"
-          className={secondary}
+          className="auth-secondary"
           onClick={() => void sendCode(email)}
           disabled={isPending}
         >
@@ -202,7 +226,7 @@ export function EmailCodeSignIn({
         {fixedEmail ? null : (
           <button
             type="button"
-            className={secondary}
+            className="auth-secondary"
             onClick={() => {
               setStep("email");
               setCode("");

@@ -5,7 +5,6 @@ import { useState } from "react";
 import { EmailCodeSignIn } from "@/components/email-code-sign-in";
 import { Avatar } from "@/components/ledger/avatar";
 import { Segmented } from "@/components/ledger/segmented";
-import { RECENT_SIGN_IN_WINDOW_MS } from "@/lib/auth/recent-sign-in";
 
 /** Extras for a confirmation asked through `ask`. */
 export type AskOptions = { points?: string[]; danger?: boolean };
@@ -51,6 +50,12 @@ export type ModalState =
       email: string;
       /** After the emailed code has signed this device in again. */
       onSignedIn: () => void;
+      /**
+       * The code itself confirms the action (account deletion, user decision
+       * 2026-11-14): the sheet shows `title` instead of "sign in again",
+       * `note` after the email address, and `label` on the code's button.
+       */
+      confirm?: { title: string; note: string; label: string };
     };
 
 export function Modal({
@@ -89,11 +94,11 @@ export function Modal({
       >
         <div className="msg">
           {state.kind === "recent-sign-in" ? (
-            <>
-              For safety, {state.purpose} needs a sign-in from the last{" "}
-              {RECENT_SIGN_IN_WINDOW_MS / 60_000} minutes. Sign in again with a
-              code from your email, then try again.
-            </>
+            state.confirm ? (
+              <p className="msg-title">{state.confirm.title}</p>
+            ) : (
+              <>For safety, sign in again before {state.purpose}.</>
+            )
           ) : state.points?.length ? (
             <>
               <p className="msg-title">{state.message}</p>
@@ -185,6 +190,14 @@ export function Modal({
           <EmailCodeSignIn
             variant="sheet"
             email={state.email}
+            note={state.confirm?.note}
+            submitLabel={state.confirm?.label}
+            danger={Boolean(state.confirm)}
+            cancel={
+              <button type="button" className="ghost" onClick={onClose}>
+                Cancel
+              </button>
+            }
             onSignedIn={() => {
               state.onSignedIn();
               onConfirm();
@@ -198,7 +211,9 @@ export function Modal({
             {state.confirmLabel}
           </button>
         )}
-        {state.kind === "confirm" && state.hideDismiss ? null : (
+        {/* The code sheet draws Cancel itself, above "Send a new code". */}
+        {(state.kind === "confirm" && state.hideDismiss) ||
+        state.kind === "recent-sign-in" ? null : (
           <button className="ghost" onClick={onClose}>
             {(state.kind === "confirm" && state.dismissLabel) || "Cancel"}
           </button>

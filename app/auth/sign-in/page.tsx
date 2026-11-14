@@ -41,16 +41,13 @@ export default async function SignInPage({
   const showGoogle = googleSignInEnabled();
 
   return (
-    <main className="auth-page">
+    <main className="auth-page sign-in-page">
       <ThemeToggle className="page-theme-toggle" />
-      <section className="auth-card" aria-labelledby="sign-in-title">
-        <BrandMark className="auth-mark" />
-        <p className="eyebrow">{APP_NAME}</p>
-        <h1 id="sign-in-title">Your private poker ledger</h1>
-        <p className="auth-intro">
-          Sign in with {showGoogle ? "Google or your email" : "your email"} to
-          manage your friend list, games, and standings. No password is needed.
-        </p>
+      <section className="auth-card sign-in-card" aria-labelledby="sign-in-title">
+        <div className="sign-in-head">
+          <BrandMark className="auth-mark" />
+          <h1 id="sign-in-title">Welcome to {APP_NAME}</h1>
+        </div>
         {deletionRequested ? (
           <p className="auth-notice" role="status">
             Your account is locked and you have been signed out on every
@@ -77,9 +74,9 @@ export default async function SignInPage({
           <EmailCodeForm invite={invite} />
         )}
         <p className="auth-legal">
-          By signing in you agree to the <Link href="/terms">Terms of Use</Link>{" "}
-          and <Link href="/privacy">Privacy Policy</Link>. You must be{" "}
-          {MINIMUM_AGE} or over. <Link href="/features">What {APP_NAME} does</Link>
+          By continuing, you agree to the <Link href="/terms">Terms</Link> and{" "}
+          <Link href="/privacy">Privacy Policy</Link> and confirm you&apos;re{" "}
+          {MINIMUM_AGE}+.
         </p>
       </section>
     </main>
